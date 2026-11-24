@@ -33,6 +33,17 @@ export function withoutLinkedActivities(timeline: TimelineItem[]): TimelineItem[
   return timeline.filter(item => item.kind !== 'activity' || !linked.has(link(item.activity)));
 }
 
+/** Only a receipt for this input proves the provider received a steer on an already busy turn. */
+export function hasNativeInputReceipt(native: NonNullable<Run['native']>): boolean {
+  return Boolean(native.nativeMessageId) || native.timings?.observedAt !== undefined
+    || native.timings?.providerAcceptedAt !== undefined || native.delivery === 'observed';
+}
+
+export function isUnreceivedSteer(item: TimelineItem): boolean {
+  const native = item.kind === 'user' ? item.run?.native : undefined;
+  return native?.intent === 'steer' && !hasNativeInputReceipt(native);
+}
+
 export function chunkText(event: WorkbenchEvent): string {
   const content = event.data.content;
   if (isRecord(content) && typeof content.text === 'string') return content.text;

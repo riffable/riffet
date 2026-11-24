@@ -134,6 +134,7 @@ import riffet.ui.pickers.RiffetMenuItem
 import riffet.ui.state.SessionStore
 import riffet.ui.state.inQueue
 import riffet.ui.state.queuedActions
+import riffet.ui.state.steerTarget
 import riffet.ui.state.RiffetConnectionState
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
@@ -361,6 +362,7 @@ fun Composer(
     val governed = control != null
     val turnCanStop = control?.activeTurn?.canStop == true
     val turnCanSteer = control?.activeTurn?.canSteer == true
+    val target = steerTarget(control, status)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -385,14 +387,11 @@ fun Composer(
                 pendingRunIds = sendState.pendingRunIds,
                 enabled = connected && !busy,
                 onSendNow = { run ->
-                    if (governed && turnCanStop || !governed && supportsTargetedStop) scope.launch { store.sendQueuedNow(run) }
+                    if (governed && turnCanStop || !governed && supportsTargetedStop) {
+                        store.stopSnapshot(session.id, control, status)?.let { shown -> scope.launch { store.sendQueuedNow(run, shown) } }
+                    }
                 },
                 onSteer = if (governed && turnCanSteer || !governed && supportsSteer && status?.activeTurn != null) ({ run ->
-                    val target = status?.activeTurn?.target() ?: control?.activeTurn?.let { turn ->
-                        val sessionId = turn.nativeSessionId
-                        val turnId = turn.nativeTurnId ?: turn.turnId
-                        if (sessionId != null && turnId != null) riffet.contracts.NativeTurnTarget(sessionId, turnId) else null
-                    }
                     if (target != null) { scope.launch { store.steerQueued(run, target) } }
                 }) else null,
                 steerEnabled = if (governed) turnCanSteer && connection is RiffetConnectionState.Live && uncertain.isEmpty()
@@ -429,7 +428,9 @@ fun Composer(
             settings = settings,
             running = working || (governed && turnCanStop),
             background = background,
-            onStop = if (sendState.interrupting || (governed && (turnCanStop || (background > 0 && supportsTargetedStop))) || (!governed && supportsTargetedStop)) ({ scope.launch { store.interrupt() } }) else null,
+            onStop = if (sendState.interrupting || (governed && (turnCanStop || (background > 0 && supportsTargetedStop))) || (!governed && supportsTargetedStop)) ({
+                store.stopSnapshot(session.id, control, status)?.let { shown -> scope.launch { store.interrupt(shown) } }
+            }) else null,
             stopping = sendState.interrupting,
             stopEnabled = connected && !busy && (if (governed) turnCanStop || (background > 0 && supportsTargetedStop) else working || background > 0),
             sendEnabled = connected && text.isNotBlank() && !uploading && !busy && !awaitingSubmission && !dictationState.active,

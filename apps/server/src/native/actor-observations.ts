@@ -52,7 +52,7 @@ export interface ActorObservationDeps {
   isClosed(): boolean;
   isInterrupting(): boolean;
   traits(backendId: string | undefined): NativeBackendTraits;
-  requeueSteer(runId: string): boolean;
+  markSteerMissed(runId: string): boolean;
   wakeSoon(): void;
 }
 
@@ -266,7 +266,10 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
       if (!matchingRun?.native) continue;
       const commandId = taggedCommandId ?? matchingRun.commandId;
       const current = deps.store.getRun(matchingRun.id);
-      if (!current.native) continue;
+      if (!current.native || current.native.stage === 'steer_missed') continue;
+      if ((event.type === 'user_message_chunk' || event.type === 'native_input_receipt') && current.native.nativeSessionId
+        && (deps.store.getSession(sessionId).nativeSessionId !== current.native.nativeSessionId
+          || typeof event.data.nativeSessionId === 'string' && event.data.nativeSessionId !== current.native.nativeSessionId)) continue;
       if ((event.type === 'native_input_rejected' || event.type === 'native_input_submitted') && current.native.intent !== 'steer') continue;
       const eventTurn = turnOf(event);
       if (current.native.nativeTurnId && eventTurn && current.native.nativeTurnId !== eventTurn) continue;
@@ -280,7 +283,7 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
       const receiptEvent = message.events.find(item => (item.type === 'user_message_chunk' || item.type === 'native_input_receipt')
         && item.data.commandId === commandId && (!current.native!.nativeTurnId || turnOf(item) === current.native!.nativeTurnId));
       if (event.type === 'native_input_rejected' && current.native.intent === 'steer' && event.data.beforeWrite === true) {
-        deps.requeueSteer(current.id);
+        deps.markSteerMissed(current.id);
         continue;
       }
       if (event.type === 'native_input_submitted' && current.native.intent === 'steer') {
@@ -335,8 +338,6 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         const stoppedSteer = current.native.intent === 'steer' && current.native.stage === 'steer_stopped';
         const session = deps.store.getSession(sessionId);
         const linkedSessionId = session.nativeSessionId;
-        const expectedSessionId = current.native.nativeSessionId;
-        if (expectedSessionId && linkedSessionId !== expectedSessionId) continue;
         deps.store.transitionNativeRun(current.id, [current.native.delivery], isFinished
           ? { nativeMessageId: event.nativeId }
           : {
@@ -359,7 +360,7 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
     const delivery = run.native!;
     const backendId = deps.store.getSession(sessionId).backendId;
     if (deps.traits(backendId).settlesSlashOnSubmit && isSlashCommand(delivery)) continue;
-    if (delivery.intent !== 'steer' && message.type === 'events' && ['dispatching', 'input_sent', 'uncertain', 'observed'].includes(delivery.delivery)) {
+    if (!delivery.queueReleasedAt && delivery.intent !== 'steer' && message.type === 'events' && ['dispatching', 'input_sent', 'uncertain', 'observed'].includes(delivery.delivery)) {
       const session = deps.store.getSession(sessionId);
       const linkedSessionId = session.nativeSessionId;
       const expectedSessionId = delivery.nativeSessionId;
@@ -368,6 +369,7 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
       const afterBaseline = message.events.filter(event => event.sequence > (delivery.baselineSequence ?? Infinity));
       const matches = deps.traits(session.backendId).untaggedEcho
         ? afterBaseline.filter(event => event.type === 'user_message_chunk'
+          && (event.data.commandId === undefined || event.data.commandId === run.commandId)
           && samePromptText(sent, ((event.data.content as { text?: string } | undefined)?.text ?? '').trim()))
         : message.events.filter(event => event.type === 'user_message_chunk' && event.data.commandId === run.commandId);
       if (!delivery.nativeMessageId && matches.length === 1) {
@@ -376,7 +378,7 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
           ...(matches[0]!.nativeTurnId ? { nativeTurnId: matches[0]!.nativeTurnId } : {}),
           ...(session.nativeSessionId ? { nativeSessionId: session.nativeSessionId } : {}),
           stage: 'executing', timings: { ...delivery.timings, observedAt: now() },
-        }, { state: delivery.queueReleasedAt ? 'interrupted' : 'running', error: undefined });
+        }, { state: 'running', error: undefined });
         const bound = deps.store.getRun(run.id);
         trackTurnOutcome(deps, bound);
         replayTurnOutcome(deps, bound);

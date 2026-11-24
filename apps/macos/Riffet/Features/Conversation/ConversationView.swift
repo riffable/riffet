@@ -307,8 +307,12 @@ struct ConversationView: View {
             features: features(state),
             sendEnabled: catalog?.capabilities.requiresLiveTerminal?.boolValue != true || state.live,
             fullscreen: fullscreen,
-            onSend: { interrupt in Task { await send(interrupt: interrupt, state: state) } },
-            onStop: state.canStop || workbench.sendState.interrupting ? { Task { await workbench.interrupt() } } : nil,
+            onSend: { interrupt in
+                let shown = interrupt ? workbench.stopSnapshot(sessionID: session.id) : nil
+                guard !interrupt || shown != nil else { return }
+                Task { await send(interrupt: interrupt, state: state, stopSnapshot: shown) }
+            },
+            onStop: state.canStop || workbench.sendState.interrupting ? { workbench.interrupt(sessionID: session.id) } : nil,
             upload: { file in try await workbench.upload(file, projectId: session.projectId) }
         ) {
             if !quickChat {
@@ -625,7 +629,7 @@ struct ConversationView: View {
         }
     }
 
-    private func send(interrupt: Bool, state: ConversationState, enqueue: Bool = false) async {
+    private func send(interrupt: Bool, state: ConversationState, enqueue: Bool = false, stopSnapshot: OpenSessionState? = nil) async {
         // This conversation's composer, even if the page has moved on by the time the send returns.
         let composer = composer
         guard composer.canSend, !providerMissing, catalog?.capabilities.requiresLiveTerminal?.boolValue != true || state.live else { return }
@@ -633,7 +637,7 @@ struct ConversationView: View {
         let text = submission.text
         // Before the message lands: once it does, the latest turn is the one being sent.
         TranscriptController.followSent(in: session.id)
-        if await workbench.send(text, attachments: submission.attachments, interrupt: interrupt, enqueue: enqueue, onStored: {
+        if await workbench.send(text, attachments: submission.attachments, interrupt: interrupt, enqueue: enqueue, stopSnapshot: stopSnapshot, onStored: {
             composer.clear(sent: submission)
             composer.flushDraft()
         }) {
@@ -970,6 +974,7 @@ struct ComposerDocks: View {
                 // A send still submitting has no run on the server to act on yet.
                 let blocked = workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run, control: workbench.control)
                 let governed = workbench.control != nil
+                let target = SessionStoreStateKt.steerTarget(control: workbench.control, status: workbench.status)
                 let showSteer = governed ? allows("steer", on: run) : (supportsSteer && workbench.status?.activeTurn != nil)
                 let showSendNow = governed ? allows("send_now", on: run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
                 let showEdit = !governed || allows("edit", on: run)
@@ -981,10 +986,6 @@ struct ComposerDocks: View {
                     HStack(spacing: 0) {
                         if showSteer {
                             Button {
-                                let target = workbench.status?.activeTurn?.target() ?? workbench.control?.activeTurn.flatMap { turn in
-                                    guard let nativeSessionId = turn.nativeSessionId, let turnId = turn.nativeTurnId ?? turn.turnId else { return nil }
-                                    return NativeTurnTarget(nativeSessionId: nativeSessionId, turnId: turnId)
-                                }
                                 guard let target else { return }
                                 Task { _ = try? await workbench.store.steerQueued(run: run, target: target) }
                             } label: { Image(icon: "arrow.turn.up.right").font(.riffet(size: S(12), weight: .medium)) }
@@ -993,7 +994,7 @@ struct ComposerDocks: View {
                                 .help("补充到当前任务").accessibilityLabel("补充到当前任务")
                         }
                         if showSendNow {
-                        Button { Task { await workbench.sendQueuedNow(run) } } label: { Image(icon: "arrow.up").font(.riffet(size: S(11), weight: .semibold)) }
+                        Button { workbench.sendQueuedNow(run) } label: { Image(icon: "arrow.up").font(.riffet(size: S(11), weight: .semibold)) }
                             .buttonStyle(IconButtonStyle(size: 26))
                             .disabled(blocked)
                             .help("停止并发送")

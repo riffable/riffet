@@ -42,7 +42,7 @@ const UNCLAIMED_GRACE_MS = 20_000;
 
 /** A copy this tab made before the server answered; the server's own run replaces it by command id. */
 export function isLocalCopy(run: Run): boolean {
-  return run.native?.fingerprint === 'client-pending' && run.native.intent !== 'steer' && (run.native.delivery === 'queued' || run.native.delivery === 'uncertain' || run.native.stage === 'outbox_failure');
+  return run.native?.fingerprint === 'client-pending' && (run.native.delivery === 'queued' || run.native.delivery === 'uncertain' || run.native.stage === 'outbox_failure');
 }
 
 const TERMINAL_RUN_STATES: ReadonlySet<Run['state']> = new Set(['completed', 'failed', 'cancelled', 'interrupted']);
@@ -120,7 +120,7 @@ export class OutboxHandoff {
         this.pending.set(commandId, confirmedGeneration);
       }
       if (isLocalCopy(run)) continue;
-      if (run.native?.intent === 'steer' || run.state === 'cancelled') {
+      if (run.state === 'cancelled') {
         this.pending.delete(commandId);
         continue;
       }

@@ -159,7 +159,7 @@ export class DeferredSteerInputs {
       const runs = this.runs(context.target);
       const run = runs.find(candidate => candidate.commandId === context.commandId
         && candidate.native?.intent === 'steer' && candidate.native.renderedText === context.carrier
-        && !['steer_rejected', 'acknowledged', 'cancelled'].includes(candidate.native.stage ?? ''));
+        && !['steer_missed', 'steer_rejected', 'acknowledged', 'cancelled'].includes(candidate.native.stage ?? ''));
       if (!run?.native) continue;
       const nativeId = sourceId(sourceNativeId, context.commandId);
       events.push({ sequence: 0, sessionId: this.options.sessionId, runId: run.id, nativeTurnId: context.target.turnId,
@@ -183,7 +183,7 @@ export class DeferredSteerInputs {
     if (this.outcomes.size > 128) this.outcomes.delete(this.outcomes.keys().next().value!);
     for (const run of this.runs(target)) {
       if (run.native?.intent !== 'steer' || !run.native.nativeMessageId
-        || ['steer_rejected', 'acknowledged', 'cancelled'].includes(run.native.stage ?? '')) continue;
+        || ['steer_missed', 'steer_rejected', 'acknowledged', 'cancelled'].includes(run.native.stage ?? '')) continue;
       this.host.emitEvent(this.options.sessionId, this.terminal(run, target, outcome, new Date().toISOString()));
     }
   }

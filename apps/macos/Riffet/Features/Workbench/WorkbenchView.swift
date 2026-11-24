@@ -249,7 +249,7 @@ struct WorkbenchView: View {
             showInspector: { tab in workbench.showInspector(tab) },
             toggleInspectorMaximized: { workbench.toggleInspectorMaximized() },
             openPalette: { workbench.sidebar.searchRequested = .commands },
-            interrupt: { Task { await workbench.interrupt() } },
+            interrupt: { workbench.interrupt(sessionID: workbench.selected?.id) },
             refresh: { workbench.refresh() },
             toggleSidebar: { toggleSidebar() },
             openPage: { page in workbench.page = page },

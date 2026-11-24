@@ -8,7 +8,7 @@ import { sameMap, sameSet, useStable } from './stable';
 import type { SubagentBrief } from './SessionWorkActions';
 import { toolView } from './toolView';
 import { isRecord, str } from '@/lib/utils';
-import { withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
+import { isUnreceivedSteer, withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
 import { activeTurnState, analyzeTimelineTurns, type ActiveTurnState } from './timelineTurns';
 import type { useSessionSync } from './useSessionSync';
 
@@ -33,7 +33,7 @@ function digestTimeline(timeline: readonly TimelineItem[], digestOf: (event: Tim
   const briefs = new Map<string, SubagentBrief>();
   for (let index = 0; index < timeline.length; index += 1) {
     const item = timeline[index]!;
-    if (item.kind === 'user') lastUserIndex = index;
+    if (item.kind === 'user' && !isUnreceivedSteer(item)) lastUserIndex = index;
     else if (item.kind === 'plan') planIndex = index;
     if (item.kind !== 'tool') continue;
     const { brief } = digestOf(item.event);

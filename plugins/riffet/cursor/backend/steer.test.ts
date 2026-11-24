@@ -8,7 +8,8 @@ import { type AgentContext, type AgentRunRef, type AgentSendRequest, type AgentS
 import { CursorBackend } from '../backend.js';
 import { cursorPort } from '../host-port.js';
 import { cursorSteerContext } from '../native/chat-store.js';
-import type { NativeService } from '../native/service.js';
+import type { CursorLive } from '../native/live.js';
+import { NativeService } from '../native/service.js';
 import { FakeHost } from '../testing/fake-host.js';
 import { CursorSteerBridge } from './steer.js';
 import { CursorTranscriptSource } from './transcript-source.js';
@@ -35,7 +36,7 @@ async function fixture() {
   };
   const session = () => host.sessions.get('s')!;
   const port = cursorPort(host);
-  const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
+  const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), refreshTurnIdentity: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
   const bridge = new CursorSteerBridge(host, port, native, stateDir, {} as never);
   const source = new CursorTranscriptSource({ chatId: () => session().nativeSessionId, chatsDir: () => stateDir });
   const endTurn = vi.spyOn(source, 'endTurn').mockImplementation(async (_w, { stillCurrent }) => stillCurrent?.() ?? true);
@@ -88,7 +89,7 @@ describe('Cursor strict tool-boundary steering', () => {
     const backend = new CursorBackend({ stateDir: f.stateDir });
     // Use this fixture's real hooked bridge, without starting a second hook server.
     Object.assign(backend, { built: { port: f.port, native: f.native, runtime: {}, profile: {}, steering: f.bridge } });
-    const stopped = backend.interrupt(f.host, f.context(), { clearPrompt: true, expectedStop: { requestId: 'stop-once', ...expected } });
+    const stopped = f.host.withSessionLock('s', () => backend.interrupt(f.host, f.context(), { clearPrompt: true, expectedStop: { requestId: 'stop-once', ...expected } }));
     if (successor) {
       await expect(stopped).rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
       expect(writes).toEqual(['C-c']);
@@ -353,19 +354,46 @@ describe('Cursor active turn lifecycle', () => {
     expect(f.fenced('run-one')).toBe(0);
   });
 
-  it('replaces a different generation at submit time and does not revive one a stop retired', async () => {
+  it('keeps guidance on the running turn when a follow-up is merely submitted', async () => {
     const f = await fixture();
     vi.mocked(f.native.turnState).mockReturnValue('open');
     await f.hook('beforeSubmitPrompt');
     const request = f.request('kept');
     await f.bridge.enqueue(request, request.input.text);
     await f.hook('beforeSubmitPrompt', { generation_id: 'next' });
-    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('next');
-    expect(f.events().find(event => event.type === 'native_input_rejected')).toMatchObject({ data: { beforeWrite: true } });
-    expect(f.fenced('run-kept')).toBe(0);
-    await f.hook('stop', { generation_id: 'next', status: 'completed' });
-    await f.hook('beforeSubmitPrompt', { generation_id: 'next' });
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('generation');
+    expect(await f.hook('postToolUse', { generation_id: 'next' })).toEqual({});
+    expect((await f.hook('postToolUse')).additional_context).toContain(request.input.text);
+    expect(f.fenced('run-kept')).toBe(1);
+    await f.hook('stop', { status: 'completed' });
+    await f.hook('beforeSubmitPrompt');
     expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+    await f.hook('preToolUse', { generation_id: 'next' });
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('next');
+  });
+
+  it.each([true, false])('refuses a stale Stop when the next request is streaming, successor submit hook observed = %s', async submitted => {
+    const f = await fixture();
+    await f.hook('beforeSubmitPrompt');
+    if (submitted) await f.hook('beforeSubmitPrompt', { generation_id: 'successor' });
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('generation');
+    const service = new NativeService(f.port, {
+      configDir: f.stateDir, cliPath: 'cursor-agent',
+      live: { read: () => ({ turn: 'successor', prompt: 'another question', sealed: false }) } as unknown as CursorLive,
+    });
+    service.useTurnObserver(vi.mocked(f.native.useTurnObserver).mock.calls[0]![0]);
+    const keys = vi.fn(async () => {});
+    f.host.control = {
+      screen: async () => ' ⠘⠆ Working\n → Add a follow-up                 ctrl+c to stop\n Claude Opus 5.5 300K High · 7.4%       Run Everything\n /tmp/project · main',
+      keys, paste: async () => {},
+    };
+    try {
+      await expect(service.interrupt(f.session(), { expectedStop: { requestId: 'stop', nativeSessionId: 'chat', turnId: 'generation' }, beforeWrite: () => {
+        if (f.bridge.activeTurn(f.session())?.turnId !== 'generation') throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'turn changed', 409);
+      } })).rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
+      expect(keys).not.toHaveBeenCalled();
+      expect(f.bridge.activeTurn(f.session())?.turnId).toBe(submitted ? 'successor' : 'generation');
+    } finally { service.closeAll(); }
   });
 
   it('ignores a prompt hook from a child or a terminal that has exited', async () => {

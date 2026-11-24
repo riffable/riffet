@@ -42,7 +42,7 @@ export function commandIdOfItem(source: CommandIdSource, item: RpcItem, turnId: 
       && candidate.native.nativeSessionId === threadId && candidate.native.nativeTurnId === turnId
       && candidate.native.baselineSequence !== undefined && candidate.native.renderedText === text
       && !['queued', 'preparing'].includes(candidate.native.delivery)
-      && !['steer_rejected', 'acknowledged', 'cancelled'].includes(candidate.native.stage ?? ''));
+      && !['steer_missed', 'steer_rejected', 'acknowledged', 'cancelled'].includes(candidate.native.stage ?? ''));
     return run?.commandId;
   }
   return source.claimSteeredItem(id, turnId, item);

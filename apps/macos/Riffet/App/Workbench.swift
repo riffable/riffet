@@ -1024,7 +1024,7 @@ final class Workbench {
     // MARK: Writes
 
     @discardableResult
-    func send(_ text: String, attachments: [Attachment], interrupt: Bool = false, enqueue: Bool = false, onStored: (() -> Void)? = nil) async -> Bool {
+    func send(_ text: String, attachments: [Attachment], interrupt: Bool = false, enqueue: Bool = false, stopSnapshot: OpenSessionState? = nil, onStored: (() -> Void)? = nil) async -> Bool {
         do {
             let projectId = selected?.projectId
             let sessionId = selected?.id
@@ -1033,7 +1033,12 @@ final class Workbench {
                 clearSubmittedReferences(cited, sessionId: sessionId, projectId: projectId)
                 callback()
             } }
-            let sent = try await (enqueue ? store.enqueue(text: text, attachments: attachments, context: cited, onStored: transfer) : store.send(text: text, attachments: attachments, context: cited, interrupt: interrupt, onStored: transfer)).boolValue
+            let sent: Bool
+            if let stopSnapshot {
+                sent = try await store.sendReplacing(text: text, attachments: attachments, context: cited, shown: stopSnapshot, onStored: transfer).boolValue
+            } else {
+                sent = try await (enqueue ? store.enqueue(text: text, attachments: attachments, context: cited, onStored: transfer) : store.send(text: text, attachments: attachments, context: cited, interrupt: interrupt, onStored: transfer)).boolValue
+            }
             if sent, onStored == nil { clearSubmittedReferences(cited, sessionId: sessionId, projectId: projectId) }
             return sent
         } catch {
@@ -1191,8 +1196,13 @@ final class Workbench {
         showInspector(.files)
     }
 
-    func interrupt() async {
-        _ = try? await store.interrupt()
+    func stopSnapshot(sessionID: String) -> OpenSessionState? {
+        store.stopSnapshot(sessionId: sessionID, control: control, status: status)
+    }
+
+    func interrupt(sessionID: String?) {
+        guard let sessionID, let shown = stopSnapshot(sessionID: sessionID) else { return }
+        Task { _ = try? await store.interrupt(shown: shown) }
     }
 
     /// Asks the server to stop a background task. The store marks it stopping at once and takes the mark
@@ -1214,7 +1224,10 @@ final class Workbench {
         }
     }
 
-    func sendQueuedNow(_ run: Run) async { _ = try? await store.sendQueuedNow(run: run) }
+    func sendQueuedNow(_ run: Run) {
+        guard let shown = stopSnapshot(sessionID: run.sessionId) else { return }
+        Task { _ = try? await store.sendQueuedNow(run: run, shown: shown) }
+    }
     func cancelRun(_ run: Run) async { _ = try? await store.cancelRun(run: run) }
     func retryRun(_ run: Run) async { _ = try? await store.retryRun(run: run) }
     func checkRun(_ run: Run) async {

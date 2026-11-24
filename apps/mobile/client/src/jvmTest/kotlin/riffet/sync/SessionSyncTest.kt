@@ -29,6 +29,7 @@ import riffet.cache.LocalFiles
 import riffet.cache.SyncWindow
 import riffet.cache.TimelineCache
 import riffet.cache.TimelineSnapshot
+import riffet.contracts.AppSettings
 import riffet.contracts.NativeInteraction
 import riffet.contracts.NativeInteractionAction
 import riffet.contracts.NativeInteractionKind
@@ -36,6 +37,7 @@ import riffet.contracts.NativeInteractionOption
 import riffet.contracts.NativeInteractionResponse
 import riffet.contracts.NativeInteractionResultStatus
 import riffet.contracts.NativeStatusPhase
+import riffet.contracts.NativeTurnTarget
 import riffet.contracts.RunState
 import riffet.contracts.Session
 import riffet.contracts.TimelineRow
@@ -50,6 +52,7 @@ import riffet.ui.state.SessionStore
 import riffet.ui.state.RiffetConnectionState
 import riffet.ui.state.SessionInteractions
 import riffet.ui.state.StateStore
+import riffet.ui.state.canRestoreUnsentMessage
 import riffet.ui.state.messageRecovery
 import riffet.shared.NativeMessageInput
 import riffet.shared.RiffetApi
@@ -138,6 +141,8 @@ class SessionSyncTest {
         assertNull(store.control.value?.activeTurn)
         assertEquals(emptyList(), store.queued.value)
         assertEquals(emptyList(), store.actionsForQueued("r1", "c1"))
+        store.applySavedSettings(AppSettings(composerRunningBehavior = "steer"))
+        assertFalse(store.prefersSteerWhileRunning(), "the empty foreground supersedes the queued run's observed delivery")
     }
 
     @Test
@@ -585,23 +590,27 @@ class SessionSyncTest {
     }
 
     @Test
-    fun aLocalSendStaysDrawnAcrossFastObservedAndCompletedControlFramesUntilServerRowLands(): Unit = runBlocking {
-        val outbox = InMemoryOutboxStore().apply {
+    fun completedSendsAndMissedSteersSurviveUntilTheirServerRowsLand(): Unit = runBlocking {
+        fun pending() = InMemoryOutboxStore().apply {
             save(OutboxEntry("s1", NativeMessageInput("fast-cmd", "hi fast"), "2026-10-25T00:00:05Z"))
+            save(OutboxEntry("s1", NativeMessageInput("steer-cmd", "change plan"), "2026-10-25T00:00:06Z",
+                steerTarget = NativeTurnTarget("native-s1", "original"), version = 2))
         }
         val observedRun = """{"id":"r-fast","sessionId":"s1","commandId":"fast-cmd","prompt":"hi fast","state":"completed","createdAt":"2026-10-25T00:00:05Z","updatedAt":"2026-10-25T00:00:06Z","native":{"input":{"text":"hi fast","attachmentIds":[],"context":[]},"config":{"mode":"agent"},"fingerprint":"f","delivery":"observed","nativeMessageId":"native-u-fast","attempt":1,"configRevision":1}}"""
+        val missed = """{"id":"r-steer","sessionId":"s1","commandId":"steer-cmd","prompt":"change plan","state":"failed","createdAt":"2026-10-25T00:00:06Z","updatedAt":"2026-10-25T00:00:07Z","native":{"input":{"text":"change plan","attachmentIds":[],"context":[]},"config":{"mode":"agent"},"fingerprint":"f","delivery":"failed","intent":"steer","stage":"steer_missed","attempt":1,"configRevision":1}}"""
         val server = serve { request ->
             when (request.path) {
                 "/api/v3/sessions/s1/sync" -> sseOpen(
                     hello("g1"),
                     snapshot("g1", 1, row("a1", 1, 1, "earlier")),
                     "run" to """{"type":"run","run":$observedRun}""",
+                    "run" to """{"type":"run","run":$missed}""",
                     ping,
                 )
                 else -> json("""{"error":{"code":"NOT_FOUND","message":"no"}}""", 404)
             }
         }
-        val store = store(server, outbox = outbox)
+        val store = store(server, outbox = pending())
         try {
             store.select(session)
             withTimeout(5_000) {
@@ -609,41 +618,41 @@ class SessionSyncTest {
             }
             val settledWithoutRow = withTimeout(5_000) {
                 store.timeline.first { items ->
-                    val user = items.lastOrNull() as? TimelineItem.User
-                    user?.key == "user:fast-cmd" && user.run?.id == "r-fast" && user.run?.state == RunState.COMPLETED
+                    val users = items.filterIsInstance<TimelineItem.User>()
+                    users.any { it.run?.id == "r-fast" && it.run?.state == RunState.COMPLETED } &&
+                        users.any { it.run?.id == "r-steer" && it.run?.let(::canRestoreUnsentMessage) == true }
                 }
             }
-            assertEquals(listOf("a1", "user:fast-cmd"), settledWithoutRow.map { it.key })
+            assertEquals(listOf("a1", "user:fast-cmd", "user:steer-cmd"), settledWithoutRow.map { it.key })
         } finally {
             store.clear()
         }
 
         // Once the server user row lands, it replaces the local placeholder in place with no duplicates.
-        val outbox2 = InMemoryOutboxStore().apply {
-            save(OutboxEntry("s1", NativeMessageInput("fast-cmd", "hi fast"), "2026-10-25T00:00:05Z"))
-        }
         val landedServer = serve { request ->
             when (request.path) {
                 "/api/v3/sessions/s1/sync" -> sseOpen(
                     hello("g1"),
                     snapshot("g1", 1, row("a1", 1, 1, "earlier")),
                     "run" to """{"type":"run","run":$observedRun}""",
-                    rows("g1", 2, 2, userRow("user:fast-cmd", 2, 2, "hi fast", runId = "r-fast")),
+                    "run" to """{"type":"run","run":$missed}""",
+                    rows("g1", 2, 3, userRow("user:fast-cmd", 2, 2, "hi fast", runId = "r-fast"),
+                        userRow("user:steer-cmd", 3, 3, "change plan", runId = "r-steer", pending = "failed")),
                     ping,
                 )
                 else -> json("""{"error":{"code":"NOT_FOUND","message":"no"}}""", 404)
             }
         }
-        val store2 = store(landedServer, outbox = outbox2)
+        val store2 = store(landedServer, outbox = pending())
         try {
             store2.select(session)
             val landed = withTimeout(5_000) {
                 store2.timeline.first { items ->
                     val user = items.lastOrNull() as? TimelineItem.User
-                    user?.key == "user:fast-cmd" && user.event.projectionKey == "user:fast-cmd"
+                    user?.key == "user:steer-cmd" && user.event.projectionKey == "user:steer-cmd"
                 }
             }
-            assertEquals(listOf("a1", "user:fast-cmd"), landed.map { it.key })
+            assertEquals(listOf("a1", "user:fast-cmd", "user:steer-cmd"), landed.map { it.key })
         } finally {
             store2.clear()
         }

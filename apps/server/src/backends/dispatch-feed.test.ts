@@ -56,7 +56,7 @@ function setup(backendId: 'claude' | 'codex' | 'cursor', send: (request: NativeB
   const dispatcher = () => new NativeDispatcher(store, new DispatchFeed({ service, feed, store }).backend(), runtime, { readAttachment: async () => { throw new Error('none'); } } as never, { intervalMs: 60_000 });
   const close = async () => { ingest.close(); feed.close(); await service.closeAll().catch(() => undefined); store.close(); };
   const setStatus = (next: NativeStatus) => { status = next; for (const pump of pumps) pump({ type: 'status', status: next }); };
-  return { store, session: session as Session, writer, dispatcher, close, setStatus, unread, driver };
+  return { store, session: session as Session, writer, dispatcher, close, setStatus, unread, driver, host: service.host };
 }
 
 const cleanups: Array<() => unknown> = [];
@@ -64,6 +64,31 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 const waitFor = (check: () => void) => vi.waitFor(check, { timeout: 2_000, interval: 5 });
 
 describe('dispatcher fed by the journal', () => {
+  it.each(['journal', 'driver'] as const)('corrects a released input by command id after its provider watch closes (%s)', async source => {
+    const env = setup('cursor');
+    cleanups.push(env.close);
+    const id = env.session.id;
+    const run = env.store.acceptNativeRun(id, 'released', input('same words'), { mode: 'agent' }, 0);
+    env.store.transitionNativeRun(run.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation', backendId: 'cursor',
+      nativeSessionId: 'chat-1', queueReleasedAt: at(0), baselineSequence: 0 }, { state: 'interrupted' });
+    const dispatcher = env.dispatcher();
+    cleanups.push(() => dispatcher.close());
+    dispatcher.kick(id);
+    const publish = (event: NativeWorkbenchEvent) => {
+      if (source === 'journal') env.writer.commit({ events: [event], cursor: event.nativeId });
+      else env.host.emitEvent(id, event);
+    };
+    publish(row(id, 'other-user', 'user_message_chunk', 'other-turn', { content: { type: 'text', text: 'same words' } }));
+    publish(row(id, 'other-chat-user', 'native_input_receipt', 'other-turn', { commandId: run.commandId, nativeSessionId: 'other-chat' }));
+    publish(row(id, 'original-user', 'native_input_receipt', 'original-turn', { commandId: run.commandId }));
+    await waitFor(() => expect(env.store.getRun(run.id)).toMatchObject({
+      state: 'interrupted', native: { delivery: 'observed', nativeMessageId: 'original-user', nativeTurnId: 'original-turn', queueReleasedAt: at(0) },
+    }));
+    if (source === 'journal') env.writer.turnEnded('original-turn', 'completed', at(2));
+    else publish(row(id, 'end', 'run_completed', 'original-turn', { commandId: run.commandId }));
+    await waitFor(() => expect(env.store.getRun(run.id).state).toBe('completed'));
+  });
+
   it('stops the targeted known turn without cancelling an earlier unbound native command', async () => {
     const env = setup('codex');
     cleanups.push(env.close);

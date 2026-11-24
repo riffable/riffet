@@ -8,7 +8,7 @@
 
 ## 1. 背景与结构性病灶
 
-近期集中暴露的两类线上问题（新建会话首条消息下显示「停止并发送」；Cursor 会话重启后丢失 steer、点击「停止并发送」缓慢且未走 `deliverNow`、停止后排队消息卡死 60 秒、工具调用块被自动折叠并显示「已处理」），根源并非零散边界 bug，而是现行架构的 4 个结构性裂缝：
+近期集中暴露的两类线上问题（新建会话首条消息下显示「停止并发送」；Cursor 会话重启后丢失 steer、点击「停止并发送」后原任务仍在运行、停止后排队消息卡死 60 秒、工具调用块被自动折叠并显示「已处理」），根源并非零散边界 bug，而是现行架构的 4 个结构性裂缝：
 
 1. **三实体混装与 `Journal ↔ Dispatcher` 环形状态机**
    - `Run` 同时承载「队列输入项」「至多一次投递围栏」「执行回合」三种不同生命周期的实体，靠十余个无类型 `stage` 字符串和全仓 40+ 处 `intent !== 'steer'` 区分语义。
@@ -17,7 +17,7 @@
    - `apps/server/src/native/dispatch.ts`（1625 行）以全局 500 ms `kick()` 轮询全库未完结 Run，并用 18 个并行内存 Map/Set 维护锁、重试、停机、引导和超时态；`lane.ts#admission` 只是被动查询函数而非状态跃迁权威。
 3. **身份混用与传输层细节侵入核心调度器**
    - `stopTargets` 把浏览器控制租约 `terminalEpoch`（开关终端抽屉、重连 tmux 均会递增）混作进程身份，且要求 `native.nativeTurnId === stop.turnId`（重启后纯内存 `activeTurn` 丢失导致 `turnId = undefined`，直接把活跃 Run 过滤为空）。
-   - 核心调度器堆叠了 18 个 `NativeBackendTraits` 开关，硬编码 PTY/argv/回显匹配逻辑；targeted stop 的 `!stop` 判断把 Cursor 的 `deliverNow`（`sendsNow = true`）彻底架空为死代码。
+   - 原实现把发进 Cursor 输入框当成替换成功。CLI 可能仍在等同一会话锁下的 hook，消息还留在自己的 follow-ups 队列里。
 4. **控制面与内容面异步撕裂，客户端各自猜状态**
    - `status`、`runs`、`rows` 三路异步到达且缺少统一权威裁决；Web / macOS / KMP 各自维护 `inQueue`、`messagePlace`、`causallyBusy`、`canSteerQueued` 与 `TurnProcess` 的副作用 `fold()`。一旦 `phase: idle` 早于 `run.state: interrupted`（或 `run` 漏结算），前端立即把被中断的回合误判为正常完成并收起工具调用。
 
@@ -235,7 +235,7 @@ export interface ExecutionAdapter {
   /** 向当前活跃回合注入引导输入 */
   steerTurn?(req: SteerTurnRequest): Promise<{ deferred?: true }>;
 
-  /** 原子替换当前回合（Cursor 走带目标守卫的 deliverNow，其他后端默认组合 stopTurn + startTurn） */
+  /** 后端能确认替代回合已开始时使用原子替换 */
   replaceTurn(req: ReplaceTurnRequest): Promise<ReplaceTurnResult>;
 
   /** 确认停止当前前台执行（成功返回即保证进程已回到空闲或已退出） */
@@ -243,7 +243,7 @@ export interface ExecutionAdapter {
 }
 ```
 
-- **`PtyExecutionAdapter`（Claude / Cursor 共享）**：封装 `waitFor`、写前 `commitDispatchFence`、tmux 进程身份检查（`pid + startedAt`）、输入框清理与回显确认、`terminalEpoch` 写锁保护、Ctrl+C 安全停止与 `deliverNow`。
+- **`PtyExecutionAdapter`（Claude / Cursor 共享）**：封装 `waitFor`、写前 `commitDispatchFence`、tmux 进程身份检查（`pid + startedAt`）、输入框清理与回显确认、`terminalEpoch` 写锁保护、带目标校验的 Ctrl+C 停止。
 - **`ProtocolExecutionAdapter`（Codex / DSH / Traex 共享）**：直接对接 App-Server / JSON-RPC，零 PTY 概念泄露。
 - 精简后的后端声明只保留高层产品能力（`supportsSteer`、`supportsTargetedStop`、`survivesRestart`、`supportsInitialPromptArgs`、`supportsSessionReferences` 等）。
 
@@ -252,12 +252,12 @@ export interface ExecutionAdapter {
 针对本次定位到的 4 处 Cursor 根因，在 `plugins/riffet/cursor/` 同步改造：
 
 1. **`activeTurn` 全生命周期覆盖与重启自愈**（`plugins/riffet/cursor/backend/steer.ts`）：
-   - `beforeSubmitPrompt` 携带 `conversation_id` + `generation_id`，校验存活终端后即刻建立 `entry.active`（不再等到第一个 `preToolUse`）；
+   - 当前没有前台回合时，`beforeSubmitPrompt` 核对终端并记录会话和生成 ID。CLI 在原回合执行期间收到另一条排队输入时也会调用这个 hook，原回合继续持有引导目标。
    - 新增 `hydrate(session)`：服务重启或重新 `observe` 时，若会话终端仍在运行且持久存储存在该 `(nativeSessionId, terminalId)` 下状态为 `running / observed` 且带 `nativeTurnId` 的 Run，核对 `chat-store` 中该 turn 仍为 `'open'`（且未记录结束），立即恢复 `entry.active` 并广播 `status`。
-2. **打通带目标校验的 `deliverNow`（`replaceTurn`）**：
-   - 移除 `dispatch.ts:1530` 的 `!stop` 封锁；
-   - `replaceTurn` 先校验目标并持久化 `StopReceipt(pending)`，再把 `beforeWrite: () => checkStopTarget()` 传入 `native.deliverNow`；
-   - 若 `deliverNow` 在写入前因 CLI 不可接管返回 `CLI_BUSY`，自动回退到 `stopTurn + startTurn`；写入一旦越过围栏，由 `SessionActor` 立即原子结算旧回合并写 `meta.turn_ended(interrupted)`。
+2. **停止并发送**。
+   - Cursor 先核对用户选择的回合，终端显示可停止时发送 Ctrl+C，确认停止后由队列正常发送一次替代消息。CLI 自己的 follow-ups 继续由它管理。
+   - Cursor 的 HTTP hook 按会话顺序处理，可以在宿主持有终端操作锁时返回。hook 消费引导时，写入前仍须核对目标。
+   - 声明支持原子替换的后端须能确认替代消息的回执。只收到提交结果或写入后失去连接时，原任务保留当前状态，重试同一停止请求只核对结果。
 3. **`native.interrupt` 迁移 `waitFor` 并修复假忙残留**（`plugins/riffet/cursor/native/service.ts`）：
    - 替换裸 `while (Date.now() < deadline)` 为共享 `waitFor` 原语（带终检与事件循环阻塞补偿）；
    - 确认停止回到 `idle` 后，清除当前回合的 `liveStep` 活跃判定并**不再错误刷新 `watch.paneBusyAt = Date.now()`**（避免 `hiddenTurn` / `ANSWERED_SETTLE_MS` 拖延空闲收敛）。
@@ -338,7 +338,7 @@ const canAutoFold =
 - **服务端**：
   - 修复 `stopTargets`（去掉 `terminalEpoch` 校验；无 `turnId` 时按同 `(nativeSessionId, terminalId)` 匹配全部未完结前台 Run）；
   - Stop 确认后原子结算 Run 并主动写 `Journal` 的 `meta.turn_ended(interrupted)`，立即 `kick()` 派发后继；
-  - Cursor 后端：`beforeSubmitPrompt` 建立 `activeTurn`、重启 `hydrate` 恢复 `activeTurn`、打通带 `stop` 目标校验的 `deliverNow`、`interrupt` 迁 `waitFor` 并修复 `paneBusyAt` / `liveStep`。
+  - Cursor 后端：`beforeSubmitPrompt` 建立 `activeTurn`、重启 `hydrate` 恢复 `activeTurn`、先确认原任务停止，再发送排队消息、`interrupt` 迁 `waitFor` 并修复 `paneBusyAt` / `liveStep`。
 - **Web 前端**：
   - `UserMessage` 彻底移除「停止并发送」；
   - `TurnProcess` + `transcriptRows` 切到纯派生折叠（接入 `TurnOutlineV3.status` + `hasIncompleteTools` + `followedByAnswer`）。

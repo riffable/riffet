@@ -1036,6 +1036,20 @@ describe('sync v3 outbox', () => {
     expect(handoff.reconcile([completed], newerWindow, { hasAfter: false, generation: 'g1' })).toEqual([]);
   });
 
+  it('keeps a steer on its original turn through a rejection before its server row arrives', () => {
+    const handoff = new OutboxHandoff();
+    const target = { intent: 'steer', ownerRunId: 'owner' } as const;
+    const rows = [row('a', 1024, 1)];
+    for (const run of [
+      nativeRun('cmd1', 'cmd1', 'queued', { ...target, fingerprint: 'client-pending', stage: 'http_pending' }),
+      nativeRun('r1', 'cmd1', 'failed', { ...target, delivery: 'failed', stage: 'steer_missed' }),
+    ]) {
+      const pending = handoff.reconcile([run], rows, { hasAfter: false, generation: 'g1' });
+      const visible = timelineItems(withLocalOutbox(rows, pending), 's1', [run]);
+      expect(visible.at(-1)).toMatchObject({ kind: 'user', key: 'user:cmd1', turn: 'run:owner', run });
+    }
+  });
+
   it('drops a tracked handoff on cancellation, confirmed generation change, or when scrolled off the top', () => {
     const handoff = new OutboxHandoff();
     const baseRows = [row('a', 1024, 1)];

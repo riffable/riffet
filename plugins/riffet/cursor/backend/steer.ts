@@ -19,8 +19,10 @@ const EDIT_TOOLS = new Set(['Write', 'Delete', 'StrReplace', 'Edit', 'MultiEdit'
 interface ActiveGeneration extends NativeTurnTarget { terminalId: string }
 interface Entry {
   inputs: DeferredSteerInputs;
+  hooks?: Promise<void>;
   active?: ActiveGeneration;
-  retired: Set<string>;
+  /** Submitted follow-ups share the bounded generation history with ended requests. */
+  generations: Map<string, 'retired' | ActiveGeneration>;
   /** Run outcomes already published, including hooks whose journal read has yet to land. */
   ended: Map<string, TurnOutcome>;
   /** The last verified idle root and the read currently checking one. */
@@ -100,6 +102,7 @@ export class CursorSteerBridge {
     };
     native.useTurnObserver({
       activeTurn: session => this.activeTurn(session),
+      requestStarted: (sessionId, chatId, turnId, fromStore) => this.requestStarted(sessionId, chatId, turnId, fromStore),
       recordedOutcome: (sessionId, target) => this.recordedOutcome(sessionId, target)?.status,
       transcript: (session, events) => { for (const receipt of this.receiptEvents(session, events)) host.emitEvent(session.id, receipt); },
       offline: session => this.reject(session.id, 'Cursor connection is no longer writable'),
@@ -111,7 +114,7 @@ export class CursorSteerBridge {
   bind(sessionId: string): Entry {
     let entry = this.entries.get(sessionId);
     if (!entry) {
-      entry = { retired: new Set(), ended: new Map(), inputs: new DeferredSteerInputs(this.steerHost, {
+      entry = { generations: new Map(), ended: new Map(), inputs: new DeferredSteerInputs(this.steerHost, {
         backendId: 'cursor', sessionId, currentTarget: () => this.activeTurn(this.port.getSession(sessionId)),
       }) };
       this.entries.set(sessionId, entry);
@@ -202,7 +205,7 @@ export class CursorSteerBridge {
     const turnId = run?.nativeTurnId;
     if (!turnId) return;
     const target = { nativeSessionId, turnId };
-    if (entry.retired.has(turnId) || entry.ended.has(turnKey(target))) return;
+    if (entry.generations.get(turnId) === 'retired' || entry.ended.has(turnKey(target))) return;
     const state = this.native.turnState(session.id, target);
     // `undefined` means the store has not been read yet; `open` means the turn is still in it.
     if (state === undefined ? storeShowsOpen : state !== 'open') return;
@@ -249,15 +252,34 @@ export class CursorSteerBridge {
     });
   }
 
-  private retire(entry: Entry, turnId: string): void {
-    entry.retired.add(turnId);
-    while (entry.retired.size > 256) entry.retired.delete(entry.retired.values().next().value!);
+  private remember(entry: Entry, turnId: string, generation: 'retired' | ActiveGeneration): void {
+    entry.generations.delete(turnId);
+    entry.generations.set(turnId, generation);
+    while (entry.generations.size > 256) entry.generations.delete(entry.generations.keys().next().value!);
+  }
+
+  /** A submit hook may name a queued prompt. Its agent request or committed turn proves it started. */
+  private requestStarted(sessionId: string, nativeSessionId: string, turnId: string, fromStore: boolean): void {
+    const entry = this.entries.get(sessionId);
+    if (!entry || entry.active?.turnId === turnId) return;
+    const submitted = entry.generations.get(turnId);
+    if (submitted === 'retired' || (!submitted && !(fromStore && entry.active
+      && this.native.turnState(sessionId, entry.active) === 'superseded'))) return;
+    const session = this.port.getSession(sessionId);
+    if (session.archivedAt || session.nativeSessionId !== nativeSessionId || !session.terminalId
+      || (submitted && (submitted.terminalId !== session.terminalId || submitted.nativeSessionId !== nativeSessionId))) return;
+    const terminal = this.port.findTerminal(session.terminalId);
+    if (!terminal || terminal.state === 'exited') return;
+    if (entry.active) this.reject(sessionId, 'Cursor started another generation');
+    entry.generations.delete(turnId);
+    entry.active = { nativeSessionId, turnId, terminalId: terminal.id };
+    this.native.notifyTurnChanged(sessionId);
   }
 
   reject(sessionId: string, reason: string): void {
     const entry = this.entries.get(sessionId);
     if (!entry) return;
-    if (entry.active) this.retire(entry, entry.active.turnId);
+    if (entry.active) this.remember(entry, entry.active.turnId, 'retired');
     entry.active = undefined;
     entry.inputs.reject(reason);
     this.native.notifyTurnChanged(sessionId);
@@ -313,9 +335,11 @@ export class CursorSteerBridge {
     }
     const entry = this.bind(session.id);
     const target = { nativeSessionId, turnId: turnId! };
-    // Outside the session lock: the snapshot can take a second or two, and the command waits for this hook but nothing else should.
     await this.observeWorkspace(session, payload);
-    return this.port.withSessionLock(session.id, async () => {
+    // Cursor can wait for this HTTP response inside a send or stop. Serialize its hooks with
+    // each other while the host keeps ownership of terminal writes under its session lock.
+    const response = (entry.hooks ?? Promise.resolve()).then(async (): Promise<Record<string, unknown>> => {
+      if (this.closed || this.entries.get(session.id) !== entry) return {};
       const current = this.port.getSession(session.id);
       if (signal.aborted || current.archivedAt || current.nativeSessionId !== nativeSessionId) return {};
       const interruptedTool = event === 'postToolUseFailure' && payload.is_interrupt === true;
@@ -324,14 +348,17 @@ export class CursorSteerBridge {
         this.end(entry, session.id, target, { status, at: new Date().toISOString() });
         return {};
       }
-      if (entry.retired.has(target.turnId)) return {};
+      if (entry.generations.get(target.turnId) === 'retired') return {};
       if (event === 'beforeSubmitPrompt') {
-        // The generation exists when the prompt is submitted, which is before the first tool hook.
-        if (entry.active && !sameTarget(entry.active, target)) this.reject(session.id, 'Cursor generation changed before the input was consumed');
-        if (current.terminalId) {
-          const terminal = await this.port.terminals.get(current.terminalId);
-          if (!signal.aborted && terminal.state !== 'exited' && this.port.getSession(session.id).terminalId === terminal.id) {
-            entry.active = { ...target, terminalId: terminal.id };
+        // A submitted follow-up already has a generation id while the original turn is still running.
+        const terminal = current.terminalId ? this.port.findTerminal(current.terminalId) : undefined;
+        if (terminal && terminal.state !== 'exited' && !sameTarget(entry.active, target)) {
+          const generation = { ...target, terminalId: terminal.id };
+          if (entry.active) {
+            this.remember(entry, turnId!, generation);
+            this.native.refreshTurnIdentity(current);
+          } else {
+            entry.active = generation;
             this.native.notifyTurnChanged(session.id);
           }
         }
@@ -367,9 +394,8 @@ export class CursorSteerBridge {
         });
         return {};
       }
-      if (!current.terminalId) return {};
-      const terminal = await this.port.terminals.get(current.terminalId);
-      if (signal.aborted || terminal.state === 'exited' || this.port.getSession(session.id).terminalId !== terminal.id) return {};
+      const terminal = current.terminalId ? this.port.findTerminal(current.terminalId) : undefined;
+      if (!terminal || terminal.state === 'exited') return {};
       if (event === 'preToolUse') {
         if (entry.active && !sameTarget(entry.active, target)) {
           // A chat runs one turn at a time, so another generation id is a new turn only once the store shows this one
@@ -385,15 +411,16 @@ export class CursorSteerBridge {
       }
       if (event !== 'postToolUse' && event !== 'postToolUseFailure') return {};
       if (!sameTarget(this.activeTurn(this.port.getSession(session.id)), target) || entry.active?.terminalId !== terminal.id) return {};
-      // claim removes the matching inbox entries before it awaits their fences, and the session lock keeps the
-      // other hooks of this conversation out meanwhile. Parallel tool hooks cannot deliver the same input twice,
-      // and a stopped/changed generation can never claim it.
+      // Each fence checks that the run still belongs to this active target and that no stop has begun.
       const owner = this.owner(session.id, target);
       const context = await entry.inputs.claimAsync(target, { terminalId: terminal.id, terminalEpoch: terminal.epoch,
         ...(owner ? { ownerRunId: owner.id, resolvedConfig: owner.resolvedConfig ?? owner.config } : {}),
       });
-      return context ? { additional_context: context } : {};
+      return context && !signal.aborted && sameTarget(this.activeTurn(this.port.getSession(session.id)), target)
+        ? { additional_context: context } : {};
     });
+    entry.hooks = response.then(() => undefined, () => undefined);
+    return response;
   }
 
   /**
@@ -479,7 +506,7 @@ export class CursorSteerBridge {
     if (entry.ended.has(key)) return;
     entry.ended.set(key, outcome);
     if (entry.ended.size > 256) entry.ended.delete(entry.ended.keys().next().value!);
-    this.retire(entry, turnId);
+    this.remember(entry, turnId, 'retired');
     if (sameTarget(entry.active, target)) entry.active = undefined;
     const type = TURN_OUTCOME_EVENT[outcome.status];
     const { at, error } = outcome;

@@ -461,7 +461,7 @@ describe('timeline service', () => {
     let queued = nativeRun('q0', 'queued', 'again', { delivery: 'queued' });
     env.setRun(queued);
     await env.ready();
-    // Each steer replaces the queued row and, not reaching the turn, comes back as the next message (`requeueSteer`).
+    // Older journals can contain repeated steer-to-queue conversions for the same row.
     for (const id of ['s1', 's2']) {
       const steer = nativeRun(id, 'queued', 'again', { intent: 'steer', delivery: 'queued', stage: 'steer_pending', nativeSessionId: 'chat-1', nativeTurnId: 't1', sourceRunId: queued.id });
       env.setRun(steer);

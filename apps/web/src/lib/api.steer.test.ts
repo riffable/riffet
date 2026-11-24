@@ -1,7 +1,12 @@
 import { afterEach,beforeEach,describe,expect,it,vi } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import type { SessionControlSnapshot } from '@contracts';
 import { api,HttpError,listNativeSendRequests,nativeSteerInput,removeNativeSendRequest,saveNativeSendRequest,submitNativeSendRequest,type NativeSendOutboxEntry } from './api';
 import { migrateNativeOutbox } from './native-outbox-storage';
 import { isUncertainRequest } from '../app/session/nativeOutbox';
+import { useNativeRunCommands } from '../app/session/nativeRunCommands';
+import { createNativeSessionStore } from '../app/session/nativeSessionStore';
 
 const target = { nativeSessionId: 'original-thread', turnId: 'original-turn' };
 const entry = (): NativeSendOutboxEntry => ({ sessionId: 's1', body: { commandId: 'c1', text: 'retain the current tool', attachments: [{ id: 'attachment' }], context: [{ path: 'src/a.ts', line: 12 }] }, createdAt: '2026-10-16T01:00:00Z', version: 2, steerTarget: { ...target } });
@@ -15,6 +20,42 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('steer outbox and transport', () => {
+  it('sends one stop to the displayed provider turn even when the foreground changes during the catalog lookup', async () => {
+    const store = createNativeSessionStore([]);
+    store.set({ status: { phase: 'busy', activeTurn: { ...target, turnId: 'stale-status' } } });
+    const control: { current: SessionControlSnapshot } = { current: {
+      revision: 1, runtime: 'ready', activeTurn: { nativeSessionId: target.nativeSessionId, nativeTurnId: target.turnId,
+        turnId: 'journal-key', phase: 'running', canStop: true, canSteer: false },
+      inbox: [], interaction: null, capabilities: { canStop: true, canSteer: false, canSendNow: false }, activity: { compacting: false, background: 0 },
+    } };
+    const posts: unknown[] = [];
+    vi.stubGlobal('fetch', async (path: string, request: RequestInit) => {
+      if (path.endsWith('/catalog')) {
+        control.current = { ...control.current, revision: 2, activeTurn: { ...control.current.activeTurn!, nativeTurnId: 'successor' } };
+        return Response.json({ capabilities: { supportsTargetedStop: true } });
+      }
+      if (path.endsWith('/cancel')) {
+        posts.push(JSON.parse(String(request.body)));
+        return Response.json({ error: { code: 'NATIVE_STOP_TARGET_CHANGED', message: 'The original task changed' } }, { status: 409 });
+      }
+      return Response.json({});
+    });
+    let stop!: () => Promise<void>;
+    const onError = vi.fn();
+    renderToStaticMarkup(createElement(function Commands() {
+      stop = useNativeRunCommands({ control, store,
+        session: { id: 's1', projectId: 'p', kind: 'native', title: '', tags: [], state: 'running', mode: 'agent', createdAt: '', updatedAt: '' },
+        tracking: { sessionId: 's1', runsRevision: 0, sendInFlight: false, transcriptKnown: true },
+        latest: { current: { onError, onSessionChanged: vi.fn(), chatActive: true, notificationsEnabled: false, title: '' } },
+      }).cancel;
+      return null;
+    }));
+    await stop();
+    expect(posts).toEqual([{ ...target, requestId: expect.any(String) }]);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('riffet.stop.s1')).toBeNull();
+  });
+
   it('isolates steering from old scanners while merging both outbox formats', () => {
     saveNativeSendRequest({ sessionId: 's1', body: { commandId: 'normal', text: 'next turn', expectedConfigRevision: 8 }, createdAt: '2026-10-16T00:00:00Z' });
     saveNativeSendRequest(entry());

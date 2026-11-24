@@ -46,7 +46,7 @@ export class SessionCommands {
   private readonly submissions = new WeakMap<Store, Map<string, PendingSubmission>>();
 
   /** Coalesces admission/preflight too, before the normal Run idempotency record exists. */
-  submit<T>(store: Store, sessionId: string, commandId: string, identity: unknown, action: () => Promise<T>): Promise<T> {
+  submit<T>(store: Store, sessionId: string, commandId: string, identity: unknown, action: () => Promise<T>, options?: { recovering?: boolean }): Promise<T> {
     try {
       // A Run is authoritative; its own accepted-input fingerprint and idempotency path apply.
       if (store.findRunByCommand(sessionId, commandId)) return Promise.resolve().then(action);
@@ -62,7 +62,8 @@ export class SessionCommands {
       if (rejection) return Promise.reject(rejection.fingerprint === fingerprint
         ? new AppError(rejection.code, rejection.message, rejection.status, undefined, rejection.params) : conflict());
       const promise = Promise.resolve().then(action).catch((error: unknown) => {
-        if (error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 408
+        // A pending stop already owns its command. A rejected recovery attempt cannot reject the original.
+        if (!options?.recovering && error instanceof AppError && error.statusCode >= 400 && error.statusCode < 500 && error.statusCode !== 408
           && !/UNCONFIRMED|UNKNOWN|TIMEOUT|NETWORK|UNREACHABLE/i.test(error.code)) {
           // If durable storage fails, propagate that failure rather than an unsafe definitive 4xx.
           store.transaction(() => {

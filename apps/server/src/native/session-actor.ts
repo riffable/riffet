@@ -8,12 +8,13 @@ import { admission, heldByProvider, holdsUnconfirmed, nextLook, queueOf, steerTu
 import type { DispatchObservation, NativeDispatcherBackend } from './dispatch.js';
 import { ExecutionAdapter, type TurnDeliveryResult } from './execution-adapter.js';
 import { Mailbox } from './mailbox.js';
+import { readStopReceipt } from './stop-receipt.js';
 import { DispatchTrace, phaseOf, type DispatchTraceEntry, type SessionPhase } from './trace.js';
 import {
   applyObservation, IDLE_OUTCOME_GRACE_MS, IDLE_RECONCILE_MS, isSlashCommand,
   releaseEndedSteers, trackTurnOutcome, watchDeliveries, type ActorObservationDeps,
 } from './actor-observations.js';
-import { beginInterrupt, checkRecovery, continueRecovery, type ActorControlDeps } from './actor-interrupt.js';
+import { awaitingLaterTurn, beginInterrupt, checkRecovery, continueRecovery, idleForRecovery, releaseAfterLaterTurn, type ActorControlDeps } from './actor-interrupt.js';
 
 export { IDLE_OUTCOME_GRACE_MS, IDLE_RECONCILE_MS };
 
@@ -44,12 +45,10 @@ type ActorMessage =
 
 /**
  * Whether an unfinished native run still needs a standing live watch on its provider.
- * A steer whose target turn already ended (`queueReleasedAt`) can never run in a later turn, so
- * it must not pin the provider watch or keep an idle CLI from being reclaimed; late journal
- * receipts still settle it through `subscribeCorrections`.
+ * Released inputs are history. Late receipts and turn ends reach them through `subscribeCorrections`.
  */
 export function runNeedsDispatchWatch(run: Run): boolean {
-  return !(run.native?.intent === 'steer' && Boolean(run.native.queueReleasedAt));
+  return !run.native?.queueReleasedAt;
 }
 
 /** Process-wide services a session actor may use. Cross-session state stays on the coordinator. */
@@ -57,7 +56,8 @@ export interface SessionActorHost {
   readonly store: Store;
   readonly native: NativeDispatcherBackend;
   readonly runtime: {
-    withSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
+    withSession<T>(sessionId: string, operation: () => Promise<T>, options?: { detached?: boolean }): Promise<T>;
+    /** With an initial prompt, fence immediately before spawning the CLI. */
     ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<unknown>;
   };
   readonly workspace: import('../workspace/index.js').WorkspaceService;
@@ -84,6 +84,10 @@ export class SessionActor {
   interruptionTask: { commandId?: string; fingerprint?: string; task: Promise<Run | undefined> } | undefined;
   readonly recoveryChecks = new Map<string, Promise<NativeRunRecovery>>();
   recoveryActive = false;
+  private releaseCheck?: Promise<void>;
+  private releaseCheckPending = false;
+  private releaseIdle = false;
+  private releaseEndSequence = 0;
   readonly steerTasks = new Map<string, Promise<Run>>();
   readonly pendingSteerOutcomes = new Map<string, NativeWorkbenchEvent>();
   readonly pendingTurnOutcomes = new Map<string, NativeWorkbenchEvent>();
@@ -127,7 +131,7 @@ export class SessionActor {
       isClosed: () => this.host.closed,
       isInterrupting: () => this.interrupting,
       traits: backendId => this.traits(backendId),
-      requeueSteer: runId => this.requeueSteer(runId),
+      markSteerMissed: runId => this.markSteerMissed(runId),
       wakeSoon: () => this.wakeSoon(),
     };
     this.ctrlDeps = {
@@ -155,7 +159,7 @@ export class SessionActor {
       readStatus: id => this.readStatus(id),
       observe: (id, message) => this.observe(id, message),
       step: () => this.step(),
-      requeueSteer: runId => this.requeueSteer(runId),
+      markSteerMissed: runId => this.markSteerMissed(runId),
       armDelivery: (run, initial) => this.armDelivery(run, initial),
       openDelivery: (run, armed) => this.openDelivery(run, armed),
       recoverDelivery: (runId, initial, options, error) => this.recoverDelivery(runId, initial, options, error),
@@ -170,7 +174,7 @@ export class SessionActor {
 
   isIdle(runs = this.store.listUnfinishedNativeRuns(this.sessionId)): boolean {
     return !runs.some(runNeedsDispatchWatch) && this.worker === undefined && !this.interrupting && this.interruptionTask === undefined
-      && !this.recoveryActive && this.recoveryChecks.size === 0 && this.steerTasks.size === 0
+      && !this.recoveryActive && !this.releaseCheck && this.recoveryChecks.size === 0 && this.steerTasks.size === 0
       && this.startReservations === 0 && this.drainHeldSteers.size === 0 && this.timer === undefined;
   }
 
@@ -194,7 +198,7 @@ export class SessionActor {
     }
     if (this.host.closed) return;
     try { this.apply(message.sessionId, message.observation); }
-    finally { this.finish(false, message.type); }
+    finally { this.finish(false, message.type, message.observation); }
   }
 
   private wake(): void {
@@ -216,7 +220,7 @@ export class SessionActor {
         if (runs.some(runNeedsDispatchWatch)) this.ensureObserver();
         if (!this.native.pending?.(session.backendId ?? '')) {
           if (releaseEndedSteers(this.store, runs)) runs = this.store.listUnfinishedNativeRuns(this.sessionId);
-          if (this.sendOrphanedSteers(this.sessionId, runs)) runs = this.store.listUnfinishedNativeRuns(this.sessionId);
+          if (this.settleOrphanedSteers(this.sessionId, runs)) runs = this.store.listUnfinishedNativeRuns(this.sessionId);
           if (runs.some(run => run.native?.intent !== 'steer' && run.native?.delivery === 'queued') && !this.host.draining() && this.worker === undefined) {
             const { next: run, held } = this.admission(this.sessionId, runs);
             if (!held && run) this.startWorker(run.id);
@@ -238,6 +242,8 @@ export class SessionActor {
     this.clearTimer();
     const pending: Array<Promise<unknown>> = [];
     if (this.worker) pending.push(this.worker);
+    // Deletion already holds the session lock. Any queued probe will see the detached actor.
+    if (this.host.closed && this.releaseCheck) pending.push(this.releaseCheck);
     for (const task of this.steerTasks.values()) pending.push(task);
     if (this.interruptionTask) pending.push(this.interruptionTask.task);
     this.pendingSteerOutcomes.clear();
@@ -254,12 +260,13 @@ export class SessionActor {
 
   private attached(): boolean { return this.host.current(this.sessionId) === this; }
 
-  private finish(evictNow: boolean, cause: ActorMessage['type']): void {
+  private finish(evictNow: boolean, cause: ActorMessage['type'], observation?: DispatchObservation): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
     let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     if (runs.some(runNeedsDispatchWatch) && !this.workspaceBlocked()) this.ensureObserver();
     if (!this.attached()) { this.clearTimer(); return; }
     runs = this.store.listUnfinishedNativeRuns(this.sessionId);
+    if (cause !== 'settle') this.checkForLaterTurn(runs, observation);
     this.scheduleTimer(runs);
     this.traced?.record(runs, this.phase(runs), cause, id => { try { return this.store.getRun(id); } catch { return undefined; } });
     if (this.mailbox.pending) return;
@@ -268,6 +275,43 @@ export class SessionActor {
       if (evictNow) this.host.onIdle(this.sessionId, this);
       else this.deferIdle();
     }
+  }
+
+  private checkForLaterTurn(runs: readonly Run[], observation?: DispatchObservation): void {
+    if (!this.native.canReleaseAfterLaterTurn) return;
+    const available = () => this.attached() && !this.host.closed && !this.host.draining() && !this.recoveryActive
+      && !this.interrupting && !this.interruptionTask && !this.worker && !this.steerTasks.size;
+    if (!available()) return;
+    const old = runs.find(awaitingLaterTurn);
+    if (!old) return;
+    // Refreshing the provider can echo idle and replay the same completed row. Only a new idle
+    // boundary or a newer journal completion warrants another probe; explicit wakes always do.
+    if (observation?.type === 'status') {
+      const idle = idleForRecovery(observation.status);
+      if (this.releaseIdle === idle) return;
+      this.releaseIdle = idle;
+      if (!idle) return;
+    } else if (observation?.type === 'events') {
+      const previous = this.releaseEndSequence;
+      for (const event of observation.events) {
+        if (event.type === 'run_completed') this.releaseEndSequence = Math.max(this.releaseEndSequence, event.sequence);
+      }
+      if (this.releaseEndSequence === previous) return;
+    }
+    if (!idleForRecovery(this.readStatus(this.sessionId))) return;
+    this.releaseIdle = true;
+    if (this.releaseCheck) { this.releaseCheckPending = true; return; }
+    // The same session lock serializes this check with sends and stops. Success only lifts the hold;
+    // the next message must go through normal admission and its own durable write fence.
+    this.releaseCheck = Promise.resolve().then(() => this.runtime.withSession(this.sessionId, () =>
+      releaseAfterLaterTurn(this.ctrlDeps, old.id, available), { detached: true }))
+      .catch(() => false).then(released => {
+        this.releaseCheck = undefined;
+        const retry = this.releaseCheckPending;
+        this.releaseCheckPending = false;
+        if (released || retry) this.wakeSoon();
+        else this.deferIdle();
+      });
   }
 
   phase(runs: readonly Run[] = this.store.listUnfinishedNativeRuns(this.sessionId)): SessionPhase {
@@ -395,19 +439,19 @@ export class SessionActor {
     try { return this.native.status(sessionId); } catch { return undefined; }
   }
 
-  private sendOrphanedSteers(sessionId: string, runs: readonly Run[]): boolean {
+  private settleOrphanedSteers(sessionId: string, runs: readonly Run[]): boolean {
     const orphaned = runs.filter(run => run.native?.intent === 'steer' && ['queued', 'preparing'].includes(run.native.delivery) && !this.steerTasks.has(run.id));
     if (!orphaned.length) return false;
     const status = this.readStatus(sessionId);
     let moved = false;
-    for (const run of orphaned) if (steerTurnEnded(run, status, item => this.store.isSteerTargetTurnEnded(item))) moved = this.requeueSteer(run.id) || moved;
+    for (const run of orphaned) if (steerTurnEnded(run, status, item => this.store.isSteerTargetTurnEnded(item))) moved = this.markSteerMissed(run.id) || moved;
     return moved;
   }
 
-  private requeueSteer(runId: string): boolean {
+  private markSteerMissed(runId: string): boolean {
     this.pendingSteerOutcomes.delete(runId);
     this.nextAttempt.delete(runId);
-    return Boolean(this.store.requeueSteer(runId));
+    return Boolean(this.store.markSteerMissed(runId));
   }
 
   private armDelivery(run: Run, initial: NonNullable<Run['native']>): { prepareAt: number; checkpoint: boolean } | undefined {
@@ -417,7 +461,7 @@ export class SessionActor {
     if (!this.store.transitionNativeRun(run.id, ['queued'], {
       delivery: 'preparing', stage: 'runtime', attempt: initial.attempt + 1,
       ...(checkpoint ? { checkpointAttempted: true } : {}),
-      timings: { ...initial.timings, prepareAt },
+      timings: { ...initial.timings, ...(initial.stage === 'interrupt_followup' ? { promotedAt: initial.timings?.promotedAt ?? prepareAt } : {}), prepareAt },
     })) return undefined;
     return { prepareAt, checkpoint };
   }
@@ -543,7 +587,7 @@ export class SessionActor {
         };
         const session = check();
         const result = await this.adapter.steerTurn(session, current, binding => {
-          if (this.store.getRun(runId).native?.intent !== 'steer') throw new AppError('RUN_CANCELLED', 'The steer message was sent on as the next message', 409);
+          if (this.store.getRun(runId).native?.delivery !== 'preparing') throw new AppError('RUN_CANCELLED', 'The steer message was cancelled', 409);
           check();
           if (binding?.nativeSessionId && binding.nativeSessionId !== current.native!.nativeSessionId || binding?.nativeTurnId && binding.nativeTurnId !== current.native!.nativeTurnId) {
             throw new AppError('STEER_TARGET_CHANGED', 'The steer target changed', 409);
@@ -558,6 +602,7 @@ export class SessionActor {
           this.store.transitionNativeRun(runId, ['preparing'], { stage: 'steer_waiting_boundary' });
           return this.store.getRun(runId);
         }
+        if (delivered.native!.stage === 'steer_missed' || delivered.native!.delivery === 'cancelled') return delivered;
         if (delivered.native!.delivery === 'preparing') throw new AppError('STEER_REJECTED', 'The backend has not accepted the steer message', 409);
         this.store.transitionNativeRun(runId, [delivered.native!.delivery], {
           ...(delivered.native!.delivery === 'dispatching' ? { delivery: 'input_sent' as const, stage: 'steer_confirmation' } : {}),
@@ -571,7 +616,7 @@ export class SessionActor {
         const code = error instanceof AppError ? error.code : undefined;
         if (delivery === 'queued' || delivery === 'preparing') {
           if (code === 'STEER_TARGET_CHANGED' || code === 'NATIVE_STEER_TARGET_GONE' || code === 'NATIVE_INTERRUPT_IN_PROGRESS' || code === 'DISPATCH_STOPPED') {
-            this.requeueSteer(runId);
+            this.markSteerMissed(runId);
           } else {
             this.pendingSteerOutcomes.delete(runId);
             this.store.transitionNativeRun(runId, [delivery], {
@@ -610,7 +655,10 @@ export class SessionActor {
     return changed ?? run;
   }
 
-  check(sessionId: string, runId: string): Promise<NativeRunRecovery> {
+  async check(sessionId: string, runId: string): Promise<NativeRunRecovery> {
+    const run = this.store.getRun(runId);
+    if (run.sessionId === sessionId) this.checkForLaterTurn([run]);
+    if (this.releaseCheck) await this.releaseCheck;
     return checkRecovery(this.ctrlDeps, sessionId, runId);
   }
 
@@ -646,9 +694,12 @@ export class SessionActor {
     catch (error) { return Promise.reject(error); }
     if (run.sessionId !== sessionId || !run.native) return Promise.reject(new AppError('RUN_NOT_FOUND', 'The message does not exist', 404));
     if (run.native.intent === 'steer') return Promise.reject(new AppError('STEER_ACTION_UNSUPPORTED', 'A steer message cannot interrupt and be sent as a new turn', 409));
-    if (run.native.stage === 'interrupt_followup' || Number.isFinite(run.native.timings?.promotedAt)) return Promise.resolve(run);
-    if (run.native.delivery !== 'queued' || run.state !== 'queued') {
-      return Promise.reject(new AppError('NATIVE_RUN_NOT_QUEUED', 'Only a message that is still queued can run now', 409));
+    if (!stop || !readStopReceipt(this.store, sessionId, stop)) {
+      const promoted = run.native.stage === 'interrupt_followup' || Number.isFinite(run.native.timings?.promotedAt);
+      if (promoted && !stop) return Promise.resolve(run);
+      if (promoted || run.native.delivery !== 'queued' || run.state !== 'queued') {
+        return Promise.reject(new AppError('NATIVE_RUN_NOT_QUEUED', 'Only a message that is still queued can run now', 409));
+      }
     }
 
     return beginInterrupt(this.ctrlDeps, sessionId, operationKey, () => {

@@ -68,6 +68,7 @@ export class TerminalService {
 
   private readonly inspector: PaneInspector;
   private readonly streams: TerminalStream;
+  onSessionInputAvailable?: (sessionId: string) => void;
 
   constructor(private readonly store: Store, private readonly options: TerminalServiceOptions) {
     const stateDir = resolve(options.stateDir);
@@ -106,6 +107,7 @@ export class TerminalService {
       finalizations: this.finalizations,
       stopping: this.stopping,
       isShuttingDown: () => this.shuttingDown,
+      inputAvailable: terminal => this.notifyInputAvailable(terminal),
       hasExclusiveOperation: id => this.hasExclusiveOperation(id),
       invalidateScreen: id => this.invalidateScreen(id),
       ensureRestored: id => this.ensureRestored(id),
@@ -459,7 +461,14 @@ export class TerminalService {
     const info = this.assertController(id, clientId, epoch);
     const updated = this.store.updateTerminal(id, { ownerId: undefined, epoch: info.epoch + 1 });
     this.streams.emit(id, { type: 'state', terminal: updated });
+    this.notifyInputAvailable(updated);
     return updated;
+  }
+
+  private notifyInputAvailable(terminal: TerminalInfo): void {
+    if (this.shuttingDown || !terminal.sessionId || !isAgentTerminal(terminal.kind)) return;
+    const session = this.store.findSession(terminal.sessionId);
+    if (session?.kind === 'native' && !session.archivedAt && session.terminalId === terminal.id) this.onSessionInputAvailable?.(session.id);
   }
 
   async interrupt(id: string): Promise<void> {

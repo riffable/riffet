@@ -469,7 +469,7 @@ export interface AgentBackend {
   /** A catalog that cannot be read throws `MODEL_CATALOG_UNAVAILABLE` (503), whose message reaches the client; `details.reason` is set when the Agent can say why. */
   listModels?(host: AgentHost, query: AgentModelQuery): Promise<AgentModel[]>;
   slashItems?(host: AgentHost, project: AgentProjectView | undefined, profile: AgentProfile): Promise<NativeSlashItem[]>;
-  /** Stop and send in one step of the Agent's own (`send` with `now`). */
+  /** Stop and send in one step (`send` with `now`), with a native input receipt for the replacement in its own turn. */
   readonly sendsNow?: boolean;
   /** Pure mapping of a stored model string to the Agent's canonical one. Synchronous because pickers call it in loops. */
   normalizeModel?(model: string, profile: AgentProfile): string;
@@ -519,6 +519,8 @@ export interface AgentBackend {
   status?(host: AgentHost, context: AgentContext): AgentStatus;
   /** Read-only proof that this exact input cannot still run from the Agent's queue or composer. */
   canReleaseInput?(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean>;
+  /** A different native turn started after this input was written and completed, and this input can no longer run. Read-only. */
+  canReleaseAfterLaterTurn?(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean>;
   /** Runs an action from the `runtimeControl` its status carries; see `RuntimeAttachment.act`. */
   runtimeAction?(host: AgentHost, context: AgentContext, request: NativeRuntimeActionRequest): Promise<void>;
   /** Stops a system activity that declares `stop` (a background task); resolves with the state at that moment (usually `stopping`). */
@@ -779,6 +781,8 @@ export interface AgentRunRef {
   nativeSessionId?: string;
   nativeTurnId?: string;
   nativeMessageId?: string;
+  /** ISO instant when this unresolved input stopped blocking later messages. */
+  queueReleasedAt?: string;
   /** The run's own failure text. */
   error?: string;
   /** Where the delivery stands in the core's finer vocabulary (`steer_rejected`, `acknowledged`, ...). */

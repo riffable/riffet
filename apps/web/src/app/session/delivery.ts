@@ -1,4 +1,5 @@
 import type { NativeQueue, Run, SessionControlSnapshot } from '@contracts';
+import { hasNativeInputReceipt } from '../../../../../packages/timeline/src/model';
 export { nativeTaskOutcome } from '../../../../../packages/timeline/src/failures';
 
 export type NativeDeliveryStatus = '' | 'sending' | 'resuming' | 'outcome_unknown' | 'unconfirmed' | 'task_failed' | 'send_failed' | 'stopped' | 'cancelled';
@@ -11,12 +12,13 @@ export function nativeDeliveryStatus(run: Run, stopShown = true, hasTurnOutput =
   if (!run.native) return '';
   const native = run.native;
   const isSteer = native.intent === 'steer';
-  const received = (!isSteer && (hasTurnOutput || run.state === 'running')) || Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
+  const received = hasNativeInputReceipt(native) || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown'
+    || (!isSteer && (hasTurnOutput || run.state === 'running'));
   switch (native.delivery) {
     case 'queued': return received ? '' : 'sending';
     case 'preparing': return received ? '' : native.stage === 'resuming' ? 'resuming' : 'sending';
     case 'dispatching': return received ? '' : 'sending';
-    case 'input_sent': return received || run.state === 'completed' ? '' : 'sending';
+    case 'input_sent': return received || (!isSteer && run.state === 'completed') ? '' : 'sending';
     case 'observed': return '';
     case 'uncertain': return received ? 'outcome_unknown' : 'unconfirmed';
     case 'failed': return received ? 'task_failed' : 'send_failed';

@@ -320,7 +320,7 @@ export class ExecutionAdapter {
     const claimed = params.claim();
     if (!claimed) return { status: 'skipped' };
     const armed = params.arm(claimed);
-    if (!armed) return { status: 'delivered', run: claimed.run };
+    if (!armed) throw new AppError('RUN_CANCELLED', 'The replacement is no longer queued', 409);
     try {
       const session = params.open(claimed, armed);
       const result = await this.startTurn({
@@ -338,7 +338,8 @@ export class ExecutionAdapter {
       return { status: 'delivered', run: claimed.run };
     } catch (error) {
       params.recover(claimed, error);
-      return { status: 'delivered', run: claimed.run };
+      if (this.store.getRun(claimed.run.id).native?.delivery === 'queued') return { status: 'skipped' };
+      throw error;
     }
   }
 
@@ -388,6 +389,12 @@ export class ExecutionAdapter {
     }
     if (!turnIds.size && fallbackTurnId) turnIds.add(fallbackTurnId);
     const at = new Date().toISOString();
-    for (const turnId of turnIds) await endTurn(sessionId, turnId, 'interrupted', at).catch(() => undefined);
+    const nativeSessionId = stop?.nativeSessionId ?? this.store.getSession(sessionId).nativeSessionId;
+    for (const turnId of turnIds) {
+      // An original that finished naturally while Stop waited keeps the provider's outcome.
+      if (nativeSessionId && this.store.findRunsByNativeTurn(sessionId, nativeSessionId, turnId)
+        .some(run => !run.native?.intent && (run.state === 'completed' || run.state === 'failed'))) continue;
+      await endTurn(sessionId, turnId, 'interrupted', at).catch(() => undefined);
+    }
   }
 }

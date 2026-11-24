@@ -289,6 +289,30 @@ describe.skipIf(!tmuxCapability)('TerminalService history and CLI lifecycle', ()
     await vi.waitFor(async () => expect((await signaled.service.get(signaled.terminal.id)).exitCode).toBe(137), { timeout: 5_000 });
   });
 
+  it('wakes the bound native conversation once when its input lease is actually released', async () => {
+    const { service, store, session, terminal } = await cursor('exec cat');
+    const available = vi.fn();
+    service.onSessionInputAvailable = available;
+    const previous = await service.claim(terminal.id, 'first');
+    const current = await service.claim(terminal.id, 'second', true);
+    await expect(service.release(terminal.id, 'first', previous.epoch)).rejects.toMatchObject({ code: 'TERMINAL_CONTROL_STALE' });
+    let entered!: () => void;
+    let finish!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const done = new Promise<void>(resolve => { finish = resolve; });
+    const interaction = service.withInteraction(terminal.id, async () => { entered(); await done; });
+    await started;
+    const released = service.release(terminal.id, 'second', current.epoch);
+    expect(available).not.toHaveBeenCalled();
+    finish();
+    await Promise.all([interaction, released]);
+    await expect(service.release(terminal.id, 'second', current.epoch)).rejects.toMatchObject({ code: 'TERMINAL_CONTROL_STALE' });
+    const next = await service.claim(terminal.id, 'third');
+    store.updateSession(session.id, { terminalId: undefined });
+    await service.release(terminal.id, 'third', next.epoch);
+    expect(available.mock.calls).toEqual([[session.id]]);
+  });
+
   it('sends only the lines added since the known version, and the whole history otherwise', async () => {
     const { service, terminal, print } = await shell();
     await print(1, 300);

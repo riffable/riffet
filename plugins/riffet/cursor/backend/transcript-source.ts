@@ -443,17 +443,28 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
 
   async drain(w: AgentLaneWriter): Promise<void> { await this.readServing(w); }
 
-  /** Read-only check for recovery (`canReleaseInput`): true while the serving lane tracks an open turn or active draft. */
-  hasOpenTurn(w: AgentLaneWriter): boolean {
-    const cursor = (w.scratch ?? w).cursor;
-    if (!cursor) {
+  /** Recovery uses the serving lane, including a scratch tail during a history rebuild. */
+  canReleaseInput(w: AgentLaneWriter, later?: { chatId: string; turnId: string }): boolean {
+    const serving = w.scratch ?? w;
+    if (!serving.cursor) {
+      if (later) return false;
       const view = this.open();
-      if (!view) return false;
-      try { return Boolean(view.meta()); } finally { view.close(); }
+      if (!view) return true;
+      try { return !view.meta(); } finally { view.close(); }
     }
-    const state = parseState(cursor);
-    if (!state) return true;
-    return Boolean((state.turn && !state.turn.ended) || state.draft);
+    const state = parseState(serving.cursor);
+    if (!state || state.draft || (state.turn && !state.turn.ended)) return false;
+    if (!later) return true;
+    if (this.bound !== later.chatId || this.options.chatId() !== later.chatId || !state.root || state.n !== state.len
+      || state.turn?.id !== later.turnId || serving.turnEndStatus(later.turnId) !== 'completed') return false;
+    // A failed or incomplete drain leaves the last good cursor readable. Verify it against the
+    // current native store, including when a scratch generation is serving the tail.
+    const view = this.open();
+    if (!view) return false;
+    try {
+      const meta = view.meta();
+      return meta?.agentId === later.chatId && meta.latestRootBlobId === state.root;
+    } finally { view.close(); }
   }
 
   settleTurnEnd(w: AgentLaneWriter, end: { turnId: string; status: AgentTurnStatus; at: string; error?: string }): Promise<boolean> {

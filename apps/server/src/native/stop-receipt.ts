@@ -14,6 +14,14 @@ export function readStopReceipt(store: Store, sessionId: string, stop: NativeSto
   return store.getSetting<Record<string, StopReceipt>>(`native-stops:${sessionId}`, {})[JSON.stringify(stop.requestId)];
 }
 
+/** A replacement retry must keep both the stop request id and the command id. */
+export function findReplacementStop(store: Store, sessionId: string, commandId: string, requestId?: string): StopReceipt | undefined {
+  const receipts = store.getSetting<Record<string, StopReceipt>>(`native-stops:${sessionId}`, {});
+  const byRequest = requestId ? receipts[JSON.stringify(requestId)] : undefined;
+  if (byRequest?.operation === commandId && byRequest.replacementFingerprint !== undefined) return byRequest;
+  return Object.values(receipts).find(receipt => receipt.operation === commandId && receipt.replacementFingerprint !== undefined) ?? byRequest;
+}
+
 export function saveStopReceipt(store: Store, sessionId: string, receipt: StopReceipt): void {
   const key = `native-stops:${sessionId}`;
   // Keep the request tombstone: eviction would turn an old retry into another Stop.

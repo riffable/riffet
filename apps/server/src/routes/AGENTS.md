@@ -30,6 +30,7 @@ HTTP 与 WebSocket 接口：把请求翻译成对内核服务的调用。只做�
 
 ## 外部行为
 
+- 「停止并发送」重试时用 commandId 和停止请求 ID 找到原收据。即使替换消息已有 Run，也要等原停止得到确认才返回成功。
 - 外部输入是 Web、Mac、iOS、Android 客户端的 HTTP、SSE 与 WebSocket 请求，以及带 `?features=` 的 EventSource（不能设头）。
 - 契约来源是 `packages/contracts/src/`。`pnpm gen:contracts` 生成 JSON Schema 快照到 `packages/contracts/schema/released/<版本>.json`，`pnpm gen:contracts:check` 在 CI 里要求相对最新快照只增不破；破坏性变更需要 `pnpm version:bump` 后重新生成。
 - 服务端忽略未知的输入字段，所以新增可选字段对旧客户端是安全的；删字段或改类型不是。

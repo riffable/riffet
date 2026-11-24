@@ -85,6 +85,7 @@ const runRef = (run: Run): AgentRunRef => ({
   ...(run.native?.nativeSessionId ? { nativeSessionId: run.native.nativeSessionId } : {}),
   ...(run.native?.nativeTurnId ? { nativeTurnId: run.native.nativeTurnId } : {}),
   ...(run.native?.nativeMessageId ? { nativeMessageId: run.native.nativeMessageId } : {}),
+  ...(run.native?.queueReleasedAt ? { queueReleasedAt: run.native.queueReleasedAt } : {}),
   ...(run.error !== undefined && run.error !== UNSPECIFIED_NATIVE_RUN_FAILURE ? { error: run.error } : {}),
   ...(run.native?.stage ? { stage: run.native.stage } : {}),
   ...(run.native?.renderedText !== undefined ? { renderedText: run.native.renderedText } : {}),
@@ -241,6 +242,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
   readonly releasePrewarm: NativeBackendDriver['releasePrewarm'];
   readonly usage: NativeBackendDriver['usage'];
   readonly canReleaseInput: NativeBackendDriver['canReleaseInput'];
+  readonly canReleaseAfterLaterTurn: NativeBackendDriver['canReleaseAfterLaterTurn'];
   readonly runtimeAction: NativeBackendDriver['runtimeAction'];
   readonly stopActivity: NativeBackendDriver['stopActivity'];
   readonly extendInteraction: NativeBackendDriver['extendInteraction'];
@@ -308,6 +310,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
     if (backend.releasePrewarm) this.releasePrewarm = (host, claimId) => backend.releasePrewarm!(this.hostFor(host), claimId);
     if (backend.usage) this.usage = (host, project, profile, session) => backend.usage!(this.hostFor(host), this.query(project, profile, session));
     if (backend.canReleaseInput) this.canReleaseInput = (host, session, profile, run) => backend.canReleaseInput!(this.hostFor(host), this.context(host, session, profile), runRef(run));
+    if (backend.canReleaseAfterLaterTurn) this.canReleaseAfterLaterTurn = (host, session, profile, run) => backend.canReleaseAfterLaterTurn!(this.hostFor(host), this.context(host, session, profile), runRef(run));
     if (backend.runtimeAction) this.runtimeAction = (host, session, profile, request) => backend.runtimeAction!(this.hostFor(host), this.context(host, session, profile), request);
     if (backend.stopActivity) this.stopActivity = (host, session, profile, activityId) => backend.stopActivity!(this.hostFor(host), this.context(host, session, profile), activityId);
     if (backend.extendInteraction) this.extendInteraction = (host, session, profile, interactionId) => backend.extendInteraction!(this.hostFor(host), this.context(host, session, profile), interactionId);
@@ -708,6 +711,10 @@ export class PluginBackendDriver implements NativeBackendDriver {
       runs: {
         find: async (id, query) => {
           own(id);
+          if ('commandId' in query && native.getRun) {
+            const runId = native.findRunIdByCommand(id, query.commandId);
+            return runId ? [runRef(native.getRun(runId))] : [];
+          }
           const runs = native.listRuns?.(id) ?? [];
           if ('commandId' in query) return runs.filter(run => run.commandId === query.commandId).map(runRef);
           if ('nativeMessageId' in query) return runs.filter(run => run.native?.nativeMessageId === query.nativeMessageId).map(runRef);

@@ -45,7 +45,6 @@ import riffet.contracts.NativeInteractionResult
 import riffet.contracts.NativeContext
 import riffet.contracts.NativeHistoryState
 import riffet.contracts.NativeStatus
-import riffet.contracts.NativeStatusPhase
 import riffet.contracts.OutputRate
 import riffet.contracts.Project
 import riffet.contracts.Run
@@ -897,11 +896,23 @@ class SessionStore(
         context: List<PromptContextReference> = emptyList(),
         interrupt: Boolean = false,
         onStored: (() -> Unit)? = null,
-    ): Boolean = composer.send(text, attachments, context, interrupt, onStored)
+    ): Boolean = composer.send(text, attachments, context, interrupt, onStored = onStored)
+
+    @Throws(Exception::class)
+    suspend fun sendReplacing(
+        text: String,
+        attachments: List<Attachment>,
+        context: List<PromptContextReference>,
+        shown: OpenSessionState,
+        onStored: (() -> Unit)? = null,
+    ): Boolean = composer.send(text, attachments, context, interrupt = true, stopSnapshot = shown, onStored = onStored)
 
     /** The selected intent remains visible even when the task temporarily cannot accept it. */
-    fun prefersSteerWhileRunning(): Boolean =
-        list.value.settings?.composerRunningBehavior == "steer" && core.value.isWorking()
+    fun prefersSteerWhileRunning(): Boolean {
+        if (list.value.settings?.composerRunningBehavior != "steer") return false
+        val state = core.value
+        return state.control?.let { it.activeTurn != null } ?: state.isWorking()
+    }
 
     @Throws(Exception::class)
     suspend fun enqueue(text: String, attachments: List<Attachment>, context: List<PromptContextReference>, onStored: (() -> Unit)? = null): Boolean =
@@ -910,20 +921,20 @@ class SessionStore(
     private fun writableSteerTarget(): riffet.contracts.NativeTurnTarget? {
         val state = core.value
         val session = state.selected ?: return null
-        val current = state.status ?: return null
-        val target = current.activeTurn?.target() ?: return null
-        val providerConnection = current.connection
+        val target = steerTarget(state.control, state.status) ?: return null
+        val control = state.control
+        val providerConnection = if (control != null) control.connection else state.status?.connection
+        val interaction = if (control != null) control.interaction else state.interaction
         if (session.archivedAt != null || target.nativeSessionId.isBlank() || target.turnId.isBlank() ||
             state.sessionId != session.id || state.connection !is RiffetConnectionState.Live ||
-            (providerConnection != null && providerConnection.state != "connected") || current.phase != NativeStatusPhase.BUSY || current.interaction != null || state.interaction != null ||
+            (providerConnection != null && providerConnection.state != "connected") || interaction != null ||
             target.nativeSessionId != session.nativeSessionId || state.uncertain.isNotEmpty()) return null
         return target
     }
 
     private suspend fun defaultSteerTarget(): riffet.contracts.NativeTurnTarget? {
-        if (list.value.settings?.composerRunningBehavior != "steer") return null
         // With no current task this remains a normal send. A busy task never silently becomes queue.
-        if (!core.value.isWorking()) return null
+        if (!prefersSteerWhileRunning()) return null
         val sessionId = core.value.selected?.id ?: return null
         val target = writableSteerTarget() ?: error(L10n.uiText("composer.error.steerUnavailable"))
         val supported = api.sessionCatalog(sessionId).capabilities.supportsSteer
@@ -945,9 +956,10 @@ class SessionStore(
     @Throws(Exception::class)
     suspend fun steerQueued(run: Run, target: riffet.contracts.NativeTurnTarget): Boolean {
         val state = core.value
-        val current = state.status
-        if (state.connection !is RiffetConnectionState.Live || current?.phase != riffet.contracts.NativeStatusPhase.BUSY || current.interaction != null ||
-            current.activeTurn?.target() != target || state.uncertain.isNotEmpty()) return false
+        if (writableSteerTarget() != target || state.actionsForQueued(run.id, run.commandId)?.contains("steer") == false) {
+            core.updateSend(state.epoch) { it.copy(error = L10n.uiText("composer.error.steerUnavailable")) }
+            return false
+        }
         return composer.steerQueued(run, target)
     }
 
@@ -957,13 +969,17 @@ class SessionStore(
      */
     fun actionsForQueued(runId: String, commandId: String): List<String>? = core.value.actionsForQueued(runId, commandId)
 
+    /** Freeze the session and the control shown by the button before scheduling its action. */
+    fun stopSnapshot(sessionId: String, control: SessionControlSnapshot?, status: NativeStatus?): OpenSessionState? =
+        openSession.value.takeIf { it.sessionId == sessionId }?.copy(control = control, status = status)
+
     /** Interrupts the running turn and promotes an already accepted queued run, keeping its keys. */
     @Throws(Exception::class)
-    suspend fun sendQueuedNow(run: Run): Boolean = composer.sendQueuedNow(run)
+    suspend fun sendQueuedNow(run: Run, shown: OpenSessionState = openSession.value): Boolean = composer.sendQueuedNow(run, shown)
 
     /** Stops the CLI's current turn, as the web's stop button does. */
     @Throws(Exception::class)
-    suspend fun interrupt(): Boolean = composer.interrupt()
+    suspend fun interrupt(shown: OpenSessionState = openSession.value): Boolean = composer.interrupt(shown)
 
     @Throws(Exception::class)
     suspend fun interruptFor(sessionId: String): Boolean = composer.interruptFor(sessionId)

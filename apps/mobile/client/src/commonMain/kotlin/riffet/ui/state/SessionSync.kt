@@ -58,6 +58,7 @@ import riffet.core.PENDING_ROW_POS
 import riffet.core.StoredSubagent
 import riffet.core.SubagentTranscript
 import riffet.core.TimelineItem
+import riffet.core.hasNativeInputReceipt
 import riffet.core.pendingUserItem
 import riffet.core.rowRun
 import riffet.core.timelineItem
@@ -909,7 +910,7 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
     private var items = HashMap<String, CachedItem>()
     private var subagents: List<StoredSubagent> = emptyList()
     /**
-     * Local non-steer sends (and a newly created session's opening receipt) drawn before the
+     * Local sends (and a newly created session's opening receipt) drawn before the
      * server's `user` row landed. Each key records the generation it started under and stays pinned
      * until the data plane covers it (`covered`), rather than guessing from `Run` delivery / `nativeMessageId`.
      */
@@ -934,8 +935,7 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
             if (run.id in failedRunIds) return true
             val native = run.native ?: return false
             if (native.delivery != NativeDeliveryState.FAILED) return false
-            val received = native.nativeMessageId != null || native.timings?.get("observedAt") != null ||
-                native.timings?.get("providerAcceptedAt") != null || native.stage == "provider_failed"
+            val received = hasNativeInputReceipt(native) || native.stage == "provider_failed"
             // A steer can share a turn with its owner while its own delivery fails independently.
             return received && native.nativeTurnId != null && native.nativeTurnId in failedTurnIds
         }
@@ -988,7 +988,7 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
             if (receiptKey !in handoffGenerations) handoffGenerations[receiptKey] = generation
         }
         for (run in runs) {
-            if (run.native?.fingerprint == "client-pending" && run.native?.intent != "steer") {
+            if (run.native?.fingerprint == "client-pending") {
                 val key = userRowKey(run)
                 if (key !in handoffGenerations) handoffGenerations[key] = generation
             }
@@ -1014,7 +1014,7 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
                 }
                 if (entry.value == null && generation != null) entry.setValue(generation)
                 if (run.native?.fingerprint == "client-pending") continue
-                if (run.native?.intent == "steer" || run.state == RunState.CANCELLED) {
+                if (run.state == RunState.CANCELLED) {
                     iterator.remove()
                     continue
                 }

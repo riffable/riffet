@@ -689,19 +689,23 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const acceptedRunPreparing = native.runs.some((run) => ['queued', 'running'].includes(run.state) && ['queued', 'preparing', 'dispatching', 'input_sent'].includes(run.native?.delivery ?? ''));
   const starting = reopening || (!silentConfigBoot && phase === 'starting') || (!connectionNotice && phase === 'offline' && (session.state === 'starting' || acceptedRunPreparing));
   const [queueOverride, setQueueOverride] = useState('');
-  const runningTargetKey = `${session.id}:${native.status.activeTurn?.turnId ?? ''}`;
+  const currentTurnId = native.control ? native.control.activeTurn?.nativeTurnId : native.status.activeTurn?.turnId;
+  const runningTargetKey = `${session.id}:${currentTurnId ?? ''}`;
+  const sendConnection = native.control ? native.control.connection : native.status.connection;
+  const writable = native.connected && (!sendConnection || sendConnection.state === 'connected');
+  const steerInteraction = native.control ? native.control.interaction : interaction;
   const preferredSubmitIntent = composerRunningIntent(runningBehavior, {
     running: busy,
     supportsSteer: native.control ? native.control.activeTurn?.canSteer : backendCapabilities?.supportsSteer,
     activeTurn: native.status.activeTurn,
-    writable: native.connected && (!connectionState || connectionState === 'connected'),
-    blocked: Boolean(interaction) || archived || starting || switchingApproval || switchingModel,
+    writable,
+    blocked: Boolean(steerInteraction) || archived || starting || switchingApproval || switchingModel,
     uncertain: native.hasUncertainSubmission,
   });
   const submitIntent = queueOverride === runningTargetKey ? 'queue' : preferredSubmitIntent;
-  const steerUnavailable = submitIntent === 'steer' && (native.control
-    ? !native.control.activeTurn?.canSteer || native.hasUncertainSubmission || Boolean(interaction)
-    : !backendCapabilities?.supportsSteer || !native.status.activeTurn || native.hasUncertainSubmission || Boolean(interaction));
+  const steerAvailable = writable && !steerInteraction && !native.hasUncertainSubmission && (native.control
+    ? native.control.activeTurn?.canSteer : backendCapabilities?.supportsSteer && native.status.activeTurn && phase === 'busy');
+  const steerUnavailable = submitIntent === 'steer' && !steerAvailable;
   const storedNativeSelection = backendSelection(backendId, catalog, session.model);
   const correctedNativeSelection = launchSelection(catalog, storedNativeSelection);
   const needsNativeNormalization = Boolean(storedNativeSelection && correctedNativeSelection !== storedNativeSelection);
@@ -924,11 +928,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     || !native.connected || Boolean(connectionState && connectionState !== 'connected')
     || native.sending || native.interrupting || native.hasUnknownSubmission;
   const { sending, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer } = native;
-  const queuedPending = useCallback((runId: string) => archived || !native.connected || Boolean(connectionState && connectionState !== 'connected') || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
-    [archived, native.connected, connectionState, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
-  const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || switchingApproval || switchingModel
-    || (native.control ? !native.control.activeTurn?.canSteer || native.hasUncertainSubmission
-      : phase !== 'busy' || Boolean(interaction) || native.hasUncertainSubmission);
+  const queuedPending = useCallback((runId: string) => archived || !writable || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
+    [archived, writable, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
+  const steerDisabled = !steerAvailable || switchingApproval || switchingModel;
   const inboxActions = useMemo(() => inboxActionsByRun(native.control, native.runs), [native.control, native.runs]);
   const canSteerQueued = native.control
     ? native.control.capabilities.canSteer && Boolean(native.control.activeTurn?.canSteer)

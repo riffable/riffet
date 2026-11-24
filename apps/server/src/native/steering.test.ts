@@ -54,7 +54,7 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
     subscribeCorrections: vi.fn((fn: typeof corrections) => { corrections = fn; return () => { corrections = undefined; }; }),
     snapshot: vi.fn(async () => ({ status, nativeSessionId: target.nativeSessionId, events: [...events] })),
     interrupt: vi.fn(async () => undefined),
-    sendRun: vi.fn(async () => undefined),
+    sendRun: vi.fn(async (_session: Session, _run: Run, _fence: (binding: NativeDispatchBinding) => Run) => undefined),
     observeTranscripts: vi.fn(() => () => undefined),
     steerRun: vi.fn(async (_session: Session, run: Run, fence: (binding?: NativeDispatchBinding) => Run) => {
       const commit = () => fence({ backendId: 'codex', nativeSessionId: target.nativeSessionId, nativeTurnId: target.turnId, ownerRunId: owner.id, baselineSequence: events.length, renderedText: run.prompt, resolvedConfig: config });
@@ -85,7 +85,7 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
     return { text: body.text.trim(), attachmentIds: body.attachments?.map(item => item.id!) ?? [], context: body.context?.map(item => ({ path: item.path!, ...(item.line ? { line: item.line } : {}) })) ?? [] };
   });
   // These messages name no other conversation: references pass straight through.
-  const contextReferences = { requireFeature: () => undefined, validateSources: () => undefined, prepare: async () => [], commit: <T>(_recipient: string, _prepared: unknown, action: (snapshots: never[]) => T) => action([]) };
+  const contextReferences = { requireFeature: () => undefined, validateSources: () => undefined, prepare: async () => [], finishInterrupt: vi.fn(), commit: <T>(_recipient: string, _prepared: unknown, action: (snapshots: never[]) => T) => action([]) };
   registerNativeRoutes(app, { store, dispatch, nativeBackends: native, sessionCommands: new SessionCommands(), readNativeInput, contextReferences } as unknown as RouteDeps);
   const submit = (commandId = 'steer-1', extra: object = {}) => app.inject({ method: 'POST', url: `/api/sessions/${session.id}/native/steer`, payload: { commandId, text: 'focus on login', target, ...extra } });
   const acceptSteer = (commandId: string) => store.acceptNativeRun(session.id, commandId, input('focus on login'), config, undefined, { target, ownerRunId: owner.id });
@@ -105,13 +105,75 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
     status = { phase: 'idle' };
     listener?.({ type: 'status', status });
   };
-  return { app, store, session, owner, target, native, runtime, dispatch, readNativeInput, submit, acceptSteer, finish, user, internal, claim, steerQueued, emit,
+  return { app, store, session, owner, target, native, runtime, dispatch, readNativeInput, contextReferences, submit, acceptSteer, finish, user, internal, claim, steerQueued, emit,
     hasListener: () => Boolean(listener),
     setMode: (next: typeof mode) => { mode = next; }, setStatus: (next: NativeStatus) => { status = next; listener?.({ type: 'status', status }); },
     setSupported: (next: boolean) => { supported = next; }, removeAttachment: () => { missingAttachment = true; } };
 }
 
 describe('native steering through HTTP and durable dispatch', () => {
+  it('recovers a written replacement through its original Stop receipt without a second write', async () => {
+    const h = harness();
+    const terminal = h.store.saveTerminal({ id: 'terminal', projectId: h.session.projectId, sessionId: h.session.id,
+      title: 'Agent', kind: 'native', state: 'running', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: h.session.createdAt });
+    h.store.updateSession(h.session.id, { terminalId: terminal.id });
+    Object.assign(h.native, { supportsSendNow: async () => true });
+    h.native.sendRun.mockImplementation(async (_session, _run, fence) => {
+      fence({ nativeSessionId: h.target.nativeSessionId, terminalId: terminal.id, terminalEpoch: terminal.epoch });
+      throw new Error('connection lost immediately after the write');
+    });
+    const stop = { requestId: 'stop-original', ...h.target };
+    const body = { commandId: 'replacement', text: 'new task', stop, attachments: [{ id: 'file' }] };
+    const post = (patch: object = {}) => h.app.inject({ method: 'POST', url: `/api/sessions/${h.session.id}/native/interrupt-and-send`, payload: { ...body, ...patch } });
+    expect((await post()).json()).toMatchObject({ error: { code: 'NATIVE_STOP_UNCONFIRMED' } });
+    const accepted = h.store.findRunByCommand(h.session.id, body.commandId)!;
+    expect(accepted.native?.timings?.dispatchAt).toEqual(expect.any(Number));
+    h.removeAttachment();
+    expect((await post()).json()).toMatchObject({ error: { code: 'NATIVE_STOP_UNCONFIRMED' } });
+    expect((await post({ text: 'changed' })).json()).toMatchObject({ error: { code: 'COMMAND_ID_CONFLICT' } });
+    expect((await post({ stop: { ...stop, requestId: 'another-stop' } })).json()).toMatchObject({ error: { code: 'NATIVE_STOP_CONFLICT' } });
+    expect(h.contextReferences.finishInterrupt).not.toHaveBeenCalled();
+    h.finish('run_cancelled');
+    const recovered = await post();
+    expect(recovered.statusCode).toBe(202);
+    expect(recovered.json<Run>().id).toBe(accepted.id);
+    h.store.updateSession(h.session.id, { archivedAt: new Date().toISOString() });
+    expect((await post()).json<Run>().id).toBe(accepted.id);
+    expect(h.native.sendRun).toHaveBeenCalledTimes(1);
+    expect(h.native.interrupt).not.toHaveBeenCalled();
+  });
+
+  it('keeps the original stop recoverable when a conflicting retry arrives before replacement acceptance', async () => {
+    const h = harness();
+    h.native.interrupt.mockRejectedValueOnce(new Error('stop response lost'));
+    Object.assign(h.native, { canReleaseInput: async () => true });
+    const body = { commandId: 'replacement', text: 'replacement task', stop: { requestId: 'stop', ...h.target } };
+    const post = (patch: object = {}) => h.app.inject({ method: 'POST', url: `/api/sessions/${h.session.id}/native/interrupt-and-send`, payload: { ...body, ...patch } });
+    expect((await post()).json()).toMatchObject({ error: { code: 'NATIVE_STOP_UNCONFIRMED' } });
+    expect(h.store.findRunByCommand(h.session.id, body.commandId)).toBeUndefined();
+    expect((await post({ text: 'different' })).json()).toMatchObject({ error: { code: 'NATIVE_STOP_CONFLICT' } });
+    expect((await post({ commandId: 'another-command' })).json()).toMatchObject({ error: { code: 'NATIVE_STOP_CONFLICT' } });
+    expect((await post()).json()).toMatchObject({ error: { code: 'NATIVE_STOP_UNCONFIRMED' } });
+    h.finish('run_cancelled');
+    const recovered = await post();
+    expect(recovered.statusCode).toBe(202);
+    expect((await post()).json<Run>().id).toBe(recovered.json<Run>().id);
+    expect(h.native.interrupt).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a definitive refusal made after recording a stop even if the old turn later ends', async () => {
+    const h = harness();
+    h.native.interrupt.mockRejectedValueOnce(new AppError('NATIVE_STOP_TARGET_CHANGED', 'The target already changed', 409));
+    Object.assign(h.native, { canReleaseInput: async () => true });
+    const post = () => h.app.inject({ method: 'POST', url: `/api/sessions/${h.session.id}/native/interrupt-and-send`,
+      payload: { commandId: 'replacement', text: 'replacement task', stop: { requestId: 'stop', ...h.target } } });
+    expect((await post()).json()).toMatchObject({ error: { code: 'NATIVE_STOP_TARGET_CHANGED' } });
+    h.finish('run_cancelled');
+    expect((await post()).json()).toMatchObject({ error: { code: 'NATIVE_STOP_TARGET_CHANGED' } });
+    expect(h.store.findRunByCommand(h.session.id, 'replacement')).toBeUndefined();
+    expect(h.native.interrupt).toHaveBeenCalledTimes(1);
+  });
+
   it('injects multiple distinct inputs into the active turn without starting or interrupting it', async () => {
     const h = harness();
     const queued = h.store.acceptNativeRun(h.session.id, 'next-task', input('next task'), config);
@@ -166,23 +228,24 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.native.steerRun).toHaveBeenCalledTimes(1);
   });
 
-  it('rechecks expiry at the write fence and sends what missed the turn once, as the next message', async () => {
+  it('preserves an expired steer and only sends the explicitly queued task', async () => {
     const h = harness(); h.setMode('expire');
-    const response = await h.submit();
+    const extra = { attachments: [{ id: 'image' }], context: [{ path: 'plan.md' }] };
+    const response = await h.submit('supplement', extra);
     expect(response.statusCode).toBe(202);
     const run = response.json<Run>();
-    expect(run).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'steer_fallback' } });
-    expect(run.native?.intent).toBeUndefined();
-    // It waits for the turn it missed to close, then goes out once.
-    h.dispatch.kick();
-    expect(h.native.sendRun).not.toHaveBeenCalled();
+    expect(run).toMatchObject({ state: 'failed', native: {
+      intent: 'steer', delivery: 'failed', stage: 'steer_missed', nativeTurnId: h.target.turnId,
+      input: { text: 'focus on login', attachmentIds: ['image'], context: extra.context },
+    } });
+    expect((await h.submit('supplement', extra)).json<Run>().id).toBe(run.id);
+    const next = h.store.acceptNativeRun(h.session.id, 'next-task', input('new task'), config);
     h.finish();
     h.dispatch.kick();
     await vi.waitFor(() => expect(h.native.sendRun).toHaveBeenCalledTimes(1));
-    expect(h.native.sendRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: run.id }), expect.any(Function), undefined);
-    h.dispatch.kick();
-    expect(h.native.sendRun).toHaveBeenCalledTimes(1);
+    expect(h.native.sendRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: next.id }), expect.any(Function), undefined);
     expect(h.native.steerRun).toHaveBeenCalledTimes(1);
+    expect(h.store.getRun(run.id).native?.stage).toBe('steer_missed');
   });
 
   it('distinguishes a definite provider rejection from a lost result and never retries a fenced input', async () => {
@@ -234,10 +297,20 @@ describe('native steering through HTTP and durable dispatch', () => {
     const queued = h.acceptSteer('queued'), preparing = h.acceptSteer('preparing'), sent = h.acceptSteer('sent');
     h.store.transitionNativeRun(preparing.id, ['queued'], { delivery: 'preparing' });
     h.store.transitionNativeRun(sent.id, ['queued'], { delivery: 'dispatching' });
+    const legacy = h.acceptSteer('old-fallback');
+    h.store.transitionNativeRun(legacy.id, ['queued'], {
+      intent: undefined, nativeTurnId: undefined, stage: 'waiting', timings: { fallbackAt: Date.now() },
+    });
+    const promoted = h.acceptSteer('explicit-stop-and-send');
+    h.store.transitionNativeRun(promoted.id, ['queued'], {
+      intent: undefined, nativeTurnId: undefined, delivery: 'preparing', stage: 'runtime', timings: { fallbackAt: 1, promotedAt: 2 },
+    });
     h.store.recoverInterruptedRuns();
-    // A restart loses the inbox that held them for the turn: they wait to be sent as the next message.
-    for (const run of [queued, preparing]) expect(h.store.getRun(run.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'steer_fallback' } });
+    for (const run of [queued, preparing, legacy]) expect(h.store.getRun(run.id)).toMatchObject({
+      state: 'failed', native: { intent: 'steer', delivery: 'failed', stage: 'steer_missed' },
+    });
     expect(h.store.getRun(sent.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
+    expect(h.store.getRun(promoted.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'interrupt_followup' } });
   });
 
   it('observes receipted hook turns through restart and accepts their real late outcome without resending', async () => {
@@ -344,19 +417,16 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.native.sendRun).not.toHaveBeenCalled(); expect(h.native.interrupt).not.toHaveBeenCalled();
   });
 
-  it('queues a deferred input its turn ended before, without treating a late pre-write rejection as proof after the fence', async () => {
+  it('keeps a rejected deferred steer out of the next turn and ignores a stale rejection after the fence', async () => {
     const h = harness(); h.setMode('deferred');
-    h.store.acceptNativeRun(h.session.id, 'queued-before-steer', input('older task'), config);
+    const next = h.store.acceptNativeRun(h.session.id, 'queued-before-steer', input('older task'), config);
     const unsent = (await h.submit('unsent')).json<Run>();
     h.internal(unsent, 'native_input_rejected', { beforeWrite: true, reason: 'turn ended' });
-    expect(h.store.getRun(unsent.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'steer_fallback' } });
-    expect(() => h.claim(unsent)).toThrow('sent on as the next message');
-    // The refused claim's own rejection speaks for the old turn: it must not bind the message to it.
+    expect(h.store.getRun(unsent.id)).toMatchObject({ state: 'failed', native: { intent: 'steer', delivery: 'failed', stage: 'steer_missed' } });
+    expect(() => h.claim(unsent)).toThrow('The steer message was cancelled');
     h.internal(unsent, 'native_input_rejected', { beforeWrite: true, reason: 'claim refused' });
-    expect(h.store.getRun(unsent.id).native?.nativeTurnId).toBeUndefined();
-    // Still ahead of what was queued before it, after an attempt rewrote its stage.
-    h.store.transitionNativeRun(unsent.id, ['queued'], { stage: 'waiting' });
-    expect(h.dispatch.queue(h.session.id, h.native.status()).next).toBe(unsent.id);
+    expect(h.store.getRun(unsent.id).native?.nativeTurnId).toBe(h.target.turnId);
+    expect(h.dispatch.queue(h.session.id, h.native.status()).next).toBe(next.id);
     const sent = (await h.submit('sent')).json<Run>(); h.claim(sent, false);
     h.internal(sent, 'native_input_rejected', { beforeWrite: true, reason: 'late rejection' });
     expect(h.store.getRun(sent.id).native?.delivery).toBe('input_sent');
@@ -412,9 +482,8 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.dispatch.cancel(h.session.id, cancelled.id).native?.delivery).toBe('cancelled');
     expect(() => h.claim(cancelled)).toThrow('The steer message was cancelled');
     const stopped = (await h.submit('stopped')).json<Run>(); await h.dispatch.interrupt(h.session.id);
-    // A stop keeps it as it keeps the messages queued behind it; the CLI is still busy, so nothing is sent yet.
-    expect(h.store.getRun(stopped.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'steer_fallback' } });
-    expect(() => h.claim(stopped)).toThrow('sent on as the next message');
+    expect(h.store.getRun(stopped.id)).toMatchObject({ state: 'failed', native: { delivery: 'failed', stage: 'steer_missed' } });
+    expect(() => h.claim(stopped)).toThrow('The steer message was cancelled');
     expect(h.native.sendRun).not.toHaveBeenCalled();
   });
 
@@ -527,7 +596,7 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.store.getRun(h.owner.id).state).toBe('failed');
   });
 
-  it('fails non-transient pre-write steer rejections instead of silently requeuing them as steer_fallback', async () => {
+  it('preserves provider rejection details and distinguishes a missed target', async () => {
     const h = harness();
     h.native.steerRun.mockRejectedValueOnce(new AppError('STEER_REJECTED', 'Steer text exceeds limit', 400));
     const response = await h.submit('reject-me');
@@ -543,12 +612,10 @@ describe('native steering through HTTP and durable dispatch', () => {
     });
     expect(h.store.getRun(run.id).error).toContain('Steer text exceeds limit');
 
-    // Claude's missing-runtime turn-ended error must still fall back cleanly to a queued message.
     h.native.steerRun.mockRejectedValueOnce(new AppError('NATIVE_STEER_TARGET_GONE', 'turn ended before hook', 409));
     const gone = (await h.submit('claude-gone')).json<Run>();
     await vi.waitFor(() => {
-      expect(h.store.getRun(gone.id).native).toMatchObject({ delivery: 'queued', stage: 'steer_fallback' });
-      expect(h.store.getRun(gone.id).native?.intent).toBeUndefined();
+      expect(h.store.getRun(gone.id).native).toMatchObject({ intent: 'steer', delivery: 'failed', stage: 'steer_missed' });
     });
   });
 

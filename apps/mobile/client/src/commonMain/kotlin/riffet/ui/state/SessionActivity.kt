@@ -4,6 +4,7 @@ import riffet.contracts.NativeInteraction
 import riffet.contracts.Session
 import riffet.contracts.SessionState
 import riffet.core.TimelineItem
+import riffet.core.isUnreceivedSteer
 import riffet.core.toolView
 import riffet.i18n.L10n
 import riffet.ui.interaction.carriesSelection
@@ -89,7 +90,7 @@ fun currentStep(timeline: List<TimelineItem>): String? {
             is TimelineItem.Tool -> return toolView(item.event.base).title.takeIf { it.isNotBlank() }?.let(::plainSummary)
             is TimelineItem.Thought -> return L10n.uiText("session.currentStep.thinking")
             is TimelineItem.Assistant -> return L10n.uiText("session.currentStep.replying")
-            is TimelineItem.User -> return null
+            is TimelineItem.User -> if (!isUnreceivedSteer(item)) return null
             else -> Unit
         }
     }

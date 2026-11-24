@@ -191,7 +191,7 @@ export interface StorePort {
   getSettings(): AppSettings;
   updateRun(id: string, patch: Partial<Run>): IdentifiedRun;
   transitionNativeRun(id: string, expectedDelivery: NativeRunDetails['delivery'][], nativePatch: Partial<NativeRunDetails>, runPatch?: Partial<Run>): IdentifiedRun | undefined;
-  requeueSteer(id: string): IdentifiedRun | undefined;
+  markSteerMissed(id: string): IdentifiedRun | undefined;
   isSteerTargetTurnEnded(run: Run): boolean;
   createNativeSubmission(clientSessionId: string, sessionInput: NativeSessionInput, commandId: string, input: NativeRunInput, contextSnapshots?: CapturedSessionReference[]): { session: IdentifiedSession; run: IdentifiedRun };
   normalizeNativeInput(input: NativeRunInput): NativeRunInput;

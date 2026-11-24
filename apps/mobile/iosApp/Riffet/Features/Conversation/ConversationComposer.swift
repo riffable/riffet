@@ -217,7 +217,7 @@ struct ConversationComposer: View {
                     .contextMenu {
                         if defaultSendSteers { Button("加入队列") { send(interrupt: false, enqueue: true) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating) }
                         if workbench.working && canStopTurn {
-                            Button("停止当前任务") { Task { await workbench.perform { _ = try await workbench.store.interrupt() } } }.disabled(busy)
+                            Button("停止当前任务") { workbench.interrupt(sessionID: session.id) }.disabled(busy)
                             Button("停止并发送") { send(interrupt: true) }.disabled(!acceptsMessages || !draft.canSend || busy || voice.dictating)
                         }
                     }
@@ -228,7 +228,7 @@ struct ConversationComposer: View {
         Group {
             if workbench.sendState.interrupting { ProgressView().frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
             else {
-                RiffetSendButton(enabled: false, stop: true) { Task { await workbench.perform { _ = try await workbench.store.interrupt() } } }
+                RiffetSendButton(enabled: false, stop: true) { workbench.interrupt(sessionID: session.id) }
                     .disabled(busy)
             }
         }
@@ -293,11 +293,12 @@ struct ConversationComposer: View {
         }
     }
     private func send(interrupt: Bool, enqueue: Bool = false) {
-        guard acceptsMessages else { return }
+        let shown = interrupt ? workbench.stopSnapshot(sessionID: session.id) : nil
+        guard acceptsMessages, !interrupt || shown != nil else { return }
         let text = draft.text, attachments = draft.attachments, references = draft.references, revision = draft.textRevision
         draft.save()
         Task {
-            _ = await workbench.send(text, attachments: attachments, interrupt: interrupt, context: references, enqueue: enqueue, onStored: {
+            _ = await workbench.send(text, attachments: attachments, interrupt: interrupt, context: references, enqueue: enqueue, stopSnapshot: shown, onStored: {
                 draft.clear(sentText: text, sentAttachments: attachments, sentReferences: references, sentRevision: revision)
                 if draft.text.isEmpty && draft.attachments.isEmpty && draft.references.isEmpty && draft.pendingFiles.isEmpty {
                     focused = false; expandedEditor = false

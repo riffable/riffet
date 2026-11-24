@@ -197,7 +197,7 @@ export class Store {
       getSettings: () => this.getSettings(),
       updateRun: (id, patch) => this.updateRun(id, patch),
       transitionNativeRun: (id, expectedDelivery, nativePatch, runPatch) => this.transitionNativeRun(id, expectedDelivery, nativePatch, runPatch),
-      requeueSteer: id => this.requeueSteer(id),
+      markSteerMissed: id => this.markSteerMissed(id),
       isSteerTargetTurnEnded: run => this.isSteerTargetTurnEnded(run),
       createNativeSubmission: (clientSessionId, sessionInput, commandId, input, contextSnapshots) => this.createNativeSubmission(clientSessionId, sessionInput, commandId, input, contextSnapshots),
       normalizeNativeInput,
@@ -623,7 +623,7 @@ export class Store {
   steerQueuedNativeRun(sessionId: string, sourceRunId: string, commandId: string, target: NativeTurnTarget, config: NativeRunConfig, ownerRunId?: string): IdentifiedRun {
     return runsApi.steerQueuedNativeRun(this.port, sessionId, sourceRunId, commandId, target, config, ownerRunId);
   }
-  requeueSteer(id: string): IdentifiedRun | undefined { return runsApi.requeueSteer(this.port, id); }
+  markSteerMissed(id: string): IdentifiedRun | undefined { return runsApi.markSteerMissed(this.port, id); }
   getRun(id: string): IdentifiedRun { return runsApi.getRun(this.port, id); }
   previousRunId(sessionId: string, runId: string): string | undefined { return runsApi.previousRunId(this.port, sessionId, runId); }
   findRunByCommand(sessionId: string, commandId: string): IdentifiedRun | undefined { return runsApi.findRunByCommand(this.port, sessionId, commandId); }

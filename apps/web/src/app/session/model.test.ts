@@ -15,6 +15,10 @@ describe('restoring a failed send', () => {
       },
     };
     expect(canRestoreUnsentRun(run)).toBe(true);
+    const missedSteer = { ...run, native: { ...run.native!, intent: 'steer', stage: 'steer_missed' } } as const;
+    expect(canRestoreUnsentRun(missedSteer)).toBe(true);
+    expect(canRestoreUnsentRun({ ...missedSteer, native: { ...missedSteer.native, timings: { inputSentAt: 1 } } })).toBe(false);
+    expect(canRestoreUnsentRun({ ...missedSteer, native: { ...missedSteer.native, timings: { dispatchAt: 1 } } })).toBe(false);
     // A launch-time prompt can fail during startup after it has already crossed the fence.
     expect(canRestoreUnsentRun({ ...run, native: { ...run.native!, timings: { dispatchAt: 1 } } })).toBe(false);
     expect(canRestoreUnsentRun({ ...run, native: { ...run.native!, nativeMessageId: 'receipt' } })).toBe(false);
@@ -39,6 +43,7 @@ describe('nativeDeliveryStatus for steers', () => {
     expect(nativeDeliveryStatus(steerRun({ delivery: 'preparing', stage: 'steer_waiting_boundary' }), true, true)).toBe('sending');
     expect(nativeDeliveryStatus(steerRun({ delivery: 'input_sent', stage: 'steer_confirmation' }), true, true)).toBe('sending');
     expect(nativeDeliveryStatus(steerRun({ delivery: 'input_sent', stage: 'steer_confirmation' }, 'running'), true, true)).toBe('sending');
+    expect(nativeDeliveryStatus(steerRun({ delivery: 'input_sent', stage: 'steer_confirmation' }, 'completed'), true, true)).toBe('sending');
     expect(nativeDeliveryStatus(steerRun({ delivery: 'uncertain', stage: 'confirmation' }, 'interrupted'), true, true)).toBe('unconfirmed');
     expect(nativeDeliveryStatus(steerRun({ delivery: 'uncertain', stage: 'steer_stopped' }, 'interrupted'), true, true)).toBe('unconfirmed');
     expect(nativeDeliveryStatus(steerRun({ delivery: 'failed', stage: 'steer_rejected' }, 'failed'), true, true)).toBe('send_failed');

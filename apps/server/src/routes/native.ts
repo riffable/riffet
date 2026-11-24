@@ -13,6 +13,7 @@ import { configureNative as configureNativeSession, type NativeConfigurePatch } 
 import type { RouteDeps, NativeMessageBody } from './deps.js';
 import { memoryPressure, type MemoryPressure } from '../native/agent-processes.js';
 import { resolveNativeSessionInput } from '../native/session-input.js';
+import { findReplacementStop, stopFingerprint } from '../native/stop-receipt.js';
 
 /** The memory pressure a prewarm is admitted under, read at most every few seconds: every open page asks every 30 s. */
 let pressureRead: { at: number; level: Promise<MemoryPressure> } | undefined;
@@ -115,32 +116,52 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
   });
   app.post<{Params:{id:string};Body:NativeMessageBody & {stop?:NativeStopRequest}}>('/api/sessions/:id/native/interrupt-and-send',async(request,reply)=>{
     reply.code(202);
-    return sessionCommands.submit(store,request.params.id,requireString(request.body?.commandId,'commandId',100),{operation:'interrupt-and-send',params:request.params,body:request.body},async()=>{
-    const session=store.getSession(request.params.id);
-    if(session.kind!=='native')throw new AppError('NOT_NATIVE','Only Native conversations support this operation',409);
-    const commandId=requireString(request.body?.commandId,'commandId',100);
-    const existing=store.findRunByCommand(session.id,commandId);
-    const input=await readNativeInput(request.body,{validateAttachments:!existing});
-    contextReferences.requireFeature(request.headers,input);
-    // A lost HTTP receipt must never interrupt the replacement turn on retry.
-    if(existing){reply.code(202);return store.acceptNativeRun(session.id,commandId,input,existing.native!.config,request.body.expectedConfigRevision);}
-    const stop=parseInput(NativeStopRequestSchema,request.body.stop,'NATIVE_STOP_TARGET_REQUIRED');
-    await assertTaskWorkspaceAvailable(store.getProject(session.projectId));
-    sessionCommands.admit(session);nativeBackends.assertAvailable(session);
-    const current=store.getSession(session.id);
-    if(request.body.expectedConfigRevision!==undefined&&request.body.expectedConfigRevision!==(current.configRevision??0))throw new AppError('NATIVE_CONFIG_CHANGED','The conversation settings changed; submit again',409);
-    const prepared=input.references?.length?(await nativeBackends.assertSessionReferences(session),await contextReferences.prepareInterrupt(session.id,commandId,input,request.headers)):[];
-    const replacementFingerprint=createHash('sha256').update(JSON.stringify({input:{text:input.text,attachmentIds:input.attachmentIds,context:input.context.map(({path,line})=>({path,...(line!==undefined?{line}:{})})),...(input.references?.length?{references:input.references}:{}),...(input.agents?.length?{agents:input.agents}:{})},expectedConfigRevision:request.body.expectedConfigRevision??current.configRevision??0})).digest('hex');
-    const result=await dispatch.interruptAndSend(session.id,commandId,()=>{
-      if(sessionCommands.isArchiving(session.id))throw new AppError('ARCHIVED_SESSION','This conversation is archived',409);
-      const latest=store.getSession(session.id);
-      return contextReferences.commit(session.id,prepared,snapshots=>store.acceptNativeRun(session.id,commandId,input,{model:latest.model,mode:latest.mode,approval:latest.approval},request.body.expectedConfigRevision,undefined,snapshots));
-    },stop,replacementFingerprint);
-    contextReferences.finishInterrupt(session.id,commandId);
-    // Concurrent retries can share the stop operation; still validate each caller's payload.
-    const receipt=store.acceptNativeRun(session.id,commandId,input,result.native!.config,request.body.expectedConfigRevision);
-    reply.code(202);return receipt;
-    });
+    const sessionId = request.params.id;
+    const commandId = requireString(request.body?.commandId, 'commandId', 100);
+    const expectedRevision = request.body.expectedConfigRevision;
+    const prior = findReplacementStop(store, sessionId, commandId, request.body.stop?.requestId);
+    const submit = async () => {
+      const session = store.getSession(sessionId);
+      if (session.kind !== 'native') throw new AppError('NOT_NATIVE', 'Only Native conversations support this operation', 409);
+      const existing = store.findRunByCommand(sessionId, commandId);
+      const input = await readNativeInput(request.body, { validateAttachments: !existing });
+      contextReferences.requireFeature(request.headers, input);
+      const accepted = existing && store.acceptNativeRun(sessionId, commandId, input, existing.native!.config, expectedRevision);
+      // Older commands have only a Run as their durable receipt.
+      if (accepted && !prior) return accepted;
+      const stop = parseInput(NativeStopRequestSchema, request.body.stop, 'NATIVE_STOP_TARGET_REQUIRED');
+      const revision = expectedRevision ?? accepted?.native?.configRevision ?? store.getSession(sessionId).configRevision ?? 0;
+      const fingerprint = createHash('sha256').update(JSON.stringify({
+        input: { text: input.text, attachmentIds: input.attachmentIds, context: input.context.map(({ path, line }) => ({ path, ...(line !== undefined ? { line } : {}) })),
+          ...(input.references?.length ? { references: input.references } : {}), ...(input.agents?.length ? { agents: input.agents } : {}) },
+        expectedConfigRevision: revision,
+      })).digest('hex');
+      if (prior && stopFingerprint(prior.request, prior.operation, prior.replacementFingerprint) !== stopFingerprint(stop, commandId, fingerprint)) {
+        throw new AppError('NATIVE_STOP_CONFLICT', 'This stop request belongs to a different operation', 409);
+      }
+      if (accepted && prior?.state === 'completed') {
+        contextReferences.finishInterrupt(sessionId, commandId);
+        return accepted;
+      }
+      if (!accepted) {
+        await assertTaskWorkspaceAvailable(store.getProject(session.projectId));
+        sessionCommands.admit(session);
+        nativeBackends.assertAvailable(session);
+        if (expectedRevision !== undefined && expectedRevision !== (store.getSession(sessionId).configRevision ?? 0)) throw new AppError('NATIVE_CONFIG_CHANGED', 'The conversation settings changed; submit again', 409);
+      }
+      const prepared = !accepted && input.references?.length
+        ? (await nativeBackends.assertSessionReferences(session), await contextReferences.prepareInterrupt(sessionId, commandId, input, request.headers)) : [];
+      const result = await dispatch.interruptAndSend(sessionId, commandId, () => {
+        if (accepted) return store.getRun(accepted.id);
+        if (sessionCommands.isArchiving(sessionId)) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
+        const latest = store.getSession(sessionId);
+        return contextReferences.commit(sessionId, prepared, snapshots => store.acceptNativeRun(sessionId, commandId, input, { model: latest.model, mode: latest.mode, approval: latest.approval }, expectedRevision, undefined, snapshots));
+      }, stop, fingerprint);
+      contextReferences.finishInterrupt(sessionId, commandId);
+      return store.acceptNativeRun(sessionId, commandId, input, result.native!.config, expectedRevision);
+    };
+    return sessionCommands.submit(store, sessionId, commandId, { operation: 'interrupt-and-send', params: request.params, body: request.body }, submit,
+      { recovering: prior?.operation === commandId && prior.replacementFingerprint !== undefined });
   });
   app.post<{Params:{id:string;runId:string}}>('/api/sessions/:id/native/runs/:runId/cancel',async(request)=>dispatch.cancel(request.params.id,request.params.runId));
   app.post<{Params:{id:string;runId:string};Body:{commandId?:string;target?:unknown}}>('/api/sessions/:id/native/runs/:runId/steer',async(request,reply)=>{

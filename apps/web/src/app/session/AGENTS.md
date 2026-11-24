@@ -38,6 +38,7 @@ co-change:
 
 ## 外部行为
 
+- 补充用会话控制快照里的目标轮次发送。只有补充自己的回执能确认送达。在写入前错过目标的补充沿用失败消息的草稿恢复操作。
 - 过程块默认在回合结束收起（用户可在 `viewPrefs.ts#setProcessFoldTiming` 切换为发送下一条时收起）；界面规则见 `docs/design/system/surfaces.md` §1.4 与 `docs/design/DECISIONS.md`。
 - 新建会话的 Agent 菜单打开时重新读取目标服务器的 Agent 列表；即使没有候选项或当前模型目录读取失败，仍能打开并重新检测。
 - 真实浏览器回放验证入口为 `scripts/replay-transcript.ts`（页面 `apps/web/src/replay/ReplayView.tsx`），可录制并检测非动画位移。

@@ -72,14 +72,18 @@ class SessionComposerSteerTest {
         } finally { client.close() }
     }
 
-    @Test fun `stop uses the current terminal epoch instead of the original run epoch`() = runTest {
+    @Test fun `stop keeps the displayed provider turn and uses the current terminal epoch`() = runTest {
         val requests = mutableListOf<String>()
         val stoppedSession = session().copy(terminalId = "terminal")
         val historicalRun = accepted("running").copy(native = accepted("running").native!!.copy(
             terminalId = "terminal", terminalEpoch = 1, nativeSessionId = target.nativeSessionId))
         val core = openCore(stoppedSession, listOf(historicalRun))
-        core.update { it.copy(status = NativeStatus(NativeStatusPhase.BUSY,
-            activeTurn = NativeActiveTurn(target.nativeSessionId, target.turnId))) }
+        val displayed = ActiveTurnState(nativeSessionId = target.nativeSessionId, nativeTurnId = target.turnId,
+            turnId = "journal-key", phase = "running", canStop = true, canSteer = false)
+        val control = SessionControlSnapshot(revision = 1, runtime = "ready", activeTurn = displayed,
+            inbox = emptyList(), capabilities = SessionControlCapabilities(true, false, false), activity = NativeActivitySummary())
+        core.update { it.copy(control = control, status = NativeStatus(NativeStatusPhase.BUSY,
+            activeTurn = NativeActiveTurn(target.nativeSessionId, "stale-status"))) }
         val client = HttpClient(MockEngine { request ->
             when {
                 request.url.encodedPath.endsWith("/catalog") -> respond(stopCatalog, headers = headersOf(HttpHeaders.ContentType, "application/json"))
@@ -94,7 +98,10 @@ class SessionComposerSteerTest {
             val api = RiffetApi(client, "http://localhost")
             val composer = SessionComposer(api, backgroundScope, NativeSendOutbox(InMemoryOutboxStore()), core,
                 MutableStateFlow(SessionListState()), SessionInteractions(api, core))
-            assertTrue(composer.interrupt())
+            val clicked = core.value.toOpenSession()
+            val stopping = async { composer.interrupt(clicked) }
+            core.update { it.copy(control = control.copy(revision = 2, activeTurn = displayed.copy(nativeTurnId = "successor"))) }
+            assertTrue(stopping.await())
             val stop = RiffetJson.instance.parseToJsonElement(requests.single()).jsonObject
             assertEquals(9L, stop.getValue("terminalEpoch").jsonPrimitive.long)
             assertEquals(target.turnId, stop.getValue("turnId").jsonPrimitive.content)
@@ -337,11 +344,11 @@ class SessionComposerSteerTest {
         }
     }
 
-    @Test fun `an explicitly rejected unsent steer remains recoverable as a draft`() = runTest {
+    @Test fun `a steer that missed its target remains recoverable as a draft`() = runTest {
         val client = HttpClient(MockEngine { request ->
             val command = RiffetJson.instance.parseToJsonElement((request.body as TextContent).text).jsonObject["commandId"]!!.jsonPrimitive.content
             val rejected = accepted(command, failed = true)
-            respond(RiffetJson.instance.encodeToString(rejected.copy(error = "target ended before write", native = rejected.native!!.copy(stage = "steer_rejected"))),
+            respond(RiffetJson.instance.encodeToString(rejected.copy(error = null, native = rejected.native!!.copy(stage = "steer_missed"))),
                 HttpStatusCode.Accepted, headersOf(HttpHeaders.ContentType, "application/json"))
         }) { installRiffetClient() }
         try {

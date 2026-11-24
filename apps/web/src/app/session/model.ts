@@ -1,4 +1,5 @@
 import type { NativeContext, Run } from '@contracts';
+import { hasNativeInputReceipt } from '../../../../../packages/timeline/src/model';
 
 /*
  * The session view's shared vocabulary: the row and picker types every surface agrees on, and the
@@ -28,6 +29,6 @@ export function canRestoreUnsentRun(run: Run | undefined): boolean {
   const native = run?.native;
   return run?.state === 'failed' && native?.delivery === 'failed'
     && (native.stage === 'steer_rejected' || native.stage === 'outbox_failure'
-      || native.stage === 'prepare' && native.timings?.dispatchAt === undefined)
-    && !native.nativeMessageId && native.timings?.observedAt === undefined && native.timings?.providerAcceptedAt === undefined;
+      || (native.stage === 'prepare' || native.stage === 'steer_missed') && native.timings?.dispatchAt === undefined && native.timings?.inputSentAt === undefined)
+    && !hasNativeInputReceipt(native);
 }

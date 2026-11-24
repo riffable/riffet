@@ -4,6 +4,7 @@ import riffet.contracts.NativeActivity
 import riffet.contracts.NativeActivityKind
 import riffet.contracts.NativeDeliveryState
 import riffet.contracts.NativeJob
+import riffet.contracts.NativeRunDetails
 import riffet.contracts.Run
 import riffet.contracts.RunState
 import riffet.contracts.WorkbenchEvent
@@ -439,6 +440,16 @@ data class TimelineTurnAnalysis(
     val lastIndexByTurn: Map<String, Int>,
 )
 
+/** A steer can name a running turn before the CLI actually receives the input. */
+fun isUnreceivedSteer(item: TimelineItem): Boolean {
+    val native = (item as? TimelineItem.User)?.run?.native ?: return false
+    return native.intent == "steer" && !hasNativeInputReceipt(native)
+}
+
+fun hasNativeInputReceipt(native: NativeRunDetails): Boolean =
+    !native.nativeMessageId.isNullOrEmpty() || native.timings?.get("observedAt") != null ||
+        native.timings?.get("providerAcceptedAt") != null || native.delivery == NativeDeliveryState.OBSERVED
+
 /** "已核对" dismisses an uncertain send; it does not cancel the CLI. A receipt proves it arrived. */
 private fun hasAcknowledgedReceipt(item: TimelineItem): Boolean {
     if (item !is TimelineItem.User || item.run?.state != RunState.CANCELLED) return false
@@ -501,7 +512,8 @@ fun analyzeTimelineTurns(timeline: List<TimelineItem>, sessionRunning: Boolean, 
     val lastIndexByTurn = mutableMapOf<String, Int>()
     timeline.forEachIndexed { index, item ->
         val turnKey = turnKeys[index]
-        if (item !is TimelineItem.Activity) lastIndexByTurn[turnKey] = index
+        if (item is TimelineItem.Activity || isUnreceivedSteer(item)) return@forEachIndexed
+        lastIndexByTurn[turnKey] = index
         if (item is TimelineItem.User && isDispatchedUserRun(item.run)) {
             activeTurns.add(turnKey)
         }
@@ -533,8 +545,8 @@ fun analyzeTimelineTurns(timeline: List<TimelineItem>, sessionRunning: Boolean, 
         if (sessionRunning) activeTurns.add(if (index != null) turnKeys[index] else "run:$activeTurnId")
         return TimelineTurnAnalysis(turnKeys, activeTurns, lastIndexByTurn)
     }
-    val latestUserIndex = timeline.indexOfLast { it.kind == TimelineItemKind.USER }
-    val latestSentUserIndex = timeline.indexOfLast { it is TimelineItem.User && !isPendingUser(it) }
+    val latestUserIndex = timeline.indexOfLast { it is TimelineItem.User && !isUnreceivedSteer(it) }
+    val latestSentUserIndex = timeline.indexOfLast { it is TimelineItem.User && !isUnreceivedSteer(it) && !isPendingUser(it) }
     val latestNotificationIndex = timeline.indexOfLast { it.kind == TimelineItemKind.TASK_NOTIFICATION }
     val latestOutputIndex = timeline.indexOfLast { it.kind != TimelineItemKind.USER && it.kind != TimelineItemKind.ACTIVITY }
     // Server-folded continuation can have no prompt and can inherit a stopped Run's source id.

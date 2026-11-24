@@ -7,6 +7,8 @@ import riffet.contracts.NativeContext
 import riffet.contracts.NativeHistoryState
 import riffet.contracts.NativeInteraction
 import riffet.contracts.NativeStatus
+import riffet.contracts.NativeStatusPhase
+import riffet.contracts.NativeTurnTarget
 import riffet.contracts.SessionControlSnapshot
 import riffet.contracts.Project
 import riffet.contracts.Run
@@ -129,6 +131,13 @@ fun queuedActions(control: SessionControlSnapshot, runId: String, commandId: Str
     control.inbox.firstOrNull { entry ->
         entry.placement == "queued" && entry.matches(runId, commandId)
     }?.actions ?: emptyList()
+
+/** Both the button and the request use the native target of the displayed foreground turn. */
+fun steerTarget(control: SessionControlSnapshot?, status: NativeStatus?): NativeTurnTarget? {
+    if (control == null) return status?.takeIf { it.phase == NativeStatusPhase.BUSY && it.interaction == null }?.activeTurn?.target()
+    val turn = control.activeTurn?.takeIf { it.canSteer } ?: return null
+    return NativeTurnTarget(turn.nativeSessionId ?: return null, turn.nativeTurnId ?: return null)
+}
 
 /** True when [control] lists [action] for that queued entry. */
 fun allowsQueuedAction(control: SessionControlSnapshot, runId: String, commandId: String, action: String): Boolean =

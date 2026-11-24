@@ -36,7 +36,7 @@
 | `preparing` | 调度器 + 后端 | 运行时就绪，写入栅栏提交 | CLI 拒收（`CLI_BUSY`）累计 3 min；等后台任务结束不计入 | `failed`：终端未就绪 | 发送中 |
 | `dispatching` / `input_sent` | 后端 | 转录回显，或 hook 带上命令 ID | 后端回执窗口（Claude 90 s）；CLI 忙时不计时 | `uncertain`，后端继续在迟到窗口内收回执 | 发送中 |
 | `observed` | 后端 | 回合结束记录 | 无。空闲状态持续 15 s / 60 s 后由空闲收敛关闭 | 关闭为结果未知 | 运行中 |
-| `uncertain` | 用户 | 迟到回执（自动），或用户执行"检查状态"/"继续" | 迟到回执窗口（Claude 30 s、120 s 两次复查） | 保持，阻塞队列，等用户处理 | 暂时无法确认是否已发送，附操作 |
+| `uncertain` | 用户 | 迟到回执（自动），或用户执行"检查状态"/"继续" | 迟到回执窗口（Claude 30 s、120 s 两次复查） | 保持送达未知；Cursor 有后续回合和当前空闲的证据时放行队列，否则继续等待 | 暂时无法确认是否已发送，附操作 |
 | `failed` / `cancelled` | — | 终态 | — | — | 发送失败 / 已取消 |
 
 规则：
@@ -51,7 +51,7 @@
 
 | 原因 | 解除条件 | 上限 | 用户操作 |
 | --- | --- | --- | --- |
-| `unconfirmed` | 迟到回执，或用户处理 | 无（需要人判断） | 检查状态 / 继续 |
+| `unconfirmed` | 迟到回执、Cursor 确认后续独立回合已经完成且输入框空闲，或用户确认继续 | 无固定时限 | 检查状态 / 继续 |
 | `turn_running` | 回合结束且无后台任务 | 无（等待是正常行为） | 停止 / 引导 |
 | `attention` | 用户回答交互 | 无 | 回答 |
 | `sending` / `steering` | 前一条有结果 | 回执窗口 | — |
@@ -147,8 +147,8 @@
 服务重启只结束随服务一起退出的进程。Claude、Cursor 跑在 Riffet 自己的 tmux 里，Codex、Traex 跑在脱离服务的 app-server 守护进程里，重启后回合照常进行（后端特征 `survivesRestart`）；Droid、Pi、DSH（子进程、桥接）和 chat（进程内）随服务结束。
 
 - **能否重启**：`GET /api/service/restartable` 返回能否重启及阻塞的会话（会话、标题、后端、原因）。有消息处于 `preparing`、`dispatching`、`input_sent` 时不能重启，否则重启后这些消息会变成 `uncertain`。不随服务存活的后端有回合在跑、会话处于运行或等待状态、或有后台任务时，也不能重启。存活后端的 `observed` 回合不阻塞重启。
-- **暂停派发**：`POST /api/service/drain {on, holder}`（`holder` 是调用方每次重启尝试自生成的 ID，各持各的租约，解除只撤销自己的；缺省为共用的旧持有者，服务只要还有未过期的租约就保持暂停）。暂停期间新消息照常接收并以 `queued` 持久化，但不派发，所以等待一定会结束；重启后自动发出。引导同样保持排队：解除暂停而没有重启时，照常投给它的回合；重启后转为下一条消息（与重启前未写入的引导相同）。这样引导在工具边界上的等待不会拖住重启。暂停只存在内存里，是一份 30 s 的租约，等待方每次轮询都会续期：重启会清除它，等待方中途退出时它也会在 30 s 内自行失效。
-- **重启后收回**（`store.recoverInterruptedRuns`，按 `restartObservation` 冻结的后端清单）：`queued`/`preparing` 保持排队；`dispatching`/`input_sent` 记为 `uncertain`，不重发（S1）。Claude、Cursor 等待回合结束 hook 的 `observed` 回合继续观察：hook 在停机期间丢失时，Claude 由转录里的结束记录（`stop_hook_summary`、`turn_duration`）补上，否则空闲后关闭为结果未知。Codex、Traex 带回合 ID 的 `observed` 回合继续观察：调度器为每个未结束的回合打开观察，读回线程即得到停机期间结束的回合；读不到结果的同样按空闲收敛关闭。Cursor 正在流式输出的那一步草稿不保留，这一步写完后照常出现。
+- **暂停派发**：`POST /api/service/drain {on, holder}`（`holder` 是调用方每次重启尝试自生成的 ID，各持各的租约，解除只撤销自己的；缺省为共用的旧持有者，服务只要还有未过期的租约就保持暂停）。暂停期间新消息照常接收并以 `queued` 持久化，但不派发，所以等待一定会结束；重启后自动发出。引导同样保持排队：解除暂停而没有重启时，照常投给它的回合；重启后将未写入的引导标为未发送，内容可恢复。这样引导在工具边界上的等待不会拖住重启。暂停只存在内存里，是一份 30 s 的租约，等待方每次轮询都会续期：重启会清除它，等待方中途退出时它也会在 30 s 内自行失效。
+- **重启后收回**（`store.recoverInterruptedRuns`，按 `restartObservation` 冻结的后端清单）：普通消息在 `queued`/`preparing` 保持排队；`dispatching`/`input_sent` 记为 `uncertain`，不重发（S1）。Claude、Cursor 等待回合结束 hook 的 `observed` 回合继续观察：hook 在停机期间丢失时，Claude 由转录里的结束记录（`stop_hook_summary`、`turn_duration`）补上，否则空闲后关闭为结果未知。Codex、Traex 带回合 ID 的 `observed` 回合继续观察：调度器为每个未结束的回合打开观察，读回线程即得到停机期间结束的回合；读不到结果的同样按空闲收敛关闭。Cursor 正在流式输出的那一步草稿不保留，这一步写完后照常出现。
 - **调用方**：`scripts/riffet-restart.sh`、`riffet restart` 与 `riffet update`（CLI、launchd、systemd 托管）先暂停派发，等到可以重启再停服；超时则解除暂停，列出阻塞的会话并按原样退出（脚本退出码 4）。脚本、`riffet restart` 与 `riffet update` 的 `--force`、`--wait-idle 0` 不等待直接重启；Mac App 的重启（设置与版本提示）每 2 s 轮询一次，列出阻塞的会话并可「仍然重启」或「取消」（解除暂停），3 分钟仍未就绪则解除暂停并报出这些会话。不支持这两个接口的旧服务退回原来的检查（`riffet update` 在有会话运行时拒绝更新）。
 
 ## 9. 故障模型与验证

@@ -204,8 +204,20 @@ final class Workbench {
     func perform(_ action: () async throws -> Void) async {
         do { try await action(); error = nil } catch is CancellationError {} catch { self.error = error.riffetMessage }
     }
-    func send(_ text: String, attachments: [Attachment], interrupt: Bool = false, context: [PromptContextReference] = [], enqueue: Bool = false, onStored: (() -> Void)? = nil) async -> Bool {
-        do { return try await (enqueue ? store.enqueue(text: text, attachments: attachments, context: context, onStored: onStored) : store.send(text: text, attachments: attachments, context: context, interrupt: interrupt, onStored: onStored)).boolValue }
+    func stopSnapshot(sessionID: String) -> OpenSessionState? {
+        store.stopSnapshot(sessionId: sessionID, control: control, status: status)
+    }
+    func interrupt(sessionID: String) {
+        guard let shown = stopSnapshot(sessionID: sessionID) else { return }
+        Task { await perform { _ = try await store.interrupt(shown: shown) } }
+    }
+    func send(_ text: String, attachments: [Attachment], interrupt: Bool = false, context: [PromptContextReference] = [], enqueue: Bool = false, stopSnapshot: OpenSessionState? = nil, onStored: (() -> Void)? = nil) async -> Bool {
+        do {
+            if let stopSnapshot {
+                return try await store.sendReplacing(text: text, attachments: attachments, context: context, shown: stopSnapshot, onStored: onStored).boolValue
+            }
+            return try await (enqueue ? store.enqueue(text: text, attachments: attachments, context: context, onStored: onStored) : store.send(text: text, attachments: attachments, context: context, interrupt: interrupt, onStored: onStored)).boolValue
+        }
         catch { self.error = error.riffetMessage; return false }
     }
     func steer(_ text: String, attachments: [Attachment], context: [PromptContextReference], target: NativeTurnTarget) async -> Bool {

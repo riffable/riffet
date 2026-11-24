@@ -4,6 +4,7 @@ import riffet.contracts.NativeDeliveryState
 import riffet.contracts.NativeQueue
 import riffet.contracts.Run
 import riffet.contracts.SessionControlSnapshot
+import riffet.core.hasNativeInputReceipt
 
 /**
  * Where a message sent to the CLI stands, as the client sees it: the web's `delivery.ts`. The places
@@ -84,7 +85,6 @@ fun messageRecovery(run: Run): MessageRecovery {
     return MessageRecovery(
         needsCheck = native.delivery == NativeDeliveryState.UNCERTAIN || outcomeUnknown || native.stage == "acknowledged",
         canRetry = native.delivery == NativeDeliveryState.UNCERTAIN && native.stage == HTTP_UNKNOWN,
-        taskOutcomeUnknown = outcomeUnknown || ((native.delivery == NativeDeliveryState.UNCERTAIN || native.stage == "acknowledged") &&
-            (native.nativeMessageId != null || native.timings?.get("observedAt") != null || native.timings?.get("providerAcceptedAt") != null)),
+        taskOutcomeUnknown = outcomeUnknown || ((native.delivery == NativeDeliveryState.UNCERTAIN || native.stage == "acknowledged") && hasNativeInputReceipt(native)),
     )
 }

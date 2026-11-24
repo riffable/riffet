@@ -33,6 +33,7 @@ export interface TerminalStreamDeps {
   finalizations: Map<string, Promise<void>>;
   stopping: Set<string>;
   isShuttingDown(): boolean;
+  inputAvailable(terminal: TerminalInfo): void;
   hasExclusiveOperation(id: string): boolean;
   invalidateScreen(id: string): void;
   ensureRestored(id: string): Promise<void>;
@@ -235,6 +236,7 @@ export class TerminalStream {
     const updated = this.deps.store.updateTerminal(info.id, { state: 'running', ownerId: undefined, epoch: current.epoch + 1 });
     this.reportLinkedTerminal(updated, true);
     this.emit(info.id, { type: 'state', terminal: updated });
+    if (current.state === 'detached' || current.ownerId) this.deps.inputAvailable(updated);
     this.seedViewers(info.id, this.deps.listeners.get(info.id) ?? []);
     if (!this.deps.listeners.has(info.id)) {
       setTimeout(() => this.restoreBackgroundSize(info.id), BACKGROUND_RESIZE_DELAY_MS).unref?.();

@@ -35,6 +35,7 @@ Riffet 私有 tmux 服务器上的终端：创建与回收 pane，经 control mo
 - 外部输入是 tmux（至少 3.2）的 control 流与 `capture-pane`、`list-panes` 输出，以及 WebSocket 客户端的 `protocol` 1 至 3 帧（`apps/server/src/routes/terminals.ts`）。
 - 录制：移动端 VT 引擎的 tmux 流录制由 `scripts/record-terminal-fixtures.ts` 生成，位于 `apps/mobile/terminal/fixtures/tmux/`，与本模块用同一套 tmux 环境。服务端没有独立的录制回放，`history.test.ts` 对拍 tmux 的网格。
 - 各 Agent 的启动失败文案与就绪判断由驱动给出（`service.ts#TerminalBehaviourSource`），本模块不认识具体 Agent。
+- 浏览器释放输入控制权或 tmux 重新接通后，只唤醒绑定到该终端的原生会话重新检查派发队列。
 
 ## 排障
 

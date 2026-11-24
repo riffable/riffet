@@ -276,6 +276,7 @@ private struct QueueDockCard: View {
 
     private func queuedRun(_ run: Run, showLead: Bool) -> some View {
         let governed = workbench.control != nil
+        let target = SessionStoreStateKt.steerTarget(control: workbench.control, status: workbench.status)
         let showsSteer = governed ? allows("steer", run) : (supportsSteer && workbench.status?.activeTurn != nil)
         let showSendNow = governed ? allows("send_now", run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
         let showEdit = !governed || allows("edit", run)
@@ -292,7 +293,7 @@ private struct QueueDockCard: View {
             .padding(.leading, RiffetMetrics.groupInset)
             .padding(.trailing, hasActions ? RiffetMetrics.floatingGap : RiffetMetrics.groupInset)
             if usesSteer {
-                Button { steer(run) } label: { Image(systemName: "arrow.turn.up.right").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
+                Button { steer(run, target: target) } label: { Image(systemName: "arrow.turn.up.right").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
                     .disabled(!canSteer).accessibilityLabel("补充到当前任务")
             } else if showSendNow {
                 Button { sendNow(run) } label: { Image(systemName: "arrow.up").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
@@ -303,7 +304,7 @@ private struct QueueDockCard: View {
                     if usesSteer && showSendNow {
                         Button("停止并发送", systemImage: "arrow.up") { sendNow(run) }
                     } else if showsSteer {
-                        Button("补充到当前任务", systemImage: "arrow.turn.up.right") { steer(run) }.disabled(!canSteer)
+                        Button("补充到当前任务", systemImage: "arrow.turn.up.right") { steer(run, target: target) }.disabled(!canSteer)
                     }
                     if showEdit {
                         Button("移回输入框", systemImage: "square.and.pencil") { Task { await workbench.perform {
@@ -326,15 +327,12 @@ private struct QueueDockCard: View {
         .disabled(workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run, control: workbench.control))
     }
 
-    private func steer(_ run: Run) {
-        let target = workbench.status?.activeTurn?.target() ?? workbench.control?.activeTurn.flatMap { turn in
-            guard let nativeSessionId = turn.nativeSessionId, let turnId = turn.nativeTurnId ?? turn.turnId else { return nil }
-            return NativeTurnTarget(nativeSessionId: nativeSessionId, turnId: turnId)
-        }
+    private func steer(_ run: Run, target: NativeTurnTarget?) {
         guard let target else { return }
         Task { await workbench.perform { _ = try await workbench.store.steerQueued(run: run, target: target) } }
     }
     private func sendNow(_ run: Run) {
-        Task { await workbench.perform { _ = try await workbench.store.sendQueuedNow(run: run) } }
+        guard let shown = workbench.stopSnapshot(sessionID: run.sessionId) else { return }
+        Task { await workbench.perform { _ = try await workbench.store.sendQueuedNow(run: run, shown: shown) } }
     }
 }

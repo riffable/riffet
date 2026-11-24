@@ -75,7 +75,7 @@ class FakeNative {
   interruptOperation?: () => Promise<void>;
   /** Mirrors the Cursor backend, the only one that declares `supportsInitialPromptArgs`. */
   argvInitialPrompt = true;
-  /** Whether the backend replaces its turn itself (`deliverNow`), like Cursor's follow-up queue. */
+  /** Whether the backend declares atomic stop-and-send. */
   sendNow = false;
   readonly nowWrites: string[] = [];
   failNowBeforeWrite?: Error;
@@ -1861,7 +1861,7 @@ describe('message recovery and targeted stop', () => {
     } finally { await dispatcher.close(); store.close(); }
   });
 
-  it('requires the reviewed queue and preserves late receipt correction after releasing an unknown input', async () => {
+  it('requires the reviewed queue and closes the live watch after releasing its only unknown input', async () => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const session = createSession(), run = accept(session.id, 'release-original', 'old input');
     store.updateSession(session.id, { nativeSessionId: session.cursorSessionId });
@@ -1875,12 +1875,79 @@ describe('message recovery and targeted stop', () => {
       expect(released.native?.queueReleasedAt).toBeTruthy();
       expect(released).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
       dispatcher.kick();
-      backend.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, 1, 'native_input_receipt', run.prompt), data: { commandId: run.commandId } }] });
-      expect(store.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'observed', queueReleasedAt: released.native?.queueReleasedAt } });
-      backend.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, 2, 'run_completed', ''), data: { commandId: run.commandId } }] });
-      expect(store.getRun(run.id).state).toBe('completed');
+      await until(() => !backend.listeners.has(session.id), 'provider watch released');
       expect(backend.writes).toEqual([]);
     } finally { await dispatcher.close(); store.close(); }
+  });
+
+  it('keeps an unknown input fenced when the provider replays the same idle and end during every unsuccessful probe', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = createSession(), old = accept(session.id, 'old-with-draft', 'original input');
+    store.updateSession(session.id, { nativeSessionId: session.cursorSessionId });
+    store.transitionNativeRun(old.id, ['queued'], {
+      delivery: 'uncertain', stage: 'confirmation', nativeSessionId: session.cursorSessionId, timings: { inputSentAt: Date.now() },
+    }, { state: 'interrupted' });
+    accept(session.id, 'waiting-behind-draft', 'next question');
+    let probes = 0;
+    const backend = Object.assign(new FakeNative(store), {
+      canReleaseAfterLaterTurn: async () => {
+        if (++probes <= 5) {
+          backend.emit(session.id, { type: 'status', status: { phase: 'idle' } });
+          backend.emit(session.id, { type: 'events', events: [makeEvent(session.id, 10, 'run_completed', '')] });
+        }
+        return false;
+      },
+    });
+    const dispatcher = new NativeDispatcher(store, backend, makeRuntime(), workspace as never);
+    try {
+      await until(() => probes > 0, 'recovery probe');
+      await pause();
+      expect(probes).toBeLessThanOrEqual(2);
+      expect(store.getRun(old.id).native?.queueReleasedAt).toBeUndefined();
+      expect(backend.writes).toEqual([]);
+    } finally { await dispatcher.close(); store.close(); }
+  });
+
+  it('automatically releases only the old hold after a later native turn, including after restart', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = createSession(), old = accept(session.id, 'old-without-receipt', 'original input');
+    store.updateSession(session.id, { nativeSessionId: session.cursorSessionId });
+    store.transitionNativeRun(old.id, ['queued'], {
+      delivery: 'uncertain', stage: 'confirmation', nativeSessionId: session.cursorSessionId, timings: { inputSentAt: Date.now() },
+    }, { state: 'interrupted' });
+    const next = accept(session.id, 'next-input', 'new question');
+    const probed = deferred(), proof = deferred();
+    const backend = Object.assign(new FakeNative(store), {
+      canReleaseInput: async () => true,
+      canReleaseAfterLaterTurn: async () => { probed.resolve(); await proof.promise; return true; },
+    });
+    backend.argvInitialPrompt = false;
+    let dispatcher = new NativeDispatcher(store, backend, makeRuntime(), workspace as never);
+    try {
+      await probed.promise;
+      backend.emit(session.id, { type: 'status', status: { phase: 'busy', activeTurn: { nativeSessionId: session.cursorSessionId!, turnId: 'new-live-turn' } } });
+      proof.resolve();
+      await pause();
+      expect(store.getRun(old.id).native?.queueReleasedAt).toBeUndefined();
+      expect(backend.writes).toEqual([]);
+
+      await dispatcher.close();
+      backend.currentStatus = { phase: 'idle' };
+      store.recoverInterruptedRuns();
+      dispatcher = new NativeDispatcher(store, backend, makeRuntime(), workspace as never);
+      await until(() => backend.writes.length === 1, 'released queue sends its head');
+      const released = store.getRun(old.id).native?.queueReleasedAt;
+      expect(released).toBeTruthy();
+      expect(store.getRun(old.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
+      await dispatcher.close();
+      store.recoverInterruptedRuns();
+      dispatcher = new NativeDispatcher(store, backend, makeRuntime(), workspace as never);
+      dispatcher.kick(session.id);
+      backend.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, 1, 'native_input_receipt', old.prompt), data: { commandId: old.commandId } }] });
+      expect(store.getRun(old.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'observed', queueReleasedAt: released } });
+      expect(store.getRun(next.id).native?.delivery).toBe('uncertain');
+      expect(backend.writes).toEqual([{ sessionId: session.id, text: 'new question' }]);
+    } finally { proof.resolve(); await dispatcher.close(); store.close(); }
   });
 
   it('admits a queued message when the CLI is offline despite earlier released uncertain history', async () => {
@@ -2099,7 +2166,7 @@ describe('message recovery and targeted stop', () => {
     } finally { await send.close(); store.close(); }
   });
 
-  it('sends a targeted stop through send-now, then settles the old turn', async () => {
+  it.each(['accepted', 'submitted', 'failed after write'])('settles the old turn only after an atomic replacement is confirmed (%s)', async outcome => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const created = createSession();
     const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
@@ -2116,6 +2183,12 @@ describe('message recovery and targeted stop', () => {
       async sendRun(current: Session, run: { native?: { input: { text: string } } }, fence: (binding?: object) => unknown, options?: { now?: boolean; expectedStop?: { requestId: string } }) {
         sends.push(options);
         fence({ backendId: 'cursor', nativeSessionId: current.nativeSessionId, terminalId: current.terminalId, terminalEpoch: live.epoch, baselineSequence: 0, renderedText: run.native?.input.text });
+        if (outcome === 'failed after write') throw Error('connection lost');
+        if (outcome === 'accepted') {
+          native.setStatus(current.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: 'new-turn' } });
+          native.events.push({ ...makeEvent(current.id, 1, 'native_input_receipt', 'do this instead'), nativeTurnId: 'new-turn', runId: queued.id,
+            data: { commandId: queued.commandId, content: { type: 'text', text: 'do this instead' } } });
+        }
       },
       endTurn: async (_sessionId: string, turnId: string, status: string) => { ended.push({ turnId, status }); },
     });
@@ -2123,12 +2196,26 @@ describe('message recovery and targeted stop', () => {
     native.setStatus(session.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } });
     const send = dispatcher(store, native, makeRuntime(), workspace);
     try {
-      const promoted = await send.sendQueuedNow(session.id, queued.id, stop);
+      const result = send.sendQueuedNow(session.id, queued.id, stop);
+      if (outcome === 'accepted') {
+        expect((await result).native?.delivery).toBe('observed');
+        expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
+        expect(ended).toEqual([{ turnId: 'running-turn', status: 'interrupted' }]);
+      } else {
+        await expect(result).rejects.toMatchObject({ code: 'NATIVE_STOP_UNCONFIRMED' });
+        expect(store.getRun(active.id)).toMatchObject({ state: 'running', native: { delivery: 'observed' } });
+        expect(store.getRun(queued.id).native?.delivery).toBe(outcome === 'submitted' ? 'input_sent' : 'uncertain');
+        expect(ended).toEqual([]);
+        await expect(send.sendQueuedNow(session.id, queued.id, stop)).rejects.toMatchObject({ code: 'NATIVE_STOP_UNCONFIRMED' });
+        native.events.push({ ...makeEvent(session.id, 1, 'run_completed', ''), runId: active.id, nativeTurnId: stop.turnId,
+          data: { nativeSessionId: stop.nativeSessionId, commandId: active.commandId } });
+        expect((await send.sendQueuedNow(session.id, queued.id, stop)).id).toBe(queued.id);
+        expect(store.getRun(active.id).state).toBe('completed');
+        expect(ended).toEqual([]);
+        expect(store.getRun(queued.id).native?.delivery).toBe(outcome === 'submitted' ? 'input_sent' : 'uncertain');
+      }
       expect(sends).toEqual([{ now: true, expectedStop: stop }]);
       expect(native.interruptCalls).toBe(0);
-      expect(promoted.native?.delivery).toBe('input_sent');
-      expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
-      expect(ended).toEqual([{ turnId: 'running-turn', status: 'interrupted' }]);
     } finally { await send.close(); store.close(); }
   });
 

@@ -1,6 +1,6 @@
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Session } from '@contracts';
+import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Session } from '@contracts';
 import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
 import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl, type AgentTurnStatus } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter, CURSOR_AGENT_READY_PATTERN, cursorComposerHoldsPrompt, cursorPromptBar, cursorPromptBarEmpty } from '../cli-adapter.js';
@@ -9,7 +9,7 @@ import type { CursorPort } from '../host-port.js';
 import { strictInputHandle } from './strict-input-handle.js';
 import { ChatReader, workspaceChatsDir, writeChatApproval, type ChatMeta } from './chat-store.js';
 import { readJobLog } from './job-log.js';
-import { cursorLoginPrompt, parseScreen, turnControls, type FollowUps } from './screen.js';
+import { cursorLoginPrompt, parseScreen, turnControls } from './screen.js';
 import { normalizeNativeModelSelection } from './model-catalog.js';
 import { MODEL_ID, parseModelList, describeModelListFailure } from './model-list.js';
 import { Transcript, visible } from './transcript.js';
@@ -56,6 +56,8 @@ export interface SettledCursorTurn {
 /** Provider hooks supply identities; screen parsing continues to own the coarse UI phase. */
 export interface NativeTurnObserver {
   activeTurn(session: AgentSessionView): NativeStatus['activeTurn'];
+  /** A request reached the agent stream or became the current turn in the committed store. */
+  requestStarted?(sessionId: string, chatId: string, turnId: string, fromStore: boolean): void;
   /** A provider outcome for this exact turn also allows a checkpoint ending on an incomplete step. */
   recordedOutcome?(sessionId: string, target: NativeTurnTarget): AgentTurnStatus | undefined;
   /** Events just read from the conversation's chat store, where a steer the CLI took leaves its context. */
@@ -133,15 +135,6 @@ const CURSOR_SUBMIT_RESEND_LIMIT = 3;
 const CURSOR_INTERRUPT_TIMEOUT_MS = 15_000;
 /** "Press Ctrl+C again to exit" stays up for about two seconds (2026.10.01); a press inside it quits. */
 const CURSOR_EXIT_WINDOW_MS = 3_000;
-/** How long a busy CLI may take to show a stop hint or go idle before "send now" gives up on its queue. */
-const CURSOR_SEND_NOW_READY_MS = 10_000;
-/** How long the follow-up box may take to show a prompt submitted into it; measured at ~1.2 s. */
-const CURSOR_FOLLOW_UP_VISIBLE_MS = 5_000;
-/** How long after an Enter on the empty bar the follow-up box is watched for the next step. */
-const CURSOR_FOLLOW_UP_STEP_MS = 1_500;
-/** Enters a queued follow-up may take: steer, then interrupt and send, plus one for a dropped key. */
-const CURSOR_FOLLOW_UP_PRESSES = 3;
-
 /** Where `deliver` is about to write: the pane, and the chat the prompt continues. */
 export interface DeliveryTarget { terminalId: string; epoch: number; chatId?: string }
 
@@ -199,6 +192,7 @@ export class NativeService {
         try { watchChatId = this.port.getSession(watch.sessionId).nativeSessionId; } catch { continue; }
       }
       if (watchChatId !== chatId) continue;
+      this.turnObserver?.requestStarted?.(watch.sessionId, chatId, step.turn, false);
       watch.metrics.observeLiveStep(step);
     }
   }
@@ -213,6 +207,36 @@ export class NativeService {
   turnState(sessionId: string, target: NativeTurnTarget): 'open' | 'answered' | 'superseded' | undefined {
     const chat = this.watches.get(sessionId)?.chat;
     return chat && chat.chatId === target.nativeSessionId && chat.status === 'ok' ? chat.turnState(target.turnId) : undefined;
+  }
+
+  /** Reconcile reads at a stop key even if file-watch notifications have not been delivered yet. */
+  refreshTurnIdentity(session: AgentSessionView, expectedStop?: NativeStopRequest): void {
+    const chatId = session.nativeSessionId;
+    if (!chatId || !this.turnObserver?.requestStarted) return;
+    const watch = this.watches.get(session.id);
+    if (watch?.chat?.chatId === chatId) {
+      const project = this.port.getProject(session.projectId);
+      this.refreshParentTranscript(watch, session, workspaceChatsDir(this.configDirFor(project), project.cwd));
+      const turn = watch.chat.turnId();
+      if (turn) this.turnObserver.requestStarted(session.id, chatId, turn, true);
+    }
+    const step = this.options.live?.read(chatId);
+    if (!step) return;
+    this.turnObserver.requestStarted(session.id, chatId, step.turn, false);
+    if (!expectedStop?.turnId || !step.prompt || step.turn === expectedStop.turnId || step.run === expectedStop.turnId) return;
+    // The tap can see a different user request before either its hook or first checkpoint.
+    // An older request can remain on disk; ignore it once its own end or successor is known.
+    const streamed = { nativeSessionId: chatId, turnId: step.turn };
+    if (!this.turnObserver.recordedOutcome?.(session.id, streamed) && this.turnState(session.id, streamed) !== 'superseded') {
+      throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'Could not confirm the original Cursor request before stopping', 409);
+    }
+  }
+
+  private hasOpenTurn(sessionId: string): boolean {
+    const active = this.turnObserver?.activeTurn(this.port.getSession(sessionId));
+    if (!active) return false;
+    const state = this.turnState(sessionId, active);
+    return state === undefined || state === 'open';
   }
 
   /** Hook lifecycle changes must reach clients even while the tool writes no transcript. */
@@ -376,11 +400,17 @@ export class NativeService {
     await this.port.terminals.interact(session.terminalId, async (raw) => {
       // Submit path: writes that are silently rejected must throw, never resolve as success.
       const control = strictInputHandle(raw);
-      const screen = await this.leaveSubview(control, await control.screen());
+      const initial = await control.screen();
+      if (this.port.findTerminal(session.terminalId!)?.ownerId && (!initial || parseScreen(initial).subview || !cursorPromptBarEmpty(initial))) {
+        throw new AppError('CLI_BUSY', 'The terminal owner is editing the prompt', 409);
+      }
+      const screen = await this.leaveSubview(control, initial);
       const info = await this.port.terminals.get(session.terminalId!);
       const interaction = await this.port.dialogs.current(session.id);
       if (interaction) throw new AppError('CLI_INTERACTION_REQUIRED', 'Finish the current selection first', 409);
-      if (!screen || parseScreen(screen).phase !== 'idle') throw new AppError('CLI_BUSY', 'The CLI is not idle yet; the message stays queued', 409);
+      if (!screen || parseScreen(screen).phase !== 'idle' || turnControls(screen).followUps || this.hasOpenTurn(session.id)) {
+        throw new AppError('CLI_BUSY', 'The CLI is not idle yet; the message stays queued', 409);
+      }
       await this.clearComposerInput(control, screen);
       await beforeWrite(await this.deliveryTarget(session.id, info));
       // Write, then submit: `paste(text, true)` presses Enter 80 ms after the bytes, and a press that
@@ -388,75 +418,6 @@ export class NativeService {
       await control.paste(text, false);
       await this.submitPaste(control, text);
     });
-  }
-
-  /**
-   * Deliver a prompt that replaces the running turn ("send now").
-   *
-   * An idle CLI takes it like any prompt. A busy one gets it through its own follow-up queue: the
-   * prompt is submitted while the turn runs, which queues it, and Enter on the empty prompt bar then
-   * escalates it until it leaves the queue (steer, then interrupt and send). The CLI stops the turn
-   * and starts this one in a single step of its own, which a Ctrl+C followed by a paste cannot do
-   * from outside: Ctrl+C does nothing in the moment after a submit, and quits the CLI if repeated.
-   */
-  async deliverNow(
-    session: AgentSessionView, text: string, beforeWrite: (info: DeliveryTarget) => void | Promise<void>,
-    options?: { checkTarget?: () => void | Promise<void> },
-  ): Promise<void> {
-    if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'The CLI has not started', 409);
-    await this.waitForPrompt(session.id, session.terminalId);
-    await this.port.terminals.interact(session.terminalId, async (raw) => {
-      const control = strictInputHandle(raw);
-      const info = await this.port.terminals.get(session.terminalId!);
-      const deadline = Date.now() + CURSOR_SEND_NOW_READY_MS;
-      let screen = await this.leaveSubview(control, await control.screen());
-      // Wait for a state that takes the prompt: idle, or processing with the bar and queue empty.
-      for (;;) {
-        if (await this.port.dialogs.current(session.id)) throw new AppError('CLI_INTERACTION_REQUIRED', 'Finish the current selection first', 409);
-        const phase = screen === undefined ? undefined : parseScreen(screen).phase;
-        if (phase === 'idle') break;
-        const controls = phase === 'busy' ? turnControls(screen!) : undefined;
-        if (controls?.stoppable && !controls.followUps) break;
-        if (Date.now() > deadline) throw new AppError('CLI_BUSY', 'The CLI cannot take the follow-up yet; the message stays queued', 409);
-        await new Promise(resolve => setTimeout(resolve, CURSOR_SUBMIT_POLL_MS * 2));
-        screen = await control.screen();
-      }
-      const idle = parseScreen(screen!).phase === 'idle';
-      // A changed stop target fails before the composer is cleared or the dispatch fence commits.
-      await options?.checkTarget?.();
-      if (idle) await this.clearComposerInput(control, screen!);
-      await beforeWrite(await this.deliveryTarget(session.id, info));
-      await control.paste(text, false);
-      await this.submitPaste(control, text);
-      if (!idle) await this.sendFollowUpNow(control);
-    });
-  }
-
-  /**
-   * Press Enter on the empty prompt bar until the follow-up queue lets go of the prompt just put in
-   * it. Each press moves it one step (steer, then interrupt and send); a press that moved nothing
-   * was missed and gets one more. A box that never draws means the turn ended meanwhile and the CLI
-   * sent the prompt on its own.
-   */
-  private async sendFollowUpNow(control: AgentTerminalControl): Promise<void> {
-    let queue = await this.watchFollowUps(control, CURSOR_FOLLOW_UP_VISIBLE_MS, current => current !== undefined);
-    for (let press = 0; queue && press < CURSOR_FOLLOW_UP_PRESSES; press += 1) {
-      const before = queue;
-      await control.keys(['Enter']);
-      queue = await this.watchFollowUps(control, CURSOR_FOLLOW_UP_STEP_MS, current => current?.text !== before.text || current?.next !== before.next);
-    }
-  }
-
-  /** Reads the follow-up box until [settled] holds or [timeoutMs] passes, and returns the last reading. */
-  private async watchFollowUps(control: AgentTerminalControl, timeoutMs: number, settled: (queue: FollowUps | undefined) => boolean): Promise<FollowUps | undefined> {
-    const deadline = Date.now() + timeoutMs;
-    let queue: FollowUps | undefined;
-    for (;;) {
-      const screen = await control.screen().catch(() => undefined);
-      if (screen !== undefined) queue = turnControls(screen).followUps;
-      if (settled(queue) || Date.now() >= deadline) return queue;
-      await new Promise(resolve => setTimeout(resolve, CURSOR_SUBMIT_POLL_MS));
-    }
   }
 
   /**
@@ -579,9 +540,13 @@ export class NativeService {
    * Ctrl+C again to exit", during which a second one quits the CLI. So the stop waits for the hint,
    * and a press that did not take is repeated once, after the exit window has closed.
    */
-  async interrupt(session: AgentSessionView, options: { clearPrompt?: boolean; beforeWrite?: (allowEnded?: boolean) => void | Promise<void> } = {}): Promise<void> {
+  async interrupt(session: AgentSessionView, options: { clearPrompt?: boolean; expectedStop?: NativeStopRequest; beforeWrite?: (allowEnded?: boolean) => void | Promise<void> } = {}): Promise<void> {
     if (!session.terminalId) return;
     const id = session.terminalId;
+    const guard = options.beforeWrite && ((allowEnded?: boolean) => {
+      this.refreshTurnIdentity(this.port.getSession(session.id), options.expectedStop);
+      return options.beforeWrite!(allowEnded);
+    });
     // A late poll extends the deadline, and the pane is read once more after it. A bare
     // `while (Date.now() < deadline)` drops the stop that landed while the loop was stalled.
     let deadline = Date.now() + CURSOR_INTERRUPT_TIMEOUT_MS;
@@ -612,19 +577,20 @@ export class NativeService {
             const screen = await control.screen();
             const parsed = screen ? parseScreen(screen) : undefined;
             if (parsed?.subview && !overdue) {
-              await options.beforeWrite?.();
+              await guard?.();
               await this.leaveSubview(control, screen);
               continue;
             }
-            if (parsed?.phase === 'idle') {
-              // After input, require two observations so an intermediate paint is not a stop receipt.
-              if ((!sentInterrupt && !dismissed) || ++idleSamples >= 2) {
+            if (parsed?.phase === 'idle' && !turnControls(screen!).followUps) {
+              // The first idle frame can precede a generation's spinner. After a stop key, wait for two idle frames.
+              const stopped = sentInterrupt || !this.hasOpenTurn(session.id);
+              if (stopped && ((!sentInterrupt && !dismissed) || ++idleSamples >= 2)) {
                 if (options.clearPrompt) {
                   // Clearing mutates the CLI's draft. If the lease changes during that operation,
                   // leave it for a deliberate retry instead of risking new browser text.
                   clearingPrompt = true;
-                  await options.beforeWrite?.(true);
-                  await this.clearComposerInput(control, screen!, () => options.beforeWrite?.(true));
+                  await guard?.(true);
+                  await this.clearComposerInput(control, screen!, () => guard?.(true));
                 }
                 return;
               }
@@ -637,11 +603,11 @@ export class NativeService {
                 sentInterrupt = true;
                 presses += 1;
                 pressedAt = Date.now();
-                await options.beforeWrite?.();
+                await guard?.();
                 await control.keys(['C-c']);
               } else if (screen && parsed?.phase === 'attention' && !dismissed && await this.port.dialogs.current(session.id)) {
                 dismissed = true;
-                await options.beforeWrite?.();
+                await guard?.();
                 await control.keys(['Escape']);
               }
             } else {
@@ -935,7 +901,7 @@ export class NativeService {
 
   /**
    * A freshly started CLI needs a few seconds before its prompt bar accepts input, and text
-   * pasted into a dialog would answer the dialog instead. Busy is fine: the CLI queues prompts.
+   * pasted into a dialog would answer the dialog instead. The write lease checks whether the prompt is idle.
    */
   private async waitForPrompt(sessionId: string, terminalId: string, timeoutMs = 30_000): Promise<void> {
     const deadline = Date.now() + timeoutMs;
@@ -1342,6 +1308,8 @@ export class NativeService {
     watch.transcript = chat.status;
     const batch: ParentTranscriptBatch = { chatId: chat.chatId, generation: chat.generation, events: change?.events ?? [] };
     if (!change) return batch;
+    const turn = chat.turnId();
+    if (turn) this.turnObserver?.requestStarted?.(session.id, chat.chatId, turn, true);
 
     // A store or draft with an unanswered prompt proves a turn is running even before the next
     // terminal screen capture finishes; announce `busy` before waking the transcript reader.

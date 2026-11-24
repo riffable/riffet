@@ -35,6 +35,10 @@ const TURN_END_POLL_MS = 50;
 
 const outcomeType = { completed: 'run_completed', failed: 'run_failed', cancelled: 'run_cancelled', interrupted: 'run_cancelled' } as const;
 
+function taggedReceipt(event: NativeWorkbenchEvent): event is NativeWorkbenchEvent & { data: { commandId: string } } {
+  return (event.type === 'native_input_receipt' || event.type === 'user_message_chunk') && typeof event.data.commandId === 'string';
+}
+
 export class DispatchFeed {
   constructor(private readonly deps: { service: NativeBackendService; feed: JournalFeed; store: Store }) {}
 
@@ -48,6 +52,7 @@ export class DispatchFeed {
       subscribeCorrections: listener => this.subscribeCorrections(listener),
       snapshot: async sessionId => this.snapshot(sessionId),
       reconcile: async sessionId => { await service.drainTranscript(sessionId); await this.deps.feed.delivered(); },
+      canReleaseAfterLaterTurn: (session, run) => service.canReleaseAfterLaterTurn(session, run),
       canReleaseInput: (session, run) => service.canReleaseInput(session, run),
       status: sessionId => service.status(sessionId),
       sendRun: (session, run, fence, options) => service.sendRun(session, run, fence, options),
@@ -64,19 +69,21 @@ export class DispatchFeed {
 
   /** Corrections remain observable after an erroneous end released the live provider watch. */
   private subscribeCorrections(listener: (sessionId: string, message: DispatchObservation) => void): () => void {
-    const { feed, store } = this.deps;
+    const { feed, store, service } = this.deps;
     let closed = false;
+    const releasedReceipt = (event: NativeWorkbenchEvent) => taggedReceipt(event)
+      && Boolean(store.findRunByCommand(event.sessionId, event.data.commandId)?.native?.queueReleasedAt);
     const deliver = (batch: FeedBatch) => {
       if (closed) return;
       const events = this.events(batch, new Map());
       if (events.some(event => ['run_completed', 'run_failed', 'run_cancelled', 'native_turn_reopened'].includes(event.type)
-        || event.type === 'user_message_chunk' && typeof event.data.commandId === 'string')) listener(batch.sessionId, { type: 'events', events });
+        || taggedReceipt(event))) listener(batch.sessionId, { type: 'events', events });
     };
     const off = feed.subscribe((_id, lane) => lane === 'main', batch => {
       const turns = new Set<string>();
       if (batch.items.some(item => {
         if ('mark' in item) return item.mark.edge !== 'started';
-        if (item.event.type === 'user_message_chunk' && typeof item.event.data.commandId === 'string') return true;
+        if (releasedReceipt(item.event)) return true;
         const turnId = item.event.nativeTurnId;
         if (!turnId || turns.has(turnId)) return false;
         turns.add(turnId);
@@ -108,7 +115,13 @@ export class DispatchFeed {
         deliver({ ...recent, items: [{ mark }, ...recent.items.filter(item => 'event' in item && item.event.nativeTurnId === mark.turnId)] });
       }
     });
-    return () => { closed = true; off(); };
+    const offReceipts = service.watchEvents(undefined, event => {
+      if (typeof event.data.commandId !== 'string' || !(taggedReceipt(event) || ['run_completed', 'run_failed', 'run_cancelled'].includes(event.type))) return;
+      if (store.findRunByCommand(event.sessionId, event.data.commandId)?.native?.queueReleasedAt) {
+        listener(event.sessionId, { type: 'events', events: [event] });
+      }
+    });
+    return () => { closed = true; off(); offReceipts(); };
   }
 
   /** The conversation's receipts from now on, opening with the newest rows of its log and its status. */

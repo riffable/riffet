@@ -22,6 +22,7 @@ import riffet.contracts.SessionControlSnapshot
 import riffet.contracts.SessionState
 import riffet.core.StoredSubagent
 import riffet.core.TimelineItem
+import riffet.core.isUnreceivedSteer
 import riffet.core.timelineTurnKeys
 import riffet.ui.composer.OutboxEntry
 
@@ -136,7 +137,7 @@ internal data class StoreState(
                 ) && run.native?.timings?.get("busyAt") == null && (preBusyPhase || phase == NativeStatusPhase.IDLE)
         }
         if (runObservedActive) return true
-        val latestUserIndex = timeline.indexOfLast { it is TimelineItem.User }
+        val latestUserIndex = timeline.indexOfLast { it is TimelineItem.User && !isUnreceivedSteer(it) }
         val latestOutputIndex = timeline.indexOfLast { it !is TimelineItem.User && it !is TimelineItem.Activity }
         val latestUser = timeline.getOrNull(latestUserIndex) as? TimelineItem.User
         val latestOutput = timeline.getOrNull(latestOutputIndex)
@@ -159,8 +160,8 @@ internal data class StoreState(
      */
     val uncertain: List<Run>
         get() {
-            val queue = status?.queue ?: return unconfirmed
-            if (queue.held?.reason == NativeQueueHoldReason.UNCONFIRMED) return unconfirmed
+            val held = if (control != null) control.held else (status?.queue ?: return unconfirmed).held
+            if (held?.reason == NativeQueueHoldReason.UNCONFIRMED) return unconfirmed
             val local = unconfirmed.filter { it.native?.stage == HTTP_UNKNOWN }
             return if (local.size == unconfirmed.size) unconfirmed else local
         }

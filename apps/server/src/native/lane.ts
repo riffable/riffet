@@ -62,10 +62,10 @@ export function holdsUnconfirmed(run: Run, status: NativeStatus | undefined, set
   return run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt && !steerTurnEnded(run, status, settled);
 }
 
-/** The queued message that starts first: a stop's follow-up, then a steer sent on as a message, then the oldest. */
+/** The queued message that starts first: a stop's follow-up, then the oldest ordinary message. */
 function nextQueued(runs: readonly Run[]): Run | undefined {
   const queued = runs.filter(run => run.native?.intent !== 'steer' && run.native?.delivery === 'queued');
-  return queued.find(run => run.native!.stage === 'interrupt_followup') ?? queued.find(run => Number.isFinite(run.native!.timings?.fallbackAt)) ?? queued[0];
+  return queued.find(run => run.native!.stage === 'interrupt_followup') ?? queued[0];
 }
 
 export function admission(facts: LaneFacts): Admission {
@@ -147,8 +147,10 @@ export function nextLook(facts: LookFacts): number | undefined {
       if (retry > at) consider(retry);
     } else if (native.delivery === 'input_sent') {
       const due = (native.timings?.inputSentAt ?? at) + facts.confirmationMs + 1;
-      // Past the window but still input_sent: the provider was busy. Look again on this conversation only.
-      consider(due > at ? due : at + facts.intervalMs);
+      // The original task can stay busy after a hook missed its receipt deadline.
+      // Check an overdue, unaccepted steer on the next tick even if the deadline passed between observations.
+      const waitingForSteerReceipt = native.intent === 'steer' && !native.timings?.providerAcceptedAt;
+      consider(due > at || waitingForSteerReceipt ? due : at + facts.intervalMs);
     } else if (native.delivery === 'observed') {
       const since = facts.idleSince(run.id);
       if (since !== undefined) consider(since + facts.idleWindow(run) > at ? since + facts.idleWindow(run) : at + facts.intervalMs);

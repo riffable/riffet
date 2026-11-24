@@ -41,8 +41,19 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
   const submitPrompt = useCallback(async (text: string, attachments: Attachment[], references: PromptContextReference[], steerTarget?: NativeTurnTarget & { ownerRunId?: string }, sourceRun?: Run, onStored?: () => boolean, requestWorkbenchConnection?: RequestWorkbenchConnection) => {
     const prompt = text.trim();
     if (!prompt || tracking.sendInFlight || store.get().interrupting || store.get().runs.some((run) => run.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown') || tracking.sessionId !== session.id) return false;
-    const { connected, status } = store.get();
-    if (steerTarget && (!connected || status.connection?.state && status.connection.state !== 'connected' || status.phase !== 'busy' || status.interaction || store.get().runs.some(run => run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt))) { latest.current.onError(i18n._(msg`暂时无法补充当前任务，输入已保留`)); return false; }
+    if (steerTarget) {
+      const { connected, status, runs } = store.get();
+      const snapshot = control.current;
+      const connection = snapshot ? snapshot.connection : status.connection;
+      const held = snapshot ? snapshot.held?.reason === 'unconfirmed'
+        : status.queue ? status.queue.held?.reason === 'unconfirmed'
+        : runs.some(run => run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt);
+      const available = snapshot ? snapshot.activeTurn?.canSteer && !snapshot.interaction : status.phase === 'busy' && !status.interaction;
+      if (!connected || (connection && connection.state !== 'connected') || held || !available) {
+        latest.current.onError(i18n._(msg`暂时无法补充当前任务，输入已保留`));
+        return false;
+      }
+    }
     if (sourceRun && (!inQueue(sourceRun, control.current) || listNativeSendRequests(session.id).some(entry => entry.sourceRunId === sourceRun.id && !entry.invalidReason))) return false;
     const body: NativeMessageInput = {
       commandId: newId(),
@@ -105,7 +116,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
       tracking.sendInFlight = false;
       if (tracking.sessionId === session.id) store.set({ sending: false });
     }
-  }, [session, store, tracking, latest]);
+  }, [session, store, tracking, latest, control]);
 
   useEffect(() => {
     let active = true;
@@ -129,19 +140,43 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
 
   const send = useCallback((text: string, attachments: Attachment[], references: PromptContextReference[], onStored?: () => boolean, requestWorkbenchConnection?: RequestWorkbenchConnection) => submitPrompt(text, attachments, references, undefined, undefined, onStored, requestWorkbenchConnection), [submitPrompt]);
 
+  const currentSteerTarget = useCallback(() => {
+    const snapshot = control.current;
+    if (!snapshot) return store.get().status.activeTurn;
+    const active = snapshot.activeTurn;
+    if (active?.nativeSessionId && active.nativeTurnId) {
+      return { nativeSessionId: active.nativeSessionId, turnId: active.nativeTurnId, ownerRunId: active.ownerRunId };
+    }
+  }, [control, store]);
+
   const steer = useCallback((text: string, attachments: Attachment[], references: PromptContextReference[], onStored?: () => boolean) => {
-    const target = store.get().status.activeTurn;
+    const target = currentSteerTarget();
     if (!target) { latest.current.onError(i18n._(msg`当前任务已结束或尚未同步，请检查会话后重试`)); return Promise.resolve(false); }
     return submitPrompt(text, attachments, references, target, undefined, onStored);
-  }, [store, latest, submitPrompt]);
+  }, [currentSteerTarget, latest, submitPrompt]);
 
   const steerQueued = useCallback((run: Run) => {
     const current = store.get().runs.find(item => item.id === run.id);
-    const target = store.get().status.activeTurn;
+    const target = currentSteerTarget();
     if (!current || !target) return Promise.resolve(false);
     return submitPrompt(current.native?.input.text ?? current.prompt, [], [], target, current);
-  }, [store, submitPrompt]);
+  }, [currentSteerTarget, store, submitPrompt]);
   const hasPendingQueuedSteer = useCallback((runId: string) => listNativeSendRequests(session.id).some(entry => entry.sourceRunId === runId && !entry.invalidReason), [session.id]);
+
+  const stopTarget = useCallback(async (saved: string | null): Promise<NativeStopRequest> => {
+    // Capture the provider identity before catalog or terminal reads can let another turn take its place.
+    const snapshot = control.current;
+    const legacyTurn = snapshot ? undefined : store.get().status.activeTurn;
+    const nativeSessionId = snapshot?.activeTurn?.nativeSessionId ?? legacyTurn?.nativeSessionId ?? session.nativeSessionId ?? session.cursorSessionId;
+    const turnId = snapshot?.activeTurn?.nativeTurnId ?? legacyTurn?.turnId;
+    const terminalId = session.terminalId;
+    const catalog = await api.sessionCatalog(session.id);
+    if (!catalog.capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
+    if (saved) return JSON.parse(saved);
+    if (!nativeSessionId) throw new Error(i18n._(msg`当前任务尚未同步，请检查会话后重试`));
+    const terminal = terminalId ? await api.getTerminal(terminalId) : undefined;
+    return { requestId: newId(), nativeSessionId, ...(turnId ? { turnId } : {}), ...(terminal ? { terminalId: terminal.id, terminalEpoch: terminal.epoch } : {}) };
+  }, [control, session.id, session.nativeSessionId, session.cursorSessionId, session.terminalId, store]);
 
   const sendQueuedNow = useCallback(async (run: Run) => {
     const current = store.get().runs.find((item) => item.id === run.id);
@@ -152,9 +187,8 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
     const key = `riffet.stop.${session.id}.${run.id}`;
     try {
       // Promote the server's accepted run: its prompt, attachments and command ID stay intact.
-      const saved = localStorage.getItem(key);
-      if (saved && !(await api.sessionCatalog(session.id)).capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
-      const stop: NativeStopRequest = saved ? JSON.parse(saved) : await stopTarget();
+      const stop = await stopTarget(localStorage.getItem(key));
+      if (tracking.sessionId !== session.id) return;
       localStorage.setItem(key, JSON.stringify(stop));
       if (localStorage.getItem(key) !== JSON.stringify(stop)) throw new Error(i18n._(msg`无法保存待发送消息，请检查浏览器存储空间`));
       const updated = await api.sendQueuedNativeRunNow(session.id, run.id, stop);
@@ -176,7 +210,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
         setRunActionPending(store, run.id, false);
       }
     }
-  }, [session, store, tracking, latest, updateRun, hasPendingQueuedSteer]);
+  }, [session, store, control, tracking, latest, updateRun, hasPendingQueuedSteer, stopTarget]);
 
   const retryNativeRun = useCallback(async (run: Run, requestWorkbenchConnection?: RequestWorkbenchConnection) => {
     if (run.native?.stage !== 'http_unknown' || run.native.delivery !== 'uncertain' || store.get().runActionIds.has(run.id) || tracking.sessionId !== session.id) return;
@@ -328,53 +362,30 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
     }
   }, [session.id, store, tracking, latest, updateRun, recoveries]);
 
-  const stopTarget = async (): Promise<NativeStopRequest> => {
-    const catalog = await api.sessionCatalog(session.id);
-    if (!catalog.capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
-    const active = store.get().status.activeTurn;
-    const nativeSessionId = active?.nativeSessionId ?? session.nativeSessionId;
-    if (!nativeSessionId) throw new Error(i18n._(msg`当前任务尚未同步，请检查会话后重试`));
-    const terminal = session.terminalId ? await api.getTerminal(session.terminalId) : undefined;
-    return { requestId: newId(), nativeSessionId, ...(active?.turnId ? { turnId: active.turnId } : {}), ...(terminal ? { terminalId: terminal.id, terminalEpoch: terminal.epoch } : {}) };
-  };
-
   const keys = useCallback(async (list: string[]) => {
     try { await api.nativeKeys(session.id, list); }
     catch (error) { latest.current.onError(errorMessage(error, i18n._(msg`无法发送按键`))); }
-  }, [session.id, store, tracking, latest]);
+  }, [session.id, latest]);
 
   const cancel = useCallback(async () => {
     if (tracking.sendInFlight || store.get().interrupting || tracking.sessionId !== session.id) return;
     store.set({ interrupting: true });
     const key = `riffet.stop.${session.id}`;
     try {
-      const saved = localStorage.getItem(key);
-      if (saved && !(await api.sessionCatalog(session.id)).capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
-      const stopOnce = async (target: NativeStopRequest) => {
-        localStorage.setItem(key, JSON.stringify(target));
-        if (localStorage.getItem(key) !== JSON.stringify(target)) throw new Error(i18n._(msg`无法保存待发送消息，请检查浏览器存储空间`));
-        const result = await api.cancelSession(session.id, target);
-        try { localStorage.removeItem(key); } catch { /* Replaying the same completed operation remains safe. */ }
-        if (result.run) updateRun(result.run);
-      };
-      try {
-        await stopOnce(saved ? JSON.parse(saved) : await stopTarget());
-      } catch (error) {
-        // The server refused because the turn it runs is not the one this request named (a stale status or
-        // a replayed target). Nothing was stopped, so aim at the current turn once; a turn that ended needs nothing.
-        if (!(error instanceof HttpError && error.code === 'NATIVE_STOP_TARGET_CHANGED')) throw error;
-        localStorage.removeItem(key);
-        const phase = store.get().status.phase;
-        if (tracking.sessionId !== session.id || (phase !== 'busy' && phase !== 'attention')) return;
-        await stopOnce(await stopTarget());
-      }
+      const stop = await stopTarget(localStorage.getItem(key));
+      if (tracking.sessionId !== session.id) return;
+      localStorage.setItem(key, JSON.stringify(stop));
+      if (localStorage.getItem(key) !== JSON.stringify(stop)) throw new Error(i18n._(msg`无法保存待发送消息，请检查浏览器存储空间`));
+      const result = await api.cancelSession(session.id, stop);
+      try { localStorage.removeItem(key); } catch { /* Replaying the same completed operation remains safe. */ }
+      if (result.run) updateRun(result.run);
     }
     catch (error) {
       if (!isUncertainRequest(error)) localStorage.removeItem(key);
       if (tracking.sessionId === session.id) latest.current.onError(errorMessage(error, i18n._(msg({ message: '无法停止', context: 'session-stop-failed' }))));
     }
     finally { if (tracking.sessionId === session.id) { store.set({ interrupting: false }); } }
-  }, [session, store, tracking, latest, updateRun]);
+  }, [session.id, store, tracking, latest, updateRun, stopTarget]);
   useEffect(() => onSessionCommand(session.id, (command) => { if (command === 'stop') void cancel(); }), [session.id, cancel]);
 
   return { send, steer, steerQueued, hasPendingQueuedSteer, sendQueuedNow, retryNativeRun, cancelNativeRun, recoverNativeRun, checkNativeRun, continueNativeRun, recoveries, keys, cancel };

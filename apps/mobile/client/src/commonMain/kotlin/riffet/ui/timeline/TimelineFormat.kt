@@ -8,6 +8,7 @@ import kotlinx.serialization.json.doubleOrNull
 import riffet.contracts.NativeDeliveryState
 import riffet.contracts.Run
 import riffet.contracts.RunState
+import riffet.core.hasNativeInputReceipt
 import riffet.i18n.L10n
 
 /*
@@ -227,19 +228,16 @@ fun deliveryLabel(run: Run?, stopShown: Boolean, hasTurnOutput: Boolean): String
     if (recovery.needsCheck) return L10n.uiText(if (recovery.taskOutcomeUnknown) "delivery.resultUnknown" else "delivery.unconfirmed")
     val isSteer = native.intent == "steer"
     val received = (!isSteer && (hasTurnOutput || run.state == RunState.RUNNING))
-        || native.nativeMessageId != null
-        || native.timings?.get("observedAt") != null
-        || native.timings?.get("providerAcceptedAt") != null
-        || native.delivery == NativeDeliveryState.OBSERVED
+        || hasNativeInputReceipt(native)
         || native.stage == "provider_failed"
         || native.stage == "turn_outcome_unknown"
     return when (native.delivery) {
         NativeDeliveryState.QUEUED -> if (received) null else L10n.uiText("delivery.sending")
         NativeDeliveryState.PREPARING, NativeDeliveryState.DISPATCHING -> if (received) null else L10n.uiText("delivery.sending")
-        NativeDeliveryState.INPUT_SENT -> if (received || run.state == RunState.COMPLETED) null else L10n.uiText("delivery.sending")
+        NativeDeliveryState.INPUT_SENT -> if (received || (!isSteer && run.state == RunState.COMPLETED)) null else L10n.uiText("delivery.sending")
         NativeDeliveryState.OBSERVED -> if (native.intent == "steer") L10n.uiText("delivery.steer.sent") else null
         NativeDeliveryState.UNCERTAIN -> L10n.uiText("delivery.unconfirmed")
-        NativeDeliveryState.FAILED -> L10n.uiText(if (native.nativeMessageId != null || native.stage == "provider_failed") "delivery.sentTurnFailed" else "delivery.sendFailed")
+        NativeDeliveryState.FAILED -> L10n.uiText(if (received) "delivery.sentTurnFailed" else "delivery.sendFailed")
         NativeDeliveryState.CANCELLED -> if (native.nativeMessageId != null || run.state == RunState.INTERRUPTED) {
             if (stopShown) L10n.uiText("delivery.stopped") else null
         } else L10n.uiText("delivery.cancelled")

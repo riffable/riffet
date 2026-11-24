@@ -97,7 +97,7 @@ function harness(cli: FakeCursorCli, options: Pick<NativeServiceOptions, 'live' 
     configDir: '/tmp/riffet-test', cliPath: 'cursor-agent', pollMs: options.pollMs ?? 25, ...(options.live ? { live: options.live } : {}),
   });
   services.push(service);
-  return { service, session };
+  return { service, session, info };
 }
 
 async function settlePhase(service: NativeService, phase: string): Promise<void> {
@@ -108,40 +108,19 @@ async function settlePhase(service: NativeService, phase: string): Promise<void>
   throw new Error(`native status stayed ${service.status('session-1').phase}`);
 }
 
-describe('NativeService.deliverNow', () => {
-  it('replaces a running turn through the CLI follow-up queue, without a Ctrl+C', async () => {
+describe('Cursor prompt delivery', () => {
+  it('waits for a confirmed stop before submitting the replacement to the idle prompt', async () => {
     const cli = new FakeCursorCli();
     cli.submit('old task');
     await pause(5);
     const { service, session } = harness(cli);
-    let fenced = 0;
-    await service.deliverNow(session, 'new task', () => { fenced += 1; });
-    expect(fenced).toBe(1);
-    expect(cli.sent).toEqual(['old task', 'new task']);
-    expect(cli.keys).not.toContain('C-c');
-    // Enter submits into the queue, then steers, then interrupts and sends.
-    expect(cli.keys.filter(key => key === 'Enter')).toHaveLength(3);
+    await expect(service.deliver(session, 'replacement', () => {})).rejects.toMatchObject({ code: 'CLI_BUSY' });
     expect(cli.queue).toEqual([]);
-  });
-
-  it('waits out the moment after a submit, when the CLI takes no prompt', async () => {
-    const cli = new FakeCursorCli();
-    cli.pendingMs = 300;
-    cli.submit('old task');
-    const { service, session } = harness(cli);
-    const started = Date.now();
-    await service.deliverNow(session, 'new task', () => {});
-    expect(Date.now() - started).toBeGreaterThanOrEqual(250);
-    expect(cli.sent).toEqual(['old task', 'new task']);
-    expect(cli.keys).not.toContain('C-c');
-  });
-
-  it('sends to an idle CLI like any prompt without sending Ctrl+U/Ctrl+K on an empty bar', async () => {
-    const cli = new FakeCursorCli();
-    const { service, session } = harness(cli);
-    await service.deliverNow(session, 'new task', () => {});
-    expect(cli.sent).toEqual(['new task']);
-    expect(cli.keys).toEqual(['Enter']);
+    expect(cli.keys).toEqual([]);
+    await service.interrupt(session, { clearPrompt: true });
+    await service.deliver(session, 'replacement', () => {});
+    expect(cli.sent).toEqual(['old task', 'replacement']);
+    expect(cli.keys.filter(key => key === 'C-c' || key === 'Enter')).toEqual(['C-c', 'Enter']);
   });
 
   it('skips editing keys on an empty bar and waits for Ctrl+U to take effect when clearing a draft', async () => {
@@ -171,11 +150,24 @@ describe('NativeService.deliverNow', () => {
     expect(stalledCli.sent).toEqual(['fresh prompt']);
   });
 
+  it('leaves the draft untouched when a browser owns the terminal before normal dispatch', async () => {
+    const cli = new FakeCursorCli();
+    const { service, session, info } = harness(cli);
+    cli.bar = 'text being edited in the terminal';
+    info.ownerId = 'browser';
+    let fenced = false;
+    await expect(service.deliver(session, 'queued question', () => { fenced = true; })).rejects.toMatchObject({ code: 'CLI_BUSY' });
+    expect(fenced).toBe(false);
+    expect(cli.keys).toEqual([]);
+    expect(cli.bar).toBe('text being edited in the terminal');
+    expect(cli.sent).toEqual([]);
+  });
+
   it('writes nothing until an asynchronous fence has committed', async () => {
     const cli = new FakeCursorCli();
     const { service, session } = harness(cli);
     let committed = false;
-    await service.deliverNow(session, 'new task', async () => {
+    await service.deliver(session, 'new task', async () => {
       await pause(20);
       expect(cli.sent).toEqual([]);
       expect(cli.bar).toBe('');
@@ -185,41 +177,7 @@ describe('NativeService.deliverNow', () => {
     expect(cli.sent).toEqual(['new task']);
   });
 
-  it('commits nothing when the CLI never takes a prompt in time', async () => {
-    const cli = new FakeCursorCli();
-    cli.pendingMs = 60_000;
-    cli.submit('old task');
-    const { service, session } = harness(cli);
-    let fenced = 0;
-    const sent = service.deliverNow(session, 'new task', () => { fenced += 1; });
-    await expect(sent).rejects.toMatchObject({ code: 'CLI_BUSY' });
-    expect(fenced).toBe(0);
-    expect(cli.keys).toEqual([]);
-  }, 15_000);
 
-  it('checks the stop target before writing and aborts when it changed', async () => {
-    const changed = () => { throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'stop target changed', 409); };
-    const idle = new FakeCursorCli();
-    idle.bar = 'draft';
-    const idleHarness = harness(idle);
-    let fenced = 0;
-    await expect(idleHarness.service.deliverNow(idleHarness.session, 'new task', () => { fenced += 1; }, { checkTarget: changed }))
-      .rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
-    expect(fenced).toBe(0);
-    expect(idle.keys).toEqual([]);
-    expect(idle.bar).toBe('draft');
-    expect(idle.sent).toEqual([]);
-
-    const busy = new FakeCursorCli();
-    busy.submit('old task');
-    await pause(5);
-    const busyHarness = harness(busy);
-    await expect(busyHarness.service.deliverNow(busyHarness.session, 'new task', () => { fenced += 1; }, { checkTarget: changed }))
-      .rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
-    expect(fenced).toBe(0);
-    expect(busy.sent).toEqual(['old task']);
-    expect(busy.keys).toEqual([]);
-  });
 });
 
 describe('NativeService.interrupt', () => {
@@ -236,6 +194,18 @@ describe('NativeService.interrupt', () => {
     } })).rejects.toThrow('stop target changed');
     expect(cli.keys).toEqual(['C-u']);
     expect(cli.bar).toBe('successor draft');
+  });
+
+  it('waits through an idle paint while the original generation is open', async () => {
+    const cli = new FakeCursorCli();
+    const { service, session } = harness(cli);
+    service.useTurnObserver({ activeTurn: () => ({ nativeSessionId: 'chat', turnId: 'original' }), offline: () => {} });
+    await expect(service.deliver(session, 'new task', () => {})).rejects.toMatchObject({ code: 'CLI_BUSY' });
+    expect(cli.keys).toEqual([]);
+    setTimeout(() => { cli.turn = 'processing'; }, 50);
+    await service.interrupt(session);
+    expect(cli.keys).toEqual(['C-c']);
+    expect(cli.turn).toBe('idle');
   });
 
   it('holds the Ctrl+C until the CLI says it will stop, and never quits it', async () => {

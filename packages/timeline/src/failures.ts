@@ -1,13 +1,13 @@
 import type { Run } from '../../contracts/src/index.js';
+import { hasNativeInputReceipt } from './model.js';
 import { isRecord, str } from './values.js';
 
 /** A confirmed input keeps its delivery success even when its task's later outcome is missing. */
 export function nativeTaskOutcome(run: Run): 'unknown' | 'failed' | undefined {
   const native = run.native;
   if (!native) return undefined;
-  const received = Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt)
-    || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
-  if (native.stage === 'turn_outcome_unknown' || received && (native.delivery === 'uncertain' || native.stage === 'acknowledged')) return 'unknown';
+  const received = hasNativeInputReceipt(native) || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
+  if (received && (native.stage === 'turn_outcome_unknown' || native.delivery === 'uncertain' || native.stage === 'acknowledged')) return 'unknown';
   return received && native.delivery === 'failed' ? 'failed' : undefined;
 }
 

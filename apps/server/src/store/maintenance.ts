@@ -244,9 +244,11 @@ export function recoverInterruptedRuns(port: StorePort): void {
           if (['completed', 'failed', 'cancelled'].includes(run.state) || ['failed', 'cancelled'].includes(run.native.delivery)) continue;
           const delivery = run.native.delivery;
           if (delivery === 'queued' || delivery === 'preparing') {
-            if (run.native.intent === 'steer') { port.requeueSteer(run.id); continue; }
+            if (port.markSteerMissed(run.id)) continue;
             if (delivery !== 'queued' || run.state !== 'queued' || run.error) {
-              port.transitionNativeRun(run.id, [delivery], { delivery: 'queued' }, { state: 'queued', error: undefined });
+              port.transitionNativeRun(run.id, [delivery], {
+                delivery: 'queued', ...(run.native.timings?.promotedAt !== undefined ? { stage: 'interrupt_followup' } : {}),
+              }, { state: 'queued', error: undefined });
             }
           } else if (delivery === 'dispatching' || delivery === 'input_sent') {
             const released = run.native.intent === 'steer' && port.isSteerTargetTurnEnded(run);

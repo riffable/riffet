@@ -72,7 +72,7 @@ function canRestore(run: Run): boolean {
   if (!native || native.queueReleasedAt || sent(native) || (native.stage !== undefined && MAYBE_SENT.has(native.stage))) return false;
   if (native.delivery === 'uncertain') return true;
   return run.state === 'failed' && native.delivery === 'failed'
-    && (native.stage === undefined || native.stage === 'steer_rejected' || native.stage === 'outbox_failure' || native.stage === 'prepare');
+    && (native.stage === undefined || native.stage === 'steer_missed' || native.stage === 'steer_rejected' || native.stage === 'outbox_failure' || native.stage === 'prepare');
 }
 
 function executing(run: Run, status: NativeStatus, foreground: Run | undefined): boolean {
@@ -137,8 +137,7 @@ function rank(run: Run): number {
   const native = run.native;
   if (native?.intent === 'steer') return 0;
   if (native?.stage === 'interrupt_followup') return 1;
-  if (typeof native?.timings?.fallbackAt === 'number') return 2;
-  return 3;
+  return 2;
 }
 
 function inboxOf(input: ControlSnapshotInput, active: ActiveTurnState | null, foreground: Run | undefined): InboxEntry[] {

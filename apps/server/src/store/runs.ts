@@ -105,14 +105,17 @@ export function steerQueuedNativeRun(port: StorePort, sessionId: string, sourceR
   });
 }
 
-export function requeueSteer(port: StorePort, id: string): IdentifiedRun | undefined {
+export function markSteerMissed(port: StorePort, id: string): IdentifiedRun | undefined {
   return port.transaction(() => {
     const native = port.getRun(id).native;
-    if (native?.intent !== 'steer') return undefined;
+    if (!native) return undefined;
+    // Older releases cleared the target and queued the steer. Honor a subsequent explicit "stop and send".
+    const legacyFallback = (native.stage === 'steer_fallback' || native.timings?.fallbackAt !== undefined)
+      && !native.timings?.promotedAt && native.stage !== 'interrupt_followup';
+    if (native.intent !== 'steer' && !legacyFallback) return undefined;
     return transitionNativeRun(port, id, ['queued', 'preparing'], {
-      intent: undefined, nativeTurnId: undefined, ownerRunId: undefined, renderedText: undefined, diagnostic: undefined,
-      delivery: 'queued', stage: 'steer_fallback', timings: { ...native.timings, fallbackAt: native.timings?.fallbackAt ?? Date.now() },
-    }, { state: 'queued', error: undefined });
+      intent: 'steer', delivery: 'failed', stage: 'steer_missed',
+    }, { state: 'failed', error: undefined });
   });
 }
 

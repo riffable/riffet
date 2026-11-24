@@ -26,6 +26,7 @@ import riffet.contracts.RunState
 import riffet.contracts.Session
 import riffet.contracts.TerminalState
 import riffet.i18n.L10n
+import riffet.core.hasNativeInputReceipt
 import riffet.shared.AttachmentRef
 import riffet.shared.NativeQueuedSteerInput
 import riffet.shared.NativeMessageInput
@@ -63,14 +64,17 @@ import riffet.shared.uploadAttachment
 /** Only a definite pre-delivery rejection may become a new sendable draft. */
 fun canRestoreUnsentSteer(run: Run): Boolean {
     val native = run.native ?: return false
+    if (native.stage == "steer_missed" && (native.timings?.get("dispatchAt") != null || native.timings?.get("inputSentAt") != null)) return false
     return run.state == RunState.FAILED && native.intent == "steer" && native.delivery == NativeDeliveryState.FAILED &&
-        native.stage in listOf("steer_rejected", OUTBOX_FAILURE) && native.nativeMessageId == null &&
-        native.timings?.get("observedAt") == null && native.timings?.get("providerAcceptedAt") == null
+        native.stage in listOf("steer_missed", "steer_rejected", OUTBOX_FAILURE) && !hasNativeInputReceipt(native)
 }
 
-fun canRestoreUnsentMessage(run: Run): Boolean = canRestoreUnsentSteer(run) ||
-    (run.state == RunState.FAILED && run.native?.delivery == NativeDeliveryState.FAILED &&
-        run.native?.stage == OUTBOX_FAILURE && run.native?.nativeMessageId == null)
+fun canRestoreUnsentMessage(run: Run): Boolean {
+    val native = run.native ?: return false
+    if (native.intent == "steer") return canRestoreUnsentSteer(run)
+    return run.state == RunState.FAILED && native.delivery == NativeDeliveryState.FAILED &&
+        native.stage == OUTBOX_FAILURE && !hasNativeInputReceipt(native)
+}
 
 /**
  * The write half of [SessionStore]: uploading, sending, queueing, retrying and cancelling, all
@@ -155,10 +159,11 @@ internal class SessionComposer(
         attachments: List<Attachment>,
         context: List<PromptContextReference>,
         interrupt: Boolean,
+        stopSnapshot: OpenSessionState? = null,
         onStored: (() -> Unit)? = null,
     ): Boolean {
         val sessionId = core.value.selected?.id ?: return false
-        return submit(text, attachments, context, interrupt, null, expectedSessionId = sessionId, selectDefaultTarget = !interrupt, onStored = onStored)
+        return submit(text, attachments, context, interrupt, null, expectedSessionId = sessionId, selectDefaultTarget = !interrupt, onStored = onStored, stopSnapshot = stopSnapshot)
     }
 
     suspend fun enqueue(text: String, attachments: List<Attachment>, context: List<PromptContextReference>, onStored: (() -> Unit)? = null): Boolean =
@@ -184,11 +189,13 @@ internal class SessionComposer(
         expectedSessionId: String? = null,
         selectDefaultTarget: Boolean = false,
         onStored: (() -> Unit)? = null,
+        opened: StoreState = core.value,
+        stopSnapshot: OpenSessionState? = null,
     ): Boolean = scope.async {
-        val opened = core.value
         val session = opened.selected ?: return@async false
         val epoch = opened.epoch
         if (opened.sessionId != session.id || (expectedSessionId != null && expectedSessionId != session.id)) return@async false
+        if (stopSnapshot != null && (stopSnapshot.epoch != epoch || stopSnapshot.sessionId != session.id)) return@async false
         val prompt = text.trim()
         if (prompt.isEmpty()) return@async false
         if (opened.send.sending || opened.send.interrupting) return@async false
@@ -214,7 +221,7 @@ internal class SessionComposer(
                 context = sourceRun?.native?.input?.context?.map { PromptContextReference(it.path, it.line) } ?: context.fileReferences(),
                 references = sourceRun?.native?.input?.references ?: context.sessionReferences(),
                 expectedConfigRevision = if (target == null) session.configRevision ?: 0 else null,
-                stop = if (interrupt) stopTarget(opened) ?: error(L10n.uiText("composer.error.stopTargetMissing")) else null,
+                stop = if (interrupt) stopTarget(stopSnapshot ?: opened.toOpenSession()) ?: error(L10n.uiText("composer.error.stopTargetMissing")) else null,
             )
             if (core.value.epoch != epoch) return@async false
             val entry = OutboxEntry(sessionId = session.id, body = body, createdAt = isoUtcNow(), interrupt = interrupt, steerTarget = target, sourceRunId = sourceRun?.id, version = if (target != null) 2 else 1)
@@ -284,11 +291,11 @@ internal class SessionComposer(
         }
     }.await()
 
-    suspend fun sendQueuedNow(run: Run): Boolean = scope.async {
+    suspend fun sendQueuedNow(run: Run, shown: OpenSessionState = core.value.toOpenSession()): Boolean = scope.async {
+        val session = shown.selected ?: return@async false
+        val epoch = shown.epoch
         val opened = core.value
-        val session = opened.selected ?: return@async false
-        val epoch = opened.epoch
-        if (opened.sessionId != session.id) return@async false
+        if (opened.epoch != epoch || opened.sessionId != session.id || run.sessionId != session.id) return@async false
         val current = opened.runs.firstOrNull { it.id == run.id } ?: return@async false
         if (!inQueue(current, opened.control) || run.id in opened.steerSources) return@async false
         if (core.value.send.sending || core.value.send.interrupting) return@async false
@@ -297,7 +304,7 @@ internal class SessionComposer(
         core.updateSend(epoch) { it.copy(interrupting = true, error = null, notice = null) }
         var stop: NativeStopRequest? = null
         try {
-            stop = outbox.queuedStop(session.id, run.id) ?: stopTarget(opened)
+            stop = outbox.queuedStop(session.id, run.id) ?: stopTarget(shown)
             requireNotNull(stop) { L10n.uiText("composer.error.stopTargetMissing") }
             requireTargetedStop(session.id)
             if (core.value.epoch != epoch) return@async false
@@ -330,15 +337,14 @@ internal class SessionComposer(
             api.syncStream(sessionId, "main", SyncWindow.MAC.copy(snapshotRows = 1), null).flow().first { it is SyncFrame.Hello } as SyncFrame.Hello
         }
         val isolated = StateStore()
-        isolated.update { it.copy(sessionId = sessionId, selected = hello.session, status = hello.status) }
+        isolated.update { it.copy(sessionId = sessionId, selected = hello.session, status = hello.status, control = hello.control) }
         return SessionComposer(api, scope, outbox, isolated, list, SessionInteractions(api, isolated)).interrupt()
     }
 
-    suspend fun interrupt(): Boolean = scope.async {
-        val opened = core.value
-        val session = opened.selected ?: return@async false
-        val epoch = opened.epoch
-        if (opened.sessionId != session.id) return@async false
+    suspend fun interrupt(shown: OpenSessionState = core.value.toOpenSession()): Boolean = scope.async {
+        val session = shown.selected ?: return@async false
+        val epoch = shown.epoch
+        if (shown.sessionId != session.id) return@async false
         val claimed = core.tryUpdate { state ->
             if (state.epoch != epoch || state.send.sending || state.send.interrupting) null
             else state.copy(send = state.send.copy(interrupting = true, error = null, notice = null))
@@ -350,7 +356,7 @@ internal class SessionComposer(
         try {
             // An unconfirmed request must keep its identity even if terminal control moved. The
             // server uses its receipt to decide whether that exact stop completed or can recover.
-            stop = previous ?: stopTarget(opened) ?: error(L10n.uiText("composer.error.stopTargetMissing"))
+            stop = previous ?: stopTarget(shown) ?: error(L10n.uiText("composer.error.stopTargetMissing"))
             if (core.value.epoch != epoch) return@async false
             outbox.persistStop(session.id, stop)
             requireTargetedStop(session.id)
@@ -574,16 +580,18 @@ internal class SessionComposer(
         }
     }.await()
 
-    private suspend fun stopTarget(state: StoreState): NativeStopRequest? {
+    private suspend fun stopTarget(state: OpenSessionState): NativeStopRequest? {
         val session = state.selected ?: return null
-        val turn = state.status?.activeTurn?.target()
-        val nativeSessionId = turn?.nativeSessionId ?: session.nativeSessionId ?: session.cursorSessionId ?: return null
+        val displayed = state.control?.activeTurn
+        val legacy = if (state.control == null) state.status?.activeTurn else null
+        val nativeSessionId = displayed?.nativeSessionId ?: legacy?.nativeSessionId ?: session.nativeSessionId ?: session.cursorSessionId ?: return null
+        val turnId = displayed?.nativeTurnId ?: legacy?.turnId
         val terminal = session.terminalId?.let { api.terminal(it) }
         // A Run's terminal epoch records its send, not today's control lease. Claim/release changes
         // that epoch without changing the provider turn, so use the terminal's current identity.
         if (terminal != null && (terminal.sessionId != session.id || terminal.projectId != session.projectId ||
                 terminal.state != TerminalState.RUNNING)) return null
-        return NativeStopRequest(newClientId(), nativeSessionId, turnId = turn?.turnId,
+        return NativeStopRequest(newClientId(), nativeSessionId, turnId = turnId,
             terminalId = terminal?.id, terminalEpoch = terminal?.epoch)
     }
 

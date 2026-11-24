@@ -8,6 +8,7 @@ import riffet.core.StatusTone
 import riffet.core.TimelineItem
 import riffet.core.TimelineItemKind
 import riffet.core.analyzeTimelineTurns
+import riffet.core.isUnreceivedSteer
 import riffet.core.kind
 import riffet.core.timelineItemTime
 import riffet.core.toolKind
@@ -207,6 +208,7 @@ fun buildTimelineGrouping(
     val laterProcessTurns = HashSet<String>()
     for (index in items.indices.reversed()) {
         val item = items[index]
+        if (isUnreceivedSteer(item)) continue
         if (item is TimelineItem.User) laterProcessTurns.clear()
         else if (item.isInteractionTool()) laterProcessTurns.remove(turnKeys[index])
         else if (item.kind in PROCESS_KINDS || item is TimelineItem.Status || item.isCommentary()) laterProcessTurns.add(turnKeys[index])
@@ -410,7 +412,7 @@ private fun processRow(
     val hasLaterSegment = ((last + 1)..turnEnd).any { index ->
         if (turnKeys[index] != turnKey) return@any false
         val later = items[index]
-        later.isInteractionTool() || later is TimelineItem.User || later is TimelineItem.Thought ||
+        later.isInteractionTool() || (later is TimelineItem.User && !isUnreceivedSteer(later)) || later is TimelineItem.Thought ||
             later is TimelineItem.Tool || later is TimelineItem.Plan || later is TimelineItem.Image || later.isCommentary()
     }
     val running = turnActive && !hasLaterSegment

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineItem } from './model';
-import { transcriptTurns, type TranscriptRow } from './transcriptRows';
+import { heldFooterRow, transcriptTurns, type TranscriptRow } from './transcriptRows';
 
 const TURN = 'run:turn-1';
 const AT = '2026-11-22T05:39:00.000Z';
@@ -10,7 +10,7 @@ function projected(sequence: number, type: string, data: Record<string, unknown>
   return { ...base, projectionKey: `event:${sequence}`, sourceEvents: [base] };
 }
 
-function user(sequence: number, text: string): TimelineItem {
+function user(sequence: number, text: string): Extract<TimelineItem, { kind: 'user' }> {
   return { kind: 'user', turn: TURN, key: `user:${sequence}`, text, attachments: [], event: projected(sequence, 'user_message_chunk') };
 }
 
@@ -29,6 +29,29 @@ function describeRow(row: TranscriptRow): string {
 }
 
 describe('transcriptTurns interaction tool boundaries', () => {
+  it('keeps the original turn working until the provider accepts a steer', () => {
+    const steer: Extract<TimelineItem, { kind: 'user' }> = {
+      ...user(3, 'Also check the shortcut'),
+      run: {
+        id: 'steer', sessionId: 'session-1', commandId: 'cmd-steer', prompt: 'Also check the shortcut',
+        state: 'running', createdAt: AT, updatedAt: AT,
+        native: {
+          intent: 'steer', ownerRunId: 'turn-1', delivery: 'input_sent', configRevision: 0, attempt: 1,
+          fingerprint: 'fp', config: { mode: 'agent' }, input: { text: 'Also check the shortcut', attachmentIds: [], context: [] },
+        },
+      },
+    };
+    const items = [user(1, 'Fix focus'), tool(2, 'read', 'Read')];
+    const rows = transcriptTurns([...items, steer], true, undefined, undefined, TURN)[0]!.rows;
+    const process = rows[1]!;
+    expect(process).toMatchObject({ type: 'process', running: true, interrupted: false });
+    expect(heldFooterRow(rows)).toBe(process.key);
+
+    const accepted = { ...steer, run: { ...steer.run!, native: { ...steer.run!.native!, nativeMessageId: 'receipt' } } };
+    const updated = transcriptTurns([...items, accepted], true, undefined, undefined, TURN)[0]!.rows;
+    expect(updated[1]).toMatchObject({ type: 'process', running: false, interrupted: true });
+  });
+
   it('keeps unphased prose and AskQuestion outside TurnProcess when skipped and followed by a closing line', () => {
     const timeline: TimelineItem[] = [
       user(1, 'Unified tool calls?'),

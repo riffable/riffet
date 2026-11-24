@@ -39,6 +39,7 @@ export interface NativeDispatcherBackend {
   subscribeCorrections?(listener: (sessionId: string, message: DispatchObservation) => void): () => void;
   snapshot(sessionId: string): Promise<DispatchSnapshot>;
   reconcile?(sessionId: string): Promise<void>;
+  canReleaseAfterLaterTurn?(session: Session, run: Run): Promise<boolean>;
   canReleaseInput?(session: Session, run: Run): Promise<boolean>;
   status(sessionId: string): NativeStatus;
   /** Whether a driver is bound to the session; without it every session counts as possibly live. */
@@ -60,12 +61,6 @@ export interface NativeDispatcherBackend {
   interrupt(session: string | Session, options?: { clearPrompt?: boolean; expectedStop?: NativeStopRequest }): Promise<void>;
   /** Journal `meta.turn_ended` for a turn a confirmed stop just closed, without waiting for the CLI's own hook. */
   endTurn?(sessionId: string, turnId: string, status: 'interrupted', at: string): Promise<void>;
-}
-
-interface NativeDispatcherRuntime {
-  withSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
-  /** With `initialPrompt`, must call `beforeSpawn` right before spawning and abort the spawn if it throws. */
-  ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<unknown>;
 }
 
 /** What keeps a restart waiting: a write still being confirmed, a turn or a background task that a restart would end. */
@@ -95,7 +90,7 @@ export class NativeDispatcher {
   private readonly drainLeases = new Map<string, number>();
   private readonly host: SessionActorHost;
 
-  constructor(private readonly store: Store, private readonly native: NativeDispatcherBackend, private readonly runtime: NativeDispatcherRuntime, private readonly workspace: WorkspaceService, private readonly options: SessionDispatchOptions = {}) {
+  constructor(private readonly store: Store, private readonly native: NativeDispatcherBackend, private readonly runtime: SessionActorHost['runtime'], private readonly workspace: WorkspaceService, private readonly options: SessionDispatchOptions = {}) {
     const dispatcher = this;
     this.host = {
       store, native, runtime, workspace, options,

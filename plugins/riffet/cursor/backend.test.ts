@@ -10,7 +10,7 @@ import { CursorBackend } from './backend.js';
 import { CursorTranscriptSource } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
 import { chatStorePath } from './native/chat-store.js';
-import { CursorLive, type CursorUsageCapture } from './native/live.js';
+import { CursorLive, type CursorLiveStep, type CursorUsageCapture } from './native/live.js';
 import { cursorPort } from './host-port.js';
 import type { NativeService } from './native/service.js';
 import type { WatchMessage } from './native/watch.js';
@@ -56,6 +56,24 @@ describe('CursorBackend.configure', () => {
     expect(order).toEqual(['lock:session-1', 'read:session-1', 'release']);
     // A backend that swallowed the refusal would leave the caller believing the switch happened.
     expect(nativeConfigure).toHaveBeenCalledWith(session, { approval: 'unrestricted' });
+  });
+});
+
+describe('CursorBackend.interrupt', () => {
+  it('keeps the successor’s pending steer when the stop was addressed to the previous turn', async () => {
+    const host = new FakeHost({ sessions: [session], projects: [project] });
+    const backend = new CursorBackend({ stateDir: '' });
+    let turnId = 'previous';
+    const expectedStop = { requestId: 'stop-previous', nativeSessionId: 'chat', turnId };
+    const native = { refreshTurnIdentity: () => { turnId = 'successor'; }, interrupt: vi.fn() };
+    const steering = { activeTurn: () => ({ nativeSessionId: 'chat', turnId }), rejectPending: vi.fn() };
+    Object.assign(backend, { built: { native, port: cursorPort(host), steering, runtime: {}, profile: {} } });
+    host.checkStopTarget = async () => {
+      if (turnId !== expectedStop.turnId) throw Object.assign(new Error('target changed'), { code: 'NATIVE_STOP_TARGET_CHANGED' });
+    };
+    await expect(backend.interrupt(host, context, { expectedStop })).rejects.toMatchObject({ code: 'NATIVE_STOP_TARGET_CHANGED' });
+    expect(steering.rejectPending).not.toHaveBeenCalled();
+    expect(native.interrupt).not.toHaveBeenCalled();
   });
 });
 
@@ -216,6 +234,10 @@ describe('CursorBackend.canReleaseInput', () => {
     status?: AgentStatus;
     cursor?: string | null;
     liveSealed?: boolean;
+    step?: CursorLiveStep;
+    chatsDir?: string;
+    endStatus?: 'completed' | 'interrupted';
+    ownerId?: string;
     epochDrift?: boolean;
     dialog?: boolean;
     activeSteerTurn?: boolean;
@@ -228,7 +250,7 @@ describe('CursorBackend.canReleaseInput', () => {
     let epoch = 1;
     const termView = {
       id: 'terminal-1', projectId: project.id, sessionId: sess.id, title: 'cursor',
-      kind: options.terminalKind ?? 'cursor', state: 'running' as const, epoch: 1,
+      kind: options.terminalKind ?? 'cursor', state: 'running' as const, epoch: 1, ownerId: options.ownerId,
       persistent: true, cols: 100, rows: 30, createdAt: '2026-11-24T00:00:00.000Z',
     };
     host.view.terminal = (id) => id === 'terminal-1' ? { ...termView, epoch } : undefined;
@@ -237,14 +259,15 @@ describe('CursorBackend.canReleaseInput', () => {
     });
     host.terminals.screen = async () => options.screen ?? IDLE_SCREEN;
     if (options.dialog) host.dialogs.current = async () => ({ id: 'dlg-1', kind: 'approval', revision: 1, title: 'Approve', options: [], actions: [], transport: 'terminal' } as never);
-    const source = new CursorTranscriptSource({ sessionId: sess.id, chatsDir: () => '/nonexistent', chatId: () => 'chat-1' });
-    const closedCursor = JSON.stringify({ v: 1, mapping: 3, from: 0, n: 2, len: 2, digest: '', mapper: {}, turn: { id: 't1', at: '2026-11-24T00:00:00.000Z', ended: true }, recent: ['t1'], placed: {}, children: [] });
-    const writer = { cursor: options.cursor === undefined ? closedCursor : options.cursor } as never;
+    const source = new CursorTranscriptSource({ sessionId: sess.id, chatsDir: () => options.chatsDir ?? '/nonexistent', chatId: () => 'chat-1' });
+    const closedCursor = JSON.stringify({ v: 1, mapping: 3, from: 0, root: 'current-root', n: 2, len: 2, digest: '', mapper: {}, turn: { id: 't1', at: '2026-11-24T00:00:00.000Z', ended: true }, recent: ['t1'], placed: {}, children: [] });
+    source.identity();
+    const writer = { cursor: options.cursor === undefined ? closedCursor : options.cursor, turnEndStatus: () => options.endStatus } as never;
     host.transcript.drain = vi.fn(async () => { if (options.drainError) throw new Error('store busy'); });
     host.transcript.withSource = async (_sid, task) => await task(source, writer);
     const backend = new CursorBackend({ stateDir: '' });
     const status = options.status ?? { phase: 'idle' };
-    const liveStep = options.liveSealed === undefined ? undefined : { turn: 't2', at: '2026-11-24T00:00:01.000Z', step: 's1', sealed: options.liveSealed, parts: [] };
+    const liveStep = options.step ?? (options.liveSealed === undefined ? undefined : { turn: 't2', at: '2026-11-24T00:00:01.000Z', step: 's1', sealed: options.liveSealed, parts: [] });
     Object.assign(backend, {
       built: {
         native: { status: () => status, refreshStatus: vi.fn(async () => undefined) },
@@ -261,6 +284,52 @@ describe('CursorBackend.canReleaseInput', () => {
   it('allows releasing an uncertain run when Cursor is idle with an empty prompt bar and no open turn', async () => {
     const { backend, host, ctx } = setupRelease();
     expect(await backend.canReleaseInput(host, ctx, runRef)).toBe(true);
+  });
+
+  it('requires the same completed native request in the tap and serving lane after the old input was written', async () => {
+    const run = { ...runRef, inputSentAt: Date.parse('2026-11-24T00:00:00.000Z'), inputText: 'old question', renderedText: 'old question with an attachment' };
+    const step = { turn: 't1', at: '2026-11-24T00:01:00.000Z', step: 's1', prompt: 'later question', sealed: true, parts: [] };
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-cursor-recovery-'));
+    const check = async (opts: Parameters<typeof setupRelease>[0]) => {
+      const { backend, host, ctx } = setupRelease({ chatsDir: dir, ...opts });
+      return backend.canReleaseAfterLaterTurn(host, ctx, run);
+    };
+    mkdirSync(join(dir, 'chat-1'));
+    const db = new DatabaseSync(join(dir, 'chat-1', 'store.db'));
+    try {
+      db.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)');
+      const put = (root: string) => db.prepare("INSERT OR REPLACE INTO meta VALUES ('0', ?)").run(JSON.stringify({ agentId: 'chat-1', latestRootBlobId: root }));
+      const proof = { step, endStatus: 'completed' as const };
+      put('current-root');
+      expect(await check(proof)).toBe(true);
+      for (const incomplete of [
+        { endStatus: proof.endStatus }, { ...proof, step: { ...step, at: new Date(run.inputSentAt).toISOString() } },
+        { ...proof, step: { ...step, turn: 'another-request' } }, { ...proof, step: { ...step, prompt: run.inputText } },
+        { ...proof, step: { ...step, prompt: run.renderedText } }, { ...proof, endStatus: 'interrupted' as const },
+        { ...proof, ownerId: 'browser' }, { ...proof, epochDrift: true }, { ...proof, cursor: null },
+        { ...proof, screen: IDLE_SCREEN.replace('→ Add a follow-up', '→ queued draft') },
+      ]) expect(await check(incomplete)).toBe(false);
+      // A browser may claim or release the terminal, or leave a draft, while the journal lane is busy.
+      for (const change of ['claim', 'release', 'draft']) {
+        const { backend, host, ctx } = setupRelease({ chatsDir: dir, ...proof });
+        const readLane = host.transcript.withSource;
+        host.transcript.withSource = async (id, read) => {
+          const settled = await readLane(id, read);
+          if (change === 'draft') {
+            host.terminals.screen = async () => IDLE_SCREEN.replace('Add a follow-up', 'unfinished draft');
+          } else {
+            const view = host.view.terminal('terminal-1')!;
+            const changed = { ...view, epoch: view.epoch + 1, ownerId: change === 'claim' ? 'browser' : undefined };
+            host.view.terminal = id => id === changed.id ? changed : undefined;
+            host.terminals.get = async () => changed;
+          }
+          return settled;
+        };
+        expect(await backend.canReleaseAfterLaterTurn(host, ctx, run), change).toBe(false);
+      }
+      put('newer-root-after-drain');
+      expect(await check(proof)).toBe(false);
+    } finally { db.close(); rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('refuses release when the prompt bar still holds unsent draft text', async () => {

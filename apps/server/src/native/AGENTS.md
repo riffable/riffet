@@ -19,7 +19,7 @@ verify:
 
 ## 不变量
 
-- 一条消息写入 CLI 至多一次，超时、重启、收敛都不重写；不确定的投递记为 `uncertain` 并占住队列（`lane.ts#holdsUnconfirmed`），由用户确认后才继续。契约见 docs/DELIVERY.md §2。
+- 一条消息写入 CLI 至多一次，超时、重启、收敛都不重写；不确定的投递记为 `uncertain` 并占住队列（`lane.ts#holdsUnconfirmed`），有后续独立回合完成且插件确认原输入已清空时自动放行，否则由用户确认后继续。契约见 docs/DELIVERY.md §2。
 - CLI 不在提示符、也没有在跑回合时，消息只允许反复被拒 `session-actor.ts#CLI_BUSY_LIMIT_MS`；排在活跃回合后面不计时。只有待处理的设置重启可以暂停这个计时，后台任务不行。
 - 空闲收敛有两档：`session-actor.ts#IDLE_RECONCILE_MS` 关闭丢了完成事件的回合，`session-actor.ts#IDLE_OUTCOME_GRACE_MS` 给 Stop hook 链留时间。缩短后者会先显示「结果未确认」再自我更正。
 - 回合的 checkpoint 与消息同时发出，不等待它；checkpoint 只保留能证明早于回合认领时间的内容，宁可拒绝恢复也不还原回合自己的改动（`dispatch.ts#NativeDispatcher` 内的 `beforeTurn`）。
@@ -35,6 +35,7 @@ verify:
 
 - 输入：各驱动的 `AgentBackend` 回传的事件与状态（`dispatch.ts#DispatchObservation`），以及终端画面。画面录制在 `apps/server/src/backends/claude/fixtures/screens/`，CLI 升级后的重录见 docs/guide/aif.md §5.4；dispatch 本身没有独立录制，用 `dispatch.test.ts` 的场景，以及 `dispatch.property.test.ts`：模拟的 CLI 加随机交错（命令、CLI 事件、迟到或缺失的状态推送、异步步骤的完成与失败、时钟、重启），检查至多一次写入、回合隔离、停止后必结算、静止后无残留。改调度逻辑后用 `RIFFET_PROPERTY_RUNS=5000 RIFFET_PROPERTY_SEED=<n>` 多跑几个种子。
 - 无命令 ID 的 CLI 回执用 `packages/contracts/src/prompt-match.ts#samePromptText` 匹配发出的提示词。规整空白后，只有 `U+FFFD` 所在位置允许字符差异，且模糊匹配至少需要一个相同的非空白字符。服务端和时间线共用此规则。
+- 队列放行后关闭该消息的实时观察。迟到的回执通过命令 ID 修正原消息。后来发送相同正文时，两条消息各认自己的回执。
 - 客户端能力来自请求头 `CLIENT_FEATURES_HEADER`；EventSource 与 WebSocket 不能带头，只有 GET 流接受 `?features=`（`client-features.ts#registerSessionVisibilityHook`）。
 - 内存与压力读取 `ps`、`sysctl kern.memorystatus_vm_pressure_level`、`/proc/pressure/memory`（`agent-processes.ts#memoryPressure`），读不到按 `normal`。
 

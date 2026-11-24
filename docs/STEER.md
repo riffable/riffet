@@ -177,7 +177,7 @@ sequenceDiagram
 
 同一会话的两次引导通过短操作锁顺序提交，不会等待目标 turn 结束。不同 commandId 的重复文本仍是两条有效消息；相同 commandId 的并发请求只产生一次投递。锁前后需复查存储状态，防止多个 HTTP 请求各自投递同一记录。
 
-引导不会调用现有 `interruptAndSend`、`sendQueuedNow` 或 Cursor 的 `deliverNow`。原任务及其工作目录占用保持有效，相关队列仍等待整个原生 turn 结束。未知的原始输入会继续阻止引导；未知的引导输入阻止继续发送新指令，并通过回执核对解决，避免顺序和送达对象失真。
+引导不会调用`interruptAndSend` 或 `sendQueuedNow`。原任务及其工作目录占用保持有效，相关队列仍等待整个原生 turn 结束。未知的原始输入会继续阻止引导；未知的引导输入阻止继续发送新指令，并通过回执核对解决，避免顺序和送达对象失真。
 
 停止与引导竞争时，已设置停止标记的会话拒绝新的引导。若引导已进入外部写入边界，停止随后作用于同一个目标 turn，引导记录保留真实送达结果和最终停止状态。归档路径沿用相同协调方式，不能在归档检查后、实际归档期间再插入一次不受控写入。
 
@@ -238,7 +238,7 @@ bridge 先完成内容 admission 等异步操作，再在同一同步处理分�
 
 | 后端 | 已知约束 | 开放引导前的要求 |
 | --- | --- | --- |
-| Cursor TUI | Follow-up 的下一步可能是 steer、interrupt and send 或 send now；当前循环会继续升级动作 | 识别可靠的原 turn 身份与输入确认，只触发 steer；目标结束或状态不明时停止，不继续按 Enter。若不能避免 CLI 自动转为下一轮，则不提供严格引导 |
+| Cursor TUI | Follow-up 的下一步可能是 steer、interrupt and send 或 send now，连续按 Enter 会改变操作 | 识别可靠的原 turn 身份与输入确认，只触发 steer；目标结束或状态不明时停止，不继续按 Enter。若不能避免 CLI 自动转为下一轮，则不提供严格引导 |
 | Cursor SDK | 官方 `run.steer()` 有接受与退回 follow-up 两种结果；部分句柄不支持实际引导 | 先验证能否接入 Riffet 所用的同一执行会话；不能因 SDK 有此方法就替换现有 TUI 驱动。退回 follow-up 时告知未引导，不自动 send |
 | Cursor 工具 hooks | CLI 2026.10.01-e373342 已实测原 generation 内注入、工具不中断、模型采用、唯一原生 marker 与旧目标不跨轮消费；`--plugin-dir` 可加载受控 hook | 已接入短登记、fence、结束拒绝、原生 marker 确认及历史恢复；只对当前进程握手后的目标开放 |
 | Claude Code | CLI 2.1.252 已实测同 prompt 的 `PostToolUse.additionalContext`、原生 attachment 和最终模型采用；生产 HTTP 全链路通过 | 已复用既有 hook bridge 接入延后投递；Enter、Ctrl+Enter、SDK priority 不承担严格目标投递 |
@@ -299,11 +299,11 @@ bridge 先完成内容 admission 等异步操作，再在同一同步处理分�
 
 1. driver 返回 `{deferred:true}` 表示等待工具边界，Dispatcher 立即释放短锁，保留 `preparing / steer_waiting_boundary`，不填写 `providerAcceptedAt/inputSentAt`。它不进入普通发送队列，停止、配置及原生 hook 可以继续获得会话锁。
 2. 登记时完成输入校验和附件物化，固定原生 session、prompt/generation、commandId 和 renderedText。hook 到来时只短暂获取会话锁，核对原目标、真实工具调用归属、Run 状态、停止与归档标记，再通过同一个 CAS fence 返回此次上下文。并行或重复 hook 只能领取一次，子 agent 的工具不能误领父会话引导。
-3. 到达 fence 前，Stop、目标更换、SessionEnd、取消或服务恢复均可明确拒绝未消费输入。`native_input_rejected` 带 `beforeWrite:true`，只允许 queued/preparing CAS 转为下一条消息（同一行去掉引导身份，`queued / steer_fallback`；`timings.fallbackAt` 让它排在停止后的补发之后、其余排队消息之前，`Store.requeueSteer`）；已越过 fence 的记录不能被这条通知伪判未发送。纯文本尾部没有后续工具时按目标结束拒绝，不通过 Stop hook 强制续跑，这条引导随后作为下一条消息发送。目标已结束而 provider 没有回报的 queued/preparing 引导，由 Dispatcher 在会话空闲时同样转为下一条消息。转出后 steer 的 fence 拒绝再写入，迟到的 hook 领取不会重复投递。用户主动取消的不转。
+3. 原回合结束或更换、服务重启、或 hook 明确报告写入前拒绝时，`Store.markSteerMissed` 只把仍在 `queued/preparing` 的引导标为 `failed / steer_missed`。记录保留原目标、正文、附件和引用，可恢复到输入框。已越过写入边界的引导继续等自己的回执。用户取消的引导保留取消状态。
 4. `native_input_submitted` 只表示 fence 后准备交出 hook 输出，记录 input_sent，不伪报原生接受。确认依据是原生 transcript 中携带完整唯一 carrier 的真实记录：Cursor 是工具结果 blob，Claude 是 `hook_additional_context` attachment。`native_input_receipt` 保留真实来源 ID、目标（`data.targetTurnId`）和 commandId；transcript 可能把这一行归到另一个 turn key（Claude 回答提问后的 `claude-turn:<uuid>`），Dispatcher 按 `targetTurnId` 比对目标，不按行所在的 turn；解析结果必须与 Store 中 fence 保存的完整 carrier 一致。UI 只显示用户内容，不显示内部 carrier。越过 fence 后回执缺失仍为未知，不自动重投。
 5. 初版只开放经过验证的输入形态。Cursor 支持文本和文件引用，暂不通过引导传附件；Claude 可物化普通文件附件与引用，拒绝图片。两个 hook 后端均拒绝命令/技能调用，渲染输入最多 6,000 字符，完整 carrier 及同次 hook 的所有引导合计最多 8,000 字符。超出同次额度的输入留待原目标下一个工具边界，原目标结束即拒绝。Claude 文档对超过 10,000 字符的上下文使用文件加预览，因此不能把超长输出当成全部正文已进入模型请求。
 
-投递前重启转为下一条消息；投递后重启保持未知并从原生记录认领。未确认的引导只在它的目标 turn 仍在运行时阻塞后续消息：CLI 回到提示符或进入同一 chat 的另一个 turn 后，它无法再进入任何 turn，后续消息照常发送，它自己保留未确认结果供核对（`native/lane.ts`）。测试覆盖短锁、Stop 竞争、重复 hook、子 agent、迟到 marker、无后续工具及旧目标不跨轮领取。终态先于 receipt 时按目标暂存，冷重放时只读取有真实输入身份且已明确结算的原始 owner；`interrupted + uncertain` 不能证明目标结束。Cursor 原生 user echo 同时补齐 owner 的 nativeTurnId，迟到关联可在精确引导 receipt 时补齐 ownerRunId。Codex 的立即投递路径继续保留。
+写入前重启，补充内容可恢复；写入后重启，继续从原生记录核对送达状态。未确认的引导只在它的目标 turn 仍在运行时阻塞后续消息：CLI 回到提示符或进入同一 chat 的另一个 turn 后，它无法再进入任何 turn，后续消息照常发送，它自己保留未确认结果供核对（`native/lane.ts`）。测试覆盖短锁、Stop 竞争、重复 hook、子 agent、迟到 marker、无后续工具及旧目标不跨轮领取。终态先于 receipt 时按目标暂存，冷重放时只读取有真实输入身份且已明确结算的原始 owner；`interrupted + uncertain` 不能证明目标结束。Cursor 原生 user echo 同时补齐 owner 的 nativeTurnId，迟到关联可在精确引导 receipt 时补齐 ownerRunId。Codex 的立即投递路径继续保留。
 
 **时间线按原生 turn 分组，输入消息各自保留身份。** Web 与 KMP core 共同使用新的 turn 关联规则：存在原生 turn 及已知 owner 时归到原始 Run；无 Riffet owner 的外部 TUI 任务，以后端、原生会话、原生 turn 组成稳定分组身份，不为显示捏造一条原始 Run。旧事件没有新增字段时继续使用已有分组逻辑。
 
@@ -345,7 +345,7 @@ Outbox 的 `body` 可继续复用 `NativeMessageInput` 容器，但引导条目�
 | Android | 原发送按钮走共享偏好；队列、消息 badge 使用同形转向箭头 | 共享 SessionStore、SessionComposer 和 NativeSendOutbox |
 | macOS | 原发送按钮和键盘提交走共享偏好，队列使用 `arrow.turn.up.right` | 共享 RiffetKit；Swift 只作命令和展示适配 |
 
-各端“交互与输入”设置增加“任务输出时发送到：排队 / 引导”，服务端保存 `composerRunningBehavior`，缺失默认为排队，旧设置不主动迁移。输入区去掉独立引导按钮，主按钮保留原图标及布局，仅提示和无障碍标签反映实际动作。选择引导后，还需满足能力、活动目标、可写连接、运行状态以及无审批和未知提交等条件，才通过同一个发送入口提交 steer；否则沿原普通发送路径排队。
+各端“交互与输入”设置增加“任务输出时发送到：排队 / 引导”，服务端保存 `composerRunningBehavior`，缺失默认为排队，旧设置不主动迁移。输入区去掉独立引导按钮，主按钮保留原图标及布局，仅提示和无障碍标签反映实际动作。选择引导后，还需满足能力、活动目标、可写连接、运行状态以及无审批和未知提交等条件，才通过同一个发送入口提交 steer；任务仍在运行但暂时无法补充时保留内容，用户可以选择排队。
 
 排队行操作统一为“补充到当前任务”“停止并发送”“编辑”和“取消排队”；可用性取决于具体任务、后端能力和服务端校验。补充消息显示“补充消息”，正常接收后隐藏成功标签。发送未知时在对应消息旁显示“检查状态”，可安全精确重试时显示“重试发送”，不展示“原请求”“已核对”或“结束跟踪”。
 
