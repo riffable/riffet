@@ -136,12 +136,39 @@ describe('NativeService.deliverNow', () => {
     expect(cli.keys).not.toContain('C-c');
   });
 
-  it('sends to an idle CLI like any prompt', async () => {
+  it('sends to an idle CLI like any prompt without sending Ctrl+U/Ctrl+K on an empty bar', async () => {
     const cli = new FakeCursorCli();
     const { service, session } = harness(cli);
     await service.deliverNow(session, 'new task', () => {});
     expect(cli.sent).toEqual(['new task']);
-    expect(cli.keys.filter(key => key === 'Enter')).toHaveLength(1);
+    expect(cli.keys).toEqual(['Enter']);
+  });
+
+  it('skips editing keys on an empty bar and waits for Ctrl+U to take effect when clearing a draft', async () => {
+    const emptyCli = new FakeCursorCli();
+    const empty = harness(emptyCli);
+    await empty.service.deliver(empty.session, '进一步优化，比如这种细节：\n\n/tmp/riffet-attachments/a/image.png', () => {});
+    expect(emptyCli.keys).toEqual(['Enter']);
+    expect(emptyCli.sent).toEqual(['进一步优化，比如这种细节：\n\n/tmp/riffet-attachments/a/image.png']);
+
+    const stalledCli = new FakeCursorCli();
+    stalledCli.bar = 'stale draft';
+    const order: string[] = [];
+    const stalled = harness(stalledCli);
+    const original = stalledCli.press.bind(stalledCli);
+    stalledCli.press = (key: string) => {
+      order.push(`key:${key}`);
+      if (key === 'C-u') {
+        stalledCli.keys.push(key);
+        setTimeout(() => { stalledCli.bar = ''; order.push('cleared'); }, 150);
+        return;
+      }
+      original(key);
+    };
+    await stalled.service.deliver(stalled.session, 'fresh prompt', () => { order.push('fence'); });
+    expect(order.indexOf('cleared')).toBeGreaterThan(order.indexOf('key:C-u'));
+    expect(order.indexOf('fence')).toBeGreaterThan(order.indexOf('cleared'));
+    expect(stalledCli.sent).toEqual(['fresh prompt']);
   });
 
   it('writes nothing until an asynchronous fence has committed', async () => {

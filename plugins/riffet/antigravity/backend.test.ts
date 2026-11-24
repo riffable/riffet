@@ -162,6 +162,32 @@ it('persists the dispatch fence before the first paste and never retries termina
   expect(paste).toHaveBeenCalledTimes(1);
 });
 
+it('re-presses Enter if Antigravity keeps the pasted prompt in the composer after the first Enter', async () => {
+  const f = await fixture();
+  const request = {
+    context: f.context,
+    runId: 'run-retry-enter',
+    commandId: 'command-retry-enter',
+    input: { text: 'Retry Enter prompt', context: [], attachmentIds: [] },
+    config: { mode: 'agent' },
+  } as AgentSendRequest;
+  let screen = '────────\n>\n────────';
+  let enters = 0;
+  const paste = vi.fn(async (text: string) => { screen = `────────\n> ${text}\n────────`; });
+  const keys = vi.fn(async (pressed: string[]) => {
+    if (pressed.includes('Enter')) {
+      enters += 1;
+      if (enters >= 2) screen = '────────\n>\n────────';
+    }
+  });
+  vi.mocked(f.host.terminals.interact).mockImplementation(async (_id, body) =>
+    body({ screen: async () => screen, paste, keys } as any),
+  );
+  await f.backend.send(f.host, request);
+  expect(paste).toHaveBeenCalledTimes(1);
+  expect(keys.mock.calls).toEqual([[['Enter']], [['Enter']]]);
+});
+
 it('rejects diverged input branches and duplicate candidates while confirming large inputs by native identity', async () => {
   const f = await fixture(),
     large = 'x'.repeat(50_000),

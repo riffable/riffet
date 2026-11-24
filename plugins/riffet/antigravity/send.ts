@@ -47,7 +47,13 @@ async function pasteImages(host: AgentHost, control: Control, images: string[]):
   }
 }
 
+const SUBMIT_RECHECK_MS = 200;
+const SUBMIT_RESEND_POLL_MS = 1_500;
+const SUBMIT_RESEND_WINDOW_MS = 10_000;
+const SUBMIT_RESEND_LIMIT = 3;
+
 async function pasteText(host: AgentHost, control: Control, text: string): Promise<void> {
+  if (!text) return;
   await control.paste(text, false);
   let observed = false;
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -58,6 +64,34 @@ async function pasteText(host: AgentHost, control: Control, text: string): Promi
     }
   }
   if (!observed) throw host.error('AGY_INPUT_UNCONFIRMED', 'Antigravity has not confirmed the pasted input', 409);
+}
+
+/** Press Enter and re-press within a bounded window if the composer still holds our unsubmitted prompt. */
+async function submitComposer(control: Control, text: string, hasImages: boolean): Promise<void> {
+  await control.keys(['Enter']);
+  const stillHeld = (screen: string): boolean => {
+    if (text) return !emptyComposer(screen) && composerHolds(composerText(screen), text);
+    return hasImages && /\d+\s*media attached/i.test(screen);
+  };
+  const deadline = Date.now() + SUBMIT_RESEND_WINDOW_MS;
+  let presses = 0;
+  let wait = SUBMIT_RECHECK_MS;
+  for (;;) {
+    await delay(wait);
+    wait = SUBMIT_RESEND_POLL_MS;
+    const final = Date.now() >= deadline;
+    const screen = await control.screen().catch(() => undefined);
+    if (screen !== undefined) {
+      if (stillHeld(screen)) {
+        if (presses >= SUBMIT_RESEND_LIMIT) return;
+        presses += 1;
+        await control.keys(['Enter']);
+      } else {
+        return;
+      }
+    }
+    if (final) return;
+  }
 }
 
 /** How long a send waits for a TUI that is still starting or reconnecting before handing the message back to the queue. */
@@ -149,5 +183,5 @@ async function dispatch(
   // No fallback send: any error after the fence is reconciled from native USER_INPUT records.
   await pasteImages(host, control, images);
   await pasteText(host, control, text);
-  await control.keys(['Enter']);
+  await submitComposer(control, text, images.length > 0);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cursorAgentAdapter, cursorAgentProjectSlug, cursorAgentTranscriptPath, cursorComposerHoldsPrompt, cursorPromptBar, CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN } from './cli-adapter.js';
+import { cursorAgentAdapter, cursorAgentProjectSlug, cursorAgentTranscriptPath, cursorComposerHoldsPrompt, cursorPromptBar, cursorPromptBarEmpty, CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN } from './cli-adapter.js';
 
 describe('cursor-agent adapter', () => {
   it('slugs the project directory the way the CLI does', () => {
@@ -60,12 +60,22 @@ describe('reading whether the cursor prompt bar still holds a written prompt', (
 
   it('reads the bar itself, not the transcript line above it', () => {
     expect(cursorPromptBar(pane('  → Add a follow-up'))).toBe('  → Add a follow-up');
+    expect(cursorPromptBarEmpty(pane('  → Add a follow-up'))).toBe(true);
+    expect(cursorPromptBarEmpty(pane('  → Add a follow-up — /plan to review and build'))).toBe(true);
+    expect(cursorPromptBarEmpty(pane('  → Add a follow-up\n    ctrl+r to review changed files'))).toBe(true);
+    expect(cursorPromptBarEmpty(pane('  → Add a follow-up feature'))).toBe(false);
     expect(cursorComposerHoldsPrompt(pane('  → Add a follow-up'), prompt)).toBe(false);
   });
 
   it('sees a write the CLI never took', () => {
     const bar = [`  → ${prompt}`, '    /var/folders/probe/image.png'].join('\n');
     expect(cursorComposerHoldsPrompt(pane(bar), `${prompt}\n\n/var/folders/probe/image.png`)).toBe(true);
+  });
+
+  it('sees a short first line followed by an attachment path on the continuation row', () => {
+    const bar = ['  → 进一步优化，比如这种细节：', '    /tmp/riffet-attachments/01506fe2/image.png'].join('\n');
+    expect(cursorComposerHoldsPrompt(pane(bar), '进一步优化，比如这种细节：\n\n/tmp/riffet-attachments/01506fe2/image.png')).toBe(true);
+    expect(cursorComposerHoldsPrompt(pane('  → 进一步优化 [Image #1]'), '进一步优化\n\n/tmp/riffet-attachments/01506fe2/image.png')).toBe(true);
   });
 
   it('reads a taken prompt as gone, placeholder or busy footer', () => {

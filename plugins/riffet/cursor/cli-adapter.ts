@@ -56,6 +56,12 @@ export function cursorAgentTranscriptPath(cwd: string, cursorSessionId: string):
 }
 
 export const CURSOR_AGENT_READY_PATTERN = /→\s+(?:Add a follow-up|Plan, search, build anything)/;
+// The prompt bar itself while empty: cursor-agent replaces the placeholder completely once any
+// character is entered, whereas status hints (e.g. `ctrl+r to review changed files`) can sit on
+// separate rows below it without making the composer non-empty.
+const CURSOR_PROMPT_EMPTY_LINE = /^\s*→\s+(?:Add a follow-up(?:\s+—\s+\/plan to review and build)?|Plan, search, build anything)(?:\s+ctrl\+c to stop)?\s*$/;
+const CURSOR_IMAGE_PLACEHOLDER_PATTERN = /\[Image #\d+\]/;
+const ATTACHMENT_PATH_LINE = /^\s*\/[^\s/]+\/\S+\s*$/;
 // The footer prints the active model and a running percentage while a turn is in flight. The
 // `ctrl+c to stop` hint is appended on busy frames and is a stable marker across versions.
 export const CURSOR_AGENT_BUSY_PATTERN = /ctrl\+c\s+to\s+stop/i;
@@ -82,16 +88,12 @@ export function cursorAgentStartupError(output: string): string | undefined {
 const PROMPT_BAR_PROMPT_CHARS = 16;
 
 /**
- * The prompt bar: the `→` line the CLI keeps just above its model/permission footer.
- *
- * It carries the placeholder while empty and the reader's own draft while one is pending. A prompt
- * the CLI has taken leaves it immediately — measured at +50 ms on 2026.09.28 — so the bar is the
- * honest answer to "did that write land?", the same question Claude Code's composer answers.
+ * The prompt bar lines: the `→` line and any continuation lines above the model/permission footer.
  *
  * Only the bar counts, and it is found the way `native/screen.ts` finds it: the last `→` line above
  * the footer, because pickers mark their current row with the same character further up the frame.
  */
-export function cursorPromptBar(screen: string): string | undefined {
+function cursorPromptBarLines(screen: string): string[] | undefined {
   const lines = screen.split('\n').map(line => line.replace(/\s+$/, '')).filter(line => line.trim());
   const tail = lines.slice(-14);
   let footer = -1;
@@ -99,11 +101,28 @@ export function cursorPromptBar(screen: string): string | undefined {
     if (/^\s{1,4}(?:~(?=$|\s|\/)|\/(?![/*])\S)/.test(tail[index + 1]!) && !/^\s*→/.test(tail[index]!)) { footer = index; break; }
   }
   if (footer < 0) return undefined;
-  const floor = Math.max(0, footer - 6);
+  const floor = Math.max(0, footer - 8);
   for (let index = footer - 1; index >= floor; index -= 1) {
-    if (/^\s*→/.test(tail[index]!)) return tail[index]!;
+    if (/^\s*→/.test(tail[index]!)) return tail.slice(index, footer);
   }
   return undefined;
+}
+
+/**
+ * The prompt bar: the `→` line the CLI keeps just above its model/permission footer.
+ *
+ * It carries the placeholder while empty and the reader's own draft while one is pending. A prompt
+ * the CLI has taken leaves it immediately — measured at +50 ms on 2026.09.28 — so the bar is the
+ * honest answer to "did that write land?", the same question Claude Code's composer answers.
+ */
+export function cursorPromptBar(screen: string): string | undefined {
+  return cursorPromptBarLines(screen)?.[0];
+}
+
+/** Whether the prompt bar itself currently shows cursor-agent's empty placeholder. */
+export function cursorPromptBarEmpty(screen: string): boolean {
+  const bar = cursorPromptBar(screen);
+  return bar !== undefined && CURSOR_PROMPT_EMPTY_LINE.test(bar);
 }
 
 /**
@@ -111,15 +130,30 @@ export function cursorPromptBar(screen: string): string | undefined {
  *
  * The bar keeps the placeholder — `→ Add a follow-up` — while nothing is pending, so text where the
  * placeholder belongs is text the CLI never took. Whitespace is ignored on both sides: the bar
- * re-wraps long drafts to the pane width. A draft taller than the bar's few rows is scrolled to its
- * end, so the `→` row then shows a later stretch of the prompt rather than its opening.
+ * re-wraps long drafts to the pane width and places continuation lines (such as attachment paths)
+ * below the `→` row. A draft taller than the bar's few rows is scrolled to its end, so the visible
+ * rows then show a later stretch of the prompt rather than its opening.
  */
 export function cursorComposerHoldsPrompt(screen: string, text: string): boolean {
-  const bar = cursorPromptBar(screen);
+  const barLines = cursorPromptBarLines(screen);
   const prompt = text.replace(/\s+/g, '');
-  if (!bar || !prompt) return false;
-  const shown = bar.replace(/^\s*→/, '').replace(/\s+/g, '');
-  return shown.includes(prompt.slice(0, PROMPT_BAR_PROMPT_CHARS)) || (shown.length >= PROMPT_BAR_PROMPT_CHARS && prompt.includes(shown));
+  if (!barLines || !prompt) return false;
+  const firstShown = barLines[0]!.replace(/^\s*→/, '').replace(/\s+/g, '');
+  const fullShown = [barLines[0]!.replace(/^\s*→/, ''), ...barLines.slice(1)].join('').replace(/\s+/g, '');
+  if (fullShown.includes(prompt.slice(0, PROMPT_BAR_PROMPT_CHARS))) return true;
+  if (firstShown.length >= PROMPT_BAR_PROMPT_CHARS && prompt.includes(firstShown)) return true;
+  if (barLines.slice(1).some(line => {
+    const compact = line.replace(/\s+/g, '');
+    return compact.length >= PROMPT_BAR_PROMPT_CHARS && prompt.includes(compact);
+  })) return true;
+  if (CURSOR_IMAGE_PLACEHOLDER_PATTERN.test(barLines.join('\n'))) {
+    const lines = text.split(/\r?\n/);
+    if (lines.some(line => ATTACHMENT_PATH_LINE.test(line))) {
+      const own = lines.filter(line => !ATTACHMENT_PATH_LINE.test(line)).join('').replace(/\s+/g, '').slice(0, PROMPT_BAR_PROMPT_CHARS);
+      return own.length === 0 || fullShown.includes(own);
+    }
+  }
+  return false;
 }
 
 /** The single source of truth for how the Cursor plugin launches cursor-agent. */

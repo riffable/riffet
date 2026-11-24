@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Session } from '@contracts';
 import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
 import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl, type AgentTurnStatus } from '@riffet/plugin-api/experimental/agent';
-import { cursorAgentAdapter, CURSOR_AGENT_READY_PATTERN, cursorComposerHoldsPrompt } from '../cli-adapter.js';
+import { cursorAgentAdapter, CURSOR_AGENT_READY_PATTERN, cursorComposerHoldsPrompt, cursorPromptBar, cursorPromptBarEmpty } from '../cli-adapter.js';
 import { approvalArgs, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import { strictInputHandle } from './strict-input-handle.js';
@@ -75,9 +75,15 @@ export interface NativeTurnObserver {
 
 /**
  * How long the prompt bar is polled for a written prompt before Enter is pressed regardless. The bar
- * takes the write within a frame; this only covers a CLI that is slow to repaint.
+ * takes the write within a frame when idle, but right after a cold `--resume` cursor-agent can block
+ * its event loop for ~1–1.5 s while hydrating context; waiting long enough prevents Enter from
+ * coalescing behind `\x1b[201~` in the same stdin chunk.
  */
-const CURSOR_SUBMIT_VISIBLE_MS = 1_500;
+const CURSOR_SUBMIT_VISIBLE_MS = 3_000;
+/** How long `clearComposerInput` waits for a Ctrl+U/Ctrl+K edit key to visibly take effect on a non-empty bar. */
+const CURSOR_CLEAR_WAIT_MS = 1_500;
+/** Shorter settle bound for Ctrl+K when Ctrl+U left the bar unchanged (cursor at col 0 or unknown placeholder). */
+const CURSOR_CLEAR_SETTLE_MS = 300;
 /**
  * A pane with no prompt bar and no known dialog is usually a redraw, a resize or a notice that is
  * about to go. It keeps its last phase; past the first window the status says the screen is not
@@ -511,47 +517,50 @@ export class NativeService {
     return current;
   }
 
-  /** Types a prompt (or slash command) into the CLI's prompt bar and submits it. */
-  async send(session: AgentSessionView, text: string): Promise<void> {
-    if (!session.terminalId) throw new AppError('TERMINAL_NOT_RUNNING', 'Open the Cursor terminal before sending', 409);
-    this.configBootTerminals.delete(session.id);
-    try {
-      await this.waitForPrompt(session.id, session.terminalId);
-    } catch (error) {
-      const watch = this.watches.get(session.id);
-      if (watch && !watch.closed) await this.updateStatus(watch, this.port.getSession(session.id)).catch(() => undefined);
-      throw error;
-    }
-    await this.port.terminals.paste(session.terminalId, text, true);
-    const watch = this.watches.get(session.id);
-    if (watch) void this.tick(watch);
-  }
-
   /**
    * The web composer owns a complete prompt, never a suffix of a restored CLI draft.
    *
-   * Phase-1 behaviour (plans/replicated-gathering-hammock.md): send a best-effort clear sequence
-   * once rather than looping until a placeholder regex matches. The old regex-based wait
-   * (`→ Add a follow-up` / `Plan, search, build anything`) could fail-closed whenever cursor-agent
-   * changed its placeholder text or paint timing, surfacing to users as the spurious
-   * `CLI_INPUT_NOT_EMPTY` toast. The paste that follows carries the real intent: if there is a
-   * leftover draft its bytes get appended to our text — a far better failure mode than refusing
-   * to send at all. Brand-new sessions bypass this path entirely via the dispatcher's argv
-   * initial-prompt route.
+   * When the prompt bar already shows cursor-agent's empty placeholder, send no editing keys at all:
+   * cursor-agent's Ctrl+U handler matches `e.startsWith("\u0015")` and returns early, discarding any
+   * trailing bytes in the same stdin chunk. During a brief event-loop stall (such as ~1–1.5 s right
+   * after cold `--resume`), an unnecessary `C-u` sits unread in the PTY buffer and coalesces with the
+   * subsequent bracketed paste, silently dropping the entire prompt.
+   *
+   * When a draft is present (or the placeholder is unrecognized), send `C-u` then `C-k` as separate
+   * writes and poll for the bar to repaint between them (bounded, never failing closed with
+   * `CLI_INPUT_NOT_EMPTY`) so `\x15` is consumed before the paste is written.
    */
   private async clearComposerInput(control: AgentTerminalControl, initial: string, beforeWrite?: () => void | Promise<void>): Promise<void> {
     if (!initial || parseScreen(initial).phase !== 'idle') throw new AppError('CLI_BUSY', 'The CLI input is not ready yet', 409);
-    // Ctrl+U erases one visual line before the cursor; Ctrl+K erases logical lines after it.
-    // Send editing keys in separate paints: the CLI's input handler may consume only the first
-    // control character of a coalesced stdin chunk.
+    if (cursorPromptBarEmpty(initial)) return;
     await beforeWrite?.();
     await control.keys(['C-u']);
-    await new Promise(resolve => setTimeout(resolve, 60));
+    const afterCu = await this.waitForClearStep(control, initial, CURSOR_CLEAR_WAIT_MS);
+    if (afterCu && parseScreen(afterCu).phase !== 'idle') throw new AppError('CLI_BUSY', 'The CLI input is not ready yet', 409);
     await beforeWrite?.();
     await control.keys(['C-k']);
-    await new Promise(resolve => setTimeout(resolve, 60));
-    const after = await control.screen();
+    const ckTimeout = afterCu === undefined || cursorPromptBarEmpty(afterCu)
+      ? CURSOR_SUBMIT_POLL_MS
+      : cursorPromptBar(afterCu) !== cursorPromptBar(initial)
+        ? CURSOR_CLEAR_WAIT_MS
+        : CURSOR_CLEAR_SETTLE_MS;
+    const after = await this.waitForClearStep(control, afterCu ?? initial, ckTimeout);
     if (!after || parseScreen(after).phase !== 'idle') throw new AppError('CLI_BUSY', 'The CLI input is not ready yet', 409);
+  }
+
+  /** Wait up to `timeoutMs` for an editing key to change or empty the prompt bar (or leave idle). */
+  private async waitForClearStep(control: AgentTerminalControl, before: string, timeoutMs: number): Promise<string | undefined> {
+    const beforeBar = cursorPromptBar(before);
+    const deadline = Date.now() + timeoutMs;
+    let current: string | undefined;
+    for (;;) {
+      await new Promise(resolve => setTimeout(resolve, CURSOR_SUBMIT_POLL_MS));
+      current = await control.screen().catch(() => undefined);
+      if (current !== undefined && (parseScreen(current).phase !== 'idle' || cursorPromptBarEmpty(current) || cursorPromptBar(current) !== beforeBar)) {
+        return current;
+      }
+      if (Date.now() >= deadline) return current;
+    }
   }
 
   /**
