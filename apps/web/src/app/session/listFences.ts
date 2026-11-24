@@ -5,6 +5,7 @@ interface ListFrame {
   bullet: string;
   orderNumber: number;
   lastLineEndedWithColon: boolean;
+  hasCitation: boolean;
 }
 
 const THEMATIC_BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
@@ -114,7 +115,7 @@ function continuedFrameAfter(
   lines: readonly string[],
   afterIndex: number,
   stack: readonly ListFrame[],
-): { frame: ListFrame; blankAfter: boolean; orderNumber: number } | undefined {
+): { frame: ListFrame; blankAfter: boolean; orderNumber: number; indented?: boolean } | undefined {
   let blankAfter = false;
   for (let i = afterIndex + 1; i < lines.length; i += 1) {
     const line = lines[i]!.endsWith('\r') ? lines[i]!.slice(0, -1) : lines[i]!;
@@ -125,7 +126,15 @@ function continuedFrameAfter(
     const { chars, cols } = leadingIndent(line);
     if (THEMATIC_BREAK.test(line)) return undefined;
     const match = LIST_MARKER.exec(line.slice(chars));
-    if (!match) return undefined;
+    if (!match) {
+      for (let s = stack.length - 1; s >= 0; s -= 1) {
+        const frame = stack[s]!;
+        if (cols >= frame.contentIndent && cols < frame.contentIndent + 4 && cols < 4) {
+          return { frame, blankAfter, orderNumber: frame.orderNumber, indented: true };
+        }
+      }
+      return undefined;
+    }
     const kind: 'ul' | 'ol' = match[1] ? 'ul' : 'ol';
     const bullet = match[1] ?? match[3]!;
     const orderNumber = match[2] ? Number(match[2]) : 0;
@@ -199,7 +208,8 @@ export function alignListFences(markdown: string): string {
       const citation = fence.char === '`' && CITATION_INFO.test(fence.info);
       const strongContinuation = Boolean(
         continued
-        && (continued.frame.markerIndent > 0
+        && (continued.indented
+          || continued.frame.markerIndent > 0
           || !continued.blankAfter
           || (continued.frame.kind === 'ol' && continued.orderNumber > continued.frame.orderNumber)),
       );
@@ -221,13 +231,16 @@ export function alignListFences(markdown: string): string {
         }
       } else {
         // Column-0 citation fences belong to the list item when attached without a blank line,
-        // introduced by a trailing colon (after at most one blank line), or followed by a list
-        // continuation. Ordinary column-0 fences only indent when followed by a list continuation.
+        // inside a nested list item (within 1 blank line regardless of trailing punctuation),
+        // introduced by a trailing colon, repeating a sibling citation in the same list, or
+        // followed by a list continuation. Ordinary column-0 fences require a list continuation.
+        const nestedCitation = citation && stack.length >= 2 && blankLines <= 1;
+        const siblingCitation = citation && top.hasCitation && blankLines <= 1 && !continued;
         const shouldIndent = citation
-          ? !sawBlank || (blankLines <= 1 && top.lastLineEndedWithColon) || strongContinuation
-          : strongContinuation && (!sawBlank || continued!.frame.markerIndent > 0 || continued!.frame.kind === 'ol');
+          ? !sawBlank || (blankLines <= 1 && top.lastLineEndedWithColon) || nestedCitation || siblingCitation || strongContinuation
+          : strongContinuation && (!sawBlank || Boolean(continued!.indented) || continued!.frame.markerIndent > 0 || continued!.frame.kind === 'ol');
         if (shouldIndent) {
-          target = continues && sawBlank && !top.lastLineEndedWithColon ? continues : top;
+          target = continues && sawBlank && !top.lastLineEndedWithColon && !nestedCitation ? continues : top;
         } else {
           stack.length = 0;
         }
@@ -236,6 +249,7 @@ export function alignListFences(markdown: string): string {
       if (target) {
         while (stack.length > 0 && stack[stack.length - 1] !== target) stack.pop();
         target.lastLineEndedWithColon = false;
+        if (citation) target.hasCitation = true;
         const extra = target.contentIndent - fence.indent;
         activeFence = { char: fence.char, size: fence.size, maxCloserIndent: fence.indent + 3, extraIndent: extra };
         blankLines = 0;
@@ -263,8 +277,16 @@ export function alignListFences(markdown: string): string {
 
     const marker = parseListMarker(line, stack);
     if (marker) {
+      let inheritedCitation = false;
       while (stack.length > 0 && marker.markerIndent < stack[stack.length - 1]!.contentIndent) {
-        stack.pop();
+        const popped = stack.pop()!;
+        if (
+          popped.markerIndent === marker.markerIndent
+          && popped.kind === marker.kind
+          && popped.bullet === marker.bullet
+        ) {
+          inheritedCitation = popped.hasCitation;
+        }
       }
       stack.push({
         markerIndent: marker.markerIndent,
@@ -273,6 +295,7 @@ export function alignListFences(markdown: string): string {
         bullet: marker.bullet,
         orderNumber: marker.orderNumber,
         lastLineEndedWithColon: marker.endedWithColon,
+        hasCitation: inheritedCitation,
       });
       blankLines = 0;
       output.push(rawLine);

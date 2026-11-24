@@ -153,4 +153,104 @@ describe('alignListFences', () => {
 
     expect(alignListFences(input)).toBe(input);
   });
+
+  it('keeps blank-separated col-0 citations inside nested list items even when ending with a period or at the end of a list', () => {
+    const input = [
+      '1. **多条排队消息**',
+      '   - 原因：这里以句号结尾，没有冒号。',
+      '',
+      '```194:251:apps/web/src/app/session/ComposerDock.tsx',
+      'const expandable = runs.length > 1;',
+      '```',
+      '',
+      '2. **单条排队消息**',
+      '   - 桌面端详情',
+      '     - 4 行文本说明',
+      '   - 原因：最后一项后面还有全局注记。',
+      '',
+      '```877:890:apps/web/src/app/terminal/NativeSession.tsx',
+      'const editQueued = useCallback(() => {}, []);',
+      '```',
+      '',
+      '*(注：仅在无附件时正常。)*',
+    ].join('\n');
+
+    const aligned = alignListFences(input);
+    const tree = unified().use(remarkParse).use(remarkGfm).parse(aligned) as {
+      children: Array<{
+        type: string;
+        children?: Array<{
+          children: Array<{
+            type: string;
+            children?: Array<{ children: Array<{ type: string }> }>;
+          }>;
+        }>;
+      }>;
+    };
+
+    expect(tree.children.map((c) => c.type)).toEqual(['list', 'paragraph']);
+    const listItems = tree.children[0]!.children!;
+    expect(listItems).toHaveLength(2);
+    const firstNested = listItems[0]!.children[1]!;
+    expect(firstNested.type).toBe('list');
+    expect(firstNested.children![0]!.children.map((c) => c.type)).toEqual(['paragraph', 'code']);
+    const secondNested = listItems[1]!.children[1]!;
+    expect(secondNested.type).toBe('list');
+    expect(secondNested.children![1]!.children.map((c) => c.type)).toEqual(['paragraph', 'code']);
+  });
+
+  it('keeps consecutive blank-separated col-0 citations inside the same nested list item', () => {
+    const input = [
+      '1. Outer item',
+      '   - Nested bullet ending with period.',
+      '',
+      '```79:86:apps/web/src/app/session/fileAccess.ts',
+      'first();',
+      '```',
+      '',
+      '```117:121:apps/web/src/app/session/fileAccess.ts',
+      'second();',
+      '```',
+    ].join('\n');
+
+    const aligned = alignListFences(input);
+    const tree = unified().use(remarkParse).use(remarkGfm).parse(aligned) as {
+      children: Array<{
+        type: string;
+        children?: Array<{
+          children: Array<{
+            type: string;
+            children?: Array<{ children: Array<{ type: string }> }>;
+          }>;
+        }>;
+      }>;
+    };
+
+    expect(tree.children.map((c) => c.type)).toEqual(['list']);
+    const nested = tree.children[0]!.children![0]!.children[1]!;
+    expect(nested.children![0]!.children.map((c) => c.type)).toEqual(['paragraph', 'code', 'code']);
+  });
+
+  it('keeps a col-0 citation inside a list item when followed by an indented continuation paragraph', () => {
+    const input = [
+      '1. **Item title**',
+      '',
+      '```140:159:apps/web/src/app/session/readingAnchor.ts',
+      'const x = 1;',
+      '```',
+      '',
+      '   Continuation paragraph belonging to item 1.',
+    ].join('\n');
+
+    const aligned = alignListFences(input);
+    const tree = unified().use(remarkParse).use(remarkGfm).parse(aligned) as {
+      children: Array<{
+        type: string;
+        children?: Array<{ children: Array<{ type: string }> }>;
+      }>;
+    };
+
+    expect(tree.children.map((c) => c.type)).toEqual(['list']);
+    expect(tree.children[0]!.children![0]!.children.map((c) => c.type)).toEqual(['paragraph', 'code', 'paragraph']);
+  });
 });
