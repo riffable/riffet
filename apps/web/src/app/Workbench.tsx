@@ -26,6 +26,9 @@ import { sendSessionCommand } from '@/lib/session-commands';
 import type { HeaderSlots } from './Header';
 import { NoProjects, NewSessionHome } from './ProjectHome';
 import { Sidebar, type SessionAction } from './Sidebar';
+import { councilAttention } from './state/councilStore';
+import { readDraft, writeDraft } from './session/Composer';
+import { joinQuotes, splitQuotes } from './session/quotes';
 import { useSidebarSessions } from './useSidebarSessions';
 import { MobileSidebar } from './MobileSidebar';
 import { NativeSession } from './terminal/NativeSession';
@@ -42,7 +45,7 @@ import { useHomeServerOptions } from './useServerLabel';
 import { settingsSections, type SettingsSection } from './settings/settingsSections';
 import { SettingsSidebar } from './settings/SettingsSidebar';
 import { runSettingsTransition } from '@/lib/view-transition';
-import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useApprovals, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
+import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useApprovals, useCouncil, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
 import { countWorkItemInbox } from './work-items/model';
 import { NO_PAGE, STORAGE_KEYS, type NavPage } from './state/navStore';
 import { paintPaneWidth, panelDockMinWidth, SIDEBAR_DEFAULT, SIDEBAR_MIN, sidebarMaxWidth } from './state/uiStore';
@@ -122,6 +125,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const tasksOpen = useNav((state) => state.tasksOpen);
   const automationsOpen = useNav((state) => state.automationsOpen);
   const councilOpen = useNav((state) => state.councilOpen);
+  const councilState = useCouncil((state) => councilAttention(state.items));
   const workItemSummaries = useWorkItems((state) => state.summaries);
   const workItemsSupported = useWorkItems((state) => state.supported);
   const extensionsOpen = useNav((state) => state.extensionsOpen);
@@ -344,6 +348,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [profilesCurrent, session, quickChat, project, projectlessTasks, remoteHomeServerId, catalogBackends, homeBackendId, catalog]);
   const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap });
   useGlobalShortcuts(desktop, newSession);
+  // A new conversation that starts from a quote (a collaboration's conclusion): added to the new-session draft, kept with
+  // what was already written there, and the reader says what to do with it.
+  const draftSessionWithQuote = useCallback((quote: string) => {
+    const key = 'riffet.draft.new:home';
+    const draft = readDraft(key);
+    const { quotes, body } = splitQuotes(draft.text);
+    if (!writeDraft(key, { ...draft, text: joinQuotes([...quotes, quote], body) })) pushError(t`草稿无法保存到浏览器，刷新后会丢失`);
+    newSession();
+  }, [newSession, t]);
   const pluginCommands = usePluginCommands({ project: quickChat ? undefined : project, sessionId: session?.id, openSession: openSessionById });
   const selectHomeTab = (tab: HomeTab) => {
     if (tab === homeTab) return;
@@ -550,6 +563,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onOpenAutomations={() => openPage('automations')}
       onOpenCouncil={() => openPage('council')}
       councilActive={councilOpen}
+      {...(councilState ? { councilState } : {})}
       onOpenExtensions={() => openPage('extensions')}
       onOpenPlugins={() => openPage('plugins')}
       pluginsActive={pluginsOpen}
@@ -741,13 +755,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   } else if (councilOpen) {
     content = (
       <CouncilPage
-        projects={regular}
+        projects={recentDirectories}
         backends={backends}
         sidebarCollapsed={desktop && sidebarCollapsed}
         onClose={() => nav.set({ councilOpen: false })}
         onOpenSidebar={openMobileSidebar}
         onExpandSidebar={expandSidebar}
-        onOpenSession={openSessionById}
+        onDraftSession={draftSessionWithQuote}
         onOpenTasks={() => openPage('tasks')}
         onOpenProviderSettings={() => openSettingsAt('providers')}
       />

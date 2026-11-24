@@ -452,7 +452,7 @@ export function acknowledgeRecoveredCreationDraft(body: NativeSessionCreateInput
 }
 
 /** Never throws: storage can be unavailable (private browsing, a policy), and a draft is best effort. */
-function readDraft(key: string): StoredDraft {
+export function readDraft(key: string): StoredDraft {
   const empty: StoredDraft = { text: '', attachments: [], references: [] };
   let raw: string | null = null;
   try { raw = key ? sessionStorage.getItem(key) : null; } catch { return empty; }
@@ -493,7 +493,7 @@ function mergeQuickChatDraft(task: StoredDraft): StoredDraft {
 }
 
 /** Whether the write went through; an empty draft removes its key. */
-function writeDraft(key: string, draft: StoredDraft): boolean {
+export function writeDraft(key: string, draft: StoredDraft): boolean {
   // A conversation deleted meanwhile must not get its draft back from a pending flush.
   if (mentionsDeletedSession(key)) return true;
   try {

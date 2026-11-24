@@ -18,10 +18,13 @@ export class CouncilStore {
   list(): CouncilSummary[] {
     const rows = this.sql(`SELECT id, json_extract(json, '$.format') AS format, json_extract(json, '$.title') AS title,
       json_extract(json, '$.status') AS status, json_extract(json, '$.maxRounds') AS maxRounds, json_extract(json, '$.rhythm') AS rhythm,
+      json_extract(json, '$.settledAt') AS settledAt, json_extract(json, '$.seenAt') AS seenAt,
       json_extract(json, '$.seats') AS seats, created_at AS createdAt, updated_at AS updatedAt
-      FROM council_discussions ORDER BY updated_at DESC, id DESC LIMIT ?`).all(COUNCIL_BUDGET.keptDiscussions) as Array<Omit<CouncilSummary, 'seats'> & { seats: string }>;
-    return rows.map(({ seats, ...row }) => ({
+      FROM council_discussions ORDER BY updated_at DESC, id DESC LIMIT ?`).all(COUNCIL_BUDGET.keptDiscussions) as Array<Omit<CouncilSummary, 'seats' | 'settledAt' | 'seenAt'> & { seats: string; settledAt: string | null; seenAt: string | null }>;
+    return rows.map(({ seats, settledAt, seenAt, ...row }) => ({
       ...row,
+      ...(settledAt ? { settledAt } : {}),
+      ...(seenAt ? { seenAt } : {}),
       seats: (JSON.parse(seats) as CouncilSeat[]).map(seat => ({ role: seat.role, model: seat.model, ...(seat.task ? { task: seat.task } : {}) })),
     }));
   }
@@ -43,10 +46,14 @@ export class CouncilStore {
       .run(discussion.id, discussion.createdAt, discussion.updatedAt, JSON.stringify(discussion));
   }
 
-  pruneOldest(): void {
-    this.sql(`DELETE FROM council_discussions WHERE id NOT IN (
+  /** Deletes the discussions beyond the kept count, oldest first out, and returns them so their seats can be removed. */
+  pruneOldest(): CouncilDiscussion[] {
+    const rows = this.sql(`SELECT json FROM council_discussions WHERE id NOT IN (
       SELECT id FROM council_discussions ORDER BY updated_at DESC, id DESC LIMIT ?
-    )`).run(COUNCIL_BUDGET.keptDiscussions);
+    )`).all(COUNCIL_BUDGET.keptDiscussions) as Array<{ json: string }>;
+    const pruned = rows.map(row => JSON.parse(row.json) as CouncilDiscussion);
+    for (const d of pruned) this.delete(d.id);
+    return pruned;
   }
 
   delete(id: string): boolean {

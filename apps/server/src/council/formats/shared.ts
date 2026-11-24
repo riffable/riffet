@@ -41,6 +41,14 @@ export interface FormatSpec {
   conclude(d: CouncilDiscussion): void;
 }
 
+/** One wording for every length cap: Chinese characters first, foreign words as the matching figure (about 0.75 per character). */
+export function lengthCap(chars: number, words = Math.round(chars * 0.75 / 10) * 10): string {
+  return `不超过 ${chars} 字（外文约 ${words} 词）`;
+}
+
+/** Stated once, in the first-turn brief of formats whose speeches name other participants. */
+export const NAME_RULE = '在正文中提到参与者时，使用讨论中显示的名称，不要写内部席位编号。';
+
 export function languageRule(source: '题目' | '文档'): string {
   return `请用${source}的语言作答。用 Markdown 直接写正文，省略开场白和标题行。`;
 }
@@ -103,19 +111,20 @@ const PHASE_NAMES: Record<CouncilPhase, string> = {
 export function compose(format: FormatSpec, d: CouncilDiscussion, target: CouncilSeat, spec: SpeechSpec): { text: string; heard: string[] } {
   const heard = new Set(target.heard ?? []);
   const first = !target.sessionId;
-  const news = d.speeches.filter(s => s.seatId !== target.id && s.status === 'done' && !heard.has(s.id) && (format.hears?.(d, target, s) ?? true));
+  // A new conversation for a seat that already spoke (its conversation was lost, or the reader swapped its model) is
+  // also told its own earlier speeches. A seat that simply heard nothing new keeps its conversation and is not.
+  const reopened = first && d.speeches.some(s => s.seatId === target.id && s.status === 'done');
+  const news = d.speeches.filter(s => s.status === 'done' && !heard.has(s.id)
+    && (s.seatId === target.id ? reopened : (format.hears?.(d, target, s) ?? true)));
   const notes = d.supplements.filter(note => !heard.has(`note:${note.id}`));
   const parts: string[] = [];
   if (first) parts.push(format.brief(d, target));
   if (news.length) {
-    const heading = first ? '此前的发言' : '你上次发言后的新发言';
-    const speeches = news.map(s => `### 第 ${s.round} 轮 · ${PHASE_NAMES[s.phase]} · ${speaker(d, s.seatId)}\n${s.text}`);
+    const heading = first || reopened ? '此前的发言' : '你上次发言后的新发言';
+    const speeches = news.map(s => `### 第 ${s.round} 轮 · ${PHASE_NAMES[s.phase]} · ${s.seatId === target.id ? '你此前的发言' : speaker(d, s.seatId)}\n${s.text}`);
     parts.push(`${heading}：\n\n${speeches.join('\n\n')}`);
   }
   if (notes.length) parts.push(`读者补充（仅供参考，请自行判断）：\n${notes.map(note => `- ${note.text}`).join('\n')}`);
-  if (d.format === 'roundtable' || d.format === 'prism') {
-    parts.push('在正文中提到参与者时，使用讨论中显示的名称，不要写内部席位编号。');
-  }
   parts.push(spec.prompt.task);
   return { text: parts.join('\n\n'), heard: [...heard, ...news.map(s => s.id), ...notes.map(note => `note:${note.id}`)] };
 }

@@ -12,6 +12,7 @@ import { BrandMark } from '@/components/BrandMark';
 import { AgentLogo } from '@/components/AgentLogo';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
+import type { CouncilAttention } from './state/councilStore';
 import { Tip } from '@/components/ui/tooltip';
 import { api, apiFor, type ProjectRecord } from '@/lib/api';
 import { serverOfObject } from '@/lib/server-routing';
@@ -78,6 +79,8 @@ interface Props {
   onOpenAutomations: () => void;
   onOpenCouncil?: () => void;
   councilActive?: boolean;
+  /** What the 模型协作 row marks, as the 个人助理 row marks its conversation: one running, or one settled since last read. */
+  councilState?: CouncilAttention;
   onOpenMarks: () => void;
   onOpenExtensions: () => void;
   onOpenPlugins: () => void;
@@ -160,6 +163,21 @@ export function SessionIndicator({ session, mobile, selected, taskStatus }: { se
   if (unread) return <StatusDot tone="accent" label={t`未读`} className={mobile ? 'size-2' : undefined} />;
   if (taskStatus) return <StatusIcon status={taskStatus} />;
   return null;
+}
+
+/** The 模型协作 row's mark: the same marks a conversation row uses, for the collaborations as a whole. */
+function CouncilIndicator({ state, mobile, selected }: { state: CouncilAttention; mobile: boolean; selected: boolean }) {
+  const { t } = useLingui();
+  if (state === 'running') {
+    return mobile
+      ? <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>
+      : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
+  }
+  // The page itself lists which one settled; on it the row needs no mark.
+  if (selected) return null;
+  if (state === 'waiting') return <StatusDot tone="warning" label={t`等待处理`} className={mobile ? 'size-2' : undefined} />;
+  if (state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className={mobile ? 'size-2' : undefined} />;
+  return <StatusDot tone="accent" label={t`未读`} className={mobile ? 'size-2' : undefined} />;
 }
 
 /** A `role="button"` row answers Enter and Space like a native button; keys pressed on the controls inside it stay theirs. */
@@ -551,7 +569,10 @@ export function Sidebar(props: Props) {
       trailing: props.tasksCount ? <span className="ml-auto text-2xs tabular-nums text-fg-4">{props.tasksCount}</span> : null,
     } } : {}),
     automations: { open: props.onOpenAutomations, active: props.automationsActive },
-    ...(props.onOpenCouncil ? { council: { open: props.onOpenCouncil, active: props.councilActive } } : {}),
+    ...(props.onOpenCouncil ? { council: {
+      open: props.onOpenCouncil, active: props.councilActive,
+      trailing: props.councilState && <span className="ml-auto inline-flex"><CouncilIndicator state={props.councilState} mobile={mobile} selected={Boolean(props.councilActive)} /></span>,
+    } } : {}),
     marks: { open: props.onOpenMarks, active: props.marksActive },
     plugins: { open: props.onOpenPlugins, active: props.pluginsActive },
     extensions: { open: props.onOpenExtensions, active: props.extensionsActive },

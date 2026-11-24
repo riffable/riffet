@@ -21,14 +21,18 @@ export interface SeatDriver {
    * Sends `text` as the seat's next turn, opening its conversation on the first; resolves once the turn is queued,
    * with the model the conversation runs on where it names one.
    */
-  send(d: CouncilDiscussion, seat: CouncilSeat, text: string): Promise<{ sessionId: string; runId: string; model?: string }>;
+  send(d: CouncilDiscussion, seat: CouncilSeat, text: string, signal?: AbortSignal): Promise<{ sessionId: string; runId: string; model?: string }>;
   /** Waits for the turn to end. Aborting stops the waiting, not the turn. */
   settle(sessionId: string, runId: string, signal: AbortSignal): Promise<SeatTurn>;
   stop(sessionId: string, runId: string): void;
+  /** Cancels every turn of the conversation still unfinished (a server stop can leave one consuming quota). */
+  stopAll(sessionId: string): void;
   /** Follows the rows of the turn as they change; returns how to stop. */
   watch(sessionId: string, runId: string, onRows: (upserts: TimelineRow[], deletes: string[]) => void): () => void;
   /** Original council input for a run belonging to this discussion. */
   prompt(discussionId: string, runId: string): string | undefined;
+  /** The conversation a run of this discussion took place in (a seat's earlier one, after a swap or a reopen). */
+  sessionOf(discussionId: string, runId: string): string | undefined;
   /** The visible rows of a run belonging to this discussion. */
   rows(discussionId: string, runId: string): Promise<TimelineRow[]>;
   /** Whether the conversation is still there to speak in. */
@@ -71,6 +75,10 @@ export class AgentSeats implements SeatDriver {
     return this.discussionRun(discussionId, runId)?.prompt;
   }
 
+  sessionOf(discussionId: string, runId: string): string | undefined {
+    return this.discussionRun(discussionId, runId)?.sessionId;
+  }
+
   private discussionRun(discussionId: string, runId: string): Run | undefined {
     const { store } = this.deps;
     try {
@@ -83,7 +91,7 @@ export class AgentSeats implements SeatDriver {
     return undefined;
   }
 
-  async send(d: CouncilDiscussion, seat: CouncilSeat, text: string): Promise<{ sessionId: string; runId: string; model?: string }> {
+  async send(d: CouncilDiscussion, seat: CouncilSeat, text: string, signal?: AbortSignal): Promise<{ sessionId: string; runId: string; model?: string }> {
     const { store, orchestration } = this.deps;
     if (seat.sessionId && this.alive(seat.sessionId)) {
       // A turn left running by a stop the server did not see through is cut now, so this one is not queued behind it.
@@ -91,6 +99,7 @@ export class AgentSeats implements SeatDriver {
       return { sessionId: seat.sessionId, runId: orchestration.message(seat.sessionId, text, randomUUID()).id };
     }
     const launch = await this.deps.launch(seat.model.backendId, seat.model.profileId);
+    signal?.throwIfAborted();
     const request: NativeSessionRequest = {
       projectId: this.deps.project(seat.model.backendId).id,
       title: `${d.title} · ${seat.id}`,
@@ -99,7 +108,22 @@ export class AgentSeats implements SeatDriver {
       ...(seat.model.model ? { model: seat.model.model } : {}),
       ...launch,
     };
-    const session = await orchestration.start(request, text, { kind: 'council', groupId: d.id }, { sessionId: randomUUID(), commandId: randomUUID() });
+    const started = orchestration.start(request, text, { kind: 'council', groupId: d.id }, { sessionId: randomUUID(), commandId: randomUUID() });
+    let session: { id: string };
+    if (signal) {
+      // Starting cannot be cancelled: when the wait is given up, the conversation it opens is removed once it exists.
+      const aborted = new Promise<never>((_, reject) => {
+        if (signal.aborted) reject(signal.reason);
+        else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+      aborted.catch(() => {});
+      try { session = await Promise.race([started, aborted]); } catch (error) {
+        if (signal.aborted) void started.then(opened => this.remove(opened.id), () => {}).catch(() => {});
+        throw error;
+      }
+    } else {
+      session = await started;
+    }
     const run = store.listRuns(session.id)[0];
     if (!run) throw new AppError('COUNCIL_SEAT_FAILED', 'The seat\'s conversation did not take its first message', 500);
     // A seat that named no model runs on the one its conversation was opened with (the owner's saved default).
@@ -140,6 +164,11 @@ export class AgentSeats implements SeatDriver {
 
   stop(sessionId: string, runId: string): void {
     try { this.deps.cancel(sessionId, runId); } catch { /* it already ended */ }
+  }
+
+  stopAll(sessionId: string): void {
+    if (!this.alive(sessionId)) return;
+    for (const run of this.deps.store.listUnfinishedNativeRuns(sessionId)) this.stop(sessionId, run.id);
   }
 
   watch(sessionId: string, runId: string, onRows: (upserts: TimelineRow[], deletes: string[]) => void): () => void {

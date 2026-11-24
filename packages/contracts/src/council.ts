@@ -125,6 +125,8 @@ export interface CouncilSpeech {
   metrics?: RunMetrics;
   /** Notes the seat recorded for the next prompts in a turn of its own after the speech; not part of the speech. */
   directive?: CouncilDirective;
+  /** The notes turn failed or gave nothing readable: the speech stands, its notes are missing until recorded again. */
+  recordError?: string;
 }
 
 export interface CouncilSupplement {
@@ -165,6 +167,15 @@ export interface CouncilDiscussion {
   version: number;
   createdAt: string;
   updatedAt: string;
+  /** When it last stopped running (paused, done or failed): from then it waits for the reader. */
+  settledAt?: string;
+  /** When the reader last had it open after it settled. */
+  seenAt?: string;
+}
+
+/** Settled since the reader last looked: the sidebar marks it (paused waits for them, done and failed are unread). */
+export function councilAwaitsReader(discussion: Pick<CouncilDiscussion, 'status' | 'settledAt' | 'seenAt'>): boolean {
+  return discussion.status !== 'running' && Boolean(discussion.settledAt) && (!discussion.seenAt || discussion.seenAt < discussion.settledAt!);
 }
 
 /** The same round-end recommendation drives automatic advancement and the primary action at a pause. */
@@ -185,7 +196,7 @@ export function councilSuggestsClosing(discussion: CouncilDiscussion): boolean {
 /** A discussion as the history list shows it. */
 /** A seat as a new discussion of the same format would take it again. */
 export type CouncilSeatChoice = Pick<CouncilSeat, 'role' | 'model' | 'task'>;
-export type CouncilSummary = Pick<CouncilDiscussion, 'id' | 'format' | 'title' | 'status' | 'createdAt' | 'updatedAt' | 'maxRounds' | 'rhythm'> & {
+export type CouncilSummary = Pick<CouncilDiscussion, 'id' | 'format' | 'title' | 'status' | 'createdAt' | 'updatedAt' | 'maxRounds' | 'rhythm' | 'settledAt' | 'seenAt'> & {
   /** Who sat where: what the launch page starts the next discussion of this format from. */
   seats: CouncilSeatChoice[];
 };
@@ -208,8 +219,12 @@ export interface CouncilCreateRequest {
 }
 
 export interface CouncilContinueRequest {
-  /** `next` runs the next round; `conclude` wraps up (LD: the next round is the closing one). */
-  action?: 'next' | 'conclude';
+  /**
+   * `next` runs the next round; `conclude` wraps up (LD: the next round is the closing one); `record` runs again only the
+   * notes turn of `speechId`, whose `recordError` is set.
+   */
+  action?: 'next' | 'conclude' | 'record';
+  speechId?: string;
 }
 
 export interface CouncilSupplementRequest {
@@ -217,8 +232,15 @@ export interface CouncilSupplementRequest {
 }
 
 export interface CouncilPatchRequest {
-  /** Review: accept or drop one proposed edit. */
+  /** Review: accept or drop one proposed edit; refused once the revision is being written or done. */
   edit?: { id: string; accepted: boolean };
+  /** The reader has it open: `seenAt` becomes now. */
+  seen?: true;
+  /**
+   * Swap the model a seat runs on while the discussion is not running (a seat that keeps failing). The seat starts a new
+   * conversation and is told the discussion so far, its own earlier speeches included.
+   */
+  seat?: { id: string; model: CouncilAgent };
 }
 
 export interface CouncilExportRequest {

@@ -154,11 +154,12 @@ function Edits({ speeches, discussion, editable, onToggle }: { speeches: Council
  * The discussion laid out by its format, in the session's reading column: the reader's prompt and notes as user
  * messages, every speech drawn with the session's answer, set out as the format seats its speakers.
  */
-export function CouncilStage({ discussion, rows, rowLoads, onLoadRows, onToggleEdit, expandedSpeeches, onExpandSpeech }: {
+export function CouncilStage({ discussion, rows, rowLoads, onLoadRows, onRetryRecord, onToggleEdit, expandedSpeeches, onExpandSpeech }: {
   discussion: CouncilDiscussion;
   rows: SpeechRows;
   rowLoads?: Partial<Record<string, SpeechProps['rowsLoad']>>;
   onLoadRows: (speechId: string) => void;
+  onRetryRecord?: (speechId: string) => Promise<CouncilDiscussion | undefined>;
   onToggleEdit: (id: string, accepted: boolean) => void;
   expandedSpeeches?: ReadonlySet<string>;
   onExpandSpeech?: (id: string, expanded: boolean) => void;
@@ -168,14 +169,14 @@ export function CouncilStage({ discussion, rows, rowLoads, onLoadRows, onToggleE
   const [localOpen, setLocalOpen] = useState<ReadonlySet<string>>(() => new Set());
   const open = expandedSpeeches ?? localOpen;
   const blocks = useMemo(() => blocksOf(discussion), [discussion]);
-  const editable = discussion.format === 'review' && discussion.status === 'paused' && discussion.round === 1;
+  const editable = discussion.format === 'review' && discussion.status === 'paused' && discussion.round === 1 && !discussion.speeches.some((s) => s.phase === 'conclusion');
   const prompt = (discussion.document?.paragraphs.map((p) => p.text) ?? []).join('\n\n');
   const expand = onExpandSpeech ?? ((id: string, next: boolean) => setLocalOpen((current) => {
     const copy = new Set(current);
     if (next) copy.add(id); else copy.delete(id);
     return copy;
   }));
-  const props = (speech: CouncilSpeech) => ({ speech, discussion, rows: rows[speech.id], rowsLoad: rowLoads?.[speech.id], onLoadRows });
+  const props = (speech: CouncilSpeech) => ({ speech, discussion, rows: rows[speech.id], rowsLoad: rowLoads?.[speech.id], onLoadRows, ...(onRetryRecord ? { onRetryRecord } : {}) });
 
   const leadExtra = (speech: CouncilSpeech): ReactNode => {
     const d = speech.directive;

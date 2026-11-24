@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   COUNCIL_BUDGET,
@@ -62,13 +62,15 @@ function initialSeats(format: CouncilFormat, models: CouncilAgent[], previous?: 
   return seats;
 }
 
-export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettings, onError }: {
+export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettings, onError, children }: {
   backends: readonly NativeBackendCatalogEntry[];
   /** The discussions held so far, newest first; undefined until read. Each format starts from its last one. */
   recent: readonly CouncilSummary[] | undefined;
   onCreate: (request: CouncilCreateRequest) => Promise<boolean>;
   onOpenProviderSettings: () => void;
   onError: (message: string) => void;
+  /** Under the seats, in the same column: the discussions held so far. */
+  children?: ReactNode;
 }) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
@@ -285,6 +287,7 @@ export function CouncilLaunch({ backends, recent, onCreate, onOpenProviderSettin
             </div>
           </div>
         </div>
+        {children && <div className="@3xl:mt-4">{children}</div>}
       </div>
     </div>
   );

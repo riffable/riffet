@@ -1,5 +1,5 @@
 import { councilSuggestsClosing, type CouncilDiscussion } from '../../../../../packages/contracts/src/index.js';
-import { closingRoundOf, languageRule, SEAT_RULE, speak, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
+import { closingRoundOf, languageRule, lengthCap, SEAT_RULE, speak, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
 
 /**
  * One-on-one Lincoln-Douglas debate. Pro carries the burden of proof, con holds presumption. Within a
@@ -59,7 +59,7 @@ function debaterTask(d: CouncilDiscussion, side: Side, phase: DebatePhase, round
       phase !== 'opening' || side === 'con' ? ANSWER_RULE : '',
       phase !== 'closing' ? QUESTION_RULE : '',
       DEBATE_STYLE,
-      phase === 'closing' ? '中文不超过 600 字，其他语言不超过 450 词。' : '中文不超过 700 字，其他语言不超过 600 词。',
+      phase === 'closing' ? `${lengthCap(600)}。` : `${lengthCap(700)}。`,
     ].filter(Boolean).join('\n\n'),
   };
 }
@@ -92,7 +92,7 @@ const ledgerTask = (round: number): SpeechPrompt => ({
     '概括双方当前最有力的论证，指出本轮真正交锋的地方、各自补强的论点和被对方击中的漏洞。直说本轮有何实质推进，重复发言一笔带过。',
     CROSS_EXAM_JUDGING,
     DEBATE_STYLE,
-    '中文不超过 500 字，其他语言不超过 250 词。',
+    `${lengthCap(500)}。`,
   ].join('\n\n'),
   record: `${LEDGER_SHAPE}\n${LEDGER_RULES}`,
 });
@@ -106,7 +106,7 @@ const VERDICT: SpeechPrompt = {
     '4. 说明剥离双方立场的论证难度后，哪一方的论证更扎实、依据是什么。若难分高下，讲清差异如何来自各自立场。',
     '5. 告诉读者，如果要依据本场辩论作决策，应怎样权衡双方最有分量的理由。',
     DEBATE_STYLE,
-    '中文不超过 800 字，其他语言不超过 600 词。',
+    `${lengthCap(800)}。`,
   ].join('\n'),
 };
 
@@ -140,6 +140,8 @@ export const ld: FormatSpec = {
     if (!spoken(d, round, 'ledger')) return speak({ seatId: 'judge', round, phase: 'ledger', prompt: ledgerTask(round) });
     return { kind: 'round-end' };
   },
+  // The judge's notes are for the reader; debaters get only the questions still owed (see `debaterTask`).
+  hears: (_d, seat, speech) => seat.role === 'judge' || (speech.phase !== 'ledger' && speech.phase !== 'conclusion'),
   autoAdvance(d) {
     if (councilSuggestsClosing(d)) d.closingRound = Math.min(d.round + 1, d.maxRounds);
   },

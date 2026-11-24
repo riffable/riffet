@@ -596,8 +596,9 @@ export async function createApp(options: AppOptions = {}) {
   const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,agentCalls,riffetMcp,planFiles,
     onCleanupError:(sessionId,error)=>app.log.warn({err:error,sessionId},'deleted conversation file cleanup failed; retrying on next start')});
   deletionRef=deletion;
-  // Seat conversations outlive a restart with their discussion; one whose discussion is gone is removed.
-  for(const orphan of store.listSessions().filter(item=>item.origin?.kind==='council'&&!(item.origin.groupId&&council.has(item.origin.groupId))))void deletion.delete(orphan.id,[orphan.id]).catch(()=>undefined);
+  // Seat conversations outlive a restart with their discussion; one no seat holds (its discussion is gone, or it was
+  // created as the server stopped, before its seat recorded it) is removed.
+  for(const orphan of store.listSessions().filter(item=>item.origin?.kind==='council'&&!(item.origin.groupId&&council.holds(item.origin.groupId,item.id))))void deletion.delete(orphan.id,[orphan.id]).catch(()=>undefined);
   registerSessionDeletionRoutes(app,deletion);
   void deletion.resumeCleanup();
   const clientLogs=new ClientLogs(join(stateDir,'client-logs'));

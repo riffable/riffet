@@ -182,7 +182,7 @@ function Overview({ discussion, afterJump }: { discussion: CouncilDiscussion; af
                 <li key={side} className="flex min-w-0 flex-col gap-0.5 px-2 text-sm">
                   <span className="text-xs text-fg-3">{labels.roleOf(side)}</span>
                   <span className="text-fg-2">{entry.claim}</span>
-                  {entry.broken && <span className="text-xs text-danger">{entry.broken}</span>}
+                  {entry.broken && <span className="flex gap-1.5 text-xs text-fg-3"><span aria-hidden className="shrink-0">−</span><span className="sr-only">{t`被击破`}</span>{entry.broken}</span>}
                 </li>
               );
             })}

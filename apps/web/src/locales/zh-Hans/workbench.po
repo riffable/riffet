@@ -2313,6 +2313,7 @@ msgid "自定义侧栏"
 msgstr "自定义侧栏"
 
 #: src/app/use-session-actions.ts
+#: src/app/Workbench.tsx
 msgid "草稿无法保存到浏览器，刷新后会丢失"
 msgstr "草稿无法保存到浏览器，刷新后会丢失"
 

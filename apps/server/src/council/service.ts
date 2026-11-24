@@ -7,6 +7,7 @@ import {
   type CouncilExportRequest,
   type CouncilExportResult,
   type CouncilFormat,
+  type CouncilContinueRequest,
   type CouncilPatchRequest,
   type CouncilPrompts,
   type CouncilRole,
@@ -45,6 +46,8 @@ interface Live {
   controller: AbortController;
   /** Seat turns in flight, speeches and their notes alike: run id to conversation. */
   turns: Map<string, string>;
+  /** Only a notes turn runs again: the discussion keeps its status, and a stop leaves it as it was. */
+  recordOnly?: boolean;
 }
 
 /** Seat roles each format takes, with how many of each and the ids they get. */
@@ -76,15 +79,24 @@ export class CouncilService {
   private readonly store: CouncilStore;
   private readonly live = new Map<string, Live>();
   private readonly listeners = new Map<string, Set<Listener>>();
+  private readonly changeListeners = new Set<() => void>();
+  /** The status last announced per discussion, so only a change of it notifies. */
+  private readonly announced = new Map<string, CouncilDiscussion['status']>();
+  private changeTimer: NodeJS.Timeout | undefined;
 
   constructor(private readonly deps: CouncilServiceDeps) {
     this.store = new CouncilStore(deps.db);
-    // A server stop ends every run; the discussion waits to be continued, the cut speech reruns then (its seat's turn
-    // left running is cut when the seat is next sent one).
+    // A server stop ends every run; the discussion waits to be continued, the cut speech reruns then. Turns the seats
+    // still have unfinished are cancelled so they do not go on consuming quota.
     for (const d of this.store.running()) {
       for (const s of d.speeches) if (s.status === 'streaming' || s.status === 'waiting') s.status = 'stopped';
       d.status = 'paused';
+      d.settledAt = now();
       this.store.save(d);
+      for (const seat of d.seats) {
+        if (!seat.sessionId) continue;
+        try { deps.seats.stopAll(seat.sessionId); } catch (error) { deps.log?.('council: a seat turn was left running', { sessionId: seat.sessionId, error: messageOf(error) }); }
+      }
     }
   }
 
@@ -92,6 +104,57 @@ export class CouncilService {
     for (const live of this.live.values()) live.controller.abort(new Error('Service closed'));
     this.live.clear();
     this.listeners.clear();
+    this.changeListeners.clear();
+    clearTimeout(this.changeTimer);
+    this.changeTimer = undefined;
+  }
+
+  /**
+   * Fires, debounced, when a discussion is created or deleted, changes status, or its `seenAt` changes: what the
+   * sidebar list shows. Returns how to stop listening.
+   */
+  onChange(listener: () => void): () => void {
+    this.changeListeners.add(listener);
+    return () => { this.changeListeners.delete(listener); };
+  }
+
+  private changed(): void {
+    if (this.changeTimer || !this.changeListeners.size) return;
+    this.changeTimer = setTimeout(() => {
+      this.changeTimer = undefined;
+      for (const listener of this.changeListeners) {
+        try { listener(); } catch { /* the subscriber went away */ }
+      }
+    }, 100);
+    this.changeTimer.unref?.();
+  }
+
+  /** The discussion stopped running: from now it waits for the reader. */
+  private settle(d: CouncilDiscussion): void {
+    d.settledAt = now();
+  }
+
+  /** Removes the seats' conversations of a discussion that went; one that cannot be removed now is an orphan the next start removes. */
+  private removeSeats(d: CouncilDiscussion): void {
+    for (const sessionId of this.sessionsOf(d)) {
+      void this.deps.seats.remove(sessionId).catch(error => this.deps.log?.('council: a seat conversation was left', { sessionId, error: messageOf(error) }));
+    }
+  }
+
+  /**
+   * Every conversation the discussion spoke in: the seats' current ones, and earlier ones a speech's turn still points
+   * to (a seat whose model was swapped, or whose conversation was archived and opened anew). Their speeches' process
+   * and input are read from them, so they go only with the discussion.
+   */
+  private sessionsOf(d: CouncilDiscussion): Set<string> {
+    const sessions = new Set(d.seats.flatMap(seat => (seat.sessionId ? [seat.sessionId] : [])));
+    for (const speech of d.speeches) {
+      for (const runId of [speech.runId, speech.recordRunId]) {
+        const sessionId = runId ? this.deps.seats.sessionOf(d.id, runId) : undefined;
+        if (sessionId) sessions.add(sessionId);
+      }
+    }
+    return sessions;
   }
 
   subscribe(id: string, listener: Listener): () => void {
@@ -123,6 +186,12 @@ export class CouncilService {
   /** Whether a seat conversation's discussion still exists: one whose discussion is gone is an orphan. */
   has(id: string): boolean {
     return this.live.has(id) || Boolean(this.store.get(id));
+  }
+
+  /** Whether a seat of discussion `id` holds conversation `sessionId`; one created as the server stopped is held by none. */
+  holds(id: string, sessionId: string): boolean {
+    const d = this.store.get(id);
+    return Boolean(d && this.sessionsOf(d).has(sessionId));
   }
 
   /** Generate a current brief, or retrieve historical inputs by their persisted run identities. */
@@ -201,8 +270,13 @@ export class CouncilService {
       updatedAt: createdAt,
     };
     this.store.save(d);
-    this.store.pruneOldest();
+    for (const pruned of this.store.pruneOldest()) {
+      const held = this.halt(pruned.id)?.discussion ?? pruned;
+      this.announced.delete(pruned.id);
+      this.removeSeats(held);
+    }
     this.start(d);
+    this.changed();
     return d;
   }
 
@@ -210,12 +284,9 @@ export class CouncilService {
     const d = this.get(id);
     this.halt(id);
     if (!this.store.delete(id)) throw new AppError('COUNCIL_NOT_FOUND', 'Discussion not found', 404);
-    // The seats' conversations go with it; one that cannot be removed now is an orphan the next start removes.
-    for (const seat of d.seats) {
-      if (!seat.sessionId) continue;
-      const sessionId = seat.sessionId;
-      void this.deps.seats.remove(sessionId).catch(error => this.deps.log?.('council: a seat conversation was left', { sessionId, error: messageOf(error) }));
-    }
+    this.announced.delete(id);
+    this.removeSeats(d);
+    this.changed();
   }
 
   /** Stops the run; speeches cut off are marked and rerun when the discussion continues. */
@@ -223,6 +294,7 @@ export class CouncilService {
     const live = this.halt(id);
     if (!live) return this.get(id);
     const d = live.discussion;
+    if (live.recordOnly) return this.commit(d);
     for (const s of d.speeches) {
       if (s.status === 'streaming' || s.status === 'waiting') {
         s.status = 'stopped';
@@ -230,11 +302,13 @@ export class CouncilService {
       }
     }
     d.status = 'paused';
+    this.settle(d);
     return this.commit(d);
   }
 
-  continue(id: string, action: 'next' | 'conclude' = 'next'): CouncilDiscussion {
+  continue(id: string, action: NonNullable<CouncilContinueRequest['action']> = 'next', speechId?: string): CouncilDiscussion {
     if (this.live.has(id)) throw new AppError('COUNCIL_BUSY', 'The discussion is already running', 409);
+    if (action === 'record') return this.rerunRecord(id, speechId);
     const d = this.get(id);
     if (d.status === 'done') throw new AppError('COUNCIL_DONE', 'The discussion has ended', 409);
     d.speeches = d.speeches.filter(s => s.status !== 'stopped');
@@ -246,10 +320,62 @@ export class CouncilService {
     const format = FORMATS[d.format];
     if (format.plan(d).kind === 'round-end') {
       if (action === 'conclude') format.conclude(d);
-      d.round += 1;
+      // As the run loop would have at this round's end (a review on `auto` accepts every edit).
+      if (d.rhythm === 'auto') format.autoAdvance?.(d);
+      this.advanceRound(d);
     }
     this.start(d);
     return d;
+  }
+
+  /** A roundtable that concludes writes its conclusion in the round it ends, not in one that never ran. */
+  private advanceRound(d: CouncilDiscussion): void {
+    if (!(d.format === 'roundtable' && d.concluding)) d.round += 1;
+  }
+
+  /** Runs again only the notes turn of a speech whose notes are missing, in the seat's own conversation. */
+  private rerunRecord(id: string, speechId: string | undefined): CouncilDiscussion {
+    const d = this.get(id);
+    const speech = d.speeches.find(item => item.id === speechId);
+    if (!speech) throw new AppError('COUNCIL_SPEECH_NOT_FOUND', 'Speech not found', 404);
+    if (speech.status !== 'done' || !speech.recordError) throw new AppError('COUNCIL_RECORD_NOT_NEEDED', 'This speech has no missing notes', 409);
+    const seat = d.seats.find(item => item.id === speech.seatId)!;
+    // The notes request asks about the speech just given, so only the seat's latest speech can be asked again.
+    if (d.speeches.findLast(item => item.seatId === seat.id && item.status === 'done') !== speech) {
+      throw new AppError('COUNCIL_RECORD_STALE', 'The seat has spoken since; its notes for this speech cannot be asked again', 409);
+    }
+    if (!seat.sessionId || !this.deps.seats.alive(seat.sessionId)) throw new AppError('COUNCIL_SEAT_GONE', 'The seat\'s conversation is gone', 409);
+    const recordPrompt = this.recordPromptOf(d, speech);
+    if (!recordPrompt) throw new AppError('COUNCIL_RECORD_UNAVAILABLE', 'The notes of this speech cannot be requested again', 409);
+
+    // The status stays: a stop or a restart midway leaves the discussion as it was (a finished one stays finished).
+    d.version += 1;
+    const live: Live = { discussion: d, controller: new AbortController(), turns: new Map(), recordOnly: true };
+    this.live.set(id, live);
+    this.commit(d);
+    void (async () => {
+      let directive: CouncilSpeech['directive'];
+      try { directive = await this.record(live, seat, speech.phase, recordPrompt, speech); } catch { /* recorded on the speech */ }
+      if (!this.current(live)) return;
+      this.live.delete(id);
+      if (directive) speech.directive = directive;
+      // A review that ended without edits because their notes were missing can go on to accept them.
+      if (d.status === 'done' && d.format === 'review' && directive && !d.speeches.some(s => s.phase === 'conclusion')) {
+        d.round = 1;
+        d.status = 'paused';
+        this.settle(d);
+      }
+      this.commit(d);
+    })();
+    return d;
+  }
+
+  /** The notes request of a finished speech, read off the plan as it stood before the speech. */
+  private recordPromptOf(d: CouncilDiscussion, speech: CouncilSpeech): string | undefined {
+    const index = d.speeches.indexOf(speech);
+    const before: CouncilDiscussion = { ...d, round: speech.round, concluding: false, speeches: d.speeches.slice(0, index) };
+    const step = FORMATS[d.format].plan(before);
+    return step.kind === 'speak' ? step.speeches.find(spec => spec.seatId === speech.seatId && spec.phase === speech.phase)?.prompt.record : undefined;
   }
 
   /** A note from the reader every later speech reads; at a pause it also lets the next round run. */
@@ -269,14 +395,48 @@ export class CouncilService {
 
   patch(id: string, req: CouncilPatchRequest): CouncilDiscussion {
     const d = this.get(id);
+    if (req?.seat) this.swapSeat(d, req.seat);
+    if (req?.seen) {
+      d.seenAt = now();
+      this.store.save(d);
+      this.emit(d.id, { type: 'snapshot', discussion: d });
+      this.changed();
+    }
     const edit = req?.edit;
     if (edit && d.format === 'review' && typeof edit.id === 'string') {
+      if (d.status === 'running' || d.status === 'done' || this.live.has(d.id)) throw new AppError('COUNCIL_EDIT_LOCKED', 'The revision is being written or done', 409);
       const accepted = new Set(d.accepted ?? []);
       if (edit.accepted) accepted.add(edit.id); else accepted.delete(edit.id);
       d.accepted = [...accepted];
       return this.commit(d);
     }
-    return d;
+    if (!req?.seat) return d;
+    // The list carries the seats a new discussion of this format starts from.
+    this.changed();
+    return this.commit(d);
+  }
+
+  /**
+   * Another model takes the seat: the next speech opens a new conversation and is told the discussion again, its own
+   * earlier speeches included (`compose` does that for a seat speaking in a new conversation).
+   */
+  private swapSeat(d: CouncilDiscussion, req: NonNullable<CouncilPatchRequest['seat']>): void {
+    if (d.status === 'running' || this.live.has(d.id)) throw new AppError('COUNCIL_BUSY', 'Stop the discussion before changing a model', 409);
+    const seat = d.seats.find(item => item.id === req?.id);
+    if (!seat) throw new AppError('INVALID_COUNCIL_SEATS', 'Unknown seat', 404);
+    const agent = req.model;
+    const profileName = agent && typeof agent.backendId === 'string' && typeof agent.profileId === 'string'
+      ? this.deps.profileName(agent.backendId, agent.profileId)
+      : undefined;
+    if (!profileName) throw new AppError('COUNCIL_AGENT_UNAVAILABLE', 'A chosen Agent is not available', 409);
+    const model = typeof agent.model === 'string' && agent.model.trim() ? agent.model.trim().slice(0, 200) : undefined;
+    seat.model = { backendId: agent.backendId, profileId: agent.profileId, ...(model ? { model } : {}) };
+    seat.profileName = profileName;
+    delete seat.sessionId;
+    seat.heard = [];
+    // Its failed speeches of this round ran on the old model: the next run speaks them again.
+    d.speeches = d.speeches.filter(s => !(s.seatId === seat.id && s.round === d.round && (s.status === 'failed' || s.status === 'stopped')));
+    // The old conversation stays with the discussion (`sessionsOf`): its speeches' process and input are read from it.
   }
 
   async exportDiscussion(id: string, req: CouncilExportRequest): Promise<CouncilExportResult> {
@@ -301,6 +461,10 @@ export class CouncilService {
     d.updatedAt = now();
     this.store.save(d);
     this.emit(d.id, { type: 'snapshot', discussion: d });
+    if (this.announced.get(d.id) !== d.status) {
+      this.announced.set(d.id, d.status);
+      this.changed();
+    }
     return d;
   }
 
@@ -348,7 +512,7 @@ export class CouncilService {
         }
         if (step.kind === 'round-end' && d.rhythm === 'auto') {
           format.autoAdvance?.(d);
-          d.round += 1;
+          this.advanceRound(d);
           continue;
         }
         d.status = step.kind === 'done' ? 'done' : 'paused';
@@ -364,6 +528,7 @@ export class CouncilService {
       d.status = 'failed';
       d.error = failure;
     }
+    this.settle(d);
     this.commit(d);
   }
 
@@ -380,6 +545,8 @@ export class CouncilService {
       startedAt: now(),
     };
     d.speeches.push(speech);
+    // Saved before the seat is sent, so a restart while its conversation opens leaves a cut speech to rerun.
+    this.store.save(d);
     this.emitSpeech(live, speech);
 
     const seat = d.seats.find(s => s.id === spec.seatId)!;
@@ -390,9 +557,15 @@ export class CouncilService {
     try {
       // A conversation that went (deleted, archived) is opened anew, and told everything again.
       if (seat.sessionId && !seats.alive(seat.sessionId)) { delete seat.sessionId; seat.heard = []; }
+      const opened = seat.sessionId;
       const message = compose(FORMATS[d.format], d, seat, spec);
-      turn = await seats.send(d, seat, message.text);
-      if (!this.current(live)) { seats.stop(turn.sessionId, turn.runId); return speech; }
+      turn = await seats.send(d, seat, message.text, signal);
+      if (!this.current(live)) {
+        seats.stop(turn.sessionId, turn.runId);
+        // A conversation this send opened would be left behind by the run that no longer owns it.
+        if (turn.sessionId !== opened) void seats.remove(turn.sessionId).catch(() => {});
+        return speech;
+      }
       live.turns.set(turn.runId, turn.sessionId);
       seat.sessionId = turn.sessionId;
       seat.heard = message.heard;
@@ -410,7 +583,7 @@ export class CouncilService {
       if (result.metrics) speech.metrics = result.metrics;
       if (result.status === 'done' && spec.prompt.record) {
         // A stop or restart must still recognize this speech as unfinished while its record is in flight.
-        const directive = await this.record(live, seat, spec, speech);
+        const directive = await this.record(live, seat, spec.phase, spec.prompt.record, speech);
         if (!this.current(live)) return speech;
         if (directive) speech.directive = directive;
       }
@@ -431,25 +604,36 @@ export class CouncilService {
     return speech;
   }
 
-  /** The notes a speech's seat records in a turn of its own; none when it does not give them in time or in shape. */
-  private async record(live: Live, seat: CouncilSeat, spec: SpeechSpec, speech: CouncilSpeech) {
+  /**
+   * The notes a speech's seat records in a turn of its own. Without them (the seat does not give them in time or in
+   * shape) the speech stands and `recordError` says why; they are recorded again from the reader's call.
+   */
+  private async record(live: Live, seat: CouncilSeat, phase: CouncilSpeech['phase'], recordPrompt: string, speech: CouncilSpeech) {
     const d = live.discussion;
     const { seats } = this.deps;
+    const timeout = AbortSignal.timeout(COUNCIL_BUDGET.recordTimeoutMs);
     let turn: { sessionId: string; runId: string } | undefined;
+    let directive: CouncilSpeech['directive'];
+    let reason: string | undefined;
     try {
-      turn = await seats.send(d, seat, recordTurn(spec.prompt.record!));
+      turn = await seats.send(d, seat, recordTurn(recordPrompt));
       if (!this.current(live)) { seats.stop(turn.sessionId, turn.runId); return undefined; }
       speech.recordRunId = turn.runId;
       this.store.save(d);
       live.turns.set(turn.runId, turn.sessionId);
-      const result = await seats.settle(turn.sessionId, turn.runId, AbortSignal.any([live.controller.signal, AbortSignal.timeout(COUNCIL_BUDGET.recordTimeoutMs)]));
-      return directiveFor(spec.phase, parseJsonObject(result.text), d, seat.id);
-    } catch {
+      const result = await seats.settle(turn.sessionId, turn.runId, AbortSignal.any([live.controller.signal, timeout]));
+      directive = directiveFor(phase, parseJsonObject(result.text), d, seat.id);
+      if (!directive) reason = result.error ?? (result.text.trim() ? 'The notes were not in a readable shape' : 'The Agent gave no notes');
+    } catch (error) {
       if (turn && this.current(live)) seats.stop(turn.sessionId, turn.runId);
-      return undefined;
+      reason = timeout.aborted ? `The notes took longer than ${Math.round(COUNCIL_BUDGET.recordTimeoutMs / 60_000)} minutes` : messageOf(error);
     } finally {
       if (turn) live.turns.delete(turn.runId);
     }
+    if (!this.current(live)) return undefined;
+    if (directive) delete speech.recordError;
+    else speech.recordError = (reason ?? 'The notes are missing').slice(0, 200);
+    return directive;
   }
 
   private emitSpeech(live: Live, speech: CouncilSpeech): void {

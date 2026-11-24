@@ -19,13 +19,13 @@ msgstr "{side} ahead"
 msgid "{side}略占上风"
 msgstr "{side} slightly ahead"
 
+#: src/app/council/CouncilPage.tsx
+msgid "「{title}」的发言和各席位的会话会一并删除，无法恢复。"
+msgstr "The speeches in “{title}” and its seats’ conversations will be deleted. This can’t be undone."
+
 #: src/app/council/model.ts
 msgid "1v1 辩论"
 msgstr "1v1 debate"
-
-#: src/app/council/CouncilExportDialog.tsx
-msgid "Agent"
-msgstr "Agent"
 
 #: src/app/council/model.ts
 msgid "主持人"
@@ -51,6 +51,10 @@ msgstr "Reviser"
 msgid "修订稿"
 msgstr "Revised draft"
 
+#: src/app/council/CouncilPage.tsx
+msgid "停止"
+msgstr "Stop"
+
 #: src/app/council/CouncilExportDialog.tsx
 msgid "内容"
 msgstr "Content"
@@ -58,6 +62,10 @@ msgstr "Content"
 #: src/app/council/CouncilLaunch.tsx
 msgid "最多 {value} 轮"
 msgstr "Up to {value} rounds"
+
+#: src/app/council/CouncilNav.tsx
+msgid "最近"
+msgstr "Recent"
 
 #: src/app/council/CouncilAside.tsx
 #: src/app/council/model.ts
@@ -77,12 +85,17 @@ msgid "创建任务"
 msgstr "Create task"
 
 #: src/app/council/CouncilNav.tsx
+#: src/app/council/CouncilPage.tsx
 msgid "删除协作"
 msgstr "Delete collaboration"
 
 #: src/app/council/CouncilPage.tsx
 msgid "删除失败"
 msgstr "Delete failed"
+
+#: src/app/council/CouncilPage.tsx
+msgid "删除这个协作？"
+msgstr "Delete this collaboration?"
 
 #: src/app/council/CouncilLaunch.tsx
 msgid "前往配置"
@@ -100,10 +113,6 @@ msgstr "Even"
 msgid "势头"
 msgstr "Momentum"
 
-#: src/app/council/CouncilNav.tsx
-msgid "协作历史"
-msgstr "History"
-
 #: src/app/council/CouncilPromptDialog.tsx
 msgid "协作提示词"
 msgstr "Collaboration prompts"
@@ -115,10 +124,6 @@ msgstr "Mode"
 #: src/app/council/CouncilAside.tsx
 msgid "协作概览"
 msgstr "Collaboration overview"
-
-#: src/app/council/CouncilNav.tsx
-msgid "历史记录"
-msgstr "History"
 
 #: src/app/council/CouncilStage.tsx
 msgid "原地打转"
@@ -228,7 +233,6 @@ msgstr "Answered"
 msgid "已达成共识"
 msgstr "Consensus"
 
-#: src/app/council/CouncilExportDialog.tsx
 #: src/app/council/CouncilPage.tsx
 msgid "带入会话"
 msgstr "Open in session"
@@ -237,10 +241,6 @@ msgstr "Open in session"
 #: src/app/council/CouncilPromptDialog.tsx
 msgid "席位"
 msgstr "Seats"
-
-#: src/app/council/CouncilExportDialog.tsx
-msgid "开始会话"
-msgstr "Start session"
 
 #: src/app/council/CouncilPromptDialog.tsx
 msgid "当前角色设定"
@@ -258,6 +258,10 @@ msgstr "Conclude"
 msgid "按裁判各轮的记录：论点加强、被击破，对方回避质询"
 msgstr "From the judge's notes each round: points reinforced or broken, and questions the other side dodged"
 
+#: src/app/council/CouncilPage.tsx
+msgid "换成"
+msgstr "Switch to"
+
 #: src/app/council/CouncilPromptDialog.tsx
 msgid "提示词来源"
 msgstr "Prompt source"
@@ -271,6 +275,7 @@ msgid "收起右侧栏"
 msgstr "Hide right panel"
 
 #: src/app/council/CouncilNav.tsx
+#: src/app/council/CouncilPage.tsx
 msgid "新建协作"
 msgstr "New collaboration"
 
@@ -287,6 +292,10 @@ msgid "无法开始协作"
 msgstr "Could not start collaboration"
 
 #: src/app/council/CouncilPage.tsx
+msgid "无法更换模型"
+msgstr "Couldn’t change the model"
+
+#: src/app/council/CouncilPage.tsx
 msgid "无法继续"
 msgstr "Couldn't continue"
 
@@ -298,13 +307,22 @@ msgstr "Couldn't load the prompt"
 msgid "无法读取过程"
 msgstr "Couldn't load the process"
 
-#: src/app/council/CouncilNav.tsx
-msgid "暂无记录"
-msgstr "No history yet"
+#: src/app/council/CouncilPage.tsx
+msgid "无法重新生成记录"
+msgstr "Couldn’t regenerate the notes"
+
+#. placeholder {0}: seatName(failedSeat, discussion.seats)
+#: src/app/council/CouncilPage.tsx
+msgid "更换 {0} 的模型"
+msgstr "Change the model for {0}"
 
 #: src/app/council/CouncilPage.tsx
 msgid "更新失败"
 msgstr "Update failed"
+
+#: src/app/council/CouncilNav.tsx
+msgid "未读"
+msgstr "Unread"
 
 #: src/app/council/model.ts
 msgid "本轮记录"
@@ -371,6 +389,10 @@ msgstr "Round {round}"
 msgid "等候发言"
 msgstr "Waiting to speak"
 
+#: src/app/council/CouncilNav.tsx
+msgid "等待处理"
+msgstr "Waiting"
+
 #: src/app/council/CouncilLaunch.tsx
 msgid "粘贴要审阅的文档或方案"
 msgstr "Paste a document or plan to review"
@@ -420,6 +442,7 @@ msgstr "Follow-up"
 msgid "补充看法或约束"
 msgstr "Add a view or constraint"
 
+#: src/app/council/CouncilAside.tsx
 #: src/app/council/CouncilStage.tsx
 msgid "被击破"
 msgstr "Lost"
@@ -470,9 +493,17 @@ msgstr "Debater"
 msgid "辩题，例如：首版应当先做 Web 端"
 msgstr "A resolution, e.g. The first version should ship on the web first"
 
+#: src/app/council/CouncilNav.tsx
+msgid "运行失败"
+msgstr "Run failed"
+
 #: src/app/council/CouncilPromptDialog.tsx
 msgid "这次发言没有可读取的提示词原文。"
 msgstr "The original prompt for this speech is unavailable."
+
+#: src/app/council/Speech.tsx
+msgid "这次发言的记录没有生成"
+msgstr "The notes for this speech weren’t recorded"
 
 #: src/app/council/CouncilPromptDialog.tsx
 msgid "这次结构化记录没有可读取的提示词原文。"
@@ -497,6 +528,10 @@ msgstr "Partly aligned"
 #: src/app/council/CouncilStage.tsx
 msgid "部分共识"
 msgstr "Partly agreed"
+
+#: src/app/council/Speech.tsx
+msgid "重新生成记录"
+msgstr "Regenerate notes"
 
 #: src/app/council/CouncilPage.tsx
 #: src/app/council/CouncilPromptDialog.tsx

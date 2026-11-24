@@ -1,10 +1,13 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { CouncilFormat, CouncilSummary } from '@contracts';
+import { councilAwaitsReader, type CouncilFormat, type CouncilSummary } from '@contracts';
 import { IconArrowRightLeft, IconChevronDown, IconFilePenLine, IconLayers, IconMessagesSquare, IconPlus, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/controls';
-import { ListRow, RowActions } from '@/components/ui/list-row';
+import { Spinner, StatusDot } from '@/components/ui/controls';
+import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tip } from '@/components/ui/tooltip';
+import { relativeTime } from '@/lib/utils';
+import { useCouncilLabels } from './model';
 
 function formatIcon(format: CouncilFormat) {
   if (format === 'ld') return <IconArrowRightLeft />;
@@ -13,83 +16,65 @@ function formatIcon(format: CouncilFormat) {
   return <IconFilePenLine />;
 }
 
-/**
- * Dedicated left history rail inside the Model Collaboration page (`PageScaffold aside`),
- * matching `PluginsAside` (same background as page body, no extra border/time clutter).
- */
-export function CouncilAsideNav({
-  items,
-  activeId,
-  onSelect,
-  onDelete,
-}: {
-  items: CouncilSummary[];
-  activeId: string | null;
-  onSelect: (id: string | null) => void;
-  onDelete: (id: string) => void;
+/** The discussions held so far, under the new discussion's seats: the way back into one, and where one is deleted. */
+export function CouncilRecent({ items, onSelect, onDelete }: {
+  items: readonly CouncilSummary[];
+  onSelect: (id: string) => void;
+  onDelete: (item: CouncilSummary) => void;
 }) {
   const { t } = useLingui();
-
+  const labels = useCouncilLabels();
+  // The marks the sidebar row sums up, on the discussion they come from; a read one shows its format.
+  const leadingOf = (item: CouncilSummary) => {
+    if (item.status === 'running') return <Spinner />;
+    if (!councilAwaitsReader(item)) return formatIcon(item.format);
+    if (item.status === 'paused') return <StatusDot tone="warning" label={t`等待处理`} />;
+    if (item.status === 'failed') return <StatusDot tone="danger" label={t`运行失败`} />;
+    return <StatusDot tone="accent" label={t`未读`} />;
+  };
+  if (!items.length) return null;
   return (
-    <nav aria-label={t`协作历史`} className="hidden w-56 shrink-0 flex-col overflow-y-auto px-3 pb-10 pt-5 lg:flex">
-      <ListRow
-        leading={<IconPlus />}
-        selected={activeId === null}
-        aria-current={activeId === null ? 'page' : undefined}
-        onClick={() => onSelect(null)}
-      >
-        <Trans>新建协作</Trans>
-      </ListRow>
-
-      <h3 className="px-2.5 pb-1 pt-4 text-2xs font-medium text-fg-4">
-        <Trans>历史记录</Trans>
-      </h3>
-
-      {items.length === 0 ? (
-        <p className="px-2.5 py-2 text-xs text-fg-4"><Trans>暂无记录</Trans></p>
-      ) : (
-        <div className="flex flex-col gap-px">
-          {items.map((item) => (
-            <ListRow
-              key={item.id}
-              leading={item.status === 'running' ? <Spinner /> : formatIcon(item.format)}
-              selected={activeId === item.id}
-              aria-current={activeId === item.id ? 'page' : undefined}
-              onClick={() => onSelect(item.id)}
-              actions={(
-                <RowActions>
-                  <Button
-                    size="icon-xs"
-                    variant="quiet"
-                    aria-label={t`删除协作`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete(item.id);
-                    }}
-                  >
-                    <IconTrash2 />
-                  </Button>
-                </RowActions>
-              )}
-            >
-              {item.title}
-            </ListRow>
-          ))}
-        </div>
-      )}
-    </nav>
+    <section aria-labelledby="council-recent" className="flex min-w-0 flex-col">
+      <h2 id="council-recent" className="mb-1 px-2.5 text-xs font-medium text-fg-3"><Trans>最近</Trans></h2>
+      <div className="flex flex-col gap-px">
+        {items.map((item) => (
+          <ListRow
+            key={item.id}
+            className="min-h-10 gap-3"
+            leading={leadingOf(item)}
+            meta={labels.format(item.format)}
+            onClick={() => onSelect(item.id)}
+            actions={(
+              // The time gives its place to the delete button while the row is pointed at or focused.
+              <span className="grid w-16 shrink-0 items-center justify-items-end">
+                <span className={`col-start-1 row-start-1 text-xs tabular-nums text-fg-4 ${rowConceal}`}>{relativeTime(item.updatedAt)}</span>
+                <span className={`col-start-1 row-start-1 z-10 flex ${rowReveal}`}>
+                  <Tip label={t`删除协作`}>
+                    <Button size="icon-xs" variant="quiet" className="no-hover:size-11" aria-label={t`删除协作`} onClick={() => onDelete(item)}>
+                      <IconTrash2 />
+                    </Button>
+                  </Tip>
+                </span>
+              </span>
+            )}
+          >
+            <span className="text-fg">{item.title}</span>
+          </ListRow>
+        ))}
+      </div>
+    </section>
   );
 }
 
-/** Compact switcher shown in the header on narrow viewports (< lg) where the left column folds. */
+/** The open discussion's title, opening the others and a new one. */
 export function CouncilHistoryMenu({
   items,
   activeId,
   title,
   onSelect,
 }: {
-  items: CouncilSummary[];
-  activeId: string | null;
+  items: readonly CouncilSummary[];
+  activeId: string;
   title?: string;
   onSelect: (id: string | null) => void;
 }) {
@@ -97,11 +82,11 @@ export function CouncilHistoryMenu({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="ml-1 flex h-7 min-w-0 items-center gap-1 rounded-md px-2 text-sm text-fg-2 outline-none hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus lg:hidden no-hover:min-h-11">
-        <span className="min-w-0 truncate">{title ?? (activeId ? t`模型协作` : t`新建协作`)}</span>
+      <DropdownMenuTrigger className="flex h-7 max-w-full min-w-0 items-center gap-1 rounded-md px-2 text-sm font-medium text-fg outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus data-[state=open]:bg-hover no-hover:min-h-11">
+        <span className="min-w-0 truncate">{title ?? t`模型协作`}</span>
         <IconChevronDown className="size-3.5 shrink-0 text-fg-3" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="max-h-[min(70dvh,480px)] w-64 overflow-y-auto">
+      <DropdownMenuContent align="start" className="max-h-[min(70dvh,480px)] w-72 overflow-y-auto">
         <DropdownMenuItem onSelect={() => onSelect(null)}>
           <IconPlus />
           <span><Trans>新建协作</Trans></span>
@@ -109,7 +94,7 @@ export function CouncilHistoryMenu({
         {items.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup value={activeId ?? ''} onValueChange={(v) => onSelect(v || null)}>
+            <DropdownMenuRadioGroup value={activeId} onValueChange={(v) => onSelect(v || null)}>
               {items.map((item) => (
                 <DropdownMenuRadioItem key={item.id} value={item.id}>
                   <span className="min-w-0 flex-1 truncate">{item.title}</span>

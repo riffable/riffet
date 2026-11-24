@@ -1,7 +1,7 @@
 import { councilSuggestsClosing, type CouncilDiscussion, type CouncilModeration } from '../../../../../packages/contracts/src/index.js';
 import { repeatedRoundCount } from './roundtable-repetition.js';
 import {
-  languageRule, recordSeatIds, SEAT_RULE, seatsOf, speak, speaker, spoken,
+  languageRule, lengthCap, NAME_RULE, recordSeatIds, SEAT_RULE, seatsOf, speak, speaker, spoken,
   type FormatSpec, type SpeechPrompt, type Step,
 } from './shared.js';
 
@@ -13,8 +13,9 @@ import {
 
 const CONCISE_PROSE = '直接在回复中写正文，不生成文件或附件。自然表达，不使用 Markdown 标题，只对关键词或短语加粗，段落之间留一个空行。';
 
+/** Per-speech cap: at most the 1v1 debate's 700, shrinking only when many debaters share the round. */
 function characterLimit(debaters: number, repeatedRounds: number): number {
-  const limit = Math.max(400, Math.floor(7000 / debaters));
+  const limit = Math.min(700, Math.max(400, Math.floor(3600 / debaters)));
   if (repeatedRounds >= 2) return Math.max(200, Math.floor(limit * 0.5));
   if (repeatedRounds === 1) return Math.max(300, Math.floor(limit * 0.7));
   return limit;
@@ -33,7 +34,7 @@ function statementTask(d: CouncilDiscussion, seatId: string, limit: number, repe
       challenges.length ? `上一轮向你提出的质疑：\n${challenges.map(c => `- ${speaker(d, c.from)}：${c.point}`).join('\n')}` : '',
       moderation?.unanswered ? `主持人指出上一轮仍有待回应的关键问题：${moderation.unanswered}\n请回应这个问题，或解释它为什么不影响你的判断。` : '',
       repeatedRounds > 0 ? '最近的发言有较多重复，本轮请引入新证据或未讨论的角度。' : '',
-      `发言最多 ${limit} 字，上限不必用满。`,
+      `发言${lengthCap(limit)}，上限不必用满。`,
       CONCISE_PROSE,
     ].filter(Boolean).join('\n'),
   };
@@ -48,13 +49,13 @@ function summaryTask(d: CouncilDiscussion): SpeechPrompt {
   const needsNewAngle = round < d.maxRounds && repeatedRoundCount(d, round) >= 2;
   return {
     task: [
-      `第 ${round} 轮发言已结束。以观察者身份，为读者总结这一轮。`,
+      `第 ${round} 轮发言已结束。以主持人身份，为读者总结这一轮。`,
       PARALLEL_ROUND,
       round === 1 ? '首轮只比较各自提出的主张、前提和依据。独立提出不同看法不算互相反驳。' : '说明谁回应了此前的哪条论点，以及这次回应给讨论带来了什么。',
       '聚焦本轮的新论点、新证据和盲区。指出关键分歧落在哪个前提，以及哪条论证更站得住脚、为什么。同样有深度的论证，留意谁把推理讲得更清楚。重复或空泛的发言一句带过，无需逐人罗列立场。把整个讨论的脉络留到终评。',
       '当共识缺少论证、关键前提长期无人检验、辩手各说各话或大家回避同一个关键问题时，可以在末尾追问。每轮最多一个，点名并引用具体轮次的论述，直接问关键问题。没有值得追问的就省略。',
       needsNewAngle ? '连续两轮新增内容有限。如果还有一个未触及、足以打破重复的角度，优先把它作为小结末尾唯一的问题交给下一轮。找不到这样的角度时省略。' : '',
-      '小结最多 600 字。',
+      `小结${lengthCap(600)}。`,
       CONCISE_PROSE,
     ].filter(Boolean).join('\n'),
     record: [
@@ -70,10 +71,10 @@ function summaryTask(d: CouncilDiscussion): SpeechPrompt {
 
 const CONCLUSION: SpeechPrompt = {
   task: [
-    '讨论已经结束。综合全部轮次，作为观察者为读者写终评。',
+    '讨论已经结束。综合全部轮次，作为主持人为读者写终评。',
     '先用两三句交代起点、终点和改变讨论的关键转折，再给读者一句最值得带走的判断，直接回答议题。',
     '按实际情况补充经交锋形成的共识及其成立条件，或仍无法弥合的分歧、各方的前提和能改变判断的证据。如果某位辩手打破僵局、提出被采纳的论点或给出有效反驳，点明他怎样改变了讨论。确有跳出议题框架或直面自身局限的洞察时，再说明它的价值。只写有依据的部分。',
-    '终评最多 800 字。',
+    `终评${lengthCap(800)}。`,
     CONCISE_PROSE,
   ].join('\n'),
 };
@@ -83,14 +84,14 @@ export const roundtable: FormatSpec = {
     const debaters = seatsOf(d, 'debater');
     if (seat.role === 'moderator') {
       return [
-        `你是这场圆桌讨论的观察者和总结者，辩手包括 ${debaters.map(s => speaker(d, s.id)).join('、')}。每轮总结讨论的推进和最重要的分歧，最后综合各轮写出终评。由辩手自行决定回应谁、如何论证和是否改变立场。`,
-        SEAT_RULE, languageRule('题目'), '', `议题：${d.topic}`,
+        `你是这场圆桌讨论的主持人，辩手包括 ${debaters.map(s => speaker(d, s.id)).join('、')}。每轮总结讨论的推进和最重要的分歧，最后综合各轮写出终评。由辩手自行决定回应谁、如何论证和是否改变立场。`,
+        SEAT_RULE, NAME_RULE, languageRule('题目'), '', `议题：${d.topic}`,
       ].join('\n');
     }
     return [
       `你是参加圆桌讨论的 ${debaters.length} 个 AI 模型之一。不同模型的训练和推理方式各有侧重，请独立判断，只有论证和证据说服你时才改变立场。`,
       `你的显示名称是 ${speaker(d, seat.id)}。其他辩手包括 ${debaters.filter(s => s.id !== seat.id).map(s => speaker(d, s.id)).join('、')}。主持人会在每轮结束后做小结。`,
-      SEAT_RULE, languageRule('题目'), '', `议题：${d.topic}`,
+      SEAT_RULE, NAME_RULE, languageRule('题目'), '', `议题：${d.topic}`,
     ].join('\n');
   },
   // Resuming an interrupted round can leave completed peers. A retried debater still speaks blind.

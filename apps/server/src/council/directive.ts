@@ -13,19 +13,31 @@ import type {
  * speech (`recordTurn`); this reads them and checks them against the discussion.
  */
 
-/** A JSON object in a model answer, tolerating a Markdown fence and stray prose around it. */
-export function parseJsonObject(raw: string): Record<string, unknown> | undefined {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
-  const candidate = (fenced?.[1] ?? raw).trim();
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start < 0 || end <= start) return undefined;
+function parseObject(candidate: string): Record<string, unknown> | undefined {
   try {
-    const parsed = JSON.parse(candidate.slice(start, end + 1)) as unknown;
+    const parsed = JSON.parse(candidate) as unknown;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
   } catch {
     return undefined;
   }
+}
+
+function outermostObject(raw: string): Record<string, unknown> | undefined {
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  return start < 0 || end <= start ? undefined : parseObject(raw.slice(start, end + 1));
+}
+
+/**
+ * A JSON object in a model answer, tolerating a Markdown fence and stray prose around it. The whole text and its outermost
+ * braces come first, because edited text inside the JSON strings may itself hold a fence; the first fence is the last resort.
+ */
+export function parseJsonObject(raw: string): Record<string, unknown> | undefined {
+  const whole = raw.trim();
+  const found = parseObject(whole) ?? outermostObject(whole);
+  if (found) return found;
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(whole);
+  return fenced ? outermostObject(fenced[1]!) : undefined;
 }
 
 const text = (value: unknown, max = 400): string | undefined =>

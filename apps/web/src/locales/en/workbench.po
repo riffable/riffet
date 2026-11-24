@@ -2313,6 +2313,7 @@ msgid "自定义侧栏"
 msgstr "Customize sidebar"
 
 #: src/app/use-session-actions.ts
+#: src/app/Workbench.tsx
 msgid "草稿无法保存到浏览器，刷新后会丢失"
 msgstr "The draft can't be saved in the browser and will be lost on refresh"
 

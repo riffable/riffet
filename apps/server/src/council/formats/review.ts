@@ -1,5 +1,5 @@
 import type { CouncilDiscussion, CouncilReviewTask } from '../../../../../packages/contracts/src/index.js';
-import { languageRule, SEAT_RULE, seatsOf, speak, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
+import { languageRule, lengthCap, SEAT_RULE, seatsOf, speak, spoken, type FormatSpec, type SpeechPrompt, type Step } from './shared.js';
 
 /**
  * Review: each reviewer reads the document from its own angle and proposes paragraph edits
@@ -22,7 +22,7 @@ function numbered(d: CouncilDiscussion): string {
 const EDITS_SHAPE = '{"edits":[{"para":"P3","title":"修改要点","before":"从该段逐字摘录的原文","after":"替换后的完整文字"}]}';
 
 const REVIEW: SpeechPrompt = {
-  task: '从你的审阅角度，向读者说明最值得关注的问题。审阅意见不超过 200 词。',
+  task: `从你的审阅角度，向读者说明最值得关注的问题。审阅意见${lengthCap(300)}。`,
   record: `${EDITS_SHAPE}\n提出一至四条修改建议，最重要的排在前面。before 必须与段落原文逐字一致。如需在段末追加内容，before 填写原段最后一句，after 填写这句话及要追加的内容。`,
 };
 

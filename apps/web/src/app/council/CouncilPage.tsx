@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { councilSuggestsClosing, type CouncilCreateRequest, type CouncilDiscussion, type CouncilSummary, type NativeBackendCatalogEntry } from '@contracts';
+import { councilAwaitsReader, councilSuggestsClosing, type CouncilAgent, type CouncilCreateRequest, type CouncilDiscussion, type CouncilSummary, type NativeBackendCatalogEntry } from '@contracts';
 import { api, type ProjectRecord } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import { toast } from '@/lib/toast';
@@ -8,17 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Badge, Spinner } from '@/components/ui/controls';
 import { Notice } from '@/components/ui/notice';
 import { Tip } from '@/components/ui/tooltip';
-import { IconGitFork, IconPanelRight, IconSquareKanban } from '@/components/icons';
+import { IconGitFork, IconPanelRight, IconSquare, IconSquareKanban, IconSquarePen } from '@/components/icons';
+import { confirmDialog } from '@/lib/dialogs';
 import { PageScaffold } from '../PageScaffold';
 import { Composer } from '../session/Composer';
-import { useNav, useSettings, useStores } from '../state/stores';
+import { useCouncil, useNav, useSettings, useStores } from '../state/stores';
 import { CouncilAside, CouncilOverviewMenu } from './CouncilAside';
-import { CouncilExportDialog } from './CouncilExportDialog';
+import { CouncilExportDialog, defaultExportBody } from './CouncilExportDialog';
 import { CouncilLaunch } from './CouncilLaunch';
 import { CouncilPromptDialog } from './CouncilPromptDialog';
-import { CouncilAsideNav, CouncilHistoryMenu } from './CouncilNav';
+import { CouncilHistoryMenu, CouncilRecent } from './CouncilNav';
 import { CouncilStage, CouncilStageSkeleton } from './CouncilStage';
-import { conclusionOf, useCouncilLabels } from './model';
+import { conclusionOf, seatName, useCouncilLabels } from './model';
+import { SeatPicker, seatAgents } from './SeatPicker';
 import { useCouncilDiscussion } from './useCouncilDiscussion';
 
 export interface CouncilPageProps {
@@ -28,23 +30,49 @@ export interface CouncilPageProps {
   onClose: () => void;
   onOpenSidebar: () => void;
   onExpandSidebar: () => void;
-  onOpenSession: (sessionId: string) => void;
+  /** Opens a new conversation with `quote` in its composer, for the reader to say what to do with it. */
+  onDraftSession: (quote: string) => void;
   onOpenTasks: () => void;
   onOpenProviderSettings: () => void;
 }
 
 const summaryOf = (d: CouncilDiscussion): CouncilSummary => ({
   id: d.id, format: d.format, title: d.title, status: d.status, createdAt: d.createdAt, updatedAt: d.updatedAt, maxRounds: d.maxRounds, rhythm: d.rhythm,
+  ...(d.settledAt ? { settledAt: d.settledAt } : {}), ...(d.seenAt ? { seenAt: d.seenAt } : {}),
   seats: d.seats.map((seat) => ({ role: seat.role, model: seat.model, ...(seat.task ? { task: seat.task } : {}) })),
 });
 
-/** What the reader can do when the discussion waits: the next round, wrapping up, or a retry. */
-export function CouncilControls({ discussion, onContinue }: { discussion: CouncilDiscussion; onContinue: (action: 'next' | 'conclude') => void }) {
+/**
+ * What the reader can do when the discussion waits: the next round, wrapping up, or a retry, with the model of the seat
+ * that failed open to change first. A review has no composer, so its stop is here.
+ */
+export function CouncilControls({ discussion, onContinue, onStop, seatBackends, onSwapSeat }: {
+  discussion: CouncilDiscussion;
+  onContinue: (action: 'next' | 'conclude') => void;
+  onStop?: () => void;
+  /** What a seat can run on; with `onSwapSeat`, a failed seat's model can be changed. */
+  seatBackends?: readonly NativeBackendCatalogEntry[];
+  onSwapSeat?: (seatId: string, model: CouncilAgent) => void;
+}) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
+  if (discussion.status === 'running') {
+    return onStop && discussion.format === 'review'
+      ? <Button size="sm" variant="secondary" onClick={onStop}><IconSquare /><span><Trans>停止</Trans></span></Button>
+      : null;
+  }
+  // A failed step (in a debate one speech is the step) is retried as it was; its seat may first be put on another model.
+  const failed = discussion.status === 'failed' ? discussion.speeches.findLast((s) => s.status === 'failed') : undefined;
+  const failedSeat = failed && discussion.seats.find((seat) => seat.id === failed.seatId);
+  const swap = failedSeat && seatBackends && onSwapSeat && (
+    <span role="group" aria-label={t`更换 ${seatName(failedSeat, discussion.seats)} 的模型`} className="flex min-w-0 items-center gap-1 text-xs text-fg-3">
+      <span className="shrink-0">{t`换成`}</span>
+      <SeatPicker backends={seatAgents(seatBackends)} value={failedSeat.model} onChange={(model) => onSwapSeat(failedSeat.id, model)} />
+    </span>
+  );
   if (discussion.status === 'failed') {
     return (
-      <Notice tone="danger" action={<Button size="xs" variant="secondary" onClick={() => onContinue('next')}><Trans>重试</Trans></Button>}>
+      <Notice tone="danger" action={<span className="flex flex-wrap items-center gap-2">{swap}<Button size="xs" variant="secondary" onClick={() => onContinue('next')}><Trans>重试</Trans></Button></span>}>
         {discussion.error}
       </Notice>
     );
@@ -81,20 +109,20 @@ export function CouncilPage({
   onClose,
   onOpenSidebar,
   onExpandSidebar,
-  onOpenSession,
+  onDraftSession,
   onOpenTasks,
   onOpenProviderSettings,
 }: CouncilPageProps) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
-  const { nav } = useStores();
   const activeId = useNav((state) => state.councilDiscussionId);
   const asideOpen = useNav((state) => state.councilAsideOpen);
   const expandedSpeeches = useNav((state) => state.councilExpandedSpeeches);
   const enterBehavior = useSettings((settings) => settings.composerEnterBehavior);
-  const [items, setItems] = useState<CouncilSummary[]>([]);
-  const deletedWhileListing = useRef<Set<string> | undefined>(undefined);
-  const [listed, setListed] = useState(false);
+  const { nav, council } = useStores();
+  const listedItems = useCouncil((state) => state.items);
+  const listed = listedItems !== undefined;
+  const items = useMemo(() => listedItems ?? [], [listedItems]);
   // Seats run on quick chat too, which the Agents list leaves out; read again whenever that list changes.
   const [seatBackends, setSeatBackends] = useState<NativeBackendCatalogEntry[]>();
   // Seats are drafted once this read is over, so a remembered quick-chat seat is not swapped for an Agent first.
@@ -106,39 +134,37 @@ export function CouncilPage({
   }, [backends]);
   const { discussion, missingId, rows, rowLoads, loadRows } = useCouncilDiscussion(activeId);
   const active = discussion && discussion.id === activeId ? discussion : undefined;
-  const [exportKind, setExportKind] = useState<'task' | 'session' | null>(null);
+  const [exportKind, setExportKind] = useState<'task' | null>(null);
   const [exporting, setExporting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const following = useRef(true);
   const restoredDiscussion = useRef<string | null>(null);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    const deletedIds = new Set<string>();
-    deletedWhileListing.current = deletedIds;
-    const end = () => {
-      if (deletedWhileListing.current === deletedIds) deletedWhileListing.current = undefined;
-    };
-    void api.councilList(controller.signal).then(({ items }) => {
-      if (controller.signal.aborted) return;
-      setItems((current) => {
-        const present = new Set(current.map(({ id }) => id));
-        return [...current, ...items.filter(({ id }) => !present.has(id) && !deletedIds.has(id))];
-      });
-    }).catch(() => {}).finally(() => {
-      end();
-      if (!controller.signal.aborted) setListed(true);
-    });
-    return () => { controller.abort(); end(); };
-  }, [nav]);
 
   // The history row follows the open discussion's state.
   const status = discussion?.status;
   const updatedAt = discussion?.updatedAt;
   useEffect(() => {
-    if (!discussion) return;
-    setItems((current) => current.map((item) => (item.id === discussion.id ? summaryOf(discussion) : item)));
+    if (discussion && items.some(({ id }) => id === discussion.id)) council.upsert(summaryOf(discussion));
   }, [discussion?.id, status, updatedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Read once it settled while in view: the sidebar's mark for it goes, here and on the reader's other devices.
+  const awaiting = Boolean(active && councilAwaitsReader(active));
+  useEffect(() => {
+    if (!awaiting || !activeId) return;
+    const id = activeId;
+    let sent = false;
+    const mark = () => {
+      if (sent || document.visibilityState !== 'visible') return;
+      sent = true;
+      void api.councilPatch(id, { seen: true }).then((updated) => {
+        if (nav.get().councilDiscussionId === updated.id) council.upsert(summaryOf(updated));
+      }).catch(() => { sent = false; });
+    };
+    mark();
+    document.addEventListener('visibilitychange', mark);
+    return () => document.removeEventListener('visibilitychange', mark);
+  }, [awaiting, activeId, council, nav]);
 
   // Streaming keeps the newest text in view unless the reader scrolled up to read.
   useLayoutEffect(() => {
@@ -165,10 +191,9 @@ export function CouncilPage({
   }, [nav]);
 
   const forget = useCallback((id: string) => {
-    deletedWhileListing.current?.add(id);
-    setItems((current) => current.filter((item) => item.id !== id));
+    council.forget(id);
     if (nav.get().councilDiscussionId === id) select(null);
-  }, [nav, select]);
+  }, [council, nav, select]);
 
   useEffect(() => {
     if (missingId) forget(missingId);
@@ -187,7 +212,7 @@ export function CouncilPage({
     const navigationRevision = nav.getNavigationRevision();
     const created = await run(() => api.councilCreate(request), t`无法开始协作`);
     if (!created) return false;
-    setItems((current) => [summaryOf(created), ...current.filter(({ id }) => id !== created.id)]);
+    council.upsert(summaryOf(created));
     if (nav.getNavigationRevision() === navigationRevision) select(created.id);
     return true;
   };
@@ -204,7 +229,15 @@ export function CouncilPage({
     return Boolean(await run(() => api.councilSupplement(activeId, { text }), t`无法发送`));
   };
 
-  const handleDelete = async (id: string) => {
+  // The seats' conversations go with the discussion, and neither can be brought back.
+  const handleDelete = async ({ id, title }: CouncilSummary) => {
+    const confirmed = await confirmDialog({
+      title: t`删除这个协作？`,
+      description: t`「${title}」的发言和各席位的会话会一并删除，无法恢复。`,
+      confirmLabel: t`删除协作`,
+      destructive: true,
+    });
+    if (!confirmed) return;
     const done = await run(async () => { await api.councilDelete(id); return true; }, t`删除失败`);
     if (!done) return;
     forget(id);
@@ -217,12 +250,8 @@ export function CouncilPage({
     setExporting(false);
     if (!result) return;
     setExportKind(null);
-    if (result.kind === 'task') {
-      toast.success(t`已创建任务`);
-      onOpenTasks();
-    } else {
-      onOpenSession(result.id);
-    }
+    toast.success(t`已创建任务`);
+    onOpenTasks();
   };
 
   // While a discussion is read, its summary in the list already says what the page will show.
@@ -233,12 +262,7 @@ export function CouncilPage({
 
   return (
     <PageScaffold
-      title={(
-        <span className="flex min-w-0 items-center">
-          <span className="hidden truncate lg:block">{title ?? t`模型协作`}</span>
-          <CouncilHistoryMenu items={items} activeId={activeId} title={title} onSelect={select} />
-        </span>
-      )}
+      title={activeId ? <CouncilHistoryMenu items={items} activeId={activeId} title={title} onSelect={select} /> : t`模型协作`}
       meta={active || reading ? (
         <span className="inline-flex shrink-0 items-center gap-1">
           <Badge>{labels.format((active ?? reading)!.format)}</Badge>
@@ -249,8 +273,11 @@ export function CouncilPage({
         <>
           {concluded && (
             <>
-              <Button size="sm" variant="secondary" className="max-md:hidden" onClick={() => setExportKind('session')}><IconGitFork /><span><Trans>带入会话</Trans></span></Button>
-              <Button size="sm" variant="secondary" className="max-md:hidden" onClick={() => setExportKind('task')}><IconSquareKanban /><span><Trans>转为任务</Trans></span></Button>
+              {/* Labelled where the header has room; icons below that, so the title keeps its place and nothing is pushed out. */}
+              <Button size="sm" variant="secondary" className="max-xl:hidden" onClick={() => onDraftSession(defaultExportBody(active!).replace(/^# /, ''))}><IconGitFork /><span><Trans>带入会话</Trans></span></Button>
+              <Button size="sm" variant="secondary" className="max-xl:hidden" onClick={() => setExportKind('task')}><IconSquareKanban /><span><Trans>转为任务</Trans></span></Button>
+              <Tip label={t`带入会话`}><Button size="icon-sm" variant="quiet" className="max-md:hidden xl:hidden" aria-label={t`带入会话`} onClick={() => onDraftSession(defaultExportBody(active!).replace(/^# /, ''))}><IconGitFork /></Button></Tip>
+              <Tip label={t`转为任务`}><Button size="icon-sm" variant="quiet" className="max-md:hidden xl:hidden" aria-label={t`转为任务`} onClick={() => setExportKind('task')}><IconSquareKanban /></Button></Tip>
             </>
           )}
           {active && <CouncilOverviewMenu discussion={active} />}
@@ -259,10 +286,12 @@ export function CouncilPage({
               <IconPanelRight />
             </Button>
           </Tip>
+          <Tip label={t`新建协作`}>
+            <Button size="icon-sm" variant="quiet" aria-label={t`新建协作`} onClick={() => select(null)}><IconSquarePen /></Button>
+          </Tip>
         </>
       ) : undefined}
       column="none"
-      aside={<CouncilAsideNav items={items} activeId={activeId} onSelect={select} onDelete={(id) => void handleDelete(id)} />}
       scrollRef={scrollRef}
       onScroll={(event) => {
         if (!active) return;
@@ -270,13 +299,43 @@ export function CouncilPage({
         following.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
         nav.rememberCouncilReadingPosition(active.id, { top: scroller.scrollTop, following: following.current });
       }}
+      footer={noting ? (
+        // Outside the scroller, as in a conversation: what scrolls stops at its top edge. The reading column's width,
+        // the overview's place kept beside it.
+        <div className="flex max-md:bg-bg">
+          <div className="min-w-0 flex-1 pt-2 pb-4">
+            <div className="mx-auto w-full max-w-(--content-width) px-3 sm:px-4 md:px-12">
+              <Composer
+                projectId=""
+                draftKey={`council-note:${active.id}`}
+                windowDrop={false}
+                attachmentsAllowed={false}
+                fileMentions={false}
+                referencesEnabled={false}
+                persistReferences={false}
+                references={[]}
+                onReferencesChange={() => {}}
+                placeholder={t`补充看法或约束`}
+                enterBehavior={enterBehavior}
+                running={active.status === 'running'}
+                onStop={() => void run(() => api.councilStop(active.id), t`无法停止`)}
+                onSubmit={(text) => handleSupplement(text)}
+                onError={(message) => toast.error(message)}
+              />
+            </div>
+          </div>
+          {asideOpen && <div className="w-[248px] shrink-0 max-xl:hidden" />}
+        </div>
+      ) : undefined}
       sidebarCollapsed={sidebarCollapsed}
       onClose={onClose}
       onOpenSidebar={onOpenSidebar}
       onExpandSidebar={onExpandSidebar}
     >
       {!activeId ? (
-        <CouncilLaunch backends={seatBackends ?? backends} recent={listed && seatsRead ? items : undefined} onCreate={create} onOpenProviderSettings={onOpenProviderSettings} onError={(message) => toast.error(message)} />
+        <CouncilLaunch backends={seatBackends ?? backends} recent={listed && seatsRead ? items : undefined} onCreate={create} onOpenProviderSettings={onOpenProviderSettings} onError={(message) => toast.error(message)}>
+          {items.length > 0 && <CouncilRecent items={items} onSelect={select} onDelete={(item) => void handleDelete(item)} />}
+        </CouncilLaunch>
       ) : !active ? (
         reading ? (
           // The same column as the discussion's, the aside's place kept, so nothing moves once it is read.
@@ -298,33 +357,19 @@ export function CouncilPage({
                 expandedSpeeches={expandedSpeeches}
                 onExpandSpeech={(id, expanded) => nav.setCouncilSpeechExpanded(active.id, id, expanded)}
                 onLoadRows={loadRows}
+                onRetryRecord={(speechId) => run(() => api.councilContinue(active.id, { action: 'record', speechId }), t`无法重新生成记录`)}
                 onToggleEdit={(id, accepted) => void run(() => api.councilPatch(active.id, { edit: { id, accepted } }), t`更新失败`)}
               />
-              <div className="timeline-gap-turn"><CouncilControls discussion={active} onContinue={handleContinue} /></div>
-            </div>
-            {noting && (
-              <div className="sticky bottom-0 max-md:bg-bg md:bg-transparent pt-2 pb-4">
-                <div className="mx-auto w-full max-w-(--content-width) px-3 sm:px-4 md:px-12">
-                  <Composer
-                    projectId=""
-                    draftKey={`council-note:${active.id}`}
-                    windowDrop={false}
-                    attachmentsAllowed={false}
-                    fileMentions={false}
-                    referencesEnabled={false}
-                    persistReferences={false}
-                    references={[]}
-                    onReferencesChange={() => {}}
-                    placeholder={t`补充看法或约束`}
-                    enterBehavior={enterBehavior}
-                    running={active.status === 'running'}
-                    onStop={() => void run(() => api.councilStop(active.id), t`无法停止`)}
-                    onSubmit={(text) => handleSupplement(text)}
-                    onError={(message) => toast.error(message)}
-                  />
-                </div>
+              <div className="timeline-gap-turn">
+                <CouncilControls
+                  discussion={active}
+                  onContinue={handleContinue}
+                  onStop={() => void run(() => api.councilStop(active.id), t`无法停止`)}
+                  {...(seatBackends ? { seatBackends } : {})}
+                  onSwapSeat={(seatId, model) => void run(() => api.councilPatch(active.id, { seat: { id: seatId, model } }), t`无法更换模型`)}
+                />
               </div>
-            )}
+            </div>
           </div>
           {asideOpen && <div className="sticky top-0 self-start"><CouncilAside discussion={active} /></div>}
         </div>
@@ -333,10 +378,8 @@ export function CouncilPage({
       {active && exportKind && (
         <CouncilExportDialog
           open
-          kind={exportKind}
           discussion={active}
           projects={projects}
-          backends={backends}
           busy={exporting}
           onOpenChange={(open) => { if (!open) setExportKind(null); }}
           onConfirm={(payload) => void handleExport(payload)}

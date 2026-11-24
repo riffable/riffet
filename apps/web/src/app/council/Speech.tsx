@@ -137,6 +137,8 @@ export interface SpeechProps {
   /** History read state, separate from rows already received in the stream. */
   rowsLoad?: SpeechRowsLoadState;
   onLoadRows: (speechId: string) => void;
+  /** Runs again the notes turn that failed after this speech (`recordError`); resolves undefined if it could not start. */
+  onRetryRecord?: (speechId: string) => Promise<CouncilDiscussion | undefined>;
   /** Where the other side sits, for a debate speech's questions. */
   opponent?: { name: string; side: 'left' | 'right' };
   /** Speaks for the format (a judge's notes, a conclusion): named by its seat, with `aside` at the line's end. */
@@ -176,7 +178,7 @@ function useSpeechParts(speech: CouncilSpeech, seat: CouncilSeat, rows: readonly
  * into its process, the answer below, and a debate speech's questions set apart under it. A finished speech's
  * process is read when the reader opens it.
  */
-export const Speech = memo(function Speech({ speech, seat, discussion, rows, rowsLoad, onLoadRows, opponent, lead, aside, children, card }: SpeechProps) {
+export const Speech = memo(function Speech({ speech, seat, discussion, rows, rowsLoad, onLoadRows, onRetryRecord, opponent, lead, aside, children, card }: SpeechProps) {
   const { t } = useLingui();
   const labels = useCouncilLabels();
   const { process, answer, live, streaming, failedTools } = useSpeechParts(speech, seat, rows);
@@ -189,6 +191,12 @@ export const Speech = memo(function Speech({ speech, seat, discussion, rows, row
   const split = useMemo(() => opponent ? splitQuestions(visibleAnswer) : { body: visibleAnswer, questions: [] }, [visibleAnswer, opponent]);
   const states = questionStates(discussion, speech, opponent && answer !== visibleAnswer ? splitQuestions(answer).questions : split.questions);
   const [inspecting, setInspecting] = useState(false);
+  // The notes turn asks about the speech just given, so only the seat's latest one can be recorded again.
+  const latest = discussion.speeches.findLast((s) => s.seatId === speech.seatId && s.status === 'done')?.id === speech.id;
+  // A notes turn runs without the discussion running. It started with the discussion as the request returned it, and
+  // is over once the discussion is saved again (notes recorded, failed anew, or stopped).
+  const [recordingSince, setRecordingSince] = useState<string>();
+  const recording = recordingSince !== undefined && discussion.updatedAt <= recordingSince;
   const compact = card === 'compact';
   const { box, content, scrollable, onScroll } = useSpeechScroll(compact, streaming);
   const canReadRows = !streaming && Boolean(speech.runId);
@@ -241,6 +249,20 @@ export const Speech = memo(function Speech({ speech, seat, discussion, rows, row
       )}
       {speech.status === 'failed' && <StatusRow tone="danger" text={t`发言失败，已跳过`} {...(speech.error ? { detail: speech.error } : {})} />}
       {speech.status === 'stopped' && <StatusRow tone="muted" text={t`已停止`} />}
+      {speech.status === 'done' && speech.recordError && (
+        // The speech stands; what later rounds, the badges and the overview read from its notes is missing.
+        <StatusRow
+          tone="muted"
+          text={t`这次发言的记录没有生成`}
+          detail={speech.recordError}
+          {...(onRetryRecord && latest ? { footer: <div>
+            <Button size="xs" variant="secondary" busy={recording} disabled={recording || discussion.status === 'running'} onClick={() => {
+              setRecordingSince('\uffff');
+              void onRetryRecord(speech.id).then((started) => setRecordingSince(started?.updatedAt));
+            }}>{t`重新生成记录`}</Button>
+          </div> } : {})}
+        />
+      )}
     </>
   );
   return (

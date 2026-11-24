@@ -28,7 +28,7 @@ export function registerCouncilRoutes(app: FastifyInstance, deps: RouteDeps): vo
     council.patch(request.params.id, request.body ?? {}));
 
   app.post<{ Params: { id: string }; Body?: CouncilContinueRequest }>('/api/council/:id/continue', async (request) =>
-    council.continue(request.params.id, request.body?.action === 'conclude' ? 'conclude' : 'next'));
+    council.continue(request.params.id, request.body?.action === 'conclude' || request.body?.action === 'record' ? request.body.action : 'next', request.body?.speechId));
 
   app.post<{ Params: { id: string }; Body: CouncilSupplementRequest }>('/api/council/:id/supplement', async (request) =>
     council.supplement(request.params.id, request.body?.text ?? ''));
