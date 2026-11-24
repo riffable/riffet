@@ -14,6 +14,8 @@ export interface ControlSnapshotInput {
   /** Unfinished runs, plus any recent failure that may still need a decision. */
   runs: readonly Run[];
   capabilities?: { supportsInterrupt?: boolean; supportsTargetedStop?: boolean; supportsSteer?: boolean };
+  /** `NativeDispatcher.taken`: the queued run a worker has taken up and not moved on yet. */
+  taken?: string;
 }
 
 const OPEN_DELIVERY = new Set<NativeRunDetails['delivery']>(['queued', 'preparing', 'dispatching', 'input_sent', 'uncertain']);
@@ -99,14 +101,31 @@ function entryStatus(native: NativeRunDetails): InboxEntry['status'] {
   return 'queued';
 }
 
-function placementOf(run: Run, active: ActiveTurnState | null, queue: NativeQueue): InboxEntry['placement'] {
+/**
+ * Whether what holds the queue is only the next message's own way in (A6): the worker that took it
+ * up and is waiting for the session lock, the backoff after the CLI refused it, or the CLI that its
+ * delivery launched still starting. Background work, a dialog, a turn, a stop or an earlier message
+ * is something else it waits behind.
+ */
+function ownProgress(run: Run, input: ControlSnapshotInput): boolean {
+  const held = input.queue.held;
+  if (!held || held.runId) return false;
+  if (held.reason === 'sending') return input.taken === run.id;
+  if (held.reason === 'retrying') return true;
+  const { status } = input;
+  return held.reason === 'turn_running' && status.phase === 'starting' && run.native!.attempt > 0
+    && !status.activity?.background && !status.activity?.compacting;
+}
+
+function placementOf(run: Run, active: ActiveTurnState | null, input: ControlSnapshotInput): InboxEntry['placement'] {
   const native = run.native!;
+  const { queue } = input;
   // Only a still-queued ordinary message waiting behind a turn or hold belongs in the queue dock.
   // Direct sends, steers, and uncertain/failed deliveries stay in the transcript so their recovery
   // actions remain visible and the dock never hides or mislabels them.
   if (native.intent === 'steer' || native.delivery !== 'queued') return 'sending';
-  if (!queue.held && queue.next === run.id && active === null) return 'sending';
-  return 'queued';
+  if (active !== null || queue.next !== run.id) return 'queued';
+  return !queue.held || ownProgress(run, input) ? 'sending' : 'queued';
 }
 
 function actionsOf(run: Run, placement: InboxEntry['placement'], status: InboxEntry['status'], active: ActiveTurnState | null, session: Session, queue: NativeQueue): InboxAction[] {
@@ -148,7 +167,7 @@ function inboxOf(input: ControlSnapshotInput, active: ActiveTurnState | null, fo
     .sort((left, right) => rank(left) - rank(right) || left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id))
     .map(run => {
       const native = run.native!;
-      const placement = placementOf(run, active, queue);
+      const placement = placementOf(run, active, input);
       const entryStatusValue = entryStatus(native);
       return {
         id: run.id,

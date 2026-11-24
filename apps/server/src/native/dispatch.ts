@@ -207,6 +207,11 @@ export class NativeDispatcher {
       || actor?.recoveryActive === true || this.store.listUnfinishedNativeRuns(sessionId).some(run => !run.native?.queueReleasedAt);
   }
 
+  /** The queued run a worker of the conversation has taken up and not moved on from `queued` yet. */
+  taken(sessionId: string): string | undefined {
+    return this.actors.get(sessionId)?.taken();
+  }
+
   /** Where the conversation's queue stands, for clients (`NativeStatus.queue`), read against the status it goes out with. */
   queue(sessionId: string, status: NativeStatus): NativeQueue {
     const actor = this.actors.get(sessionId);

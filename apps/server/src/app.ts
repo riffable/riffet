@@ -483,7 +483,7 @@ export async function createApp(options: AppOptions = {}) {
   const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id),controlSnapshot:(sessionId,status,revision)=>{
     try{
       const session=store.getSession(sessionId);
-      return buildSessionControlSnapshot({revision,session,status,queue:dispatch.queue(sessionId,status),runs:store.listUnfinishedNativeRuns(sessionId),capabilities:controlCapabilities(session)});
+      return buildSessionControlSnapshot({revision,session,status,queue:dispatch.queue(sessionId,status),taken:dispatch.taken(sessionId),runs:store.listUnfinishedNativeRuns(sessionId),capabilities:controlCapabilities(session)});
     }catch{return undefined;}
   },subscribeControlRefresh:listener=>{controlRefreshListeners.add(listener);return ()=>{controlRefreshListeners.delete(listener);};}});
   // Needs the timeline, so it is built here rather than beside orchestration. Unfinished turn cards are taken over once connected.

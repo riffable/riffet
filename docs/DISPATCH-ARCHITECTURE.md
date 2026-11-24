@@ -42,6 +42,7 @@
 - **A3 Stop-Settles-Turn 原子性**：任何已确认的 `stopTurn` / `replaceTurn` 在返回前的同一个串行步内，必须原子完成：① 结算被中断的前台回合与关联 Run；② 向 `Journal` 写入 `meta.turn_ended(status: 'interrupted')`；③ 释放队列阻塞并推进后继消息；④ 广播最新控制快照。外部 CLI 迟到的 `stop` hook 仅作幂等补充，不再是解除阻塞的唯一生命线。
 - **A4 直发与排队模型隔离**：`placement === 'sending'`（新建会话首条消息或空闲直发消息）与 `placement === 'queued'`（被前序回合或条件阻塞的排队消息）在模型层彻底分离；正文中的 `UserMessage` 永不渲染「停止并发送」，该操作只属于队列项且受服务端 `actions` 门控。
 - **A5 纯派生过程块折叠（对齐 DeepSeek Harness）**：`TurnProcess` 不再因 `running: true -> false` 的瞬时跳变在副作用中 `fold()`；自动折叠的充要条件是：`turn.status === 'completed' && hasFinalAnswer && !hasIncompleteTools`。运行中、已停止、失败、结果未知或含未完成工具调用的回合，默认保持展开。
+- **A6 位置单向**：`placement` 回答「这条消息是不是排在别的东西后面」，不回答「现在能不能派发」。下一条消息被服务端接手后（worker 已接手，或已 arm 过至少一次），挡住它的只是它自己的进展——worker 在等会话锁、被 CLI 拒绝后的退避、为它拉起的 CLI 仍在启动——时保持 `'sending'`；只有前序消息、外部回合、对话框、后台任务、停止、工作区保留、恢复操作才让它进队列。消息不会因为服务端内部的重试或冷启动在内容区和队列之间来回跳（`control.ts#ownProgress`）。
 
 ---
 
@@ -206,7 +207,7 @@ HTTP Routes (/native/send, /steer, /cancel, /send-now, /configure)
 3. **统一 `computeControlSnapshot()`**：
    - 每次状态跃迁同步重算 `SessionControlSnapshot`（`revision++`）：
      - `activeTurn` 非空时，`canStop = supportsInterrupt && supportsTargetedStop && phase !== 'stopping'`；
-     - `placement` 规则：`activeTurn === null && !held && item === nextToDispatch` → `'sending'`，其余等待项 → `'queued'`；
+     - `placement` 规则：`activeTurn === null && item === nextToDispatch && (!held || held 只是该项自己的进展)` → `'sending'`，其余等待项 → `'queued'`（A6）；
      - 每条 `InboxEntry.actions` 直接按当前状态生成：
        - `'sending'` 项：**绝不含 `'send_now'`**，仅在未过写围栏前含 `'cancel'`；
        - `'queued'` 项：仅当 `activeTurn?.canStop` 时含 `'send_now'`，仅当 `activeTurn?.canSteer` 且支持 steer 时含 `'steer'`，常规含 `'edit' | 'cancel'`；

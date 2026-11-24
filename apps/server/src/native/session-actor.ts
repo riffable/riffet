@@ -79,6 +79,8 @@ export interface SessionActorHost {
  */
 export class SessionActor {
   worker: Promise<void> | undefined;
+  /** The run the worker took up, from before the session lock is held until it lets go. */
+  private workerRunId: string | undefined;
   unsubscribeObserver: (() => void) | undefined;
   readonly nextAttempt = new Map<string, number>();
   startReservations = 0;
@@ -182,6 +184,11 @@ export class SessionActor {
 
   blocksWorkspace(): boolean {
     return this.worker !== undefined || this.startReservations > 0 || this.steerTasks.size > 0 || this.interrupting;
+  }
+
+  /** The queued run this conversation's worker is bringing in now, while it has not left `queued` yet. */
+  taken(): string | undefined {
+    return this.worker !== undefined ? this.workerRunId : undefined;
   }
 
   queue(status: NativeStatus): NativeQueue {
@@ -358,10 +365,11 @@ export class SessionActor {
     let release!: (result: Promise<void>) => void;
     const gate = new Promise<Promise<void>>(resolve => { release = resolve; });
     const work = gate.then(inner => inner).finally(() => {
-      if (this.worker === work) this.worker = undefined;
+      if (this.worker === work) { this.worker = undefined; this.workerRunId = undefined; }
       if (!this.host.closed && this.attached()) this.step();
     });
     this.worker = work;
+    this.workerRunId = runId;
     release(this.runtime.withSession(this.sessionId, () => this.execute(runId)).then(() => undefined, () => undefined));
   }
 

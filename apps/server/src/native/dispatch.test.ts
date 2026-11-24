@@ -5,6 +5,7 @@ import type { NativeDeliveryState, NativeStatus, NativeWorkbenchEvent, Session, 
 import { AppError } from '../errors.js';
 import { Store } from '../store.js';
 import { NativeDispatcher, type DispatchObservation, type NativeDispatcherBackend } from './dispatch.js';
+import { buildSessionControlSnapshot } from './control.js';
 import type { NativeBackendTraits } from '../backends/types.js';
 import { CLAUDE_TRAITS } from '../backends/claude/index.js';
 import { CODEX_TRAITS } from '../backends/codex/index.js';
@@ -328,6 +329,39 @@ describe('NativeDispatcher durable delivery', () => {
       native: { input: input('continue the task'), stage: fails ? 'prepare' : 'confirmation' },
       ...(fails ? { state: 'failed', error: 'Saved conversation could not be restored' } : {}),
     });
+  });
+
+  it('keeps a message sent to an offline session inline while only its own delivery holds it (A6)', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = store.updateSession(createSession().id, { nativeSessionId: 'saved-conversation' });
+    const run = accept(session.id, 'resume-and-send', 'continue the task');
+    const runtime = makeRuntime(), backend = new FakeNative(store), lock = deferred();
+    backend.currentStatus = { phase: 'offline' };
+    backend.argvInitialPrompt = false;
+    runtime.ensureError = new AppError('CLI_BUSY', 'Try again later', 409);
+    const locked = runtime.withSession.bind(runtime);
+    runtime.withSession = async (id, action) => { await lock.promise; return locked(id, action); };
+    const send = dispatcher(store, backend, runtime, workspace);
+    cleanups.push(() => store.close(), () => send.close());
+    const seen = () => {
+      const status = backend.status(session.id), queue = send.queue(session.id, status);
+      const entry = buildSessionControlSnapshot({ revision: 1, session: store.getSession(session.id), status, queue, taken: send.taken(session.id), runs: store.listUnfinishedNativeRuns(session.id) }).inbox.find(item => item.id === run.id);
+      return [queue.held?.reason, entry?.placement];
+    };
+    expect(seen()).toEqual([undefined, 'sending']);
+    send.kick();
+    // Its worker waits for the session lock (a resume holds it) before the run leaves `queued`.
+    await until(() => send.taken(session.id) === run.id, 'worker took the run');
+    expect(store.getRun(run.id).native?.delivery).toBe('queued');
+    expect(seen()).toEqual(['sending', 'sending']);
+    // The CLI refuses it while it comes up; the run backs off in `queued`.
+    lock.resolve();
+    await until(() => store.getRun(run.id).native?.attempt === 1 && store.getRun(run.id).native?.delivery === 'queued', 'refused and backing off');
+    expect(seen()).toEqual(['retrying', 'sending']);
+    // A second message waits behind it.
+    const later = accept(session.id, 'after-resume', 'and then this');
+    const status = backend.status(session.id);
+    expect(buildSessionControlSnapshot({ revision: 2, session: store.getSession(session.id), status, queue: send.queue(session.id, status), runs: store.listUnfinishedNativeRuns(session.id) }).inbox.find(item => item.id === later.id)?.placement).toBe('queued');
   });
 
   it.each(['running', 'cold'] as const)('sends to a %s CLI without waiting for a checkpoint that never finishes', async cli => {

@@ -37,6 +37,25 @@ describe('buildSessionControlSnapshot', () => {
     expect(snapshot.capabilities.canSendNow).toBe(false);
   });
 
+  it('keeps the next run inline while only its own delivery holds it, and docks it behind anything else (A6)', () => {
+    const fresh = { ...queued('run-1'), native: { ...queued('run-1').native!, attempt: 0 } };
+    const tried = queued('run-1');
+    const place = (run: Run, status: NativeStatus, held: NonNullable<ControlSnapshotInput['queue']['held']>, taken?: string) =>
+      snap({ status, queue: { next: run.id, held }, runs: [run], ...(taken ? { taken } : {}) }).inbox[0]!.placement;
+    const offline: NativeStatus = { phase: 'offline' };
+    const starting: NativeStatus = { phase: 'starting' };
+    // Its worker is waiting for the session lock, its refusal is backing off, the CLI it launched is starting.
+    expect(place(fresh, offline, { reason: 'sending' }, fresh.id)).toBe('sending');
+    expect(place(tried, starting, { reason: 'retrying' })).toBe('sending');
+    expect(place(tried, starting, { reason: 'turn_running' })).toBe('sending');
+    // Another run's worker, a CLI starting for nothing of ours, background work, an earlier message, a reserved workspace.
+    expect(place(fresh, offline, { reason: 'sending' }, 'run-0')).toBe('queued');
+    expect(place(fresh, starting, { reason: 'turn_running' })).toBe('queued');
+    expect(place(tried, { phase: 'starting', activity: { compacting: false, background: 1 } }, { reason: 'turn_running' })).toBe('queued');
+    expect(place(tried, starting, { reason: 'sending', runId: 'run-0' })).toBe('queued');
+    expect(place(tried, offline, { reason: 'workspace' })).toBe('queued');
+  });
+
   it('places a run behind a live turn in the queue and offers send_now, plus steer only when the turn can be steered', () => {
     const run = queued('run-q');
     const held = { next: run.id, held: { reason: 'turn_running' as const } };

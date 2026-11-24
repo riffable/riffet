@@ -25,6 +25,7 @@ verify:
 - 回合的 checkpoint 与消息同时发出，不等待它；checkpoint 只保留能证明早于回合认领时间的内容，宁可拒绝恢复也不还原回合自己的改动（`dispatch.ts#NativeDispatcher` 内的 `beforeTurn`）。
 - `SessionActor` 的处理函数不嵌套：处理一条消息期间到达的消息排在它后面。处理函数内部要应用自己读到的观测时调 `apply`，不调 `observe`，否则会被排到当前消息之后。
 - 会话所处阶段（`trace.ts#SessionPhase`）由未完结的 run 与在途操作推导，不单独存储：`runs` 表是跨重启的唯一依据。
+- 客户端看到的位置（`control.ts#placementOf`）与调度（`lane.ts#admission`）回答的是两件事：后者是「现在能不能派发」，前者是「这条消息是不是排在别的东西后面」。下一条消息被服务端接手后，挡住它的只是它自己的进展（worker 已接手在等会话锁、被 CLI 拒绝后的退避、为它拉起的 CLI 仍在 `starting`）时，它留在内容区（docs/DISPATCH-ARCHITECTURE.md A6）。不要为了改显示去改 `admission` 的 `held`：`heldByProvider` 靠不带 `runId` 的 `turn_running` 决定是否按间隔重读状态。
 - 队列只被后端状态挡住时（不是我们发起的回合、对话框），调度器按 `intervalMs` 自己再读状态（`lane.ts#heldByProvider`），不依赖后端一定会推送「空闲」。
 - 同一会话的启动、配置、发送、中断都在 `apps/server/src/agent-host/session-lock.ts#SessionLock` 下串行；修改配置要先同步 `dispatch.ts#reserveSessionStart` 再等锁（`configure.ts#configureNative`）。
 - 回收判断依赖持久化的 `reclaim.ts#UsageRecord`（agent-usage.json）：没有上次抓屏的 pane 记为 `unobserved` 并保留，在会话锁下读不到的 pane 也保留。比较前要先过 `reclaim.ts#settledScreen`，否则 spinner 与时钟让空闲规则永不触发。
@@ -47,6 +48,7 @@ verify:
 - 上一轮早已结束但后续消息卡在「等待上一条消息确认」或终端离线后不再拉起：旧的未确认 steer（`steer_stopped` 或回执超时）若未在目标回合结束时持久化 `queueReleasedAt`，CLI 在线 `idle` 时会被 `steerTurnEnded` 暂时放行，但 CLI 退出/服务重启进入 `offline` 后会重新触发 `unconfirmed` 死锁；同时 `lane.ts` 对 `queueReleasedAt` 历史记录的放行判断需允许 `offline` 状态下放行拉起终端。现已在 `session-actor.ts#SessionActor` 与 `apps/server/src/store.ts#Store` 的重启恢复中按 `isSteerTargetTurnEnded` 持久化释放，且空闲回收、终端接管、编排忙碌与删除校验均忽略已释放的历史记录。
 - 普通的 `uncertain` 消息（回执超时、CLI 退出或重启恢复）在之后已有更晚回合正常完成且 CLI 回到空闲时，不会再永久阻塞队列：调度器通过后端的 `canReleaseAfterLaterTurn`（如 Cursor 校验存在严格晚于该发送时刻的独立已完成回合、store root 一致、提示符空闲且无浏览器草稿/未决排队）自动写入 `queueReleasedAt` 释放队列，同时浏览器释放终端控制权或终端重连时也会唤醒派发器；已释放记录的迟到带标回执仍经全局事件通道纠正历史，但不再参与无标签文本回显匹配。
 - 原子替换回合（`replaceTurn` / 立即发送）必须观察到新回合回执与新 `nativeTurnId` 才可结算旧回合，否则抛 `NATIVE_STOP_UNCONFIRMED` 保持失败封闭，不会在未确认替换时把仍在运行的旧回合误标为已中断。
+- 没恢复的会话里发消息，先进内容区、跳到排队栏、恢复后又回内容区：快照的 `placement` 曾直接取 `admission` 的 `held`，worker 接手到 arm 之间的 `sending`、`CLI_BUSY` 后的 `retrying`、CLI 冷启动的 `turn_running` 都会把它算成排队。现在按 `control.ts#ownProgress` 区分；仍跳时看快照里 `held.reason` 与 `dispatch.ts#NativeDispatcher` 的 `taken`。
 - 重启被拒或一直等待：`GET /api/service/restartable`，对应 `dispatch.ts#restartability`；暂停派发是 30 s 租约（`dispatch.ts#DRAIN_LEASE_MS`），等待方不续期会自行失效。
 - 空闲 CLI 不被回收或被误回收：监控接口 `agentProcesses` 给出每个 CLI 的 `AgentRetention` 与预计停止时间；回收日志无 scope，按消息文本过滤 `riffet logs`，如 `reclaimed idle agent CLIs`、`agent reclaim pass failed`。生命周期见 docs/guide/performance.md §3.10。
 - 终端持有的会话无法发送：日志 `releasing a terminal hold failed`、`following a terminal-held conversation failed`；持有的 token 存在会话旁的 `terminal-hold:` 密钥里（`terminal-hold.ts#SECRET_PREFIX`）。

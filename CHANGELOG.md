@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- A message sent to a conversation that is still being resumed stays where it was sent until it goes in, instead of jumping into the queue above the composer and back.
 - Long agent answers and thinking are shown in full. They used to stop mid-sentence past about 32 KB, with Show all below the message footer.
 - Bare web links (`http://`, `https://`, `www.`) in sent user messages are now clickable across Web, Mac, iPhone, and Android, while keeping the rest of the message plain text.
 - Appearance plugins on the web now support full-window underlay wallpapers (with optional light/dark image pairs, `contain` fit, 9-point positioning, frosted-glass floating menus/dialogs, and adjustable card translucency) and custom SVG/raster brand logos (selectable in Settings › Theme and synced to the browser favicon); an example `tux-theme` plugin is included under `examples/plugins/tux-theme`.
