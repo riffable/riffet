@@ -31,6 +31,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Cursor conversations now use a consistent stop-then-send flow instead of direct follow-up replacement, eliminating hook deadlocks during stop/interrupt, unconfirmed turn-replacement stalls, and permanently blocked queues after an uncertain message is followed by a completed turn; releasing terminal control or reconnecting a terminal also resumes pending queue dispatch automatically.
 - Closing an image preview on the web and macOS now clears the backdrop smoothly ahead of the returning thumbnail instead of leaving a dark or frosted veil behind until the shrink finishes.
 - On the web, code citation blocks and fenced code blocks written inside a nested list now stay indented with their list item instead of resetting to column zero and breaking subsequent sub-items.
 - The count in a background browser tab now follows the sidebar's filters. It counts conversations with unread results that you can find under “Unread only”. Conversations waiting for confirmation keep their status indicators.

@@ -65,6 +65,8 @@ export class TerminalService {
   private readonly stopping = new Set<string>();
   private shuttingDown = false;
   private previousWarmupsEnded?: Promise<void>;
+  /** Fires when browser control clears or tmux reconnects on a bound native session's terminal. */
+  onSessionInputAvailable?: (sessionId: string) => void;
 
   private readonly inspector: PaneInspector;
   private readonly streams: TerminalStream;
@@ -118,6 +120,7 @@ export class TerminalService {
       killSession: id => this.killSession(id),
       resizeWindow: (id, cols, rows) => this.resizeWindow(id, cols, rows),
       behaviourFor: (kind, sessionId, backendId) => this.behaviourFor(kind, sessionId, backendId),
+      notifySessionInputAvailable: terminal => this.notifySessionInputAvailable(terminal),
     });
   }
 
@@ -459,7 +462,17 @@ export class TerminalService {
     const info = this.assertController(id, clientId, epoch);
     const updated = this.store.updateTerminal(id, { ownerId: undefined, epoch: info.epoch + 1 });
     this.streams.emit(id, { type: 'state', terminal: updated });
+    this.notifySessionInputAvailable(updated);
     return updated;
+  }
+
+  private notifySessionInputAvailable(terminal: TerminalInfo): void {
+    if (this.shuttingDown || !terminal.sessionId || !isAgentTerminal(terminal.kind)) return;
+    try {
+      const session = this.store.getSession(terminal.sessionId);
+      if (session.kind !== 'native' || session.archivedAt || session.terminalId !== terminal.id) return;
+      this.onSessionInputAvailable?.(session.id);
+    } catch { /* session was deleted or is not bound */ }
   }
 
   async interrupt(id: string): Promise<void> {

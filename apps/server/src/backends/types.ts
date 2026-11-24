@@ -612,8 +612,8 @@ export interface NativeBackendDriver {
    */
   transcript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): TranscriptSource;
   /**
-   * The provider can stop its running turn and start a new message in one step of its own (`send`
-   * with `now`), so "send now" does not have to interrupt and then send as two separate actions.
+   * The provider can replace its running turn in one step (`send` with `now`) and report the
+   * replacement's native input receipt in its own turn before returning.
    */
   readonly sendsNow?: boolean;
 
@@ -630,6 +630,8 @@ export interface NativeBackendDriver {
   requestInterrupt?(host: NativeBackendHost, session: Session): void;
   /** Read-only proof that this exact input cannot still run from a native queue or composer. */
   canReleaseInput?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, run: Run): Promise<boolean>;
+  /** Stronger proof for automatic release: a different, later native turn completed and the input cannot still run. */
+  canReleaseAfterLaterTurn?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, run: Run): Promise<boolean>;
   interrupt(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: { clearPrompt?: boolean; expectedStop?: NativeStopRequest; beforeWrite?: (allowEnded?: boolean) => void }): Promise<void>;
   /** Runs an action from the session's `runtimeControl`. */
   runtimeAction?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, request: NativeRuntimeActionRequest): Promise<void>;

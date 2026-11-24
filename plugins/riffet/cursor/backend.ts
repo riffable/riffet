@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { NativeInteractionResponse, NativeSlashItem, NativeTurnTarget } from '@contracts';
+import { samePromptText, type NativeInteractionResponse, type NativeSlashItem, type NativeTurnTarget } from '@contracts';
 import { AppError, estimatedTokens, isCliMissing, materializeNativeInput, queryDirectory, redactSensitiveText, resolveCliExecutable, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
@@ -25,7 +25,7 @@ import { CursorApiCache } from './backend/api-cache.js';
 import { CursorTranscriptSource, type CursorTranscriptSignals } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
 import { workspaceChatsDir } from './native/chat-store.js';
-import { CursorLive } from './native/live.js';
+import { CursorLive, cursorPromptAlias } from './native/live.js';
 import { nativeModelCatalogFromVariants } from './native/model-catalog.js';
 import { emptyRuntimeStats, NativeRuntimeManager } from './native/runtime.js';
 import { parseScreen, promptSettled, turnControls } from './native/screen.js';
@@ -149,8 +149,6 @@ export class CursorBackend implements AgentBackend {
    * so the search index may read a Cursor conversation nobody has opened.
    */
   readonly readOnlyHistory = true;
-  /** cursor-agent queues a prompt submitted mid-turn, and Enter on the empty bar sends it in place of the turn. */
-  readonly sendsNow = true;
   readonly launchEnv = CURSOR_LAUNCH_ENV;
   /** The key is redacted with the launch profile once there is one; before any, no Cursor terminal of this process has been launched. */
   readonly terminal: AgentTerminalBehaviour = cursorTerminalBehaviour(() => this.built?.profile ?? 'cursor-agent');
@@ -462,7 +460,7 @@ export class CursorBackend implements AgentBackend {
     if (!chatId) return;
     const runs = await host.runs.find(sessionId, { unfinished: true }).catch(() => []);
     const run = runs.find(item => item.delivery === 'dispatching' && item.intent !== 'steer');
-    if (run) receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text, sentAt });
+    if (run) await receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text, sentAt });
   }
 
   /**
@@ -476,9 +474,9 @@ export class CursorBackend implements AgentBackend {
     if (!chatId) return;
     const runs = await host.runs.find(sessionId, { unfinished: true }).catch(() => []);
     for (const run of runs) {
-      if (run.delivery !== 'uncertain' || run.stage !== 'runtime_exit' || run.nativeMessageId || run.intent === 'steer'
+      if (run.delivery !== 'uncertain' || run.stage !== 'runtime_exit' || run.nativeMessageId || run.queueReleasedAt || run.intent === 'steer'
         || run.nativeSessionId !== chatId || !run.renderedText || run.inputSentAt === undefined) continue;
-      receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text: run.renderedText, sentAt: run.inputSentAt, waitFrom: Date.now() });
+      await receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text: run.renderedText, sentAt: run.inputSentAt, waitFrom: Date.now() });
     }
   }
 
@@ -489,7 +487,7 @@ export class CursorBackend implements AgentBackend {
     const { native, port, receipts, steering } = this.parts(host, request.context.profile);
     const session = port.getSession(request.context.session.id);
     steering.noteRun(session.id, request.runId);
-    const sentAt = Date.now();
+    let sentAt = Date.now();
     const fence = async ({ terminalId, epoch, chatId }: { terminalId: string; epoch: number; chatId?: string }) => {
       const nativeSessionId = chatId ?? session.nativeSessionId;
       if (nativeSessionId) await host.setNativeSessionId(session.id, nativeSessionId);
@@ -499,20 +497,13 @@ export class CursorBackend implements AgentBackend {
         renderedText: text,
         resolvedConfig: { model: session.model, mode: session.mode, approval: session.approval },
       });
-      port.noteInputSent(request.runId);
+      sentAt = Date.now();
+      port.noteInputSent(request.runId, sentAt);
     };
-    if (request.now) {
-      const replaced = steering.activeTurn(session);
-      steering.rejectPending(session.id, 'Current task is stopping');
-      await native.deliverNow(session, text, fence, { checkTarget: () => host.checkStopTarget(session.id) });
-      const remaining = steering.activeTurn(port.getSession(session.id));
-      if (replaced && remaining?.nativeSessionId === replaced.nativeSessionId && remaining.turnId === replaced.turnId) {
-        steering.reject(session.id, 'Current task was replaced');
-      }
-    } else await native.deliver(session, text, fence);
+    await native.deliver(session, text, fence);
     // The echo in the store can be a whole answer away; the CLI taking the prompt is not.
     const chatId = port.getSession(session.id).nativeSessionId;
-    if (chatId) receipts.expect({ host, sessionId: session.id, chatId, runId: request.runId, commandId: request.commandId, text, sentAt });
+    if (chatId) await receipts.expect({ host, sessionId: session.id, chatId, runId: request.runId, commandId: request.commandId, text, sentAt });
   }
 
   /**
@@ -565,11 +556,20 @@ export class CursorBackend implements AgentBackend {
     const { native, steering, port } = this.parts(host, context.profile);
     const sessionId = context.session.id;
     const current = port.getSession(sessionId);
-    const target = steering.activeTurn(current);
+    if (options?.expectedStop) {
+      native.refreshTurnIdentity?.(current, options.expectedStop);
+      await host.checkStopTarget(sessionId);
+      const active = steering.activeTurn(port.getSession(sessionId));
+      if (active && (active.nativeSessionId !== options.expectedStop.nativeSessionId
+        || (options.expectedStop.turnId && active.turnId !== options.expectedStop.turnId))) {
+        throw new AppError('NATIVE_STOP_TARGET_CHANGED', 'The running Cursor turn already changed', 409);
+      }
+    }
+    const target = steering.activeTurn(port.getSession(sessionId));
     steering.rejectPending(sessionId, 'Current task is stopping');
-    await native.interrupt(current, {
+    await native.interrupt(port.getSession(sessionId), {
       ...(options?.clearPrompt !== undefined ? { clearPrompt: options.clearPrompt } : {}),
-      ...(options?.expectedStop ? { beforeWrite: allowEnded => host.checkStopTarget(sessionId, allowEnded) } : {}),
+      ...(options?.expectedStop ? { expectedStop: options.expectedStop, beforeWrite: allowEnded => host.checkStopTarget(sessionId, allowEnded) } : {}),
     });
     const remaining = steering.activeTurn(port.getSession(sessionId));
     if (target && remaining?.nativeSessionId === target.nativeSessionId && remaining.turnId === target.turnId) {
@@ -623,7 +623,19 @@ export class CursorBackend implements AgentBackend {
    * or an active turn. Mirrors Claude's passive `canReleaseInput` check so "Check status" can
    * offer "Continue" when an unconfirmed prompt was genuinely dropped.
    */
-  async canReleaseInput(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean> {
+  canReleaseInput(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean> {
+    return this.checkInputRelease(host, context, run, false);
+  }
+
+  /**
+   * Automatic queue recovery proof: requires both the passive idle/empty-composer proof and a
+   * later, distinct, completed Cursor turn in the same chat after `run` was sent.
+   */
+  canReleaseAfterLaterTurn(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean> {
+    return this.checkInputRelease(host, context, run, true);
+  }
+
+  private async checkInputRelease(host: AgentHost, context: AgentContext, run: AgentRunRef, requireLaterTurn: boolean): Promise<boolean> {
     try {
       const { native, steering, port, live } = this.parts(host, context.profile);
       const sessionId = context.session.id;
@@ -639,14 +651,26 @@ export class CursorBackend implements AgentBackend {
       if (steering.activeTurn(session) || port.dialogs.isResponding(terminalId)) return false;
       const liveBefore = live.read(chatId);
       if (liveBefore && !liveBefore.sealed) return false;
-      const hasOpenTurn = await host.transcript.withSource(sessionId, (source, w) =>
-        source instanceof CursorTranscriptSource ? source.hasOpenTurn(w) : true);
-      if (hasOpenTurn !== false) return false;
+      let later: { chatId: string; turnId: string } | undefined;
+      if (requireLaterTurn) {
+        const sentAt = run.inputSentAt ?? run.dispatchAt;
+        const prompt = run.renderedText ?? run.inputText;
+        const stepAt = liveBefore ? Date.parse(liveBefore.at) : Number.NaN;
+        if (!liveBefore || !liveBefore.sealed || !liveBefore.prompt || !liveBefore.turn
+          || sentAt === undefined || !Number.isFinite(stepAt) || !(stepAt > sentAt)) return false;
+        if (liveBefore.turn === run.nativeTurnId || cursorPromptAlias(liveBefore.turn) === run.nativeMessageId) return false;
+        if (prompt && samePromptText(prompt, liveBefore.prompt)) return false;
+        if (run.inputText && run.inputText !== prompt && samePromptText(run.inputText, liveBefore.prompt)) return false;
+        later = { chatId, turnId: liveBefore.turn };
+      }
+      const releasable = await host.transcript.withSource(sessionId, (source, w) =>
+        source instanceof CursorTranscriptSource ? source.canReleaseInput(w, later) : false);
+      if (releasable !== true) return false;
       const terminalView = port.findTerminal(terminalId);
       if (!terminalView || terminalView.kind !== 'cursor' || terminalView.sessionId !== session.id
         || terminalView.projectId !== session.projectId || terminalView.state === 'exited') return false;
       const terminal = await host.terminals.get(terminalId);
-      if (!terminal || terminal.state === 'exited') return false;
+      if (!terminal || terminal.state === 'exited' || (requireLaterTurn && terminal.ownerId)) return false;
       const screen = await host.terminals.screen(terminalId, { fresh: true });
       if (!screen) return false;
       const parsed = parseScreen(screen);
@@ -659,16 +683,18 @@ export class CursorBackend implements AgentBackend {
       const checked = await host.terminals.get(terminalId);
       const checkedView = port.findTerminal(terminalId);
       if (!checked || checked.epoch !== terminal.epoch || checked.state === 'exited'
+        || (requireLaterTurn && checked.ownerId)
         || !checkedView || checkedView.kind !== 'cursor' || checkedView.sessionId !== session.id
         || checkedView.projectId !== session.projectId || checkedView.state === 'exited') return false;
       const latest = port.getSession(sessionId);
       const latestStatus = this.status(host, context);
       const liveAfter = live.read(chatId);
+      if (liveAfter && !liveAfter.sealed) return false;
+      if (requireLaterTurn && (liveAfter?.step !== liveBefore?.step || liveAfter?.turn !== liveBefore?.turn)) return false;
       return !latest.archivedAt && latest.terminalId === terminalId && latest.nativeSessionId === chatId
         && latestStatus.phase === 'idle' && !latestStatus.activeTurn && !latestStatus.interaction
         && !latestStatus.activity?.background && !latestStatus.activity?.compacting
-        && !steering.activeTurn(latest) && !port.dialogs.isResponding(terminalId)
-        && !(liveAfter && !liveAfter.sealed);
+        && !steering.activeTurn(latest) && !port.dialogs.isResponding(terminalId);
     } catch { return false; }
   }
 

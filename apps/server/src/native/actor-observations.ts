@@ -336,7 +336,9 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         const session = deps.store.getSession(sessionId);
         const linkedSessionId = session.nativeSessionId;
         const expectedSessionId = current.native.nativeSessionId;
+        const eventSessionId = typeof event.data.nativeSessionId === 'string' ? event.data.nativeSessionId : undefined;
         if (expectedSessionId && linkedSessionId !== expectedSessionId) continue;
+        if (eventSessionId && ((expectedSessionId && eventSessionId !== expectedSessionId) || (linkedSessionId && eventSessionId !== linkedSessionId))) continue;
         deps.store.transitionNativeRun(current.id, [current.native.delivery], isFinished
           ? { nativeMessageId: event.nativeId }
           : {
@@ -367,8 +369,10 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
       const sent = (delivery.renderedText ?? delivery.input.text).trim();
       const afterBaseline = message.events.filter(event => event.sequence > (delivery.baselineSequence ?? Infinity));
       const matches = deps.traits(session.backendId).untaggedEcho
-        ? afterBaseline.filter(event => event.type === 'user_message_chunk'
-          && samePromptText(sent, ((event.data.content as { text?: string } | undefined)?.text ?? '').trim()))
+        ? delivery.queueReleasedAt
+          ? []
+          : afterBaseline.filter(event => event.type === 'user_message_chunk'
+            && samePromptText(sent, ((event.data.content as { text?: string } | undefined)?.text ?? '').trim()))
         : message.events.filter(event => event.type === 'user_message_chunk' && event.data.commandId === run.commandId);
       if (!delivery.nativeMessageId && matches.length === 1) {
         deps.store.transitionNativeRun(run.id, ['dispatching', 'input_sent', 'uncertain'], {

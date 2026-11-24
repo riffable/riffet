@@ -34,15 +34,16 @@ function setup(backendId: 'claude' | 'codex' | 'cursor', send: (request: NativeB
   const unread: Array<() => void> = [];
   const pumps = new Set<(message: NativeControlMessage) => void>();
   const source: TranscriptSource = { identity: () => 'chat-1', pull: async () => ({ caughtUp: true }), drain: async () => { for (const write of unread.splice(0)) write(); } };
+  let driverHost: NativeBackendHost | undefined;
   const driver = {
     id: backendId, label: backendId, traits: { claude: CLAUDE_TRAITS, codex: CODEX_TRAITS, cursor: CURSOR_TRAITS }[backendId],
     profiles: () => [{ id: 'local', backendId, name: 'Local', isDefault: true, config: {} }],
     capabilities: () => ({ supportsInitialPromptArgs: false, supportsSteer: false }),
-    status: () => status,
-    subscribe: (_host: unknown, _session: unknown, _profile: unknown, listener: (message: NativeControlMessage) => void) => { pumps.add(listener); return () => { pumps.delete(listener); }; },
+    status: (host: NativeBackendHost) => { driverHost ??= host; return status; },
+    subscribe: (host: NativeBackendHost, _session: unknown, _profile: unknown, listener: (message: NativeControlMessage) => void) => { driverHost ??= host; pumps.add(listener); return () => { pumps.delete(listener); }; },
     snapshot: async () => ({ events: [], status }),
-    transcript: () => source,
-    send: async (host: NativeBackendHost, request: NativeBackendSendRequest) => { status = { phase: 'busy' }; await send(request, writer, host); },
+    transcript: (host: NativeBackendHost) => { driverHost ??= host; return source; },
+    send: async (host: NativeBackendHost, request: NativeBackendSendRequest) => { driverHost ??= host; status = { phase: 'busy' }; await send(request, writer, host); },
   } as unknown as NativeBackendDriver;
   const service = new NativeBackendService({
     store, workspace: {} as never, terminal: { get: async () => { throw new Error('none'); }, screen: async () => undefined } as never,
@@ -56,7 +57,8 @@ function setup(backendId: 'claude' | 'codex' | 'cursor', send: (request: NativeB
   const dispatcher = () => new NativeDispatcher(store, new DispatchFeed({ service, feed, store }).backend(), runtime, { readAttachment: async () => { throw new Error('none'); } } as never, { intervalMs: 60_000 });
   const close = async () => { ingest.close(); feed.close(); await service.closeAll().catch(() => undefined); store.close(); };
   const setStatus = (next: NativeStatus) => { status = next; for (const pump of pumps) pump({ type: 'status', status: next }); };
-  return { store, session: session as Session, writer, dispatcher, close, setStatus, unread, driver };
+  const emitEvent = async (sessionId: string, event: NativeWorkbenchEvent) => { if (!driverHost) await service.transcriptSource(sessionId); driverHost!.emitEvent(sessionId, event); };
+  return { store, session: session as Session, writer, dispatcher, close, setStatus, emitEvent, unread, driver };
 }
 
 const cleanups: Array<() => unknown> = [];
@@ -362,5 +364,27 @@ describe('dispatcher fed by the journal', () => {
     send.kick();
     await waitFor(() => expect(env.store.getRun(run.id).native).toMatchObject({ delivery: 'observed', nativeMessageId: '7:0', nativeTurnId: 'req-2' }));
     expect(env.store.getRun(run.id).native?.baselineSequence).toBe(2);
+  });
+
+  it('delivers late provider receipts for a released run even after its live watch closes', async () => {
+    const env = setup('cursor', () => undefined);
+    cleanups.push(env.close);
+    const run = env.store.acceptNativeRun(env.session.id, 'cmd-released', input('old prompt'), { mode: 'agent' }, 0);
+    env.store.transitionNativeRun(run.id, ['queued'], {
+      delivery: 'uncertain', stage: 'confirmation', backendId: 'cursor', nativeSessionId: 'chat-1',
+      queueReleasedAt: at(1), baselineSequence: 0,
+    }, { state: 'interrupted' });
+    const send = env.dispatcher();
+    cleanups.push(() => send.close());
+    send.kick();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await env.emitEvent(env.session.id, {
+      sequence: 0, sessionId: env.session.id, nativeId: 'cursor-prompt:req-late', runId: run.id, nativeTurnId: 'req-late',
+      type: 'native_input_receipt', data: { commandId: 'cmd-released', content: { type: 'text', text: 'old prompt' } }, createdAt: at(2),
+    });
+    await waitFor(() => expect(env.store.getRun(run.id)).toMatchObject({
+      state: 'interrupted',
+      native: { delivery: 'observed', nativeMessageId: 'cursor-prompt:req-late', nativeTurnId: 'req-late', queueReleasedAt: at(1) },
+    }));
   });
 });

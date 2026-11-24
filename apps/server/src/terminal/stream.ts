@@ -45,6 +45,7 @@ export interface TerminalStreamDeps {
   killSession(id: string): Promise<void>;
   resizeWindow(id: string, cols: number, rows: number): Promise<void>;
   behaviourFor(kind: TerminalInfo['kind'], sessionId: string | undefined, backendId: NativeBackendId | undefined): TerminalBehaviour | undefined;
+  notifySessionInputAvailable(terminal: TerminalInfo): void;
 }
 
 export class TerminalStream {
@@ -235,6 +236,7 @@ export class TerminalStream {
     const updated = this.deps.store.updateTerminal(info.id, { state: 'running', ownerId: undefined, epoch: current.epoch + 1 });
     this.reportLinkedTerminal(updated, true);
     this.emit(info.id, { type: 'state', terminal: updated });
+    if (current.state === 'detached' || current.ownerId) this.deps.notifySessionInputAvailable(updated);
     this.seedViewers(info.id, this.deps.listeners.get(info.id) ?? []);
     if (!this.deps.listeners.has(info.id)) {
       setTimeout(() => this.restoreBackgroundSize(info.id), BACKGROUND_RESIZE_DELAY_MS).unref?.();
