@@ -410,11 +410,6 @@ msgstr "Close"
 msgid "关闭{title}"
 msgstr "Close {title}"
 
-#. placeholder {0}: terminal.title
-#: src/app/use-terminal-actions.ts
-msgid "关闭「{0}」？"
-msgstr "Close \"{0}\"?"
-
 #: src/app/Sidebar.tsx
 msgid "关闭侧边栏"
 msgstr "Close sidebar"
@@ -434,6 +429,10 @@ msgstr "Close tab"
 #: src/app/tabs/TabBar.tsx
 msgid "关闭标签后仍在后台运行"
 msgstr "Keeps running in the background after the tab closes"
+
+#: src/app/use-terminal-actions.ts
+msgid "关闭终端？"
+msgstr "Close terminal?"
 
 #: src/app/SessionInfo.tsx
 msgid "其余 {hidden} 个"
@@ -1908,6 +1907,10 @@ msgstr "Cancelling"
 msgid "正在同步"
 msgstr "Syncing"
 
+#: src/app/use-terminal-actions.ts
+msgid "正在运行的命令会被结束。"
+msgstr "The running command will be ended."
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "此配置在当前客户端不可用"
 msgstr "This configuration is unavailable in this client"
@@ -2241,10 +2244,6 @@ msgstr "Terminal"
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "终端不会带上 Riffet 中配置的模型接口和密钥。"
 msgstr "The terminal won't use the model endpoint and keys configured in Riffet."
-
-#: src/app/use-terminal-actions.ts
-msgid "终端中的进程会被结束。"
-msgstr "Processes in the terminal will be ended."
 
 #: src/app/ImportSessionDialog.tsx
 msgid "终端会话"

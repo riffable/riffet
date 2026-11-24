@@ -209,6 +209,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     ui.switchSession(panelSession.current, selectedSessionId);
     panelSession.current = selectedSessionId;
   }, [selectedSessionId, ui]);
+  // The shell dock follows the project, not the conversation; swapped before paint like the panel.
+  const dockProject = useRef(selectedProjectId);
+  useLayoutEffect(() => {
+    if (dockProject.current === selectedProjectId) return;
+    ui.switchProject(dockProject.current, selectedProjectId);
+    dockProject.current = selectedProjectId;
+  }, [selectedProjectId, ui]);
   useEffect(() => { if (loaded) ui.keepSessionPanels(new Set(sessions.map((item) => item.id))); }, [loaded, sessions, ui]);
   const homeServerOptions = useHomeServerOptions();
   /** Only set when the reader picked a linked server that has no registered projects yet. */
@@ -443,7 +450,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       if (view) { ui.set({ panelTab: view.id }); ui.setPanelOpen(true); }
     });
   }, [projects, viewCatalog, selectProject, ui]);
-  const { createShell, closeTerminal } = useTerminalActions();
+  const { createShell, openShell, closeTerminal } = useTerminalActions();
 
   // Stable, so the memoized sidebar rows and pages are not re-rendered by the shell's own renders.
   const onSessionAction = useCallback((target: Session, action: SessionAction) => handlers.sessionAction(target, action), [handlers]);
@@ -841,7 +848,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onOpenDirectory={(path) => void startSessionInDirectory(path)}
         onCreateWorktree={project && !project.system ? () => void startIsolatedDirectory() : undefined}
         isolating={creatingWorktree}
-        onOpenShell={() => void createShell()}
+        onOpenShell={() => void openShell()}
         onAttemptsStarted={onAttemptsStarted}
         onOpenAttemptGroup={(group) => nav.openAttemptsGroup(group.id)}
         onSelectSession={selectSession}

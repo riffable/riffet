@@ -151,6 +151,11 @@ export function createUiStore() {
    * drops its entry, so this never outgrows the session list.
    */
   const panelBySession = new Map<string, string>();
+  /**
+   * Shells belong to a project, so the dock does too: it stays across that project's conversations
+   * and comes back, on the same tab, when the reader returns. Closing the dock drops the entry.
+   */
+  const dockByProject = new Map<string, string>();
   store.subscribe(() => {
     const { panelFloating, panelFrame } = store.get();
     const next = panelFloating || panelFrame ? JSON.stringify({ floating: panelFloating, frame: panelFrame }) : '';
@@ -193,6 +198,13 @@ export function createUiStore() {
       }
       const tab = phone() ? undefined : panelBySession.get(next);
       store.set(tab ? { panelOpen: true, panelTab: tab } : { panelOpen: false });
+    },
+    /** Leaving a project stores its dock; the project entered shows its own, closed if never opened. */
+    switchProject(previous: string, next: string) {
+      const { dockOpen, selectedTerminalId } = store.get();
+      if (dockOpen) dockByProject.set(previous, selectedTerminalId); else dockByProject.delete(previous);
+      const tab = phone() ? undefined : dockByProject.get(next);
+      store.set(tab === undefined ? { dockOpen: false } : { dockOpen: true, selectedTerminalId: tab });
     },
     /** Drops the panels of conversations that no longer exist. */
     keepSessionPanels(live: ReadonlySet<string>) {

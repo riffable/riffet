@@ -671,6 +671,13 @@ describe('protocol 4 binary framing and OuterTerminalState resilience', () => {
     expect(state.mode(2004)).toBe(true);
     expect(state.paneTitle).toBe('nvim app.ts');
     expect(state.cwd).toBe('/Users/dev/my repo');
+    // OSC 133 boundaries decide whether closing a shell asks first; a split sequence still counts.
+    expect(state.commandRunning).toBeUndefined();
+    state.accept('\u001b]133;C\u0007sleep');
+    expect(state.commandRunning).toBe(true);
+    state.accept('\u001b]133;D;0\u0007\u001b]13');
+    state.accept('3;A\u0007$ ');
+    expect(state.commandRunning).toBe(false);
   });
 });
 

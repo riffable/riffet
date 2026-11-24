@@ -13,6 +13,11 @@ export interface TerminalInfo {
   foregroundCommand?: string;
   /** Dynamic title set by the running program (OSC 0/2 or tmux `pane_title`). */
   paneTitle?: string;
+  /**
+   * A shell's shell integration (OSC 133) reports a command started at the prompt that has not
+   * finished. Absent until the shell reports a boundary, so a shell without integration stays unknown.
+   */
+  commandRunning?: boolean;
 }
 /** The live grid's dimensions and one-based row positions. Blank cells do not count as content. */
 export interface TerminalGridDiagnostics {

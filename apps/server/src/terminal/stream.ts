@@ -258,11 +258,13 @@ export class TerminalStream {
     runtime.output.append(data);
     const prevCwd = runtime.modes.cwd;
     const prevTitle = runtime.modes.paneTitle;
+    const prevRunning = runtime.modes.commandRunning;
     runtime.modes.accept(data);
-    if (runtime.modes.cwd !== prevCwd || runtime.modes.paneTitle !== prevTitle) {
+    if (runtime.modes.cwd !== prevCwd || runtime.modes.paneTitle !== prevTitle || runtime.modes.commandRunning !== prevRunning) {
       this.updateMetadata(id, {
         ...(runtime.modes.cwd !== prevCwd ? { cwd: runtime.modes.cwd } : {}),
         ...(runtime.modes.paneTitle !== prevTitle ? { paneTitle: runtime.modes.paneTitle } : {}),
+        ...(runtime.modes.commandRunning !== prevRunning ? { commandRunning: runtime.modes.commandRunning } : {}),
       });
     }
     if (runtime.behaviour?.ready && !runtime.agentReady) runtime.agentReady = runtime.behaviour.ready(stripTerminalSequences(runtime.output.tail(16 * 1024)));
@@ -394,7 +396,7 @@ export class TerminalStream {
     } catch { return {}; }
   }
 
-  private updateMetadata(id: string, patch: { cwd?: string; foregroundCommand?: string; paneTitle?: string }): void {
+  private updateMetadata(id: string, patch: { cwd?: string; foregroundCommand?: string; paneTitle?: string; commandRunning?: boolean }): void {
     if (this.deps.isShuttingDown()) return;
     const current = this.deps.store.findTerminal(id);
     if (!current || current.state === 'exited') return;
@@ -402,6 +404,7 @@ export class TerminalStream {
     if (patch.cwd && patch.cwd !== current.cwd) nextPatch.cwd = patch.cwd;
     if (patch.foregroundCommand && patch.foregroundCommand !== current.foregroundCommand) nextPatch.foregroundCommand = patch.foregroundCommand;
     if (patch.paneTitle && patch.paneTitle !== current.paneTitle) nextPatch.paneTitle = patch.paneTitle;
+    if (patch.commandRunning !== undefined && patch.commandRunning !== current.commandRunning) nextPatch.commandRunning = patch.commandRunning;
     if (!Object.keys(nextPatch).length) return;
     const updated = this.deps.store.updateTerminal(id, nextPatch);
     this.emit(id, { type: 'state', terminal: updated });

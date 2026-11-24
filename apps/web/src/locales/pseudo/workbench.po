@@ -410,11 +410,6 @@ msgstr ""
 msgid "关闭{title}"
 msgstr ""
 
-#. placeholder {0}: terminal.title
-#: src/app/use-terminal-actions.ts
-msgid "关闭「{0}」？"
-msgstr ""
-
 #: src/app/Sidebar.tsx
 msgid "关闭侧边栏"
 msgstr ""
@@ -433,6 +428,10 @@ msgstr ""
 
 #: src/app/tabs/TabBar.tsx
 msgid "关闭标签后仍在后台运行"
+msgstr ""
+
+#: src/app/use-terminal-actions.ts
+msgid "关闭终端？"
 msgstr ""
 
 #: src/app/SessionInfo.tsx
@@ -1908,6 +1907,10 @@ msgstr ""
 msgid "正在同步"
 msgstr ""
 
+#: src/app/use-terminal-actions.ts
+msgid "正在运行的命令会被结束。"
+msgstr ""
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "此配置在当前客户端不可用"
 msgstr ""
@@ -2240,10 +2243,6 @@ msgstr ""
 
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "终端不会带上 Riffet 中配置的模型接口和密钥。"
-msgstr ""
-
-#: src/app/use-terminal-actions.ts
-msgid "终端中的进程会被结束。"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx

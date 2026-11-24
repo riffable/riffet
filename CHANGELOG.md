@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The Web shell terminal at the bottom works more like an IDE's: closed or exited shells no longer come back as tabs, tabs show a close button on hover and close on middle click, and each tab names the current folder. The status line and the "⋯" menu above the terminal (control, reconnect, interrupt) are gone; search with ⌘F and interrupt with Ctrl+C. Closing asks for confirmation only while a command is still running. "Shell terminal" on the new-session page opens the panel when shells already exist instead of starting another one every time. The terminal panel follows the project: it stays open across that project's conversations, and switching to another project shows that project's own terminals instead of an empty panel.
 - A message sent to a conversation that is still being resumed stays where it was sent until it goes in, instead of jumping into the queue above the composer and back.
 - Editing a queued message on the web moves it into the composer in one smooth motion: the area above the composer no longer drops and springs back, and the message no longer flashes into the conversation.
 - Long agent answers and thinking are shown in full. They used to stop mid-sentence past about 32 KB, with Show all below the message footer.

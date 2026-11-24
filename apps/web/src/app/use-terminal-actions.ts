@@ -44,14 +44,34 @@ export function useTerminalActions() {
     }
   }, [lists, nav, ui, upsertTerminal, t]);
 
+  /** The new-session card: show the dock's shells if it is hidden, otherwise start another one. */
+  const openShell = useCallback(async () => {
+    const projectId = nav.get().projectId;
+    const existing = lists.get().terminals.some((terminal) => !terminal.sessionId && isShellTerminal(terminal) && terminal.projectId === projectId && terminal.state !== 'exited');
+    if (existing && !ui.get().dockOpen) { ui.setDockOpen(true); return; }
+    await createShell();
+  }, [createShell, lists, nav, ui]);
+
+  /**
+   * A shell waiting at its prompt closes at once, like an IDE's. A running command, or a shell that
+   * never reported its prompt (no shell integration), asks first. The server's copy is read because a
+   * tab not on screen gets no live updates.
+   */
   const closeTerminal = useCallback(async (terminal: TerminalInfo) => {
-    const ok = await confirmDialog({ title: t`关闭「${terminal.title}」？`, description: t`终端中的进程会被结束。`, confirmLabel: t`关闭`, destructive: true });
-    if (!ok) return;
+    const current = await api.getTerminal(terminal.id).catch(() => terminal);
+    if (current.commandRunning !== false) {
+      const ok = await confirmDialog({ title: t`关闭终端？`, description: t`正在运行的命令会被结束。`, confirmLabel: t`关闭`, destructive: true });
+      if (!ok) return;
+    }
     try {
       await api.deleteTerminal(terminal.id);
+      // Closing the last shell hides the dock here, before the list empties, so the dock never reads
+      // it as a stale tab to replace with a fresh shell.
+      const others = lists.get().terminals.some((item) => item.id !== terminal.id && !item.sessionId && isShellTerminal(item) && item.projectId === terminal.projectId && item.state !== 'exited');
+      if (!others) ui.setDockOpen(false);
       lists.removeTerminal(terminal.id);
     } catch (error) { toast.error(errorMessage(error, t`无法关闭终端`)); }
-  }, [lists, t]);
+  }, [lists, t, ui]);
 
-  return { createShell, closeTerminal };
+  return { createShell, openShell, closeTerminal };
 }

@@ -1120,6 +1120,12 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
             <div ref={hostRef} className="h-full w-full" />
           </div>
         </div>
+        {/* Without the toolbar, only states that need the reader's patience surface, over the grid. */}
+        {!toolbar && !searchOpen && (connection === 'reconnecting' || uploading) && (
+          <span role="status" className={cn('pointer-events-none absolute right-3 top-2 inline-flex h-7 items-center justify-center gap-1.5 rounded-full bg-elevated text-xs text-fg-2 shadow-md', connection === 'reconnecting' ? 'px-3' : 'w-7')}>
+            <Spinner className="size-3.5" />{connection === 'reconnecting' && connectionLabel}
+          </span>
+        )}
         {!atBottom && (
           <button type="button" onClick={backToLive} className="absolute bottom-3 left-1/2 inline-flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-full bg-elevated px-3.5 text-xs text-fg-2 shadow-md">
             <IconArrowDown className="size-3.5" /><Trans>回到实时</Trans>

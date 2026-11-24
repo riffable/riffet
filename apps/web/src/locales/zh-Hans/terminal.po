@@ -120,8 +120,8 @@ msgid "停止任务"
 msgstr "停止任务"
 
 #: src/app/terminal/TerminalDock.tsx
-msgid "关闭分屏"
-msgstr "关闭分屏"
+msgid "关闭{label}"
+msgstr "关闭{label}"
 
 #: src/app/terminal/TerminalSearchBar.tsx
 msgctxt "terminal-search"
@@ -229,10 +229,6 @@ msgstr "左"
 #: src/app/terminal/NativeSession.tsx
 msgid "已交接给 {successorAgentLabel}，在新会话中继续。"
 msgstr "已交接给 {successorAgentLabel}，在新会话中继续。"
-
-#: src/app/terminal/TerminalDock.tsx
-msgid "已停止"
-msgstr "已停止"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "已删除的会话"

@@ -3,9 +3,9 @@ import { TERMINAL_BUDGET } from '../../../../packages/contracts/src/index.js';
 /**
  * What a program's own output set, read from a raw byte stream: the private modes and cursor shape
  * tmux has no format variable for (bracketed paste, focus reporting, DECSCUSR), OSC 0/2/7 metadata
- * (title and cwd), and the SGR pen for history tails. A seed takes these from here; everything tmux
- * does state comes from its formats. Whatever was set before the stream was first observed reads as
- * its default.
+ * (title and cwd), OSC 133 command boundaries, and the SGR pen for history tails. A seed takes these
+ * from here; everything tmux does state comes from its formats. Whatever was set before the stream
+ * was first observed reads as its default.
  */
 export class OuterTerminalState {
   private pending = '';
@@ -17,6 +17,8 @@ export class OuterTerminalState {
   paneTitle?: string;
   /** The last working directory from OSC 7 (`file://host/path`), if observed on the raw stream. */
   cwd?: string;
+  /** Between OSC 133 `C` (command output starts) and the next `D` or `A`, if observed on the raw stream. */
+  commandRunning?: boolean;
 
   mode(mode: number): boolean { return this.modes.get(mode) === true; }
 
@@ -76,6 +78,10 @@ export class OuterTerminalState {
     } else if (code === '7') {
       const parsed = parseOsc7Path(value);
       if (parsed) this.cwd = parsed;
+    } else if (code === '133') {
+      const mark = value.charAt(0);
+      if (mark === 'C') this.commandRunning = true;
+      else if (mark === 'A' || mark === 'D') this.commandRunning = false;
     }
   }
 

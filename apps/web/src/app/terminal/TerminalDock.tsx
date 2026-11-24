@@ -29,6 +29,14 @@ interface Props {
 }
 
 const EMPTY_PROFILES: TerminalProfile[] = [];
+/**
+ * The folder the shell is in. A prompt's own title (`user@host: ~/path`) repeats on every tab, so it
+ * only reaches the tooltip; tmux's foreground command is read once per attach and goes stale.
+ */
+function shellTabLabel(terminal: TerminalInfo): string {
+  const folder = terminal.cwd?.replace(/\/+$/, '').split('/').pop();
+  return folder || terminal.paneTitle || terminal.title;
+}
 
 export function TerminalDock({
   terminals, profiles = EMPTY_PROFILES, selectedId, height, onHeightChange, onSelect, onCreate, onHide, onChanged, onClose, onError, fullscreen = false,
@@ -107,27 +115,46 @@ export function TerminalDock({
       <div className={cn('flex h-9 shrink-0 items-center gap-1 edge-b px-2', fullscreen && 'h-12 px-2.5')}>
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
           {terminals.map((terminal) => {
-            const label = terminal.paneTitle || terminal.foregroundCommand || terminal.title;
-            const tooltip = terminal.cwd ? `${label} — ${terminal.cwd}` : label;
+            const label = shellTabLabel(terminal);
+            const tooltip = [terminal.paneTitle, terminal.cwd].filter(Boolean).join(' — ') || label;
             const isPrimary = terminal.id === active?.id;
             const isSplit = terminal.id === splitTerminal?.id;
             return (
-              <button
+              <div
                 key={terminal.id}
-                type="button"
-                onClick={() => onSelect(terminal.id)}
-                title={tooltip}
+                data-active={isPrimary}
+                onMouseDown={(event) => { if (event.button === 1) event.preventDefault(); }}
+                onAuxClick={(event) => { if (event.button === 1) { event.preventDefault(); onClose(terminal); } }}
                 className={cn(
-                  'flex h-7 max-w-48 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg no-hover:h-11',
-                  fullscreen && 'h-10 px-2.5',
+                  'group/tab flex h-7 max-w-48 shrink-0 items-center rounded-md text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg no-hover:h-11',
+                  fullscreen && 'h-10',
                   isPrimary && 'bg-active text-fg',
                   !isPrimary && isSplit && 'bg-hover/70 text-fg-2',
                 )}
               >
-                <IconTerminal className="size-3.5 shrink-0" />
-                <span className="truncate">{label}</span>
-                {terminal.state !== 'running' && <span className="size-1.5 shrink-0 rounded-full bg-fg-4" aria-label={t`已停止`} />}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onSelect(terminal.id)}
+                  title={tooltip}
+                  aria-current={isPrimary || undefined}
+                  className={cn('flex h-full min-w-0 items-center gap-1.5 rounded-md pl-2 pr-1 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus', fullscreen && 'pl-2.5')}
+                >
+                  <IconTerminal className="size-3.5 shrink-0" />
+                  <span className="truncate">{label}</span>
+                </button>
+                {/* The slot keeps its width while the button is hidden, so a tab does not change width
+                    under the pointer. Touch has no hover: only the current tab has the button, at 44. */}
+                <span className="mr-1 grid size-5 shrink-0 place-items-center no-hover:mr-0 no-hover:size-auto">
+                  <button
+                    type="button"
+                    aria-label={t`关闭${label}`}
+                    onClick={() => onClose(terminal)}
+                    className="hidden size-5 place-items-center rounded-md text-fg-3 outline-none hover:bg-active hover:text-fg focus-visible:ring-2 focus-visible:ring-focus group-focus-within/tab:grid group-hover/tab:grid group-data-[active=true]/tab:grid no-hover:size-11"
+                  >
+                    <IconX className="size-3" />
+                  </button>
+                </span>
+              </div>
             );
           })}
           <Tip label={t`新建终端`}><Button size="icon-xs" variant="quiet" aria-label={t`新建终端`} className={cn('no-hover:size-11', fullscreen && 'size-10')} onClick={() => void onCreate()}><IconPlus /></Button></Tip>
@@ -174,14 +201,9 @@ export function TerminalDock({
                 key={terminal.id}
                 terminal={terminal}
                 active={visible}
-                showTitle={Boolean(splitTerminal)}
+                toolbar={false}
                 autoFocus={isPrimary && !fullscreen}
                 className={cn(!visible && 'hidden', isSplit && 'edge-l')}
-                actions={isSplit ? (
-                  <Tip label={t`关闭分屏`}>
-                    <Button size="icon-xs" variant="quiet" aria-label={t`关闭分屏`} onClick={() => setSplitId(null)}><IconX /></Button>
-                  </Tip>
-                ) : undefined}
                 onChanged={onChanged}
                 onClose={onClose}
                 onError={onError}

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Collapse } from '@/components/ui/collapse';
@@ -160,7 +160,28 @@ export function DockHost({ mode, show, onCreate, onChanged, onClose, onError }: 
   const terminals = useLists((state) => state.terminals);
   const profiles = useSettings((state) => state.terminal?.profiles);
   const localProfiles = serverOfObject(projectId) ? undefined : profiles;
-  const shell = useMemo(() => terminals.filter((terminal) => !terminal.sessionId && isShellTerminal(terminal) && terminal.projectId === projectId), [terminals, projectId]);
+  // An exited shell has nothing left to show, so its tab goes, as in an IDE.
+  const shell = useMemo(() => terminals.filter((terminal) => !terminal.sessionId && isShellTerminal(terminal) && terminal.projectId === projectId && terminal.state !== 'exited'), [terminals, projectId]);
+  // Opening the dock always shows a shell, so the panel is never an empty strip. Only the transition
+  // acts: a dock restored open on load is left alone.
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const opened = open && !wasOpen.current;
+    wasOpen.current = open;
+    if (show && opened && shell.length === 0) void onCreate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the open transition creates
+  }, [open]);
+  // When the last tab goes, a shell that was live ended (closed or `exit`), so the dock hides, as an
+  // IDE's does. Tabs that were never live here (left detached by a server restart and found exited on
+  // reconnect) give way to a fresh shell instead, or opening the dock would show nothing.
+  const lastShells = useRef({ projectId, shells: shell });
+  useEffect(() => {
+    const previous = lastShells.current;
+    lastShells.current = { projectId, shells: shell };
+    if (!show || !open || shell.length > 0 || previous.projectId !== projectId || previous.shells.length === 0) return;
+    if (previous.shells.some((terminal) => terminal.state === 'running')) ui.setDockOpen(false);
+    else void onCreate();
+  }, [onCreate, open, projectId, shell, show, ui]);
   if (!show) return null;
   const dock = (fullscreen: boolean) => (
     // The fallback already stands at the dock's height, so the first open grows once instead of
