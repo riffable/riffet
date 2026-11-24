@@ -1,6 +1,6 @@
 import type { CapturedSessionReference, NativeActivity, NativeJob, ReasoningChannel, Run, TaskNotificationResult, TaskNotificationStatus, UserAttachment, WorkbenchEvent, TimelineRow } from '../../contracts/src/index.js';
 import type { ProjectedEvent } from './projectEvents.js';
-import { isRecord } from './values.js';
+import { isRecord, pixelEdge, records, str } from './values.js';
 
 /*
  * The rows a conversation's events fold into, and the few event readers every fold needs. What is
@@ -37,6 +37,25 @@ export function chunkText(event: WorkbenchEvent): string {
   const content = event.data.content;
   if (isRecord(content) && typeof content.text === 'string') return content.text;
   return typeof event.data.text === 'string' ? event.data.text : '';
+}
+
+/** Upload order comes from the submitted Run. A CLI may echo only some files, a path or a label.
+ * Only a matching upload id ties native metadata to a submitted file. */
+export function messageAttachments(event: WorkbenchEvent, uploadIds?: readonly string[]): UserAttachment[] {
+  const raw = isRecord(event.raw) ? event.raw : undefined;
+  const attachments = records(event.data.attachments ?? raw?.attachments).flatMap((item): UserAttachment[] => {
+    const id = str(item.id);
+    const path = str(item.path);
+    const name = str(item.name) ?? (path ? path.slice(path.lastIndexOf('/') + 1) || path : id);
+    if (!name) return [];
+    const type = item.type === 'image' || item.type === 'file' ? item.type : undefined;
+    const mimeType = str(item.mimeType);
+    const width = pixelEdge(item.width);
+    const height = pixelEdge(item.height);
+    return [{ name, ...(id ? { id } : {}), ...(path ? { path } : {}), ...(type ? { type } : {}), ...(mimeType ? { mimeType } : {}), ...(width && height ? { width, height } : {}) }];
+  });
+  if (!uploadIds?.length) return attachments;
+  return uploadIds.map(id => attachments.find(attachment => attachment.id === id) ?? { id, name: id });
 }
 
 export function timelineItemTime(item: TimelineItem): string {

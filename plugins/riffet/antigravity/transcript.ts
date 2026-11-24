@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { NativeJob, NativeWorkbenchEvent } from '@riffet/contracts';
+import type { NativeJob, NativeWorkbenchEvent, TaskNotificationStatus } from '@riffet/contracts';
 import { activityEvent, clipDetail, toolImageContent } from '@riffet/plugin-api/kit';
 import {
   type AgentHistory, type AgentHost, type AgentLaneWriter, type AgentTranscriptSource, type AgentTurnStatus, type AgentUsageRecord,
@@ -54,10 +54,34 @@ function toolKind(name: string): string {
   if (/write|edit|create|delete|move/.test(name)) return 'edit';
   return 'other';
 }
+function hiddenSystemMessage(system: AgyRecord | undefined): boolean {
+  return system?.renderInfo?.hidden === true || system?.agentMessage?.hideFromUser === true;
+}
+function hiddenError(message: AgyRecord | undefined): boolean {
+  return message?.shouldShowUser === false || (message?.shouldShowModel === true && message.shouldShowUser !== true);
+}
+function noticeStatus(step: AgyRecord): TaskNotificationStatus {
+  const status = text(step.status) ?? '';
+  if (/_(?:CANCELED|INTERRUPTED)$/.test(status)) return 'cancelled';
+  if (step.errorMessage || step.error || /_(?:ERROR|INVALID)$/.test(status)) return 'failed';
+  if (status.endsWith('_DONE')) return 'completed';
+  if (/_(?:PENDING|RUNNING|GENERATING|WAITING|QUEUED)$/.test(status)) return 'running';
+  return 'unknown';
+}
+function userError(step: AgyRecord): string | undefined {
+  const message = step.errorMessage;
+  if (hiddenError(message)) return;
+  const nested = record(message?.error), top = record(step.error);
+  const user = text(nested.userErrorMessage) || text(top.userErrorMessage);
+  if (user || message?.shouldShowUser !== true) return user;
+  return text(nested.shortError) || text(top.shortError) || text(nested.fullError) || text(top.fullError);
+}
 function resultText(step: AgyRecord): string {
+  if (agyRecord(step.errorMessage)) return userError(step) ?? '';
   const e = record(step.error);
-  const failure = text(e.userErrorMessage) ?? text(e.shortError) ?? text(e.fullError) ?? text(e.modelErrorMessage);
+  const failure = text(e.userErrorMessage) || text(e.shortError) || text(e.fullError);
   if (failure) return failure;
+  if (agyRecord(step.notifyUser)) return text(step.notifyUser.notificationContent) ?? '';
   const generic = record(record(step.generic).result),
     command = record(step.runCommand),
     output = command.combinedOutput;
@@ -177,7 +201,24 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
         `agy:tool:${id}:call`,
       );
     };
-    if (agyRecord(step.userInput)) {
+    const notice = (title: string | undefined, detail: string | undefined) => {
+      const label = title?.trim() || detail?.trim();
+      if (!label) return;
+      const heading = clipDetail(label, 120);
+      event('notice', 'task_notification', {
+        kind: 'provider', status: noticeStatus(step), title: heading,
+        ...(detail && detail !== heading ? { detail: clipDetail(detail) } : {}),
+      }, settled(step), `antigravity:${baseId}:notice`);
+    };
+    if (agyRecord(step.systemMessage)) {
+      // Only agy's presentation fields are for the reader. The message itself is a model-context envelope.
+      const render = record(step.systemMessage.renderInfo);
+      if (hiddenSystemMessage(step.systemMessage)) return;
+      const blocks = Array.isArray(render.contentBlocks) ? render.contentBlocks.map(b => text(record(b).markdown)).filter(Boolean) : [];
+      notice(text(render.title), blocks.length ? blocks.join('\n\n') : text(render.markdown));
+    } else if (agyRecord(step.ephemeralMessage)) {
+      return;
+    } else if (agyRecord(step.userInput)) {
       const user = step.userInput,
         body = text(user.userResponse) ?? (Array.isArray(user.items) ? user.items.map(i => text(record(i).text) ?? '').join('\n') : '');
       if (turn && body) turn.text = body;
@@ -264,7 +305,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
         const exitCode = record(step.runCommand).exitCode;
         const failed =
           /_(?:ERROR|CANCELED|INTERRUPTED)$/.test(text(step.status) ?? '') ||
-          !!step.error ||
+          !!step.error || !!step.errorMessage ||
           (typeof exitCode === 'number' && exitCode !== 0);
         const result = resultText(step),
           images = record(step.mcpTool).images ?? record(record(step.generic).result).media;
@@ -350,48 +391,12 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
         noteOrder(activity.nativeId);
         if (settled(step)) out.events.push(activity);
         else out.drafts.push({ finalId: activity.nativeId, event: activity });
+      } else if (step.errorMessage || step.error) {
+        notice(undefined, userError(step));
+      } else if (agyRecord(step.notifyUser)) {
+        notice(undefined, text(step.notifyUser.notificationContent));
       } else {
-        const system = text(record(step.systemMessage).message) ?? text(record(step.ephemeralMessage).content);
-        const err = record(record(step.errorMessage).error ?? step.error);
-        const message = system ?? text(err.userErrorMessage) ?? text(err.shortError) ?? text(err.fullError);
-        if (message) {
-          // Local native notices are visible activities and never masquerade as model responses.
-          const activity = activityEvent(
-            sessionId,
-            {
-              id: `antigravity:${baseId}:notice`,
-              kind: 'local_command',
-              status: step.errorMessage || step.error ? 'failed' : 'completed',
-              title: clipDetail(message, 120),
-              detail: clipDetail(message),
-              startedAt: createdAt,
-            },
-            { createdAt, ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}) },
-          );
-          noteOrder(activity.nativeId);
-          out.events.push(activity);
-        } else {
-          const kind = text(step.type) ?? String(index);
-          out.warnings.push(`Unmapped Antigravity step ${kind}.`);
-          // Keep a visible placeholder when a native format grows a new non-tool payload.
-          const activity = activityEvent(
-            sessionId,
-            {
-              id: `antigravity:${baseId}:notice`,
-              kind: 'local_command',
-              status: settled(step)
-                ? /_(?:ERROR|CANCELED|INTERRUPTED)$/.test(text(step.status) ?? '')
-                  ? 'failed'
-                  : 'completed'
-                : 'unknown',
-              title: kind.replace(/^CORTEX_STEP_TYPE_/, ''),
-              startedAt: createdAt,
-            },
-            { createdAt, ...(turnId ? { runId: turnId, nativeTurnId: turnId } : {}) },
-          );
-          noteOrder(activity.nativeId);
-          out.events.push(activity);
-        }
+        out.warnings.push(`Unmapped Antigravity step ${text(step.type) ?? index}.`);
       }
     }
   });
@@ -632,6 +637,9 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
             ...p,
             ...s,
             metadata: md,
+            // A partial stream frame must not publish a message the stored copy explicitly hides.
+            ...(hiddenSystemMessage(p.systemMessage) ? { systemMessage: p.systemMessage } : {}),
+            ...(hiddenError(p.errorMessage) ? { errorMessage: p.errorMessage } : {}),
             ...(agyRecord(s.plannerResponse) ? { plannerResponse: { ...record(p.plannerResponse), ...s.plannerResponse } } : {}),
           };
         }),

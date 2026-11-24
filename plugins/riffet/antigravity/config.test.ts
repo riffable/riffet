@@ -153,6 +153,20 @@ describe('Antigravity private launch configuration', () => {
     expect(await readFile(join(f.source, 'antigravity-cli', 'settings.json'), 'utf8')).toBe(original);
     expect(process.env.HOME).toBeTruthy();
   });
+  it('enables the terminal sandbox for a Sandbox launch and restores the native setting on later launches', async () => {
+    const f = await fixture();
+    await f.put('antigravity-cli/settings.json', { enableTerminalSandbox: false, permissions: { ask: ['command(git push)'] } });
+    for (const approval of ['proceed-in-sandbox', 'auto-review', 'request-review']) {
+      const launch = await prepareAgySession({ ...f.input(), mode: 'agent', approval });
+      const settings = JSON.parse(await readFile(launch.settingsPath, 'utf8'));
+      expect(settings).toMatchObject({
+        agentMode: '',
+        toolPermission: approval === 'request-review' ? 'request-review' : 'proceed-in-sandbox',
+        enableTerminalSandbox: approval !== 'request-review',
+        permissions: { ask: ['command(git push)'] },
+      });
+    }
+  });
   it('refuses linked state, linked customizations and external discovery references', async () => {
     const f = await fixture();
     await f.put('config/rules/rule.md', 'rule');

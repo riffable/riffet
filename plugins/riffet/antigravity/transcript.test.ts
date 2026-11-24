@@ -161,6 +161,10 @@ it('uses executor outcomes and real call IDs without treating handled tool failu
   expect(m.turns[0].status).toBeUndefined();
   expect(m.events.filter(e => e.type === 'tool_call')).toHaveLength(1);
   expect(m.events.find(e => e.type === 'tool_call_update')?.data).toMatchObject({ toolCallId: 'call-real', status: 'failed' });
+  s.steps[2].error = { modelErrorMessage: 'Internal retry instructions' };
+  const result = mapAgySnapshot(s).events.find(e => e.type === 'tool_call_update')!;
+  expect(result.data.status).toBe('failed');
+  expect(JSON.stringify(result.data.content)).not.toContain('Internal retry instructions');
   s.executors = [{ executionId: 'run-a', lastStepIdx: 2, terminationReason: 'EXECUTOR_TERMINATION_REASON_USER_CANCELED' }];
   expect(mapAgySnapshot(s).turns[0].status).toBe('cancelled');
   s.executors[0].terminationReason = 'EXECUTOR_TERMINATION_REASON_ERROR';
@@ -214,15 +218,60 @@ it('rebuilds when a step is inserted ahead of existing steps and commits in snap
   await reader.pull(w as unknown as AgentLaneWriter, signal);
   expect(rebuilds).toBe(0);
 
-  // Insert an orphan notice between turn 1's user input and planner response (ahead of an existing step).
+  // Insert a user-facing notice before a previously committed planner response.
   s.steps.splice(1, 0, {
     type: 'CORTEX_STEP_TYPE_SYSTEM_MESSAGE',
     status: 'CORTEX_STEP_STATUS_DONE',
     metadata: { createdAt: '2026-11-13T00:00:00Z', sourceTrajectoryStepInfo: { trajectoryId: tid, stepIndex: 99, cascadeId: cid } },
-    systemMessage: { message: 'Injected notice' },
+    systemMessage: { message: 'For the model', renderInfo: { title: 'Review ready', markdown: 'Open the review.' } },
   });
   await reader.pull(w as unknown as AgentLaneWriter, signal);
   expect(rebuilds).toBe(1);
   const committedIds = batches.flatMap(b => (b.events ?? []).map((e: any) => e.nativeId));
   expect(committedIds).toEqual(mapAgySnapshot(s).order);
+});
+
+it('projects only user-facing notices and retires an already published system envelope on replay', async () => {
+  const s = snapshot();
+  const internal = '[Message] sender=system content=[Notice] Previous background tasks stopped';
+  const presentation = { title: 'Review ready', contentBlocks: [{ markdown: 'Open the review.' }] };
+  s.steps[0].userInput.userResponse = internal; // A user can quote the exact same text.
+  const step = (payload: Record<string, unknown>) => ({
+    status: 'CORTEX_STEP_STATUS_DONE', metadata: md('run-a', s.steps.length), ...payload,
+  });
+  s.steps.push(step({ systemMessage: { message: internal, renderInfo: { ...presentation, hidden: true } } }));
+  const publishedId = `antigravity:${agyStepIdentity(s, s.steps[2], 2)}:notice`;
+  s.steps.push(step({ systemMessage: { message: internal, renderInfo: presentation, agentMessage: { hideFromUser: true } } }));
+  s.steps.push(step({ systemMessage: { message: internal } }));
+  s.steps.push(step({ systemMessage: { message: internal, renderInfo: { showOnError: true } } }));
+  s.steps.push(step({ ephemeralMessage: { content: internal } }));
+  s.steps.push(step({ type: 'CORTEX_STEP_TYPE_NEW_INTERNAL_STEP' }));
+  s.steps.push(step({ systemMessage: { message: internal, renderInfo: presentation } }));
+  s.steps.push(step({ notifyUser: { notificationContent: 'Ready for feedback.' } }));
+  s.steps.push(step({ status: 'CORTEX_STEP_STATUS_WAITING', notifyUser: { notificationContent: 'Review pending.' } }));
+  s.steps.push(step({ status: 'CORTEX_STEP_STATUS_CANCELED', notifyUser: { notificationContent: 'Review withdrawn.' } }));
+  s.steps.push(step({ errorMessage: { shouldShowModel: true, error: {} }, error: { userErrorMessage: internal } }));
+  s.steps.push(step({ errorMessage: { shouldShowUser: true, error: { shortError: 'Diagnostics' } }, error: { userErrorMessage: 'Reconnect to continue.' } }));
+
+  const mapped = mapAgySnapshot(s);
+  expect(mapped.events[0].data.content).toEqual({ type: 'text', text: internal });
+  expect(mapped.events.slice(1).map(e => [e.type, e.data.title, e.data.detail, e.data.status])).toEqual([
+    ['task_notification', 'Review ready', 'Open the review.', 'completed'],
+    ['task_notification', 'Ready for feedback.', undefined, 'completed'],
+    ['task_notification', 'Review withdrawn.', undefined, 'cancelled'],
+    ['task_notification', 'Reconnect to continue.', undefined, 'failed'],
+  ]);
+  expect(mapped.drafts.filter(d => d.event.type === 'task_notification').map(d => d.event.data.status)).toEqual(['running']);
+  expect(mapped.warnings).toEqual(['Unmapped Antigravity step CORTEX_STEP_TYPE_NEW_INTERNAL_STEP.']);
+
+  const f = writer(), reader = source(() => s), signal = new AbortController().signal;
+  // Older versions persisted the hidden step as a local_command activity.
+  f.w.commit({ events: [], cursor: JSON.stringify({
+    version: 1, conversationId: cid, events: [[publishedId, 'old-digest']], drafts: [], turns: [], children: [],
+  }) });
+  await reader.pull(f.w, signal);
+  expect(f.batches.flatMap(b => b.retire ?? [])).toEqual([publishedId]);
+  const count = f.batches.length;
+  await reader.pull(f.w, signal);
+  expect(f.batches).toHaveLength(count);
 });

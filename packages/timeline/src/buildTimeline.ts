@@ -1,7 +1,7 @@
 import { samePromptText, type NativeJob, type NativeWorkbenchEvent, type ReasoningChannel, type Run, type TaskNotificationResult, type TaskNotificationStatus, type UserAttachment, type WorkbenchEvent } from '../../contracts/src/index.js';
-import { chunkText, nativeSourceIds, timelineItemTime, type TimelineItem } from './model.js';
+import { chunkText, messageAttachments, nativeSourceIds, timelineItemTime, type TimelineItem } from './model.js';
 import { activityOf, messagePhase, type ProjectedEvent } from './projectEvents.js';
-import { isRecord, pixelEdge, records, str, taskReportDetail } from './values.js';
+import { isRecord, records, str, taskReportDetail } from './values.js';
 import { describeFailure } from './failures.js';
 
 function imageSource(event: WorkbenchEvent): string | undefined {
@@ -48,14 +48,17 @@ function sameTimelineItem(left: TimelineItem | undefined, right: TimelineItem): 
  * recorded qualifies — a queued or preparing run has not been delivered — and only the latest
  * dispatch that precedes the receipt, so a repeated prompt consumes one run each.
  */
-function unconfirmedNativeRun(runs: Run[], stored: string, createdAt: string | undefined, echoed: Set<string>): Run | undefined {
-  const receiptAt = createdAt ? Date.parse(createdAt) : Number.NaN;
+function unconfirmedNativeRun({ runs, nativeChatId }: TimelineContext, stored: string, event: ProjectedEvent, echoed: Set<string>): Run | undefined {
+  const receiptAt = Date.parse(event.createdAt);
   const samePrompt = (sent: string) => samePromptText(sent, stored);
+  let receiptUploadIds: string[] | undefined;
   let match: Run | undefined;
   let matchAt = Number.NEGATIVE_INFINITY;
   for (const run of runs) {
     const native = run.native;
     if (!native || native.intent === 'steer' || native.nativeMessageId || echoed.has(run.id)) continue;
+    const chat = runChatId(native);
+    if (nativeChatId && chat && chat !== nativeChatId) continue;
     if (native.delivery === 'queued' || native.delivery === 'preparing') continue;
     if (!samePrompt(native.renderedText ?? run.prompt)) continue;
     const dispatchedAt = native.timings?.dispatchAt ?? Date.parse(run.createdAt);
@@ -63,6 +66,9 @@ function unconfirmedNativeRun(runs: Run[], stored: string, createdAt: string | u
     // The stored receipt's stamp is coarse — observed up to a minute *before* the dispatch it
     // belongs to — so the window is generous on both sides while still refusing an old submission.
     if (Number.isFinite(receiptAt) && (receiptAt < dispatchedAt - 120_000 || receiptAt > dispatchedAt + 600_000)) continue;
+    // CLI paths, labels and data URLs cannot identify an upload. A Riffet upload id on the receipt can rule out a same-text send.
+    receiptUploadIds ??= messageAttachments(event).flatMap(({ id }) => id && /^[a-f0-9-]{36}$/i.test(id) ? [id] : []);
+    if (receiptUploadIds.some(id => !native.input.attachmentIds.includes(id))) continue;
     if (dispatchedAt > matchAt) { matchAt = dispatchedAt; match = run; }
   }
   return match;
@@ -294,19 +300,7 @@ function eventRow(event: ProjectedEvent, index: number, context: TimelineContext
         && (run.native.intent !== 'steer' || run.native.nativeTurnId === (event as Partial<NativeWorkbenchEvent>).nativeTurnId));
       const run = event.type === 'native_input_receipt' ? commandRun ?? nativeRun : nativeRun ?? commandRun ?? (sourceIds.length ? undefined : event.runId ? runById.get(event.runId) : marker >= 0
         ? fileReferenceRuns.get(text.slice(0, marker).trimEnd())
-        : undefined) ?? unconfirmedNativeRun(runs, marker >= 0 ? text.slice(0, marker).trimEnd() : text, event.createdAt, pass.echoedRuns);
-      const raw = isRecord(event.raw) ? event.raw : undefined;
-      const attachments = records(event.data.attachments ?? raw?.attachments).flatMap((item): UserAttachment[] => {
-        const path = str(item.path);
-        const name = str(item.name) ?? (path ? path.slice(path.lastIndexOf('/') + 1) || path : undefined);
-        if (!name) return [];
-        const id = str(item.id);
-        const type = item.type === 'image' || item.type === 'file' ? item.type : undefined;
-        const mimeType = str(item.mimeType);
-        const width = pixelEdge(item.width);
-        const height = pixelEdge(item.height);
-        return [{ name, ...(id ? { id } : {}), ...(path ? { path } : {}), ...(type ? { type } : {}), ...(mimeType ? { mimeType } : {}), ...(width && height ? { width, height } : {}) }];
-      });
+        : undefined) ?? unconfirmedNativeRun(context, marker >= 0 ? text.slice(0, marker).trimEnd() : text, event, pass.echoedRuns);
       // A queue receipt names a command, not an execution. Its source run id cannot claim a
       // different submission when its command identity did not resolve.
       const runKey = run?.id ?? (event.type !== 'native_input_receipt' ? event.runId : undefined);
@@ -315,16 +309,9 @@ function eventRow(event: ProjectedEvent, index: number, context: TimelineContext
       const turnKey = runKey && !pass.seenRunIds.has(runKey) ? (run ? userRowKey(run, key) : `user:${runKey}`) : key;
       if (runKey) claim(pass, pass.seenRunIds, runKey, index);
       const itemText = run?.prompt ?? text;
-      const fallbackAttachments = run?.native?.input.attachmentIds.map((id) => ({ id, name: id })) ?? [];
-      // A CLI can record only the files it materialised, while the Run keeps every upload id. When
-      // native metadata has a path without an id, keep the Run's complete list and borrow metadata
-      // only where the same id appears; pairing by position could attach the wrong file.
-      const hasNativePath = attachments.some((attachment) => attachment.path && !attachment.id);
-      const rowAttachments = fallbackAttachments.length && hasNativePath
-        ? fallbackAttachments.map((fallback) => attachments.find((attachment) => attachment.id === fallback.id) ?? fallback)
-        : attachments.length ? attachments : fallbackAttachments;
+      const attachments = messageAttachments(event, run?.native?.input.attachmentIds);
       if (!text.trim() && !attachments.length) return undefined;
-      const item = reuse({ kind: 'user', key: turnKey, text: itemText, event, attachments: rowAttachments, ...(run ? { run } : {}) });
+      const item = reuse({ kind: 'user', key: turnKey, text: itemText, event, attachments, ...(run ? { run } : {}) });
       if (runKey) claim(pass, pass.echoedRuns, runKey, index);
       if (!run?.native) claim(pass, pass.echoedPrompts, itemText, index);
       return item;
