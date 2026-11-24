@@ -188,7 +188,7 @@ export class FakeLaneWriter implements AgentLaneWriter {
     }
     this.lanes.append(this.key, inputs, { cursor: batch.cursor });
     const last = [...batch.events, ...(batch.drafts ?? []).map(draft => draft.event)].findLast(event => event.nativeTurnId)?.nativeTurnId;
-    if (last && !batch.reproject) this.turn = last;
+    if (last && !batch.reproject && !batch.ended) this.turn = last;
   }
 
   canReproject(event: NativeWorkbenchEvent): boolean {
@@ -225,6 +225,10 @@ export class FakeLaneWriter implements AgentLaneWriter {
     if (status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'interrupted') {
       return { status, at: ended.at, ...(typeof error === 'string' ? { error } : {}) };
     }
+  }
+
+  transaction(task: () => void): void {
+    task();
   }
 
   turnReopened(turnId: string, at: string, cursor?: string): void {

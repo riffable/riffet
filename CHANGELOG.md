@@ -42,6 +42,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Cursor shell commands that time out into the background now pick up their terminal log file reliably (tracking completion promptly instead of spinning until a later notification) and `<task>` notifications no longer append `output_path:` onto the task title or command.
 - Tool groups across Web, Mac, iOS, and Android now fold automatically once subsequent prose, delegation, or an answer follows, without being held open by a background or unsettled command inside the group (unless manually opened or a row inside is expanded).
 - Sending a message (especially with an attachment or right after resuming an idle Cursor conversation) no longer drops the prompt or gets stuck on "Unable to confirm whether this was sent" when the CLI is briefly busy; custom "Other" question answers, Antigravity submits, and image-only Claude Code messages also confirm and retry Enter reliably.
+- Stopping an active Cursor turn no longer wipes out already-streamed thinking and tool calls while Cursor's transcript finishes flushing to disk; the rows stay visible in place and settle smoothly once persisted.
 
 ## 0.10.0 - 2026-11-22
 

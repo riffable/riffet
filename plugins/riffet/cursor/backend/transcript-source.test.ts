@@ -579,4 +579,172 @@ describe('Cursor transcript source', () => {
     expect(visible.map(row => row.nativeId)).toEqual(['2:0', '3:0', '3:1', '4:0', '5:0']);
     checkSession(lanes);
   });
+
+  it('preserves pending drafts in place across interrupted stop and reconciles delayed store flush without reopening', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-stop-kept-'));
+    dirs.push(dir);
+    const pendingStep: ChatMessage = {
+      role: 'assistant',
+      content: [
+        { type: 'reasoning', text: 'Inspecting the failing checks.' },
+        { type: 'tool-call', toolCallId: 'c1', toolName: 'Shell', args: { command: 'pnpm test' } },
+        { type: 'tool-call', toolCallId: 'c2', toolName: 'Read', args: { path: 'src/a.ts' } },
+      ],
+    };
+    const base = [...SYSTEM, ask('can we ignore these errors', 'req-1')];
+    writeChat(dir, 'chat-1', { messages: base, pending: pendingStep });
+    const { lanes, writer } = openLanes();
+    const source = () => new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's', tailState: () => 'live' });
+    await catchUp(source(), writer);
+    const gen1 = writer.generation;
+    expect(rowsOf(lanes).filter(row => row.kind === 'draft').map(row => row.nativeId)).toEqual(['3:0', '3:1', '3:2']);
+
+    // Control path settles Stop before store.db commits the interrupted step: drafts are promoted in place.
+    const stopAt = '2026-11-24T04:26:53.419Z';
+    expect(await source().settleTurnEnd(writer, { turnId: 'req-1', status: 'interrupted', at: stopAt })).toBe(true);
+    expect(writer.turnEndStatus('req-1')).toBe('interrupted');
+    expect(['3:0', '3:1', '3:2'].map(id => writer.entity(id)?.kind)).toEqual(['agent_thought_chunk', 'tool_call', 'tool_call']);
+    expect(['3:0', '3:1', '3:2'].map(id => writer.entity(id)?.turnId)).toEqual(['req-1', 'req-1', 'req-1']);
+    checkSession(lanes);
+
+    // Re-reading before store.db flushes writes nothing and never re-drafts into req-1.
+    const afterStop = snapshot(lanes);
+    await catchUp(source(), writer);
+    assertUnchanged(afterStop, snapshot(lanes), 're-reading interrupted turn before delayed store flush');
+
+    // 8.8s later store.db commits the interrupted assistant step and its failed tool results.
+    const finalMessages = [...base, pendingStep, result('c1', 'Shell', 'Aborted'), result('c2', 'Read', 'Aborted')];
+    writeChat(dir, 'chat-1', { messages: finalMessages });
+    await catchUp(source(), writer);
+    expect(writer.generation).toBe(gen1);
+    // Truthful turn_ended: no fake turnReopened or duplicate meta.turn_ended revisions.
+    expect(turnEnds(lanes)).toEqual([['req-1', 'interrupted']]);
+    expect(rowsOf(lanes).filter(row => row.nativeId === 'meta:turn:req-1:ended')).toHaveLength(1);
+    checkSession(lanes);
+
+    // Visible entities match a fresh cold import of the same store.db (no duplicates, no phantom turn).
+    const cold = openLanes();
+    const coldSource = new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's' });
+    await catchUp(coldSource, cold.writer);
+    await coldSource.endTurn(cold.writer, { turnId: 'req-1', status: 'interrupted', at: stopAt });
+    expect(visibleLanes(lanes)).toEqual(visibleLanes(cold.lanes));
+  });
+
+  it('never reopens a failed turn or overwrites refined error diagnostics when delayed store rows flush', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-failed-kept-'));
+    dirs.push(dir);
+    const pendingStep: ChatMessage = {
+      role: 'assistant',
+      content: [
+        { type: 'reasoning', text: 'Calling tool.' },
+        { type: 'tool-call', toolCallId: 'c1', toolName: 'Shell', args: { command: 'build' } },
+      ],
+    };
+    const base = [...SYSTEM, ask('build it', 'req-1')];
+    writeChat(dir, 'chat-1', { messages: base, pending: pendingStep });
+    const { lanes, writer } = openLanes();
+    const source = () => new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's', tailState: () => 'live' });
+    await catchUp(source(), writer);
+
+    const stopAt = '2026-11-24T04:26:53.000Z';
+    const error = 'Network Error: Unable to connect';
+    expect(await source().settleTurnEnd(writer, { turnId: 'req-1', status: 'failed', at: stopAt })).toBe(true);
+    // Settled footer refines the failure diagnostic before store.db flushes.
+    expect(await source().endTurn(writer, { turnId: 'req-1', status: 'failed', at: '2026-11-24T04:26:56.000Z', error })).toBe(true);
+    expect(writer.turnEnd('req-1')).toEqual({ status: 'failed', at: stopAt, error });
+
+    writeChat(dir, 'chat-1', { messages: [...base, pendingStep, result('c1', 'Shell', 'Failed')] });
+    await catchUp(source(), writer);
+    expect(writer.turnEnd('req-1')).toEqual({ status: 'failed', at: stopAt, error });
+    expect(rowsOf(lanes).filter(row => row.nativeId === 'meta:turn:req-1:ended' && row.kind === 'tombstone')).toEqual([]);
+    checkSession(lanes);
+  });
+
+  it('survives a server restart between delayed assistant commit and trailing aborted tool results', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-stop-split-'));
+    dirs.push(dir);
+    const pendingStep: ChatMessage = {
+      role: 'assistant',
+      content: [
+        { type: 'reasoning', text: 'Checking logs.' },
+        { type: 'tool-call', toolCallId: 'c1', toolName: 'Shell', args: { command: 'rg err' } },
+      ],
+    };
+    const base = [...SYSTEM, ask('check logs', 'req-1')];
+    writeChat(dir, 'chat-1', { messages: base, pending: pendingStep });
+    const { lanes, writer } = openLanes();
+    const source = () => new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's', tailState: () => 'live' });
+    await catchUp(source(), writer);
+    const gen1 = writer.generation;
+
+    const stopAt = '2026-11-24T04:26:53.419Z';
+    expect(await source().settleTurnEnd(writer, { turnId: 'req-1', status: 'interrupted', at: stopAt })).toBe(true);
+
+    // First flush: only the assistant step lands.
+    writeChat(dir, 'chat-1', { messages: [...base, pendingStep] });
+    await catchUp(source(), writer);
+    expect(writer.generation).toBe(gen1);
+    expect(turnEnds(lanes)).toEqual([['req-1', 'interrupted']]);
+    checkSession(lanes);
+
+    // Restart server, then trailing Aborted tool results + next turn arrive.
+    const restarted = FakeLaneWriter.open(lanes);
+    writeChat(dir, 'chat-1', { messages: [...base, pendingStep, result('c1', 'Shell', 'Aborted'), ask('next', 'req-2'), say('Done.')] });
+    await catchUp(source(), restarted);
+    expect(restarted.generation).toBe(gen1);
+    expect(turnEnds(lanes)).toEqual([['req-1', 'interrupted']]);
+    expect(restarted.turnEndStatus('req-2')).toBeUndefined();
+    expect(rowsOf(lanes).filter(row => row.kind === 'tool_call_update').map(row => row.turnId)).toEqual(['req-1']);
+    checkSession(lanes, { openLastTurn: true });
+  });
+
+  it('rebuilds cleanly without inverting turn order if store.db drops an interrupted draft and reuses its slot', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-stop-dropped-'));
+    dirs.push(dir);
+    const pendingStep: ChatMessage = { role: 'assistant', content: [{ type: 'reasoning', text: 'Halfway.' }] };
+    const base = [...SYSTEM, ask('first turn', 'req-1')];
+    writeChat(dir, 'chat-1', { messages: base, pending: pendingStep });
+    const { lanes, writer } = openLanes();
+    const source = () => new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's', tailState: () => 'live' });
+    await catchUp(source(), writer);
+    const gen1 = writer.generation;
+
+    expect(await source().settleTurnEnd(writer, { turnId: 'req-1', status: 'interrupted', at: '2026-11-24T04:26:53.419Z' })).toBe(true);
+    expect(writer.entity('3:0')?.kind).toBe('agent_thought_chunk');
+
+    // Cursor discards the interrupted step and writes turn 2's prompt directly at slot 3.
+    writeChat(dir, 'chat-1', { messages: [...base, ask('second turn', 'req-2'), say('Answer.')] });
+    await catchUp(source(), writer);
+    expect(writer.generation).not.toBe(gen1);
+    const visible = rowsOf(lanes).filter(row => !row.kind.startsWith('meta.') && row.kind !== 'tombstone' && row.kind !== 'draft');
+    expect(visible.map(row => [row.nativeId, row.turnId])).toEqual([
+      ['2:0', 'req-1'],
+      ['3:0', 'req-2'],
+      ['4:0', 'req-2'],
+    ]);
+    checkSession(lanes, { openLastTurn: true });
+  });
+
+  it('preserves a live-tap draft in place when the CLI exits mid-step', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-live-exit-'));
+    dirs.push(dir);
+    const base = [...SYSTEM, ask('explain', 'req-1')];
+    writeChat(dir, 'chat-1', { messages: base });
+    let state: 'live' | 'exited' = 'live';
+    const live: CursorLiveStep = { turn: 'req-1', at: '2026-11-24T04:26:00.000Z', step: 's1', sealed: false, parts: [{ type: 'reasoning', text: 'Working...' }, { type: 'text', text: 'Partial answer' }] };
+    const source = () => new CursorTranscriptSource({
+      chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's',
+      tailState: () => state, live: { read: () => live, watch: () => () => {} },
+    });
+    const { lanes, writer } = openLanes();
+    await catchUp(source(), writer);
+    expect(rowsOf(lanes).filter(row => row.kind === 'draft').map(row => row.nativeId)).toEqual(['3:0', '3:1']);
+
+    state = 'exited';
+    await catchUp(source(), writer);
+    expect(turnEnds(lanes)).toEqual([['req-1', 'interrupted']]);
+    expect(writer.entity('3:0')?.kind).toBe('agent_thought_chunk');
+    expect(writer.entity('3:1')?.kind).toBe('agent_message_chunk');
+    checkSession(lanes);
+  });
 });

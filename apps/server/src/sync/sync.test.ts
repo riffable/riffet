@@ -541,4 +541,85 @@ describe('sync v3 stream', () => {
     app.auth.revokeDevice(device.device.id);
     await waitFor(() => expect(stream.ended).toBe(true));
   });
+
+  it('lets a transcript source settle external turn ends atomically so in-flight drafts never blank on stop', async () => {
+    const dir = await stateDir();
+    const native = new NativeTranscript();
+    const app = await boot(dir, native);
+    const sessionId = newSession(app, dir);
+
+    let phase: 'draft' | 'committed' = 'draft';
+    let settledCalls = 0;
+    let drainCalls = 0;
+    const listeners = new Set<() => void>();
+    const draftSource: TranscriptSource = {
+      identity: () => 'conv-draft',
+      watch: (_w, wake) => { listeners.add(wake); return () => { listeners.delete(wake); }; },
+      async pull(w) { this.sync(w); return { caughtUp: true }; },
+      async drain(w) { drainCalls += 1; this.sync(w); },
+      async settleTurnEnd(w, end) {
+        settledCalls += 1;
+        if (end.turnId !== 't1' || w.cursor !== 'draft') return false;
+        w.transaction(() => {
+          w.commit({
+            events: [{ sequence: 0, sessionId, nativeId: 'a-t1', nativeTurnId: 't1', type: 'agent_thought_chunk', data: { content: { type: 'text', text: 'Inspecting errors' } }, createdAt: stamp(1) }],
+            cursor: 'kept',
+          });
+          w.turnEnded('t1', end.status, end.at, end.error);
+        });
+        return true;
+      },
+      sync(w: LaneWriter) {
+        if (w.cursor === null) {
+          w.commit({
+            events: [{ sequence: 0, sessionId, nativeId: 'u-t1', nativeTurnId: 't1', type: 'user_message_chunk', data: { content: { type: 'text', text: 'question t1' } }, createdAt: stamp(0) }],
+            drafts: [{ finalId: 'a-t1', event: { sequence: 0, sessionId, nativeId: 'a-t1', nativeTurnId: 't1', type: 'agent_thought_chunk', data: { content: { type: 'text', text: 'Inspecting errors' } }, createdAt: stamp(1) } }],
+            cursor: 'draft',
+          });
+        } else if (phase === 'committed' && w.cursor === 'kept') {
+          w.commit({
+            events: [{ sequence: 0, sessionId, nativeId: 'a-t1', nativeTurnId: 't1', type: 'agent_thought_chunk', data: { content: { type: 'text', text: 'Inspecting errors' } }, createdAt: stamp(1) }],
+            cursor: 'committed',
+            ended: true,
+          });
+        }
+      },
+    } as TranscriptSource & { sync(w: LaneWriter): void };
+
+    vi.spyOn(app.nativeBackends, 'transcriptSource').mockImplementation(() => draftSource);
+    const stream = app.open(sessionId);
+    await waitFor(() => expect(holds(apply(stream.frames), 'Inspecting errors')).toBe(true));
+    const thoughtKey = [...apply(stream.frames).values()].find(row => row.kind === 'thought')?.key;
+    expect(thoughtKey).toBeDefined();
+
+    // Stop settles via TranscriptIngest.endTurn: client keeps the exact same row key and never sees a blank frame.
+    const beforeStop = stream.frames.length;
+    await app.ingest.endTurn(sessionId, 't1', 'interrupted', stamp(2));
+    expect(settledCalls).toBe(1);
+    await waitFor(() => expect(app.timeline.outline(sessionId, 'main')?.turns[0]?.status).toBe('interrupted'));
+    expect(holds(apply(stream.frames), 'Inspecting errors')).toBe(true);
+    expect([...apply(stream.frames).values()].find(row => row.kind === 'thought')?.key).toBe(thoughtKey);
+    for (let i = beforeStop; i <= stream.frames.length; i += 1) {
+      expect(holds(apply(stream.frames.slice(0, i)), 'Inspecting errors')).toBe(true);
+    }
+
+    // Re-ending an already-ended turn does not trigger a redundant drain.
+    await app.ingest.endTurn(sessionId, 't1', 'interrupted', stamp(2));
+    expect(settledCalls).toBe(2);
+    expect(drainCalls).toBe(0);
+
+    // Delayed commit reconciles in place without a reset frame, row-key swap, or turnReopened.
+    phase = 'committed';
+    for (const wake of listeners) wake();
+    await waitFor(() => expect(app.store.journal.peek(sessionId)?.ingestCursor).toBe('committed'));
+    expect(of(stream.frames, 'reset')).toEqual([]);
+    expect([...apply(stream.frames).values()].find(row => row.kind === 'thought')?.key).toBe(thoughtKey);
+    expectSameRows(app, sessionId, apply(stream.frames));
+
+    // Unhandled turnId falls back to drain + direct turnEnded.
+    await app.ingest.endTurn(sessionId, 't-fallback', 'interrupted', stamp(3));
+    expect(settledCalls).toBe(3);
+    expect(drainCalls).toBe(1);
+    expect(app.store.journal.entity(sessionId, 'meta:turn:t-fallback:ended')?.kind).toBe('meta.turn_ended');
+  });
 });

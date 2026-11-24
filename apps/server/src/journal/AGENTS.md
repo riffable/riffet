@@ -2,6 +2,7 @@
 module: server.journal
 verify:
   - npx vitest run apps/server/src/journal
+  - npx vitest run apps/server/src/sync/pipeline-contract.test.ts
 co-change:
   - when: ingest.ts#eventOrder
     with:
@@ -11,6 +12,11 @@ co-change:
     with:
       - apps/server/src/timeline/service.ts#TimelineService
     reason: rebuild 先清空日志再异步重导，TimelineService 需配合延迟折叠与多步 pendingReset 避免客户端闪现空快照
+  - when: ingest.ts#TranscriptSource
+    with:
+      - packages/plugin-api/src/agent.ts#AgentTranscriptSource
+      - apps/server/src/backends/plugin-backend.ts#PluginLaneSource
+    reason: 核心与插件共用转写源接口（含 settleTurnEnd / transaction / ended），增改字段须同步三处
 ---
 
 ## 职责

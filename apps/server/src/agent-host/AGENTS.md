@@ -36,4 +36,4 @@ verify:
 - 应答返回 `NATIVE_INTERACTION_STALE`：画面在两次读取之间变了，看 `interactions.ts#NativeInteractions` 里 id 与 revision 的复核；先同步再重试是预期行为。
 - 对话框没有出现在客户端：对该终端的画面跑 `interaction-screen.ts#parseDialog`，多半是边框后残留内容或页脚没被排除。
 - Cursor 批准卡缺失：`interaction-choice.ts#cursorApprovalNeedsHistory` 为真时要读 scrollback 才能还原标题，由 `NativeInteractionsOptions` 的 `recoverCursorApprovals` 控制。
-- 同一会话的操作互相卡住：`session-lock.ts#SessionLock` 的 `settled` 可以等当前队列结束；锁没有超时，长时间持锁的操作要自己有截止。
+- 同一会话的操作互相卡住：`session-lock.ts#SessionLock` 的 `settled` 可以等当前队列结束；锁没有超时，长时间持锁的操作要自己有截止。重入判断必须同时匹配 `sessionId` 和 `active` 并在入栈前滤掉已关闭的作用域，否则从外层锁内派生的异步链路重新加锁并重入时会命中旧的失效作用域而自死锁。

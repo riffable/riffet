@@ -142,8 +142,11 @@ export class TranscriptIngest {
    */
   endTurn(sessionId: string, turnId: string, status: TurnEndStatus, at: string, error?: string): Promise<void> {
     return this.control(sessionId, async (source, w) => {
-      await source.drain(w);
       const target = (w.scratch ?? w) as JournalLaneWriter;
+      if (source.settleTurnEnd) {
+        if (await source.settleTurnEnd(w, { turnId, status, at, error }) || hasTurnEnded(this.deps.journal, target.key, turnId)) return;
+      }
+      await source.drain(w);
       if (!hasTurnEnded(this.deps.journal, target.key, turnId)) target.turnEnded(turnId, status, at, error);
     }).then(() => undefined);
   }

@@ -2,6 +2,12 @@
 module: server.sync
 verify:
   - npx vitest run apps/server/src/sync
+co-change:
+  - when: ingest.ts#TranscriptIngest
+    with:
+      - apps/server/src/journal/ingest.ts#TranscriptSource
+      - apps/server/src/backends/plugin-backend.ts#PluginLaneSource
+    reason: endTurn 经 TranscriptSource.settleTurnEnd 保持单一写入方（D2），改动外部结束逻辑须同步插件适配器与跨层读链路校验
 ---
 
 ## 职责
