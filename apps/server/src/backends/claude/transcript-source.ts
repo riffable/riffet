@@ -266,6 +266,10 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     await this.children(w, metas, Infinity);
   }
 
+  async settleTurnEnd(w: LaneWriter, end: { turnId: string; status: TurnEndStatus; at: string; error?: string }): Promise<boolean> {
+    return (await this.endTurn(w, end.status, end.at, end.turnId, end.error)) !== undefined;
+  }
+
   /**
    * Ends the turn rows go to, for the control path when the transcript will not (the CLI took a prompt back
    * without a row): reads what is on disk first (G6), and records the end in the cursor so a row read later
@@ -273,16 +277,18 @@ export class ClaudeTranscriptSource implements TranscriptSource {
    * is open, which only a caller that knows nothing will write to it may want (a CLI that is gone ends its
    * turn through `exited` instead). A lane nothing was read into has no turn to end. Returns the turn ended.
    */
-  async endTurn(w: LaneWriter, status: TurnEndStatus, at: string, promptId?: string): Promise<string | undefined> {
+  async endTurn(w: LaneWriter, status: TurnEndStatus, at: string, promptId?: string, error?: string): Promise<string | undefined> {
     await this.drain(w);
     const target = w.scratch ?? w;
     const cursor = decode(target.cursor);
     const turn = cursor && cursorTurn(cursor.s);
     if (!cursor || !turn?.open || (promptId !== undefined && turn.p !== promptId && turn.k !== promptId)) return undefined;
     cursor.s.t = turn;
-    target.turnEnded(turn.k, status, at);
     turn.open = false;
-    target.commit({ events: [], cursor: JSON.stringify(cursor) });
+    target.transaction(() => {
+      target.turnEnded(turn.k, status, at, error);
+      target.commit({ events: [], cursor: JSON.stringify(cursor) });
+    });
     return turn.k;
   }
 

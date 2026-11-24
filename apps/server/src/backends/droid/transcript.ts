@@ -250,10 +250,33 @@ export class DroidTranscriptSource implements TranscriptSource {
     const overtaken = state.pending ?? [];
     if (!open && !overtaken.length) return [];
     Object.assign(state, { open: undefined, run: undefined, auto: undefined, pending: undefined });
-    target.commit({ events: [], cursor: encode(state, state.o) });
-    for (const turn of overtaken) target.turnEnded(turn, 'interrupted', at);
-    if (open) target.turnEnded(open, status, at, error);
+    target.transaction(() => {
+      target.commit({ events: [], cursor: encode(state, state.o) });
+      for (const turn of overtaken) target.turnEnded(turn, 'interrupted', at);
+      if (open) target.turnEnded(open, status, at, error);
+    });
     return [...overtaken, ...open ? [open] : []];
+  }
+
+  /** External turn-end settlement (G6 / D2): drains disk and clears matching open/pending cursor state atomically. */
+  async settleTurnEnd(w: LaneWriter, end: { turnId: string; status: TurnEndStatus; at: string; error?: string }): Promise<boolean> {
+    await this.drain(w);
+    const target = w.scratch ?? w;
+    const state = decode(target.cursor);
+    if (!state) return false;
+    const isOpen = state.open && state.turn === end.turnId;
+    const pendingIdx = state.pending?.indexOf(end.turnId) ?? -1;
+    if (!isOpen && pendingIdx < 0) return false;
+    if (isOpen) Object.assign(state, { open: undefined, run: undefined, auto: undefined });
+    if (pendingIdx >= 0 && state.pending) {
+      const nextPending = state.pending.filter(id => id !== end.turnId);
+      state.pending = nextPending.length ? nextPending : undefined;
+    }
+    target.transaction(() => {
+      target.commit({ events: [], cursor: encode(state, state.o) });
+      target.turnEnded(end.turnId, end.status, end.at, end.error);
+    });
+    return true;
   }
 
   private async path(): Promise<string | undefined> {

@@ -360,13 +360,34 @@ export class DshTranscriptSource implements TranscriptSource {
     const read = decodeCursor(target.cursor);
     if (!seen?.open || !read || !Number.isFinite(read.next) || read.next < seen.total || read.ended?.turn === seen.open) return undefined;
     const ended: EndedTurn = { turn: seen.open, time: at, ...(error ? { error: error.slice(0, 1000) } : {}) };
-    for (const lane of target === w ? [w] : [target, w]) {
-      const cursor = decodeCursor(lane.cursor);
-      if (cursor && !Number.isFinite(cursor.next)) continue;
-      lane.commit({ events: [], cursor: encodeCursor(cursor?.next ?? 0, cursor?.createdAt ?? read.createdAt, ended) });
-    }
-    target.turnEnded(ended.turn, 'interrupted', at, ended.error);
+    target.transaction(() => {
+      for (const lane of target === w ? [w] : [target, w]) {
+        const cursor = decodeCursor(lane.cursor);
+        if (cursor && !Number.isFinite(cursor.next)) continue;
+        lane.commit({ events: [], cursor: encodeCursor(cursor?.next ?? 0, cursor?.createdAt ?? read.createdAt, ended) });
+      }
+      target.turnEnded(ended.turn, 'interrupted', at, ended.error);
+    });
     return ended.turn;
+  }
+
+  /** External turn-end settlement (G6 / D2): drains disk and records the ended turn on lane cursor(s) atomically. */
+  async settleTurnEnd(w: LaneWriter, end: { turnId: string; status: TurnEndStatus; at: string; error?: string }): Promise<boolean> {
+    await this.drain(w);
+    const target = w.scratch ?? w;
+    const seen = this.seen.get(this.identity());
+    const read = decodeCursor(target.cursor);
+    if (seen?.open !== end.turnId || !read || !Number.isFinite(read.next) || read.next < seen.total || read.ended?.turn === end.turnId) return false;
+    const ended: EndedTurn = { turn: end.turnId, time: end.at, ...(end.error ? { error: end.error.slice(0, 1000) } : {}) };
+    target.transaction(() => {
+      for (const lane of target === w ? [w] : [target, w]) {
+        const cursor = decodeCursor(lane.cursor);
+        if (cursor && !Number.isFinite(cursor.next)) continue;
+        lane.commit({ events: [], cursor: encodeCursor(cursor?.next ?? 0, cursor?.createdAt ?? read.createdAt, ended) });
+      }
+      target.turnEnded(end.turnId, end.status, end.at, end.error);
+    });
+    return true;
   }
 
   watch(w: LaneWriter, wake: () => void): () => void {

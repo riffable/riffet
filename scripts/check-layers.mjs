@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 // Layers of the server (apps/server/src), lowest first. A file imports its own module and lower layers only:
 //
-//   base       errors, process environment, identity helpers, metrics; knows nothing of sessions
-//   kernel     sessions and runs (store), delivery (native), journal, timeline, sync, the driver seam
-//              (backends/*.ts), terminals, settings; names no concrete backend
-//   kit        backends/shared/ and adapters/: what drivers are built from (child processes, hooks, waits)
-//   drivers    backends/<name>/: one CLI each, written against the kernel's seam
-//   features   git, workspace, orchestration, shares, stats, search, tasks, extensions, plugins, …
-//   surfaces   routes and channels: protocol translation
-//   root       app.ts and the CLI: the only place that names every module
+//   base           errors, process environment, identity helpers, metrics; knows nothing of sessions
+//   kernel-fact    durable facts & settings (store, settings, journal); never reaches up into folding or delivery
+//   kernel-engine  stateful engines & driver seam (timeline, terminal, agent-host, backends/*.ts); names no concrete backend
+//   kernel-wire    orchestration & delivery wiring (sync, native, auxiliary) over facts and engines
+//   kit            backends/shared/ and adapters/: what drivers are built from (child processes, hooks, waits)
+//   drivers        backends/<name>/: one CLI each, written against the kernel's seam
+//   features       git, workspace, orchestration, shares, stats, search, tasks, extensions, plugins, …
+//   surfaces       routes and channels: protocol translation
+//   root           app.ts and the CLI: the only place that names every module
 //
 // Drivers and features are one layer. Base, kernel, kit and root modules may import one another; a driver,
 // a feature or a surface imports no other module of its own layer: a driver does not reach into another
@@ -48,7 +49,9 @@ const LAYERS = [
   ['base', ['assistant-capability.ts', 'errors.ts', 'exec.ts', 'version.ts', 'environment.ts', 'compat.ts', 'server-log.ts', 'server-id.ts', 'mdns-name.ts',
     'connection-addresses.ts', 'discovery.ts', 'service-files.ts', 'loop-health.ts', 'pairing.ts', 'auth.ts',
     'clientLogs.ts', 'sqlite-storage.ts', 'wal-checkpoint.ts', 'session-identity.ts', 'session-title.ts', 'metrics', 'prompts', 'links']],
-  ['kernel', ['store.ts', 'store', 'journal', 'timeline', 'sync', 'native', 'backends', 'agent-host', 'terminal', 'settings', 'auxiliary']],
+  ['kernel-fact', ['store.ts', 'store', 'settings', 'journal']],
+  ['kernel-engine', ['timeline', 'terminal', 'agent-host', 'backends']],
+  ['kernel-wire', ['sync', 'native', 'auxiliary']],
   ['kit', ['backends/shared', 'adapters']],
   ['drivers', ['backends/*']],
   ['features', ['git', 'workspace', 'task-workspaces', 'orchestration', 'shares', 'stats', 'search', 'tasks', 'extensions',
@@ -59,9 +62,9 @@ const LAYERS = [
   ['root', ['app.ts', 'index.ts', 'cli.ts', 'cli', 'doctor.ts']],
 ];
 // Drivers and features are one rank: neither is below the other.
-const RANK = { base: 0, kernel: 1, kit: 2, drivers: 3, features: 3, surfaces: 4, root: 5 };
+const RANK = { base: 0, 'kernel-fact': 1, 'kernel-engine': 2, 'kernel-wire': 3, kit: 4, drivers: 5, features: 5, surfaces: 6, root: 7 };
 /** Layers whose modules may import one another. */
-const OPEN = new Set(['base', 'kernel', 'kit', 'root']);
+const OPEN = new Set(['base', 'kernel-fact', 'kernel-engine', 'kernel-wire', 'kit', 'root']);
 const layerOf = new Map(LAYERS.flatMap(([layer, modules]) => modules.map(module => [module, layer])));
 
 const posix = path => path.split(sep).join('/');

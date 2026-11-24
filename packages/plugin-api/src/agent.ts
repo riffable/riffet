@@ -262,6 +262,8 @@ export interface AgentLaneBatch {
   cursor: string | null;
   /** Rewrite existing entities after an adapter upgrade, keeping their identity, timing and turn ownership. */
   reproject?: true;
+  /** The events belong to turns already over: the lane's current turn stays where it is. */
+  ended?: true;
 }
 
 /**
@@ -306,6 +308,8 @@ export interface AgentLaneWriter {
   turnEndStatus(turnId: string): AgentTurnStatus | undefined;
   /** The last effective end with its original time and diagnostic, including on a scratch lane. */
   turnEnd?(turnId: string): { status: AgentTurnStatus; at: string; error?: string } | undefined;
+  /** Runs a sequence of lane writes atomically so readers never observe an intermediate state. */
+  transaction?(task: () => void): void;
   /** Retracts an end when the transcript resumes or corrects the turn; `cursor` checkpoints the reread. */
   turnReopened(turnId: string, at: string, cursor?: string): void;
   readonly activities: AgentActivityLedger;
@@ -338,6 +342,8 @@ export interface AgentTranscriptSource {
   watch?(w: AgentLaneWriter, wake: () => void): () => void;
   /** Reads everything already on disk into the log that serves; called before a turn is ended from outside the transcript. */
   drain(w: AgentLaneWriter): Promise<void>;
+  /** Ends a turn from outside the transcript so the source can settle its cursor and drafts atomically. */
+  settleTurnEnd?(w: AgentLaneWriter, end: { turnId: string; status: AgentTurnStatus; at: string; error?: string }): Promise<boolean>;
 }
 
 export interface AgentHistoryOptions {

@@ -3,6 +3,13 @@ module: server.timeline
 verify:
   - npx vitest run apps/server/src/timeline
   - npx vitest run packages/timeline
+  - npx vitest run apps/server/src/sync/pipeline-contract.test.ts
+co-change:
+  - when: fold.ts#LaneFold
+    with:
+      - apps/server/src/journal/ingest.ts#TranscriptSource
+      - apps/server/src/sync/pipeline-contract.ts#runReadPipelineContract
+    reason: LaneFold 在 meta.turn_ended 丢弃活跃 draft 并靠 rebase 冻结旧回合，改写草稿或结束逻辑须同步核对写入接口与跨层读链路校验（P1–P6）
 ---
 
 ## 职责

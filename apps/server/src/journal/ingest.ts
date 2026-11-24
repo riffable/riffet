@@ -102,6 +102,17 @@ export interface LaneWriter {
  * it resolves `caughtUp: true` once everything on disk is in the log. A first import of a long
  * transcript commits a tail window to `w.openScratch()` and then imports from the start into `w`, a
  * bounded step per pull, keeping the window current meanwhile.
+ *
+ * Kernel draft & turn-end invariants enforced across `Journal`, `LaneFold`, and `DispatchFeed`:
+ * - **D1 (Draft-End Exclusion)**: `LaneFold` drops every active `draft` on `meta.turn_ended`. A source
+ *   that wants an interrupted/failed draft to remain visible MUST promote it in-place (`draft → committed`
+ *   under the same `finalId`) inside the same `transaction()` BEFORE `turnEnded()`.
+ * - **D2 (Single-Writer Ownership)**: External stop/error paths (`TranscriptIngest.endTurn`) delegate
+ *   through `settleTurnEnd()` first so sources with open-turn cursors or drafts settle atomically instead
+ *   of being bypassed.
+ * - **D3 (No Synthetic Reopen on Delayed Settlement)**: A late backend flush that only settles already-promoted
+ *   parts or tool results of an ended turn MUST commit with `ended: true` and MUST NOT call `turnReopened()`,
+ *   which would emit `native_turn_reopened` and reopen settled runs or erase refined error diagnostics.
  */
 export interface TranscriptSource {
   /** The native conversation being read (a thread or transcript id); a change starts the lane over (G8). */
@@ -111,6 +122,12 @@ export interface TranscriptSource {
   watch?(w: LaneWriter, wake: () => void): () => void;
   /** Reads everything already on disk into the log that serves; called before a turn is ended from outside the transcript (G6). */
   drain(w: LaneWriter): Promise<void>;
+  /**
+   * Ends a turn from outside the transcript (G6), letting the source drain disk state and settle
+   * its cursor/drafts atomically. Returns `true` when the source settled the end; `false` falls
+   * back to draining and writing the turn end directly.
+   */
+  settleTurnEnd?(w: LaneWriter, end: { turnId: string; status: TurnEndStatus; at: string; error?: string }): Promise<boolean>;
 }
 
 const TURN_STARTED = 'meta.turn_started';

@@ -48,7 +48,7 @@ export interface LaneCheckOptions {
   openLastTurn?: boolean;
 }
 
-interface TurnFacts { started?: number; ended?: number; first?: number; lastNew?: number }
+interface TurnFacts { started?: number; ended?: number; endStatus?: string; first?: number; lastNew?: number; toolCalls?: Set<string> }
 
 /** G1, G3, G5, G6 and G10 for one log; returns its rows. */
 export function checkLane(journal: Journal, key: string, options: LaneCheckOptions = {}): JournalRow[] {
@@ -65,15 +65,29 @@ export function checkLane(journal: Journal, key: string, options: LaneCheckOptio
     if (row.kind === 'meta.turn_ended' && row.turnId) {
       // A corrected end supersedes the earlier outcome; a tombstoned end proves nothing about
       // completion. G6 still checks that the effective settled read follows the recovered items.
-      if (journal.locate(key, row.nativeId)?.seq === row.seq) facts(row.turnId).ended = row.seq;
+      if (journal.locate(key, row.nativeId)?.seq === row.seq) {
+        const turn = facts(row.turnId);
+        turn.ended = row.seq;
+        const status = (payload as { status?: unknown } | null)?.status;
+        if (typeof status === 'string') turn.endStatus = status;
+      }
       continue;
     }
     if (isHiddenKind(row.kind)) continue;
     assert.ok(row.turnId, `G3: ${where} has no turn id`);
     const activity = activityOfEvent(payload);
     if (activity) { assert.equal(row.nativeId, activity.id, `G10: ${where} carries activity ${activity.id} under another id`); facts(row.turnId).first ??= row.seq; continue; }
-    // Activities are their own axis and may outlive their turn; anything else is part of it.
-    if (row.rev === 1) { const turn = facts(row.turnId); turn.first ??= row.seq; turn.lastNew = row.seq; }
+    const turn = facts(row.turnId);
+    const toolCallId = (payload as { data?: { toolCallId?: unknown } } | null)?.data?.toolCallId;
+    if (row.kind === 'tool_call' && typeof toolCallId === 'string') (turn.toolCalls ??= new Set()).add(toolCallId);
+    // Activities are their own axis and may outlive their turn; a late tool_call_update settling an
+    // already-opened call of a stopped/failed turn is an update to that call, not an undrained message.
+    const lateToolSettlement = row.kind === 'tool_call_update' && turn.ended !== undefined && turn.endStatus !== 'completed'
+      && typeof toolCallId === 'string' && turn.toolCalls?.has(toolCallId);
+    if (row.rev === 1) {
+      turn.first ??= row.seq;
+      if (!lateToolSettlement) turn.lastNew = row.seq;
+    }
   }
   const ordered = [...turns].sort(([, left], [, right]) => (left.started ?? left.first ?? 0) - (right.started ?? right.first ?? 0));
   ordered.forEach(([turnId, turn], index) => {

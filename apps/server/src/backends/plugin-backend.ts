@@ -134,12 +134,14 @@ class PluginTranscriptSource implements TranscriptSource {
  * A source the plugin wrote against the lane writer, handed to the journal as it is, except that once the
  * plugin is turned off nothing in it is called again: the journal may still hold the source in a follow.
  */
-class PluginLaneSource implements TranscriptSource {
+export class PluginLaneSource implements TranscriptSource {
   readonly watch: TranscriptSource['watch'];
+  readonly settleTurnEnd: TranscriptSource['settleTurnEnd'];
   private lastIdentity: string | undefined;
 
   constructor(readonly inner: AgentTranscriptSource, private readonly active: () => boolean) {
     if (inner.watch) this.watch = (w, wake) => this.active() ? inner.watch!(w, wake) : () => undefined;
+    if (inner.settleTurnEnd) this.settleTurnEnd = (w, end) => this.active() ? inner.settleTurnEnd!(w, end) : Promise.resolve(false);
   }
 
   identity(): string | undefined { return this.active() ? (this.lastIdentity = this.inner.identity()) : this.lastIdentity; }

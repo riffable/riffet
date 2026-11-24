@@ -112,6 +112,20 @@ interface TurnState {
   owes?: true;
 }
 
+/**
+ * Promoted draft of an interrupted/cancelled/failed turn whose step had not flushed to `store.db`
+ * yet. Promoted in-place under `${at}:${part}` before `meta.turn_ended` so row keys stay stable;
+ * once the store commits `at`, the canonical message updates those slots in place (and trailing
+ * `role: 'tool'` abort results settle into `turnId`), or if the store discarded the step and
+ * reused `at` for another turn, the lane rebuilds to avoid identity inversion.
+ */
+interface KeptDraft {
+  turnId: string;
+  run?: string;
+  at?: number;
+  count?: number;
+}
+
 /** A lane's reading of one chat store, stored as the lane's journal cursor. */
 interface LaneState {
   v: typeof STATE_VERSION;
@@ -139,6 +153,8 @@ interface LaneState {
    * prompt is drafted too, under `${at - 1}:0`, and this is the turn it opens.
    */
   draft?: { at: number; count: number; live?: true; prompt?: string };
+  /** See {@link KeptDraft}. */
+  kept?: KeptDraft;
   /** Turns a live step opened that were ended without the store recording them, so a late record reopens them. */
   liveEnded?: string[];
   /** Subagents (tool call id, agent id) still being read. */
@@ -427,6 +443,10 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
 
   async drain(w: AgentLaneWriter): Promise<void> { await this.readServing(w); }
 
+  settleTurnEnd(w: AgentLaneWriter, end: { turnId: string; status: AgentTurnStatus; at: string; error?: string }): Promise<boolean> {
+    return this.endTurn(w, end);
+  }
+
   /** Drain the CLI's checkpoint before the hook or settled idle observation ends its turn (G6). */
   endTurn(w: AgentLaneWriter, end: TurnEnd): Promise<boolean> {
     return this.readServing(w, end);
@@ -583,6 +603,11 @@ class LaneRead {
     this.stopped = new Set(this.state.stopped);
   }
 
+  private runAtomically(task: () => void): void {
+    if (this.w.transaction) this.w.transaction(task);
+    else task();
+  }
+
   /** Retires a positional entity and remembers its slot so a later message never reuses a tombstoned identity out of order. */
   private retireId(id: string): void {
     this.retire.push(id);
@@ -644,10 +669,7 @@ class LaneRead {
       else if (this.options.stopped && !this.state.draft?.prompt) outcome = { status: 'interrupted' };
     }
     if (!outcome) return;
-    if (this.state.draft && !this.state.draft.prompt) this.dropDraft();
-    this.flush();
-    turn.ended = true;
-    this.writeEnd(turn, outcome);
+    this.finishTurn(turn, outcome);
   }
 
   /** Repair old normalized payloads in place; CLI reads, receipts and terminal turn marks stay intact. */
@@ -754,15 +776,73 @@ class LaneRead {
       }
       return !!turnId && correctInferredEnd(this.w, turnId, end);
     }
-    if (this.state.draft && !prompt) {
-      this.source.dismissLive(this.view.chatId);
-      this.dropDraft();
-      this.flush();
-    }
-    turn.ended = true;
-    this.writeEnd(turn, end);
-    this.flush();
+    this.finishTurn(turn, end);
     return true;
+  }
+
+  /**
+   * Ends `turn`, promoting any uncommitted non-prompt draft of an interrupted/cancelled/failed turn
+   * in-place under `${draft.at}:${part}` before `meta.turn_ended` so visible in-flight work and
+   * row keys stay intact while waiting for `store.db` to flush.
+   */
+  private finishTurn(turn: TurnState, outcome: CursorTurnResult): void {
+    const endAt = outcome.at || turn.at || new Date().toISOString();
+    const end = { status: outcome.status, at: endAt, ...(outcome.error ? { error: outcome.error } : {}) };
+    if (this.state.draft && !this.state.draft.prompt) {
+      if (outcome.status !== 'completed') this.keepDraft(turn, endAt);
+      else {
+        this.source.dismissLive(this.view.chatId);
+        this.dropDraft();
+      }
+    }
+    this.runAtomically(() => {
+      this.flush();
+      turn.ended = true;
+      this.writeEnd(turn, end);
+      this.flush();
+    });
+  }
+
+  private currentDraftMessage(draft: NonNullable<LaneState['draft']>): ChatMessage | undefined {
+    if (draft.live) {
+      const step = this.source.liveStep(this.view.chatId, this.state.root);
+      return step ? liveMessage(step) : undefined;
+    }
+    const snapshot = this.view.snapshot();
+    if (!snapshot?.pending) return undefined;
+    const ids = snapshot.messageIds;
+    return sameStep(snapshot.pending, ids.length ? this.view.reader.message(ids.at(-1)!) : undefined) ? undefined : snapshot.pending;
+  }
+
+  private keepDraft(turn: TurnState, endAt: string): void {
+    const draft = this.state.draft;
+    if (!draft || draft.prompt) return;
+    const message = this.currentDraftMessage(draft);
+    const mapped = message ? this.mapper.fork().map({ id: `${draft.at}:draft`, message }) : [];
+    this.source.dismissLive(this.view.chatId);
+    if (!mapped.length) {
+      this.dropDraft();
+      if (this.retired.size) this.retiredBarrier = true;
+      return;
+    }
+    mapped.forEach((event, part) => {
+      this.noteTask(event);
+      const promoted = this.eventOf(event, draft.at, '', part, turn.id);
+      this.events.push({
+        ...promoted,
+        ...(promoted.runId ? {} : turn.run ? { runId: turn.run } : {}),
+        createdAt: promoted.createdAt || turn.at || endAt,
+      });
+    });
+    for (let part = mapped.length; part < draft.count; part += 1) this.retireId(`${draft.at}:${part}`);
+    this.state.kept = {
+      turnId: turn.id,
+      ...(turn.run ? { run: turn.run } : {}),
+      at: draft.at,
+      count: mapped.length,
+    };
+    this.drafts = [];
+    delete this.state.draft;
   }
 
   private abandon(): false {
@@ -814,6 +894,60 @@ class LaneRead {
       const blob = ids[position]!;
       const result = this.view.reader.readMessage(blob);
       if (result.status === 'missing') { blocked = true; break; }
+      const kept = this.state.kept;
+      if (kept && kept.at === position) {
+        const preview = result.status === 'ok' ? this.mapper.fork().map({ id: `${position}:${blob}`, message: result.message }) : [];
+        const opensNext = preview.length > 0 && (preview[0]!.type === 'user_message_chunk' || preview[0]!.type === 'task_notification');
+        if (opensNext) {
+          this.w.rebuild('identity-changed');
+          return this.abandon();
+        }
+        if (preview.length === 0 || result.status !== 'ok') {
+          for (let part = 0; part < (kept.count ?? 0); part += 1) this.retireId(`${position}:${part}`);
+          this.retiredBarrier = true;
+          delete this.state.kept;
+          this.state.n = position + 1;
+          this.hash.update(blob).update('\0');
+          if (await this.pause()) break;
+          continue;
+        }
+        const hadRetired = this.retired.has(position);
+        if (hadRetired) {
+          if (this.conflictsRetired(position, preview.length)) { this.w.rebuild('identity-changed'); return this.abandon(); }
+          if (preview.length >= (this.retired.get(position) ?? 0)) {
+            this.retired.delete(position);
+            if (!this.retired.size) this.retiredBarrier = false;
+          }
+        }
+        const absorbed = this.absorbKept(kept, position, blob, result.message, result.bytes, preview.length, ids, stop, compactions);
+        if (absorbed === undefined) return false;
+        bytes += absorbed;
+        if (!hadRetired && this.retired.size && (this.produced.get(position) ?? 0) > 0) this.retiredBarrier = true;
+        if (bounded && bytes >= this.source.limits.stepBytes) break;
+        if (await this.pause()) break;
+        continue;
+      }
+      if (kept && kept.at === undefined) {
+        if (result.status === 'ok' && result.message.role === 'tool') {
+          const previewCount = this.mapper.fork().map({ id: `${position}:${blob}`, message: result.message }).length;
+          const hadRetired = this.retired.has(position);
+          if (hadRetired) {
+            if (this.conflictsRetired(position, previewCount)) { this.w.rebuild('identity-changed'); return this.abandon(); }
+            if (previewCount >= (this.retired.get(position) ?? 0)) {
+              this.retired.delete(position);
+              if (!this.retired.size) this.retiredBarrier = false;
+            }
+          }
+          const absorbed = this.absorbKept(kept, position, blob, result.message, result.bytes, previewCount, ids, stop, compactions);
+          if (absorbed === undefined) return false;
+          bytes += absorbed;
+          if (!hadRetired && this.retired.size && (this.produced.get(position) ?? 0) > 0) this.retiredBarrier = true;
+          if (bounded && bytes >= this.source.limits.stepBytes) break;
+          if (await this.pause()) break;
+          continue;
+        }
+        delete this.state.kept;
+      }
       // A positional slot retired by an earlier rewind or dropped draft keeps its old rev=1
       // identity in the journal; rebuild if writing this message would invert identity order.
       const hadRetired = this.retired.has(position);
@@ -856,6 +990,65 @@ class LaneRead {
   }
 
   /**
+   * Reconciles delayed `store.db` rows for a turn whose draft was promoted in place, plus any
+   * immediately trailing `role: 'tool'` abort results. Keeps `meta.turn_ended` intact (never
+   * emitting fake `turnReopened` corrections on normal delayed flushes or failed/cancelled turns);
+   * only re-anchors an `interrupted` end per G6 if the flushed step genuinely gained extra parts
+   * beyond what was promoted.
+   */
+  private absorbKept(kept: KeptDraft, position: number, blob: string, message: ChatMessage, firstBytes: number, previewCount: number, ids: readonly string[], stop: number, compactions: readonly ChatCompaction[]): number | undefined {
+    this.flush();
+    let bytes = firstBytes;
+    const grew = kept.at === position && previewCount > (kept.count ?? 0);
+    const currentEnd = grew ? this.w.turnEnd?.(kept.turnId) : undefined;
+    const reanchor = grew && currentEnd?.status === 'interrupted';
+    let aborted = false;
+    this.runAtomically(() => {
+      if (reanchor) this.w.turnReopened(kept.turnId, currentEnd.at);
+      this.state.turn = { id: kept.turnId, ...(kept.run ? { run: kept.run } : {}), at: this.state.turn?.at ?? '' };
+      this.message(position, blob, message);
+      if (kept.at === position) {
+        for (let part = this.produced.get(position) ?? 0; part < (kept.count ?? 0); part += 1) this.retireId(`${position}:${part}`);
+      }
+      this.state.n = position + 1;
+      this.hash!.update(blob).update('\0');
+      while (this.mapper.awaitingReply && this.state.n < stop) {
+        if (compactions.some(compaction => compaction.boundary === this.state.n && this.state.n > this.state.from)) break;
+        const nextBlob = ids[this.state.n]!;
+        const nextRead = this.view.reader.readMessage(nextBlob);
+        if (nextRead.status !== 'ok' || nextRead.message.role !== 'tool') break;
+        if (this.retired.has(this.state.n)) {
+          const nextCount = this.mapper.fork().map({ id: `${this.state.n}:${nextBlob}`, message: nextRead.message }).length;
+          if (this.conflictsRetired(this.state.n, nextCount)) {
+            this.events = []; this.drafts = []; this.retire = [];
+            this.w.rebuild('identity-changed');
+            this.abandon();
+            aborted = true;
+            return;
+          }
+          if (nextCount >= (this.retired.get(this.state.n) ?? 0)) {
+            this.retired.delete(this.state.n);
+            if (!this.retired.size) this.retiredBarrier = false;
+          }
+        }
+        this.message(this.state.n, nextBlob, nextRead.message);
+        bytes += nextRead.bytes;
+        this.state.n += 1;
+        this.hash!.update(nextBlob).update('\0');
+      }
+      if (this.mapper.awaitingReply) {
+        this.state.kept = { turnId: kept.turnId, ...(kept.run ? { run: kept.run } : {}) };
+      } else {
+        delete this.state.kept;
+      }
+      this.state.turn.ended = true;
+      this.flush(this.encode(), { ended: !reanchor });
+      if (reanchor) this.w.turnEnded(kept.turnId, currentEnd.status, currentEnd.at, currentEnd.error);
+    });
+    return aborted ? undefined : bytes;
+  }
+
+  /**
    * Where a tail window begins (`selectHistoryStart`), its messages read a slice at a time; undefined
    * when the read is to stop first.
    */
@@ -885,6 +1078,10 @@ class LaneRead {
     let at = 0;
     while (at < before.n && at < ids.length && at < oldIds.length && ids[at] === oldIds[at]) at += 1;
     at = Math.max(at, before.from);
+    if (before.kept?.at !== undefined && at <= before.kept.at) {
+      this.w.rebuild('identity-changed');
+      return this.abandon();
+    }
     this.state = {
       ...emptyState(before.from, ''), placed: before.placed, children: before.children,
       ...(before.live ? { live: true as const } : {}), ...(before.compacting ? { compacting: before.compacting } : {}),
@@ -1055,12 +1252,13 @@ class LaneRead {
   private draft(length: number, pending: ChatMessage | undefined): boolean {
     const turn = this.state.turn;
     const mapper = this.mapper.fork();
-    let at = length, turnId = turn?.id, message = pending, prompt: NativeWorkbenchEvent | undefined, live = false;
+    const openTurn = turn && !turn.ended ? turn : undefined;
+    let at = length, turnId = openTurn?.id, message = openTurn ? pending : undefined, prompt: NativeWorkbenchEvent | undefined, live = false;
     const step = pending || !this.state.live ? undefined : this.source.liveStep(this.view.chatId, this.state.root);
-    if (step && turn && !turn.ended && (turn.id === step.turn || this.mapper.turnId === step.turn)) {
+    if (step && openTurn && (openTurn.id === step.turn || this.mapper.turnId === step.turn)) {
       message = liveMessage(step);
       live = true;
-    } else if (step?.prompt && !this.state.recent.includes(step.turn) && !this.state.liveEnded?.includes(step.turn)) {
+    } else if (step?.prompt && this.state.kept?.at === undefined && !this.state.recent.includes(step.turn) && !this.state.liveEnded?.includes(step.turn)) {
       const promptAt = length || FIRST_PROMPT_AT;
       // The turn's time is the run's, so the same step read again is the same draft.
       const [event] = mapper.map({ id: `${promptAt}:draft`, message: livePrompt(step), seenAt: step.at });
@@ -1181,14 +1379,14 @@ class LaneRead {
   // ---- commits -------------------------------------------------------------------------------
 
   private encode(before?: Before): string {
-    const { v, mapping, reproject, from, root, n, len, live, placed, draft, liveEnded, earlierDone } = this.state;
+    const { v, mapping, reproject, from, root, n, len, live, placed, draft, kept, liveEnded, earlierDone } = this.state;
     const turn = before ? before.turn : this.state.turn;
     const taken = new Set(Object.values(placed));
     const compacting = this.w.activities.list().filter(activity => isOpenCompaction(activity) && !taken.has(activity.id)).slice(-4);
     const state: LaneState = {
       v, ...(mapping ? { mapping } : {}), ...(reproject ? { reproject } : {}), from, ...(root ? { root } : {}), n, len, digest: this.hash ? this.hash.copy().digest('hex') : this.state.digest, ...(live ? { live } : {}),
       mapper: before?.mapper ?? this.mapper.state(), ...(turn ? { turn } : {}), recent: before?.recent ?? this.state.recent, placed,
-      ...(draft ? { draft } : {}), ...(liveEnded?.length ? { liveEnded } : {}), children: [...this.children], ...(this.tasks.size ? { tasks: [...this.tasks] } : {}),
+      ...(draft ? { draft } : {}), ...(kept ? { kept } : {}), ...(liveEnded?.length ? { liveEnded } : {}), children: [...this.children], ...(this.tasks.size ? { tasks: [...this.tasks] } : {}),
       ...(this.stopped.size ? { stopped: [...this.stopped] } : {}),
       ...(compacting.length ? { compacting } : {}), ...(this.stale.size ? { stale: [...this.stale] } : {}),
       ...(this.retired.size ? { retired: [...this.retired.entries()].sort((a, b) => a[0] - b[0]) } : {}),
@@ -1199,9 +1397,9 @@ class LaneRead {
   }
 
   /** Commits what was read with the state to resume from: by default the one after everything read so far (G7). */
-  private flush(cursor = this.encode()): void {
+  private flush(cursor = this.encode(), options?: { ended?: boolean }): void {
     if (!this.events.length && !this.drafts.length && !this.retire.length && cursor === this.w.cursor) return;
-    const batch = { events: this.events, drafts: this.drafts, retire: this.retire, cursor };
+    const batch = { events: this.events, drafts: this.drafts, retire: this.retire, cursor, ...(options?.ended ? { ended: true as const } : {}) };
     this.events = []; this.drafts = []; this.retire = [];
     this.w.commit(batch);
   }
