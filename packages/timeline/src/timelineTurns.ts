@@ -1,5 +1,5 @@
 import type { NativeWorkbenchEvent, Run } from '../../contracts/src/index.js';
-import { nativeSourceIds, timelineItemTime, type TimelineItem } from './model.js';
+import { isUnreceivedSteer, nativeSourceIds, timelineItemTime, type TimelineItem } from './model.js';
 
 /**
  * Resolves the conversation turn for each displayed row. Most events carry a run id;
@@ -140,10 +140,10 @@ export function analyzeTimelineTurns(timeline: TimelineItem[], sessionRunning: b
   const lastIndexByTurn = new Map<string, number>();
   timeline.forEach((item, index) => {
     const turnKey = turnKeys[index]!;
-    // An activity sits in a turn without ending it: a compaction note after the answer must not make
-    // the answer look like it is followed by more work.
-    if (item.kind !== 'activity') lastIndexByTurn.set(turnKey, index);
-    if (item.kind === 'user' && isDispatchedUserRun(item.run)) activeTurns.add(turnKey);
+    // An activity or unreceived steer sits in a turn without ending it: neither should make
+    // an answer or running process block look followed by a completed segment.
+    if (item.kind !== 'activity' && !isUnreceivedSteer(item)) lastIndexByTurn.set(turnKey, index);
+    if (item.kind === 'user' && !isUnreceivedSteer(item) && isDispatchedUserRun(item.run)) activeTurns.add(turnKey);
   });
   if (!sessionRunning) {
     activeTurns.clear();
@@ -165,8 +165,8 @@ export function analyzeTimelineTurns(timeline: TimelineItem[], sessionRunning: b
     if (sessionRunning) activeTurns.add(index >= 0 ? turnKeys[index]! : `run:${activeTurnId}`);
     return { turnKeys, activeTurns, lastIndexByTurn };
   }
-  const latestUserIndex = timeline.findLastIndex((item) => item.kind === 'user');
-  const latestSentUserIndex = timeline.findLastIndex((item) => item.kind === 'user' && !isPendingUser(item));
+  const latestUserIndex = timeline.findLastIndex((item) => item.kind === 'user' && !isUnreceivedSteer(item));
+  const latestSentUserIndex = timeline.findLastIndex((item) => item.kind === 'user' && !isPendingUser(item) && !isUnreceivedSteer(item));
   const latestNotificationIndex = timeline.findLastIndex((item) => item.kind === 'task_notification');
   const latestOutputIndex = timeline.findLastIndex((item) => item.kind !== 'user' && item.kind !== 'activity');
   // A folded tail can begin a provider turn without a user prompt. Its server identity keeps
@@ -237,7 +237,7 @@ export function activeTurnState(
   let activeEnd = -1;
   for (let index = timeline.length - 1; index >= 0; index -= 1) {
     const item = timeline[index]!;
-    if (item.kind === 'activity') continue;
+    if (item.kind === 'activity' || isUnreceivedSteer(item)) continue;
     const key = analysis.turnKeys[index]!;
     if (analysis.activeTurns.has(key)) {
       activeTurnKey = key;
@@ -249,7 +249,7 @@ export function activeTurnState(
     let start: TimelineItem | undefined;
     for (let index = activeEnd; index >= 0; index -= 1) {
       const item = timeline[index]!;
-      if (item.kind === 'activity') continue;
+      if (item.kind === 'activity' || isUnreceivedSteer(item)) continue;
       if (analysis.turnKeys[index] !== activeTurnKey) {
         if (activeTurnKey === 'turn:orphan') break;
         continue;

@@ -114,8 +114,13 @@ export function withLocalOutbox(rows: readonly TimelineRow[], locals: readonly R
     if (keys.has(`user:${run.commandId}`) || runIds.has(run.id)) continue;
     let row = outboxRows.get(run);
     if (!row) {
+      const steerTurn = run.native?.intent === 'steer'
+        ? run.native.ownerRunId ? `run:${run.native.ownerRunId}`
+          : run.native.nativeTurnId ? `native:${run.sessionId}:${run.native.nativeTurnId}`
+            : undefined
+        : undefined;
       row = {
-        key: `user:${run.commandId}`, pos: PENDING_ROW_POS, turn: `run:${run.id}`, seq: 0, rev: 0, runId: run.id,
+        key: `user:${run.commandId}`, pos: PENDING_ROW_POS, turn: steerTurn ?? `run:${run.id}`, seq: 0, rev: 0, runId: run.id,
         kind: 'user', text: run.prompt, attachments: run.native?.input.attachmentIds.map((id) => ({ id, name: id })) ?? [],
         pending: run.native?.delivery === 'uncertain' ? 'unconfirmed' : 'queued',
         event: { type: 'user_message_chunk', data: {}, createdAt: run.createdAt, lastAt: run.createdAt, runId: run.id, sourceIds: [] },

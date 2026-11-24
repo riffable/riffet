@@ -1,7 +1,7 @@
 import type { NativeJob, Run, RunMetrics, TurnOutlineV3 } from '@contracts';
 import { str } from '@/lib/utils';
 import { nativeEventIds, type TimelineItem } from './model';
-import { withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
+import { isUnreceivedSteer, withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
 import { isInteractionToolData } from '../../../../../packages/timeline/src/toolTitle';
 import { analyzeTimelineTurns, runIdFromTurnKey } from './timelineTurns';
 import { laneTurnOf } from '@/sync/rows';
@@ -212,7 +212,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     }
     if (item.kind === 'user' && item.run?.native && item.run.native.intent !== 'steer') sentRunByTurn.set(turnKeys[index]!, item.run.id);
     if (item.kind === 'user' && item.run && item.run.native?.intent !== 'steer' && !openingRunStateByTurn.has(turnKeys[index]!)) openingRunStateByTurn.set(turnKeys[index]!, item.run.state);
-    if (item.kind === 'user' && item.run?.native?.intent === 'steer') lastSteerIndexByTurn.set(turnKeys[index]!, index);
+    if (item.kind === 'user' && item.run?.native?.intent === 'steer' && !isUnreceivedSteer(item)) lastSteerIndexByTurn.set(turnKeys[index]!, index);
     if (item.kind === 'user' && item.run?.native?.intent !== 'steer') {
       if (item.run?.native?.stage === 'turn_outcome_unknown') outcomeUnknownTurns.add(turnKeys[index]!);
       else if (item.run?.state === 'interrupted' || (item.run?.state === 'cancelled' && item.run.native?.stage !== 'acknowledged')) interruptedTurns.add(turnKeys[index]!);
@@ -367,7 +367,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       for (let index = groupLastIndex + 1; index <= turnEnd; index += 1) {
         if (turnKeys[index] !== turnKey) continue;
         const later = timeline[index]!;
-        if (isInteractionTool(later) || later.kind === 'user' || processItems[index]) hasLaterSegment = true;
+        if (isInteractionTool(later) || (later.kind === 'user' && !isUnreceivedSteer(later)) || processItems[index]) hasLaterSegment = true;
         if ((later.kind === 'assistant' && !processItems[index])
           || (isInteractionTool(later) && (() => {
             const live = toolItemLiveness(later, { stale: !turnDisplayedRunning });

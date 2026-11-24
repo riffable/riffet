@@ -304,7 +304,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
       updateRun(result.run);
       setRecoveries(current => ({ ...current, [result.run.id]: result }));
       const checked = store.get().runs.find(item => item.id === result.run.id) ?? result.run;
-      if (!result.canContinue && (checked.native?.delivery === 'uncertain' || checked.native?.stage === 'acknowledged' || nativeTaskOutcome(checked) === 'unknown')) {
+      if (!result.canContinue && !checked.native?.queueReleasedAt && (checked.native?.delivery === 'uncertain' || checked.native?.stage === 'acknowledged' || nativeTaskOutcome(checked) === 'unknown')) {
         toast.info(i18n._(msg`仍无法确认当前状态`));
       }
     } catch (error) {

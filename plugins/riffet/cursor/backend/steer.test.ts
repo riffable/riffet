@@ -35,7 +35,7 @@ async function fixture() {
   };
   const session = () => host.sessions.get('s')!;
   const port = cursorPort(host);
-  const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
+  const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), refreshTurnIdentity: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
   const bridge = new CursorSteerBridge(host, port, native, stateDir, {} as never);
   const source = new CursorTranscriptSource({ chatId: () => session().nativeSessionId, chatsDir: () => stateDir });
   const endTurn = vi.spyOn(source, 'endTurn').mockImplementation(async (_w, { stillCurrent }) => stillCurrent?.() ?? true);
@@ -353,19 +353,40 @@ describe('Cursor active turn lifecycle', () => {
     expect(f.fenced('run-one')).toBe(0);
   });
 
-  it('replaces a different generation at submit time and does not revive one a stop retired', async () => {
+  it('keeps the active turn on a queued follow-up beforeSubmitPrompt, promotes on requestStarted, and does not revive a retired generation', async () => {
     const f = await fixture();
     vi.mocked(f.native.turnState).mockReturnValue('open');
     await f.hook('beforeSubmitPrompt');
     const request = f.request('kept');
     await f.bridge.enqueue(request, request.input.text);
+    // A queued follow-up fires beforeSubmitPrompt while the current turn is still running; it must not displace `generation`.
     await f.hook('beforeSubmitPrompt', { generation_id: 'next' });
+    expect(f.bridge.activeTurn(f.session())?.turnId).toBe('generation');
+    expect(f.native.refreshTurnIdentity).toHaveBeenCalled();
+    expect(f.events().filter(event => event.type === 'native_input_rejected')).toHaveLength(0);
+    // Once the live tap / store confirms `next` actually started, the active turn promotes and rejects pending steer for the old turn.
+    f.bridge.requestStarted('s', 'chat', 'next', false);
     expect(f.bridge.activeTurn(f.session())?.turnId).toBe('next');
     expect(f.events().find(event => event.type === 'native_input_rejected')).toMatchObject({ data: { beforeWrite: true } });
     expect(f.fenced('run-kept')).toBe(0);
     await f.hook('stop', { generation_id: 'next', status: 'completed' });
     await f.hook('beforeSubmitPrompt', { generation_id: 'next' });
     expect(f.bridge.activeTurn(f.session())).toBeUndefined();
+  });
+
+  it('delivers already-fenced steer context from postToolUse even if active turn clears while fence awaits', async () => {
+    const f = await fixture();
+    await f.hook('preToolUse');
+    const request = f.request('fenced-once');
+    await f.bridge.enqueue(request, request.input.text);
+    const origFence = f.host.commitDispatchFence.bind(f.host);
+    f.host.commitDispatchFence = async (runId, binding) => {
+      await origFence(runId, binding);
+      f.bridge.reject('s', 'turn cleared mid-fence');
+    };
+    const hookResult = await f.hook('postToolUse');
+    expect(f.fenced('run-fenced-once')).toBe(1);
+    expect(hookResult.additional_context).toContain('guide this tool result');
   });
 
   it('ignores a prompt hook from a child or a terminal that has exited', async () => {

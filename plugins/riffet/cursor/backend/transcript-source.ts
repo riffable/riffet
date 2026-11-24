@@ -443,17 +443,30 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
 
   async drain(w: AgentLaneWriter): Promise<void> { await this.readServing(w); }
 
-  /** Read-only check for recovery (`canReleaseInput`): true while the serving lane tracks an open turn or active draft. */
-  hasOpenTurn(w: AgentLaneWriter): boolean {
-    const cursor = (w.scratch ?? w).cursor;
+  /**
+   * Read-only check for recovery (`canReleaseInput` / `canReleaseAfterLaterTurn`): true only while
+   * the serving lane has no open turn or active draft. When `later` is supplied, also proves that
+   * the later turn ended as `completed` in the serving journal and the store root has not advanced.
+   */
+  canReleaseInput(w: AgentLaneWriter, later?: { chatId: string; turnId: string }): boolean {
+    const serving = w.scratch ?? w;
+    const cursor = serving.cursor;
     if (!cursor) {
+      if (later) return false;
       const view = this.open();
-      if (!view) return false;
-      try { return Boolean(view.meta()); } finally { view.close(); }
+      if (!view) return view === undefined;
+      try { return !view.meta(); } finally { view.close(); }
     }
     const state = parseState(cursor);
-    if (!state) return true;
-    return Boolean((state.turn && !state.turn.ended) || state.draft);
+    if (!state || (state.turn && !state.turn.ended) || state.draft) return false;
+    if (!later) return true;
+    if (serving.turnEndStatus(later.turnId) !== 'completed') return false;
+    const view = this.open();
+    if (!view || view.chatId !== later.chatId) { view?.close(); return false; }
+    try {
+      const meta = view.meta();
+      return Boolean(meta && state.root === meta.latestRootBlobId);
+    } finally { view.close(); }
   }
 
   settleTurnEnd(w: AgentLaneWriter, end: { turnId: string; status: AgentTurnStatus; at: string; error?: string }): Promise<boolean> {

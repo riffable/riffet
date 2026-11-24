@@ -16,7 +16,7 @@ export interface ActorControlDeps {
   readonly store: Store;
   readonly native: NativeDispatcherBackend;
   readonly adapter: ExecutionAdapter;
-  readonly runtime: { withSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T> };
+  readonly runtime: { withSession<T>(sessionId: string, operation: () => Promise<T>, options?: { detached?: boolean }): Promise<T> };
   readonly nextAttempt: Map<string, number>;
   readonly recoveryChecks: Map<string, Promise<NativeRunRecovery>>;
   readonly pendingSteerOutcomes: Map<string, NativeWorkbenchEvent>;
@@ -67,6 +67,58 @@ export function checkRecovery(deps: ActorControlDeps, sessionId: string, runId: 
   return task;
 }
 
+export function idleForRecovery(status: NativeStatus | undefined): boolean {
+  return Boolean(status && status.phase === 'idle' && !status.activeTurn && !status.interaction
+    && !status.activity?.background && !status.activity?.compacting
+    && (!status.connection || status.connection.state === 'connected'));
+}
+
+export function awaitingLaterTurn(run: Run): boolean {
+  const native = run.native;
+  return Boolean(native && native.delivery === 'uncertain' && !native.intent && !native.queueReleasedAt
+    && !native.nativeMessageId && !isSlashCommand(native)
+    && (native.timings?.inputSentAt !== undefined || native.timings?.dispatchAt !== undefined));
+}
+
+function mayReleaseInput(
+  deps: ActorControlDeps, session: Session, run: Run, status: NativeStatus | undefined,
+  options: { allowRecreatedTerminal?: boolean } = {},
+): boolean {
+  const native = run.native;
+  return Boolean(native && native.delivery === 'uncertain' && !native.queueReleasedAt
+    && !session.archivedAt && !deps.getInterrupting() && !deps.workspaceReserved(session)
+    && idleForRecovery(status)
+    && native.nativeSessionId && native.nativeSessionId === session.nativeSessionId
+    && (options.allowRecreatedTerminal
+      ? Boolean(session.terminalId) && (!native.backendId || native.backendId === session.backendId)
+      : (!native.terminalId || native.terminalId === session.terminalId)));
+}
+
+/** Automatically releases a non-steer uncertain send once the backend proves a later turn completed. */
+export async function releaseAfterLaterTurn(
+  deps: ActorControlDeps, sessionId: string, runId: string, isWorkerActive: () => boolean,
+): Promise<boolean> {
+  if (!deps.native.canReleaseAfterLaterTurn || deps.isClosed() || isWorkerActive() || deps.getRecoveryActive()) return false;
+  let run: Run, session: Session;
+  try {
+    run = recoveryRun(deps.store, sessionId, runId);
+    session = deps.store.getSession(sessionId);
+  } catch { return false; }
+  if (!awaitingLaterTurn(run) || !mayReleaseInput(deps, session, run, deps.readStatus(sessionId), { allowRecreatedTerminal: true })) return false;
+  const proven = await deps.native.canReleaseAfterLaterTurn(session, run).catch(() => false);
+  if (!proven || deps.isClosed() || isWorkerActive() || deps.getRecoveryActive()) return false;
+  let latestRun: Run, latestSession: Session;
+  try {
+    latestRun = recoveryRun(deps.store, sessionId, runId);
+    latestSession = deps.store.getSession(sessionId);
+  } catch { return false; }
+  if (!awaitingLaterTurn(latestRun)
+    || latestSession.nativeSessionId !== session.nativeSessionId
+    || latestSession.terminalId !== session.terminalId
+    || !mayReleaseInput(deps, latestSession, latestRun, deps.readStatus(sessionId), { allowRecreatedTerminal: true })) return false;
+  return Boolean(deps.store.transitionNativeRun(runId, ['uncertain'], { queueReleasedAt: new Date().toISOString() }));
+}
+
 async function readRecovery(deps: ActorControlDeps, sessionId: string, runId: string): Promise<NativeRunRecovery> {
   recoveryRun(deps.store, sessionId, runId);
   await deps.native.reconcile?.(sessionId);
@@ -75,22 +127,14 @@ async function readRecovery(deps: ActorControlDeps, sessionId: string, runId: st
   deps.observe(sessionId, { type: 'status', status: snapshot.status });
   let run = recoveryRun(deps.store, sessionId, runId);
   const session = deps.store.getSession(sessionId);
-  const native = run.native!;
   const status = snapshot.status;
-  let canContinue = native.delivery === 'uncertain' && !native.queueReleasedAt
-    && !session.archivedAt && !deps.getInterrupting()
-    && !deps.workspaceReserved(session) && status.phase === 'idle' && !status.activeTurn
-    && !status.activity?.background && !status.activity?.compacting
-    && Boolean(native.nativeSessionId && native.nativeSessionId === session.nativeSessionId)
-    && (!native.terminalId || native.terminalId === session.terminalId);
+  let canContinue = mayReleaseInput(deps, session, run, status);
   if (canContinue) canContinue = await deps.native.canReleaseInput?.(session, run) ?? false;
   run = recoveryRun(deps.store, sessionId, runId);
   const latest = deps.store.getSession(sessionId);
   const currentStatus = deps.native.status(sessionId);
-  canContinue &&= run.native?.delivery === 'uncertain' && !run.native.queueReleasedAt
-    && latest.nativeSessionId === session.nativeSessionId && latest.terminalId === session.terminalId
-    && currentStatus.phase === 'idle' && !currentStatus.activeTurn
-    && !currentStatus.activity?.background && !currentStatus.activity?.compacting;
+  canContinue &&= mayReleaseInput(deps, latest, run, currentStatus)
+    && latest.nativeSessionId === session.nativeSessionId && latest.terminalId === session.terminalId;
   return { run, canContinue, queuedRunIds: queuedRunIds(deps.store, sessionId) };
 }
 
@@ -292,6 +336,13 @@ async function performInterrupt(deps: ActorControlDeps, sessionId: string, submi
       const after = deps.store.getRun(replacement.run.id);
       if (after.native?.delivery === 'failed') return after;
       if (after.native?.delivery !== 'queued') {
+        const oldTurn = stop?.turnId ?? activeTurnId;
+        const activeAfter = deps.readStatus(sessionId)?.activeTurn;
+        const confirmedReplacement = after.native?.delivery === 'observed' && Boolean(after.native.nativeMessageId)
+          && (!oldTurn || (Boolean(after.native.nativeTurnId) && after.native.nativeTurnId !== oldTurn && activeAfter?.turnId !== oldTurn));
+        if (!confirmedReplacement) {
+          throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The replacement send did not confirm that the previous turn stopped', 409);
+        }
         settleInterrupted(deps, targets, deps.traits(session.backendId));
         await deps.adapter.endInterruptedTurns(sessionId, targets, stop, activeTurnId);
         return after;

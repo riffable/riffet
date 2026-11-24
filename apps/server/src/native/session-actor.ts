@@ -13,7 +13,10 @@ import {
   applyObservation, IDLE_OUTCOME_GRACE_MS, IDLE_RECONCILE_MS, isSlashCommand,
   releaseEndedSteers, trackTurnOutcome, watchDeliveries, type ActorObservationDeps,
 } from './actor-observations.js';
-import { beginInterrupt, checkRecovery, continueRecovery, type ActorControlDeps } from './actor-interrupt.js';
+import {
+  awaitingLaterTurn, beginInterrupt, checkRecovery, continueRecovery, idleForRecovery, releaseAfterLaterTurn,
+  type ActorControlDeps,
+} from './actor-interrupt.js';
 
 export { IDLE_OUTCOME_GRACE_MS, IDLE_RECONCILE_MS };
 
@@ -44,12 +47,11 @@ type ActorMessage =
 
 /**
  * Whether an unfinished native run still needs a standing live watch on its provider.
- * A steer whose target turn already ended (`queueReleasedAt`) can never run in a later turn, so
- * it must not pin the provider watch or keep an idle CLI from being reclaimed; late journal
- * receipts still settle it through `subscribeCorrections`.
+ * A released run (`queueReleasedAt`) no longer holds the queue or pins an idle CLI from being
+ * reclaimed; late journal or provider receipts still settle it through `subscribeCorrections`.
  */
 export function runNeedsDispatchWatch(run: Run): boolean {
-  return !(run.native?.intent === 'steer' && Boolean(run.native.queueReleasedAt));
+  return !run.native?.queueReleasedAt;
 }
 
 /** Process-wide services a session actor may use. Cross-session state stays on the coordinator. */
@@ -57,7 +59,7 @@ export interface SessionActorHost {
   readonly store: Store;
   readonly native: NativeDispatcherBackend;
   readonly runtime: {
-    withSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
+    withSession<T>(sessionId: string, operation: () => Promise<T>, options?: { detached?: boolean }): Promise<T>;
     ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<unknown>;
   };
   readonly workspace: import('../workspace/index.js').WorkspaceService;
@@ -100,6 +102,10 @@ export class SessionActor {
   private waking = false;
   private subscribing = false;
   private idleQueued = false;
+  private releaseCheck: Promise<void> | undefined;
+  private lastReleaseProbe: string | undefined;
+  private releaseEndSequence = 0;
+  private lastStatusIdle = false;
   private readonly traced: DispatchTrace | undefined;
   private readonly adapter: ExecutionAdapter;
   private readonly obsDeps: ActorObservationDeps;
@@ -170,7 +176,7 @@ export class SessionActor {
 
   isIdle(runs = this.store.listUnfinishedNativeRuns(this.sessionId)): boolean {
     return !runs.some(runNeedsDispatchWatch) && this.worker === undefined && !this.interrupting && this.interruptionTask === undefined
-      && !this.recoveryActive && this.recoveryChecks.size === 0 && this.steerTasks.size === 0
+      && !this.recoveryActive && this.recoveryChecks.size === 0 && this.releaseCheck === undefined && this.steerTasks.size === 0
       && this.startReservations === 0 && this.drainHeldSteers.size === 0 && this.timer === undefined;
   }
 
@@ -182,6 +188,10 @@ export class SessionActor {
     return queueOf(this.admission(this.sessionId, this.store.listUnfinishedNativeRuns(this.sessionId), status));
   }
 
+  kick(): void {
+    this.lastReleaseProbe = undefined;
+    this.step();
+  }
   step(): void { this.mailbox.post({ type: 'wake' }); }
   observe(sessionId: string, message: DispatchObservation): void { this.mailbox.post({ type: 'observation', sessionId, observation: message }); }
   settle(): void { this.mailbox.post({ type: 'settle' }); }
@@ -238,6 +248,7 @@ export class SessionActor {
     this.clearTimer();
     const pending: Array<Promise<unknown>> = [];
     if (this.worker) pending.push(this.worker);
+    if (this.releaseCheck) pending.push(this.releaseCheck);
     for (const task of this.steerTasks.values()) pending.push(task);
     if (this.interruptionTask) pending.push(this.interruptionTask.task);
     this.pendingSteerOutcomes.clear();
@@ -264,10 +275,43 @@ export class SessionActor {
     this.traced?.record(runs, this.phase(runs), cause, id => { try { return this.store.getRun(id); } catch { return undefined; } });
     if (this.mailbox.pending) return;
     if (this.shouldDispatch(runs)) this.wakeSoon();
-    else if (this.isIdle(runs)) {
-      if (evictNow) this.host.onIdle(this.sessionId, this);
-      else this.deferIdle();
+    else {
+      this.maybeReleaseAfterLaterTurn(runs);
+      if (this.isIdle(runs)) {
+        if (evictNow) this.host.onIdle(this.sessionId, this);
+        else this.deferIdle();
+      }
     }
+  }
+
+  private maybeReleaseAfterLaterTurn(runs: readonly Run[]): void {
+    if (this.host.closed || !this.attached() || !this.native.canReleaseAfterLaterTurn
+      || this.worker !== undefined || this.interrupting || this.recoveryActive || this.releaseCheck !== undefined) return;
+    const candidate = runs.find(awaitingLaterTurn);
+    if (!candidate) { this.lastReleaseProbe = undefined; return; }
+    let session: Session;
+    try { session = this.store.getSession(this.sessionId); } catch { return; }
+    if (session.archivedAt || !session.nativeSessionId || !session.terminalId
+      || this.host.workspaceReserved(session) || this.native.pending?.(session.backendId ?? '')) return;
+    const status = this.readStatus(this.sessionId);
+    if (!idleForRecovery(status)) return;
+    const probeKey = JSON.stringify([candidate.id, session.nativeSessionId, session.terminalId, this.releaseEndSequence]);
+    if (probeKey === this.lastReleaseProbe) return;
+    this.lastReleaseProbe = probeKey;
+    let released = false;
+    let release!: (result: Promise<void>) => void;
+    const gate = new Promise<Promise<void>>(resolve => { release = resolve; });
+    const task = gate.then(inner => inner).finally(() => {
+      if (this.releaseCheck === task) this.releaseCheck = undefined;
+      if (!this.host.closed && this.attached()) {
+        if (released) { this.lastReleaseProbe = undefined; this.step(); }
+        else this.settle();
+      }
+    });
+    this.releaseCheck = task;
+    release(this.runtime.withSession(this.sessionId, async () => {
+      released = await releaseAfterLaterTurn(this.ctrlDeps, this.sessionId, candidate.id, () => this.worker !== undefined);
+    }, { detached: true }).then(() => undefined, () => undefined));
   }
 
   phase(runs: readonly Run[] = this.store.listUnfinishedNativeRuns(this.sessionId)): SessionPhase {
@@ -598,6 +642,17 @@ export class SessionActor {
   }
 
   private apply(sessionId: string, message: DispatchObservation): void {
+    if (message.type === 'events' && message.events.some(event => ['run_completed', 'run_failed', 'run_cancelled'].includes(event.type))) {
+      this.releaseEndSequence += 1;
+      this.lastReleaseProbe = undefined;
+    } else if (message.type === 'status') {
+      const idle = idleForRecovery(message.status);
+      if (idle && !this.lastStatusIdle) {
+        this.releaseEndSequence += 1;
+        this.lastReleaseProbe = undefined;
+      }
+      this.lastStatusIdle = idle;
+    }
     applyObservation(this.obsDeps, sessionId, message);
   }
 
@@ -610,8 +665,22 @@ export class SessionActor {
     return changed ?? run;
   }
 
-  check(sessionId: string, runId: string): Promise<NativeRunRecovery> {
-    return checkRecovery(this.ctrlDeps, sessionId, runId);
+  async check(sessionId: string, runId: string): Promise<NativeRunRecovery> {
+    const result = await checkRecovery(this.ctrlDeps, sessionId, runId);
+    if (this.native.canReleaseAfterLaterTurn && awaitingLaterTurn(result.run)
+      && !this.worker && !this.interrupting && !this.recoveryActive) {
+      const released = await this.runtime.withSession(sessionId, () =>
+        releaseAfterLaterTurn(this.ctrlDeps, sessionId, runId, () => this.worker !== undefined), { detached: true }).catch(() => false);
+      if (released) {
+        this.lastReleaseProbe = undefined;
+        this.step();
+        const latest = this.store.getRun(runId);
+        const queuedRunIds = this.store.listUnfinishedNativeRuns(sessionId)
+          .filter(run => run.native?.delivery === 'queued' && !run.native.intent).map(run => run.id);
+        return { run: latest, canContinue: false, queuedRunIds };
+      }
+    }
+    return result;
   }
 
   continue(sessionId: string, runId: string, queuedRunIds: string[]): Promise<Run> {

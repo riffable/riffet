@@ -120,4 +120,41 @@ describe('transcriptTurns interaction tool boundaries', () => {
     expect(afterAsk.type === 'process' && afterAsk.running).toBe(true);
     expect(afterAsk.type === 'process' && afterAsk.canAutoFold).toBe(false);
   });
+
+  it('keeps the running process block active when an unreceived steer sits at the end of the turn', () => {
+    const unreceivedSteer: TimelineItem = {
+      kind: 'user',
+      turn: TURN,
+      key: 'user:steer-pending',
+      text: 'also check edge cases',
+      attachments: [],
+      event: projected(3, 'user_message_chunk'),
+      run: {
+        id: 'run-steer',
+        sessionId: 's1',
+        commandId: 'cmd-steer',
+        prompt: 'also check edge cases',
+        state: 'queued',
+        createdAt: '2026-01-01T00:00:03.000Z',
+        updatedAt: '2026-01-01T00:00:03.000Z',
+        native: {
+          delivery: 'preparing',
+          intent: 'steer',
+          ownerRunId: 'run-1',
+          nativeTurnId: 'turn-1',
+          input: { text: 'also check edge cases', attachmentIds: [], context: [] },
+          attempt: 1,
+        },
+      } as never,
+    };
+    const timeline: TimelineItem[] = [
+      user(1, 'Run checks'),
+      tool(2, 'shell', 'Shell', 'in_progress'),
+      unreceivedSteer,
+    ];
+    const [turn] = transcriptTurns(timeline, true, undefined);
+    const process = turn!.rows.find(row => row.type === 'process');
+    expect(process && process.type === 'process' && process.running).toBe(true);
+    expect(process && process.type === 'process' && process.interrupted).toBe(false);
+  });
 });

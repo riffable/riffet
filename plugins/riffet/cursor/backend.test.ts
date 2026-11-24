@@ -305,4 +305,53 @@ describe('CursorBackend.canReleaseInput', () => {
       expect(await backend.canReleaseInput(host, ctx, runRef)).toBe(false);
     }
   });
+
+  it('proves canReleaseAfterLaterTurn only for a later distinct completed turn when no browser controls the terminal', async () => {
+    const sentAt = Date.parse('2026-11-24T00:00:00.000Z');
+    const uncertainRun: AgentRunRef = {
+      ...runRef, renderedText: 'original prompt', inputText: 'original prompt', dispatchAt: sentAt,
+    };
+    const build = (overrides: {
+      liveStep?: { turn: string; at: string; step: string; sealed: boolean; prompt?: string };
+      turnEndStatus?: string;
+      ownerId?: string;
+      storeRoot?: string;
+    } = {}) => {
+      const { backend, host, ctx } = setupRelease();
+      const step = overrides.liveStep ?? {
+        turn: 'later-turn', at: '2026-11-24T00:05:00.000Z', step: 'step-later', sealed: true, prompt: 'a later prompt', parts: [],
+      };
+      const built = (backend as unknown as { built: Record<string, unknown> }).built;
+      built.live = { read: () => step };
+      if (overrides.ownerId) {
+        host.terminals.get = async () => ({ id: 'terminal-1', state: 'running', epoch: 1, ownerId: overrides.ownerId });
+      }
+      const root = 'root-1';
+      const closedCursor = JSON.stringify({ v: 1, mapping: 3, from: 0, root, n: 4, len: 4, digest: '', mapper: {}, turn: { id: 'later-turn', at: '2026-11-24T00:05:00.000Z', ended: true }, recent: ['later-turn'], placed: {}, children: [] });
+      const writer = { cursor: closedCursor, turnEndStatus: (id: string) => id === 'later-turn' ? (overrides.turnEndStatus ?? 'completed') : undefined } as never;
+      const source = new CursorTranscriptSource({ sessionId: ctx.session.id, chatsDir: () => '/nonexistent', chatId: () => 'chat-1' });
+      vi.spyOn(source as unknown as { open(): unknown }, 'open').mockImplementation(() => ({
+        chatId: 'chat-1',
+        meta: () => ({ latestRootBlobId: overrides.storeRoot ?? root }),
+        close: () => undefined,
+      }));
+      host.transcript.withSource = async (_sid, task) => await task(source, writer);
+      return { backend, host, ctx };
+    };
+
+    const ok = build();
+    expect(await ok.backend.canReleaseAfterLaterTurn(ok.host, ok.ctx, uncertainRun)).toBe(true);
+
+    // Same prompt text, non-completed later turn, browser-owned terminal, or stale store root must refuse.
+    for (const bad of [
+      { liveStep: { turn: 'later-turn', at: '2026-11-24T00:05:00.000Z', step: 'step-later', sealed: true, prompt: 'original prompt' } },
+      { liveStep: { turn: 'later-turn', at: '2026-11-23T23:59:00.000Z', step: 'step-later', sealed: true, prompt: 'a later prompt' } },
+      { turnEndStatus: 'interrupted' },
+      { ownerId: 'browser-1' },
+      { storeRoot: 'root-2' },
+    ]) {
+      const h = build(bad);
+      expect(await h.backend.canReleaseAfterLaterTurn(h.host, h.ctx, uncertainRun)).toBe(false);
+    }
+  });
 });

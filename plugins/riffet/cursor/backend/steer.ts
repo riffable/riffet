@@ -20,7 +20,10 @@ interface ActiveGeneration extends NativeTurnTarget { terminalId: string }
 interface Entry {
   inputs: DeferredSteerInputs;
   active?: ActiveGeneration;
-  retired: Set<string>;
+  /** Generations seen by hooks: `'retired'` once ended/rejected, or remembered while queued behind an active turn. */
+  generations: Map<string, 'retired' | ActiveGeneration>;
+  /** Per-session serialization for hook HTTP requests without waiting on SessionLock (which TUI delivery/stop holds). */
+  hooks: Promise<void>;
   /** Run outcomes already published, including hooks whose journal read has yet to land. */
   ended: Map<string, TurnOutcome>;
   /** The last verified idle root and the read currently checking one. */
@@ -105,13 +108,14 @@ export class CursorSteerBridge {
       offline: session => this.reject(session.id, 'Cursor connection is no longer writable'),
       answered: (session, target, stillIdle) => { void this.answered(session, target, stillIdle).catch(() => undefined); },
       unnamedBusy: session => { void this.hydrate(session, true).catch(() => undefined); },
+      requestStarted: (sessionId, nativeSessionId, turnId, fromStore) => this.requestStarted(sessionId, nativeSessionId, turnId, fromStore),
     });
   }
 
   bind(sessionId: string): Entry {
     let entry = this.entries.get(sessionId);
     if (!entry) {
-      entry = { retired: new Set(), ended: new Map(), inputs: new DeferredSteerInputs(this.steerHost, {
+      entry = { generations: new Map(), hooks: Promise.resolve(), ended: new Map(), inputs: new DeferredSteerInputs(this.steerHost, {
         backendId: 'cursor', sessionId, currentTarget: () => this.activeTurn(this.port.getSession(sessionId)),
       }) };
       this.entries.set(sessionId, entry);
@@ -202,7 +206,7 @@ export class CursorSteerBridge {
     const turnId = run?.nativeTurnId;
     if (!turnId) return;
     const target = { nativeSessionId, turnId };
-    if (entry.retired.has(turnId) || entry.ended.has(turnKey(target))) return;
+    if (entry.generations.get(turnId) === 'retired' || entry.ended.has(turnKey(target))) return;
     const state = this.native.turnState(session.id, target);
     // `undefined` means the store has not been read yet; `open` means the turn is still in it.
     if (state === undefined ? storeShowsOpen : state !== 'open') return;
@@ -249,9 +253,60 @@ export class CursorSteerBridge {
     });
   }
 
+  private rememberGeneration(entry: Entry, turnId: string, state: 'retired' | ActiveGeneration): void {
+    entry.generations.delete(turnId);
+    entry.generations.set(turnId, state);
+    while (entry.generations.size > 256) entry.generations.delete(entry.generations.keys().next().value!);
+  }
+
   private retire(entry: Entry, turnId: string): void {
-    entry.retired.add(turnId);
-    while (entry.retired.size > 256) entry.retired.delete(entry.retired.values().next().value!);
+    this.rememberGeneration(entry, turnId, 'retired');
+  }
+
+  /**
+   * Promotes a turn once the live tap or chat store confirms Cursor actually started that request.
+   * Queued follow-up prompts fire `beforeSubmitPrompt` while the previous turn is still running, so
+   * `beforeSubmitPrompt` remembers them without displacing `entry.active`; this promotes them when
+   * execution actually shifts.
+   */
+  requestStarted(sessionId: string, nativeSessionId: string, turnId: string, fromStore: boolean): void {
+    if (this.closed) return;
+    const entry = this.entries.get(sessionId);
+    if (!entry) return;
+    const target: NativeTurnTarget = { nativeSessionId, turnId };
+    const known = entry.generations.get(turnId);
+    if (known === 'retired' || entry.ended.has(turnKey(target))) return;
+    let current: AgentSessionView;
+    try { current = this.port.getSession(sessionId); } catch { return; }
+    if (current.archivedAt || current.nativeSessionId !== nativeSessionId || !current.terminalId
+      || ['failed', 'interrupted', 'cancelling'].includes(current.state)) return;
+    const terminal = this.port.findTerminal(current.terminalId);
+    if (!terminal || terminal.state === 'exited') return;
+    if (sameTarget(entry.active, target)) return;
+    const active: ActiveGeneration = known && known.nativeSessionId === nativeSessionId && known.terminalId === terminal.id
+      ? known : { nativeSessionId, turnId, terminalId: terminal.id };
+    if (entry.active) {
+      if (entry.active.nativeSessionId !== nativeSessionId) return;
+      const previous = this.native.turnState(sessionId, entry.active);
+      if (previous === 'answered') {
+        this.end(entry, sessionId, entry.active, { status: 'completed', at: new Date().toISOString() });
+      } else {
+        this.retire(entry, entry.active.turnId);
+        entry.active = undefined;
+        entry.inputs.reject('Cursor started another generation');
+      }
+    } else if (!fromStore && !known) {
+      // A live tap stream for a brand-new turn that bypassed `beforeSubmitPrompt` still names the turn.
+    }
+    this.rememberGeneration(entry, turnId, active);
+    entry.active = active;
+    this.native.notifyTurnChanged(sessionId);
+  }
+
+  private serializeHook<T>(entry: Entry, task: () => Promise<T>): Promise<T> {
+    const run = entry.hooks.then(task, task);
+    entry.hooks = run.then(() => undefined, () => undefined);
+    return run;
   }
 
   reject(sessionId: string, reason: string): void {
@@ -315,7 +370,9 @@ export class CursorSteerBridge {
     const target = { nativeSessionId, turnId: turnId! };
     // Outside the session lock: the snapshot can take a second or two, and the command waits for this hook but nothing else should.
     await this.observeWorkspace(session, payload);
-    return this.port.withSessionLock(session.id, async () => {
+    // Serialize per-session hooks without waiting on `SessionLock`: TUI `deliver`/`interrupt` hold
+    // `SessionLock` while waiting for the pane, while Cursor blocks on HTTP hooks before updating it.
+    return this.serializeHook(entry, async () => {
       const current = this.port.getSession(session.id);
       if (signal.aborted || current.archivedAt || current.nativeSessionId !== nativeSessionId) return {};
       const interruptedTool = event === 'postToolUseFailure' && payload.is_interrupt === true;
@@ -324,15 +381,23 @@ export class CursorSteerBridge {
         this.end(entry, session.id, target, { status, at: new Date().toISOString() });
         return {};
       }
-      if (entry.retired.has(target.turnId)) return {};
+      if (entry.generations.get(target.turnId) === 'retired') return {};
       if (event === 'beforeSubmitPrompt') {
-        // The generation exists when the prompt is submitted, which is before the first tool hook.
-        if (entry.active && !sameTarget(entry.active, target)) this.reject(session.id, 'Cursor generation changed before the input was consumed');
         if (current.terminalId) {
           const terminal = await this.port.terminals.get(current.terminalId);
           if (!signal.aborted && terminal.state !== 'exited' && this.port.getSession(session.id).terminalId === terminal.id) {
-            entry.active = { ...target, terminalId: terminal.id };
-            this.native.notifyTurnChanged(session.id);
+            const gen: ActiveGeneration = { ...target, terminalId: terminal.id };
+            if (!entry.active || sameTarget(entry.active, target)) {
+              this.rememberGeneration(entry, target.turnId, gen);
+              entry.active = gen;
+              this.native.notifyTurnChanged(session.id);
+            } else {
+              // Cursor fires `beforeSubmitPrompt` for queued follow-ups before the current turn stops.
+              // Remember this generation without displacing `entry.active`, and ask the store/live tap
+              // whether execution has actually moved on.
+              this.rememberGeneration(entry, target.turnId, gen);
+              try { this.native.refreshTurnIdentity(this.port.getSession(session.id)); } catch { /* best effort */ }
+            }
           }
         }
         if (standingLaunch) {
@@ -379,20 +444,22 @@ export class CursorSteerBridge {
           if (previous === 'answered') this.end(entry, session.id, entry.active, { status: 'completed', at: new Date().toISOString() });
           else this.reject(session.id, 'Cursor started another generation');
         }
-        entry.active = { ...target, terminalId: terminal.id };
+        const gen: ActiveGeneration = { ...target, terminalId: terminal.id };
+        this.rememberGeneration(entry, target.turnId, gen);
+        entry.active = gen;
         this.native.notifyTurnChanged(session.id);
         return {};
       }
       if (event !== 'postToolUse' && event !== 'postToolUseFailure') return {};
       if (!sameTarget(this.activeTurn(this.port.getSession(session.id)), target) || entry.active?.terminalId !== terminal.id) return {};
-      // claim removes the matching inbox entries before it awaits their fences, and the session lock keeps the
-      // other hooks of this conversation out meanwhile. Parallel tool hooks cannot deliver the same input twice,
-      // and a stopped/changed generation can never claim it.
+      // claim removes the matching inbox entries before it awaits their fences, and per-session hook
+      // serialization keeps parallel tool hooks from claiming the same input twice. Once `claimAsync`
+      // returns fenced context, always deliver it unless the HTTP request itself aborted.
       const owner = this.owner(session.id, target);
       const context = await entry.inputs.claimAsync(target, { terminalId: terminal.id, terminalEpoch: terminal.epoch,
         ...(owner ? { ownerRunId: owner.id, resolvedConfig: owner.resolvedConfig ?? owner.config } : {}),
       });
-      return context ? { additional_context: context } : {};
+      return context && !signal.aborted ? { additional_context: context } : {};
     });
   }
 
