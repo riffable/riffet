@@ -5,7 +5,6 @@ interface ListFrame {
   bullet: string;
   orderNumber: number;
   lastLineEndedWithColon: boolean;
-  hasCitation: boolean;
 }
 
 const THEMATIC_BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
@@ -230,17 +229,16 @@ export function alignListFences(markdown: string): string {
           target = top;
         }
       } else {
-        // Column-0 citation fences belong to the list item when attached without a blank line,
-        // inside a nested list item (within 1 blank line regardless of trailing punctuation),
-        // introduced by a trailing colon, repeating a sibling citation in the same list, or
-        // followed by a list continuation. Ordinary column-0 fences require a list continuation.
-        const nestedCitation = citation && stack.length >= 2 && blankLines <= 1;
-        const siblingCitation = citation && top.hasCitation && blankLines <= 1 && !continued;
+        // Cursor's `<citing_code>` rule forbids indenting triple backticks, so a column-0
+        // `start:end:path` citation within 1 blank line of an open list item belongs to that item
+        // (even at top level, without a trailing colon, or on the last item before a heading/EOF).
+        // Ordinary column-0 fences can be indented by the author/model, so they require a clear
+        // list continuation after the fence to avoid swallowing genuine top-level code blocks.
         const shouldIndent = citation
-          ? !sawBlank || (blankLines <= 1 && top.lastLineEndedWithColon) || nestedCitation || siblingCitation || strongContinuation
+          ? blankLines <= 1 || strongContinuation
           : strongContinuation && (!sawBlank || Boolean(continued!.indented) || continued!.frame.markerIndent > 0 || continued!.frame.kind === 'ol');
         if (shouldIndent) {
-          target = continues && sawBlank && !top.lastLineEndedWithColon && !nestedCitation ? continues : top;
+          target = !citation && continues && sawBlank && !top.lastLineEndedWithColon ? continues : top;
         } else {
           stack.length = 0;
         }
@@ -249,7 +247,6 @@ export function alignListFences(markdown: string): string {
       if (target) {
         while (stack.length > 0 && stack[stack.length - 1] !== target) stack.pop();
         target.lastLineEndedWithColon = false;
-        if (citation) target.hasCitation = true;
         const extra = target.contentIndent - fence.indent;
         activeFence = { char: fence.char, size: fence.size, maxCloserIndent: fence.indent + 3, extraIndent: extra };
         blankLines = 0;
@@ -277,16 +274,8 @@ export function alignListFences(markdown: string): string {
 
     const marker = parseListMarker(line, stack);
     if (marker) {
-      let inheritedCitation = false;
       while (stack.length > 0 && marker.markerIndent < stack[stack.length - 1]!.contentIndent) {
-        const popped = stack.pop()!;
-        if (
-          popped.markerIndent === marker.markerIndent
-          && popped.kind === marker.kind
-          && popped.bullet === marker.bullet
-        ) {
-          inheritedCitation = popped.hasCitation;
-        }
+        stack.pop();
       }
       stack.push({
         markerIndent: marker.markerIndent,
@@ -295,7 +284,6 @@ export function alignListFences(markdown: string): string {
         bullet: marker.bullet,
         orderNumber: marker.orderNumber,
         lastLineEndedWithColon: marker.endedWithColon,
-        hasCitation: inheritedCitation,
       });
       blankLines = 0;
       output.push(rawLine);

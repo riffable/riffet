@@ -73,7 +73,7 @@ describe('alignListFences', () => {
       '- First item',
       '- Second item',
       '',
-      '```10:20:src/app.ts',
+      '```ts',
       'const topLevel = true;',
       '```',
       '',
@@ -85,15 +85,29 @@ describe('alignListFences', () => {
     expect(parseTypes(aligned)).toEqual(['list', 'code', 'list']);
   });
 
-  it('does not carry a colon from an earlier code block onto a later top-level citation', () => {
+  it('does not carry a colon from an earlier code block onto a later top-level fence', () => {
     const input = [
       '- Item with code:',
       '  ```ts',
       '  const inside = 1;',
       '  ```',
       '',
-      '```10:20:src/top.ts',
+      '```ts',
       'const outside = 2;',
+      '```',
+    ].join('\n');
+
+    expect(alignListFences(input)).toBe(input);
+    expect(parseTypes(alignListFences(input))).toEqual(['list', 'code']);
+  });
+
+  it('keeps citations separated by 2+ blank lines at column 0', () => {
+    const input = [
+      '- Item one',
+      '',
+      '',
+      '```10:20:src/top.ts',
+      'const outside = true;',
       '```',
     ].join('\n');
 
@@ -106,7 +120,7 @@ describe('alignListFences', () => {
       '1. Old first',
       '2. Old second',
       '',
-      '```10:20:src/top.ts',
+      '```ts',
       'const outside = true;',
       '```',
       '',
@@ -252,5 +266,34 @@ describe('alignListFences', () => {
 
     expect(tree.children.map((c) => c.type)).toEqual(['list']);
     expect(tree.children[0]!.children![0]!.children.map((c) => c.type)).toEqual(['paragraph', 'code', 'paragraph']);
+  });
+
+  it('keeps a col-0 citation inside a top-level bullet ending with a period before a heading', () => {
+    const input = [
+      '### 1. 刚点发送时：为什么先出现在内容区域',
+      '- 发送前会话处于未恢复状态。',
+      '- `useSessionTranscript` 直接显示在**内容区域**。',
+      '',
+      '```83:99:apps/web/src/app/session/useSessionTranscript.ts',
+      'for (const entry of control.inbox) {',
+      '  if (entry.placement !== "queued") continue;',
+      '}',
+      '```',
+      '',
+      '### 2. 紧接着：为什么又跳回「排队」',
+    ].join('\n');
+
+    const aligned = alignListFences(input);
+    const tree = unified().use(remarkParse).use(remarkGfm).parse(aligned) as {
+      children: Array<{
+        type: string;
+        children?: Array<{ children: Array<{ type: string }> }>;
+      }>;
+    };
+
+    expect(tree.children.map((c) => c.type)).toEqual(['heading', 'list', 'heading']);
+    const items = tree.children[1]!.children!;
+    expect(items).toHaveLength(2);
+    expect(items[1]!.children.map((c) => c.type)).toEqual(['paragraph', 'code']);
   });
 });
