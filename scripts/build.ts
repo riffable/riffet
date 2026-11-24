@@ -92,7 +92,7 @@ try {
   const { metafile } = await build({entryPoints,outdir:'dist',bundle:true,platform:'node',format:'esm',target:'node24',packages:'external',sourcemap:true,metafile:true,plugins:[bundledXlsx,...pluginsModule ? [pluginsModule.plugin] : []],define:{__RIFFET_BUILD_RECORD__:JSON.stringify(record)}});
   // Lingui macros are compile-time only. A web module the server bundles cannot use one: with
   // node_modules left external the import survives, and the server dies at startup on the macro's
-  // own peer dependency. Pass the translated text in instead (see visualizationReferences.ts).
+  // own peer dependency. Pass the translated text in instead (see packages/timeline/src/visualizationReferences.ts).
   for (const file of Object.keys(metafile.outputs).filter(output => output.endsWith('.js'))) {
     if ((await readFile(file, 'utf8')).includes('@lingui/core/macro')) throw new Error(`${file} imports the compile-time macro @lingui/core/macro; the server bundle must not use Lingui macros`);
   }

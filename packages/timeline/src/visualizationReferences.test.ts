@@ -1,14 +1,13 @@
-import { describe,expect,it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-parseVisualizationReferenceLine,
-visualizationReferenceFromHref,
-visualizationReferenceHref
-} from './visualizationReferences';
+  parseVisualizationReferenceLine,
+  visualizationReferenceFromHref,
+  visualizationReferenceHref,
+} from './visualizationReferences.js';
 
 const marker = (value: unknown) => `\uE200visualize\uE202${JSON.stringify(value)}\uE201`;
 
 describe('visualization reference protocol', () => {
-
   it('round-trips validated references through an encoded Markdown destination', () => {
     const reference = { path: '/tmp/a (b).html', title: '标题 (wide)', mode: 'wide' as const };
     expect(visualizationReferenceFromHref(visualizationReferenceHref(reference))).toEqual(reference);

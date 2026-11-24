@@ -66,7 +66,7 @@ pnpm gen:theme:check    # CI 会跑；忘了生成就在这一步失败
 pnpm typecheck && pnpm test && pnpm build
 ```
 
-**不要手工编辑**这些生成文件：Kotlin `apps/mobile/shared/src/commonMain/kotlin/riffet/theme/RiffetTheme.kt`、Swift `apps/macos/Riffet/Theme/RiffetTheme.swift`、Web `apps/web/src/lib/theme-builtins.generated.ts` 与 `theme-ansi.generated.ts`。它们都由 `scripts/gen-mobile-theme.ts` 从 CSS 与 `scripts/theme-ansi.ts` 生成。
+**不要手工编辑**这些生成文件：Kotlin `apps/mobile/shared/src/commonMain/kotlin/riffet/theme/RiffetTheme.kt`、Swift `apps/macos/Riffet/Theme/RiffetTheme.swift`、Shared `packages/contracts/src/theme-builtins.generated.ts` 与 Web `apps/web/src/lib/theme-ansi.generated.ts`。它们都由 `scripts/gen-mobile-theme.ts` 从 CSS 与 `scripts/theme-ansi.ts` 生成。
 
 ## 4. 自定义主题（服务端共享）
 

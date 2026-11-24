@@ -28,7 +28,7 @@ import { markdownBlocks } from './markdownBlocks';
 import { mayContainMath, useMath, type MathModules } from './mathRenderer';
 import { useRemembered } from './rememberedState';
 import { VisualizationPreview } from './VisualizationPreview';
-import { rewriteVisualizationReferences, visualizationReferenceFromHref } from './visualizationReferences';
+import { rewriteVisualizationReferences, visualizationReferenceFromHref } from '../../../../../packages/timeline/src/index';
 import { registerBounded } from '@/lib/cache-registry';
 
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'));

@@ -8,3 +8,4 @@ export * from './toolTitle.js';
 export * from './toolPresentation.js';
 export * from './lineDiff.js';
 export * from './findText.js';
+export * from './visualizationReferences.js';

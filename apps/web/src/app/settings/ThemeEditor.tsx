@@ -3,7 +3,7 @@ import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
-  CODE_THEME_ROLES, contrastRatio, importCodeThemeJson, normalizeThemeColor, normalizeThemeSeed, parseColor, resolveCodeThemeId, THEME_ANSI_KEYS, THEME_ROLES, validateCustomThemes,
+  BUILTIN_THEME_PALETTES, CODE_THEME_ROLES, contrastRatio, importCodeThemeJson, normalizeThemeColor, normalizeThemeSeed, parseColor, resolveCodeThemeId, THEME_ANSI_KEYS, THEME_ROLES, validateCustomThemes,
   type CodeThemeRole, type CustomCodeSyntax, type CustomCodeSyntaxHalf, type CustomTheme, type ThemeDesign, type ThemeGradient, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeValidationIssue,
 } from '@contracts';
 import { BrandMark } from '@/components/BrandMark';
@@ -25,7 +25,6 @@ import { applySeed, deriveSeedGradient, inferSeed } from '@/lib/theme-seed';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
 import { ANSI_BY_THEME } from '@/lib/theme-ansi.generated';
-import { BUILTIN_THEME_PALETTES } from '@/lib/theme-builtins.generated';
 import { ThemeCanvas } from './ThemeCanvas';
 
 type Mode = 'light' | 'dark';

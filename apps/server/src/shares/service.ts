@@ -8,7 +8,7 @@ import type { PublishedPreview, SharePublisher, ShareIdentity } from '@riffet/pl
 import type { SessionShare, ShareCapability, ShareDraft, ShareDraftProgress, ShareSelection, ShareAppearanceRequest, ShareAppearance, ShareSnapshot, ShareStatus, TextParams } from '../../../../packages/contracts/src/index.js';
 import type { OwnedSharePublisher } from '../plugins/registry.js';
 import type { RouteDeps } from '../routes/deps.js';
-import { BUILTIN_THEME_PALETTES } from '../../../web/src/lib/theme-builtins.generated.js';
+import { BUILTIN_THEME_PALETTES } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { captureShareSnapshot, shareTurnCatalog } from './capture.js';
 import { buildSharePackage } from './package.js';

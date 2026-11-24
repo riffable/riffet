@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { copyWithToast } from '@/lib/files';
 import { cn, errorMessage } from '@/lib/utils';
 import { useFileAccess } from './fileAccess';
-import type { VisualizationReference } from './visualizationReferences';
+import type { VisualizationReference } from '../../../../../packages/timeline/src/index';
 
 function fileName(path: string): string {
   return path.split('/').filter(Boolean).at(-1) ?? path;

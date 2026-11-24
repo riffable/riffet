@@ -1,7 +1,6 @@
 {
   "agent-host -> adapters": 1,
   "appearance -> plugins": 1,
-  "apps/server -> apps/web": 2,
   "auxiliary -> backends/shared": 2,
   "backends -> backends/codex": 1,
   "backends -> backends/pi": 1,

@@ -1,4 +1,4 @@
-import { closesFence, fenceRun, type Fence } from '../../../../../packages/timeline/src/markdownSource';
+import { closesFence, fenceRun, type Fence } from './markdownSource.js';
 
 export interface VisualizationReference {
   path: string;

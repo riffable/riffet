@@ -5,7 +5,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { rewriteVisualizationReferences, visualizationReferenceFromHref, type VisualizationReference } from '../../../web/src/app/session/visualizationReferences.js';
+import { rewriteVisualizationReferences, visualizationReferenceFromHref, type VisualizationReference } from '../../../../packages/timeline/src/index.js';
 import type { ShareDraftProgress, ShareResource, ShareSnapshot } from '../../../../packages/contracts/src/share.js';
 import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';

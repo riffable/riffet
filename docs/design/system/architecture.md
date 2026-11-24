@@ -18,7 +18,7 @@
 
 | 命令 | 读 | 写 |
 |---|---|---|
-| `pnpm gen:theme` | `index.css` 的主题、`scripts/code-themes.ts` | Web `index.css`（`code-themes` 标记区）、`lib/theme-builtins.generated.ts`、`lib/theme-ansi.generated.ts`、`lib/code-themes.generated.ts`；Android `riffet/theme/RiffetTheme.kt`；Mac `Theme/RiffetTheme.swift`；iOS `Theme/RiffetTheme.swift` |
+| `pnpm gen:theme` | `index.css` 的主题、`scripts/code-themes.ts` | Web `index.css`（`code-themes` 标记区）、`lib/theme-ansi.generated.ts`、`lib/code-themes.generated.ts`；Shared `packages/contracts/src/theme-builtins.generated.ts`；Android `riffet/theme/RiffetTheme.kt`；Mac `Theme/RiffetTheme.swift`；iOS `Theme/RiffetTheme.swift` |
 | `pnpm gen:tokens` | `design-tokens.ts`、`mobile-styles.ts` | Web `index.css` 的生成段；Mac `Theme/Controls.swift`；Android `ui/design/MobileStyles.generated.kt`；iOS `Design/RiffetDesign.swift` |
 | `pnpm gen:styles` | `interface-styles.ts`、`index.css` | Mac `Theme/InterfaceStyles.swift` |
 

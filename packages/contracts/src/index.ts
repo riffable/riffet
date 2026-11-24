@@ -1,6 +1,7 @@
 export * from './extensions.js';
 export * from './update.js';
 export * from './theme.js';
+export * from './theme-builtins.generated.js';
 export * from './code-theme.js';
 export * from './vscode-code-theme.js';
 export * from './share.js';
