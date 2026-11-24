@@ -6753,6 +6753,10 @@ msgstr "标为新增的组件还没有 Mac 实现，迁移时先建组件，再�
 msgid "标准"
 msgstr "标准"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "标志"
+msgstr "标志"
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "标志 64（手机 48）· 标题 text-2xl 600"
 msgstr "标志 64（手机 48）· 标题 text-2xl 600"

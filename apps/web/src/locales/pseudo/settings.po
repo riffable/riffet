@@ -6753,6 +6753,10 @@ msgstr ""
 msgid "标准"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "标志"
+msgstr ""
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "标志 64（手机 48）· 标题 text-2xl 600"
 msgstr ""

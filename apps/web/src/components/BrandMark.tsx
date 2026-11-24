@@ -1,13 +1,36 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type SVGProps } from 'react';
+import { useAppearanceLogo } from '@/lib/appearance';
+import { useTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { APP_ICON_TILE, BRAND_BODY, BRAND_EYE, BRAND_MANE, BRAND_TEETH, BRAND_TILE_TRANSFORM, BRAND_VIEWBOX } from '@/lib/app-icon';
+
+function usePluginLogoUrl(disabled?: boolean): string | undefined {
+  const logo = useAppearanceLogo();
+  const { resolved } = useTheme();
+  if (disabled || !logo) return undefined;
+  return resolved === 'dark' ? (logo.darkAsset?.url ?? logo.asset.url) : logo.asset.url;
+}
 
 /**
  * The Riffet mark: a solid horse head in `currentColor` with the eye cut out, over a three-tooth
  * mane in the theme accent. `scripts/gen-brand.ts` draws the favicon and app icons from the same
- * geometry.
+ * geometry. When an appearance plugin logo is active (and `forceDefault` is not set), that image
+ * takes this slot while keeping the caller's sizing classes.
  */
-export function BrandMark(props: SVGProps<SVGSVGElement>) {
+export function BrandMark({ forceDefault, ...props }: SVGProps<SVGSVGElement> & { forceDefault?: boolean }) {
+  const pluginUrl = usePluginLogoUrl(forceDefault);
+  if (pluginUrl) {
+    return (
+      <img
+        src={pluginUrl}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className={cn('object-contain select-none', props.className)}
+        style={props.style}
+      />
+    );
+  }
   return (
     <svg aria-hidden="true" viewBox={BRAND_VIEWBOX} strokeLinejoin="round" {...props}>
       <path d={BRAND_MANE} strokeWidth=".6" className="fill-accent stroke-accent" />
@@ -59,7 +82,8 @@ function LivePart({ x, y, part, children }: { x: number; y: number; part: string
  * screen shows it running. With `once` it draws itself one time and then stays still: the first
  * launch's welcome page. Decoration only; it reports nothing else.
  */
-export function LiveBrandMark({ fixed, once, ...props }: SVGProps<SVGSVGElement> & { fixed?: LiveStyle; once?: boolean }) {
+export function LiveBrandMark({ fixed, once, forceDefault, ...props }: SVGProps<SVGSVGElement> & { fixed?: LiveStyle; once?: boolean; forceDefault?: boolean }) {
+  const pluginUrl = usePluginLogoUrl(forceDefault);
   const [picked, setStyle] = useState(pickLiveStyle);
   const style = once ? 'draw' : fixed ?? picked;
   const svgRef = useRef<SVGSVGElement>(null);
@@ -70,7 +94,7 @@ export function LiveBrandMark({ fixed, once, ...props }: SVGProps<SVGSVGElement>
   useEffect(() => {
     const svg = svgRef.current;
     const look = lookRef.current;
-    if (style !== 'gaze' || !svg || !look || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (pluginUrl || style !== 'gaze' || !svg || !look || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     let frame = 0, rest = 0, x = 0, y = 0, pointerX = 0, pointerY = 0, tracking = false;
     const step = () => {
       let targetX = 0, targetY = 0;
@@ -99,7 +123,20 @@ export function LiveBrandMark({ fixed, once, ...props }: SVGProps<SVGSVGElement>
       window.clearTimeout(rest); cancelAnimationFrame(frame);
       release(); look.removeAttribute('transform');
     };
-  }, [style]);
+  }, [pluginUrl, style]);
+
+  if (pluginUrl) {
+    return (
+      <img
+        src={pluginUrl}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        className={cn('object-contain select-none', props.className)}
+        style={props.style}
+      />
+    );
+  }
 
   const swap = () => {
     setStyle((current) => pickLiveStyle(current));

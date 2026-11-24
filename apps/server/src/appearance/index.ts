@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { extname } from 'node:path';
 import {
-  APPEARANCE_MAX_ICON_PACK_BYTES, iconPackProblem, APPEARANCE_MAX_FONT_BYTES, APPEARANCE_MAX_IMAGE_BYTES, APPEARANCE_MAX_PALETTE_BYTES, validateCustomThemes,
+  APPEARANCE_MAX_ICON_PACK_BYTES, iconPackProblem, APPEARANCE_MAX_FONT_BYTES, APPEARANCE_MAX_IMAGE_BYTES, APPEARANCE_MAX_LOGO_BYTES, APPEARANCE_MAX_PALETTE_BYTES, validateCustomThemes,
   type AppearanceAsset, type AppearanceCatalog, type AppearanceDeclarations, type CustomTheme, type ShareAppearance, type ShareFont,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { confined } from '../plugins/development.js';
 
-type Kind = 'font' | 'image' | 'palette' | 'iconPack' | 'packageIcon';
+type Kind = 'font' | 'image' | 'logo' | 'palette' | 'iconPack' | 'packageIcon';
 interface Source { id: string; appearance: AppearanceDeclarations; root: string }
 interface Resolved { file: string; sha256: string; size: number; type: string }
 
@@ -18,14 +18,23 @@ export const IMAGE_MAGIC: Record<'image/png' | 'image/jpeg' | 'image/webp', (hea
   'image/jpeg': head => head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff,
   'image/webp': head => head.subarray(0, 4).toString('latin1') === 'RIFF' && head.subarray(8, 12).toString('latin1') === 'WEBP',
 };
+const SVG_MAGIC = (head: Buffer): boolean => /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(head.subarray(0, 512).toString('utf8'));
+interface AssetRule { kind: Kind; type: string; limit: number; magic?: (head: Buffer) => boolean }
 /** The allow-list: what a package may ship as an appearance asset, and the largest each may be. */
-const TYPES: Record<string, { kind: Kind; type: string; limit: number; magic?: (head: Buffer) => boolean }> = {
+const TYPES: Record<string, AssetRule> = {
   '.woff2': { kind: 'font', type: 'font/woff2', limit: APPEARANCE_MAX_FONT_BYTES, magic: head => head.subarray(0, 4).toString('latin1') === 'wOF2' },
   '.png': { kind: 'image', type: 'image/png', limit: APPEARANCE_MAX_IMAGE_BYTES, magic: IMAGE_MAGIC['image/png'] },
   '.jpg': { kind: 'image', type: 'image/jpeg', limit: APPEARANCE_MAX_IMAGE_BYTES, magic: IMAGE_MAGIC['image/jpeg'] },
   '.jpeg': { kind: 'image', type: 'image/jpeg', limit: APPEARANCE_MAX_IMAGE_BYTES, magic: IMAGE_MAGIC['image/jpeg'] },
   '.webp': { kind: 'image', type: 'image/webp', limit: APPEARANCE_MAX_IMAGE_BYTES, magic: IMAGE_MAGIC['image/webp'] },
   '.json': { kind: 'palette', type: 'application/json', limit: APPEARANCE_MAX_PALETTE_BYTES },
+};
+const LOGO_TYPES: Record<string, AssetRule> = {
+  '.png': { kind: 'logo', type: 'image/png', limit: APPEARANCE_MAX_LOGO_BYTES, magic: IMAGE_MAGIC['image/png'] },
+  '.jpg': { kind: 'logo', type: 'image/jpeg', limit: APPEARANCE_MAX_LOGO_BYTES, magic: IMAGE_MAGIC['image/jpeg'] },
+  '.jpeg': { kind: 'logo', type: 'image/jpeg', limit: APPEARANCE_MAX_LOGO_BYTES, magic: IMAGE_MAGIC['image/jpeg'] },
+  '.webp': { kind: 'logo', type: 'image/webp', limit: APPEARANCE_MAX_LOGO_BYTES, magic: IMAGE_MAGIC['image/webp'] },
+  '.svg': { kind: 'logo', type: 'image/svg+xml', limit: APPEARANCE_MAX_LOGO_BYTES, magic: SVG_MAGIC },
 };
 /** An Agent icon is a mark, not artwork: a larger file is refused. */
 const PACKAGE_ICON_MAX_BYTES = 64 * 1024;
@@ -56,9 +65,9 @@ export class AppearanceService {
   }) {}
 
   async catalog(): Promise<AppearanceCatalog> {
-    const body: Omit<AppearanceCatalog, 'revision'> = { version: 1, palettes: [], fonts: [], backgrounds: [], presets: [], iconPacks: [] };
+    const body: Omit<AppearanceCatalog, 'revision'> = { version: 1, palettes: [], fonts: [], backgrounds: [], logos: [], presets: [], iconPacks: [] };
     for (const source of this.registry.appearanceSources()) {
-      const { palettes = [], fonts = [], backgrounds = [], presets = [], iconPacks = [] } = source.appearance;
+      const { palettes = [], fonts = [], backgrounds = [], logos = [], presets = [], iconPacks = [] } = source.appearance;
       const asset = async (path: string, kind: Kind): Promise<AppearanceAsset | undefined> => {
         const found = await this.resolve(source, path, kind);
         return found && { url: `/api/appearance/assets/${source.id}/${found.sha256}`, sha256: found.sha256, size: found.size, type: found.type };
@@ -80,7 +89,35 @@ export class AppearanceService {
       }
       for (const background of backgrounds) {
         const found = await asset(background.asset, 'image');
-        if (found) body.backgrounds.push({ id: background.id, plugin: source.id, title: background.title, asset: found, areas: background.areas, opacity: background.opacity ?? 1, fit: background.fit ?? 'cover' });
+        const darkFound = background.darkAsset ? await asset(background.darkAsset, 'image') : undefined;
+        if (found && (!background.darkAsset || darkFound)) {
+          body.backgrounds.push({
+            id: background.id,
+            plugin: source.id,
+            title: background.title,
+            asset: found,
+            ...(darkFound ? { darkAsset: darkFound } : {}),
+            areas: background.areas,
+            opacity: background.opacity ?? 1,
+            fit: background.fit ?? 'cover',
+            placement: background.placement ?? 'overlay',
+            position: background.position ?? 'center',
+            ...(background.surfaceOpacity !== undefined ? { surfaceOpacity: background.surfaceOpacity } : {}),
+          });
+        }
+      }
+      for (const logo of logos) {
+        const found = await asset(logo.asset, 'logo');
+        const darkFound = logo.darkAsset ? await asset(logo.darkAsset, 'logo') : undefined;
+        if (found && (!logo.darkAsset || darkFound)) {
+          body.logos!.push({
+            id: logo.id,
+            plugin: source.id,
+            title: logo.title,
+            asset: found,
+            ...(darkFound ? { darkAsset: darkFound } : {}),
+          });
+        }
       }
       for (const preset of presets) body.presets.push({ ...preset, plugin: source.id });
     }
@@ -92,19 +129,24 @@ export class AppearanceService {
    * that has any, so a broken newer version cannot replace a working one by dropping its contribution.
    */
   async problems(source: Source): Promise<string[]> {
-    const { palettes = [], fonts = [], backgrounds = [], iconPacks = [] } = source.appearance;
-    const declared: Array<[string, Kind]> = [
-      ...palettes.map((item): [string, Kind] => [item.asset, 'palette']),
-      ...iconPacks.map((item): [string, Kind] => [item.asset, 'iconPack']),
-      ...fonts.flatMap(font => font.files.map((file): [string, Kind] => [file.path, 'font'])),
-      ...backgrounds.map((item): [string, Kind] => [item.asset, 'image']),
-    ];
+    const declared = this.declaredAssets(source.appearance);
     const found: string[] = [];
     for (const [path, kind] of declared) {
       const reasons: string[] = [];
       if (!await this.resolve(source, path, kind, reason => reasons.push(reason))) found.push(`${path}: ${reasons[0] ?? 'it cannot be used'}`);
     }
     return found;
+  }
+
+  private declaredAssets(appearance: AppearanceDeclarations): Array<[string, Kind]> {
+    const { palettes = [], fonts = [], backgrounds = [], logos = [], iconPacks = [] } = appearance;
+    return [
+      ...palettes.map((item): [string, Kind] => [item.asset, 'palette']),
+      ...iconPacks.map((item): [string, Kind] => [item.asset, 'iconPack']),
+      ...fonts.flatMap(font => font.files.map((file): [string, Kind] => [file.path, 'font'])),
+      ...backgrounds.flatMap((item): Array<[string, Kind]> => [[item.asset, 'image'], ...(item.darkAsset ? [[item.darkAsset, 'image'] as [string, Kind]] : [])]),
+      ...logos.flatMap((item): Array<[string, Kind]> => [[item.asset, 'logo'], ...(item.darkAsset ? [[item.darkAsset, 'logo'] as [string, Kind]] : [])]),
+    ];
   }
 
   /**
@@ -184,14 +226,7 @@ export class AppearanceService {
     const current = SHA256.test(sha256) ? this.registry.appearanceSources().find(item => item.id === pluginId) : undefined;
     const sources = current ? [current, ...await this.registry.retainedAppearanceSources?.(pluginId) ?? []] : [];
     for (const source of sources) {
-      const { palettes = [], fonts = [], backgrounds = [], iconPacks = [] } = source.appearance;
-      const declared: Array<[string, Kind]> = [
-        ...palettes.map((item): [string, Kind] => [item.asset, 'palette']),
-        ...iconPacks.map((item): [string, Kind] => [item.asset, 'iconPack']),
-        ...fonts.flatMap(font => font.files.map((file): [string, Kind] => [file.path, 'font'])),
-        ...backgrounds.map((item): [string, Kind] => [item.asset, 'image']),
-      ];
-      for (const [path, kind] of declared) {
+      for (const [path, kind] of this.declaredAssets(source.appearance)) {
         const found = await this.resolve(source, path, kind);
         if (found?.sha256 === sha256) return found;
       }
@@ -233,7 +268,7 @@ export class AppearanceService {
     if (cached?.stamp === stamp && cached.kind === 'packageIcon') return typeof cached.result === 'string' ? undefined : cached.result;
     const bytes = await readFile(file).catch(() => undefined);
     if (!bytes) return undefined;
-    if (bytes.length <= PACKAGE_ICON_MAX_BYTES && /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(bytes.subarray(0, 512).toString('utf8'))) {
+    if (bytes.length <= PACKAGE_ICON_MAX_BYTES && SVG_MAGIC(bytes)) {
       const result: Resolved = { file, size: bytes.length, type: 'image/svg+xml', sha256: createHash('sha256').update(bytes).digest('hex') };
       this.resolved.set(file, { stamp, kind: 'packageIcon', result });
       return result;
@@ -257,7 +292,9 @@ export class AppearanceService {
       const extension = extname(file).toLowerCase();
       const rule = kind === 'iconPack' && extension === '.json'
         ? { kind, type: 'application/json', limit: APPEARANCE_MAX_ICON_PACK_BYTES }
-        : TYPES[extension];
+        : kind === 'logo'
+          ? LOGO_TYPES[extension]
+          : TYPES[extension];
       if (!rule || rule.kind !== kind) return fail('its type is not allowed here');
       const info = await stat(file);
       if (info.size > rule.limit) return fail(`it is larger than ${rule.limit} bytes`);
@@ -273,7 +310,7 @@ export class AppearanceService {
   }
 
   /** The asset, or the reason it is refused. */
-  private async inspect(file: string, rule: typeof TYPES[string], size: number): Promise<Resolved | string> {
+  private async inspect(file: string, rule: AssetRule, size: number): Promise<Resolved | string> {
     const bytes = await readFile(file);
     if (rule.magic && !rule.magic(bytes)) return `its content is not ${rule.type}`;
     if (bytes.length > rule.limit) return 'asset exceeds size limit';

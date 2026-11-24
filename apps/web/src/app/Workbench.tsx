@@ -873,7 +873,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       ...(sidebarViews.some((view) => view.id === 'files') ? [{ id: 'toggle-files', label: panelShows('files') ? t`收起文件面板` : t`打开文件面板`, keywords: 'files explorer panel 文件 目录', icon: <IconFolder className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'files', shownTab()) }] : []),
     ] : []),
     // i18n-ignore: search keywords in both languages, not interface text
-    ...(!pageOpen && !attemptsGroupId && !session?.archivedAt && runnerFits() ? [{ id: 'open-runner', label: t`黑马跑酷`, keywords: 'game runner horse dino 游戏 小游戏 跑酷 黑马', icon: <BrandMark className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => openRunner() }] : []),
+    ...(!pageOpen && !attemptsGroupId && !session?.archivedAt && runnerFits() ? [{ id: 'open-runner', label: t`黑马跑酷`, keywords: 'game runner horse dino 游戏 小游戏 跑酷 黑马', icon: <BrandMark forceDefault className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => openRunner() }] : []),
     { id: 'toggle-color-mode', label: t`切换浅色 / 深色`, keywords: 'theme dark light appearance 主题 明暗 深色 浅色', icon: <IconMoon className="size-4 shrink-0 text-fg-3" />, run: () => setThemeMode(document.documentElement.classList.contains('dark') ? 'light' : 'dark') },
     ...(session && !session.archivedAt ? [{ id: 'focus-composer', label: t`聚焦输入框`, keywords: 'composer input focus 输入 消息', icon: <IconPencilLine className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => document.querySelector<HTMLTextAreaElement>('textarea[data-composer-input]')?.focus() }] : []),
     // Opens the composer's model list; `ModelPicker` has no handle on it other than its trigger.
@@ -900,6 +900,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     // Clip, not hide: the context panel and sidebar wait off-screen before they slide in, and a
     // hidden overflow still scrolls, so a `scrollIntoView` inside them would shove the whole window.
     <div className={cn('workbench-viewport relative flex h-dvh overflow-clip text-fg', desktop ? 'bg-canvas' : 'bg-bg')}>
+      <AppearanceBackdrop placement="underlay" />
       {desktop && (
         // ⌘B reserves the sidebar's room in one layout pass and slides the sidebar over it, like the
         // context panel: animating this width reflowed the conversation every frame and crossed the
@@ -966,7 +967,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
       <SidebarPeekTrigger.Provider value={desktop && sidebarCollapsed ? sidebarPeek.triggerProps : null}>
       <TabChromeContext.Provider value={tabChrome}>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
       {tabbed && tabStyle === 'strip' && (
         // Stats, tasks, marks and extensions carry their own expand button under the strip.
         <TabBar variant="strip" activeId={anyPageOpen || assistantPage ? '' : session?.id ?? ''} sidebarCollapsed={sidebarCollapsed && !pageOpen} onExpandSidebar={expandSidebar} onNewSession={newSession} actionsRef={setTabActions} />
@@ -1032,7 +1033,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onError={pushError}
       />
       {pluginCommands.dialogs}
-      <AppearanceBackdrop />
+      <AppearanceBackdrop placement="overlay" />
     </div>
   );
 }

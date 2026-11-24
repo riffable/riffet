@@ -8,14 +8,15 @@ const catalog: AppearanceCatalog = {
   palettes: [{ id: 'acme.pack/dusk', plugin: 'acme.pack', title: { en: 'Dusk' }, asset: asset('a') }, { id: 'acme.pack/dawn', plugin: 'acme.pack', title: { en: 'Dawn' }, asset: asset('b') }],
   fonts: [{ id: 'acme.pack/serif', plugin: 'acme.pack', title: { en: 'Serif' }, role: 'ui', family: 'Serif', fallback: [], files: [] }],
   backgrounds: [],
-  presets: [{ id: 'acme.pack/night', plugin: 'acme.pack', title: { en: 'Night' }, palette: 'acme.pack/dusk', fonts: { ui: 'acme.pack/serif' } }],
+  logos: [{ id: 'acme.pack/mark', plugin: 'acme.pack', title: { en: 'Mark' }, asset: asset('c') }, { id: 'acme.pack/alt', plugin: 'acme.pack', title: { en: 'Alt' }, asset: asset('d') }],
+  presets: [{ id: 'acme.pack/night', plugin: 'acme.pack', title: { en: 'Night' }, palette: 'acme.pack/dusk', fonts: { ui: 'acme.pack/serif' }, logo: 'acme.pack/mark' }],
 };
 
 describe('effective appearance', () => {
   it('takes the preset, lets a single choice win over it, and treats the default as the host', () => {
-    expect(effectiveAppearance({ preset: 'acme.pack/night' }, catalog)).toMatchObject({ palette: { id: 'acme.pack/dusk' }, uiFont: { id: 'acme.pack/serif' } });
-    expect(effectiveAppearance({ preset: 'acme.pack/night', palette: 'acme.pack/dawn' }, catalog).palette?.id).toBe('acme.pack/dawn');
-    expect(effectiveAppearance({ preset: 'acme.pack/night', palette: APPEARANCE_DEFAULT }, catalog).palette).toBeUndefined();
+    expect(effectiveAppearance({ preset: 'acme.pack/night' }, catalog)).toMatchObject({ palette: { id: 'acme.pack/dusk' }, uiFont: { id: 'acme.pack/serif' }, logo: { id: 'acme.pack/mark' } });
+    expect(effectiveAppearance({ preset: 'acme.pack/night', palette: 'acme.pack/dawn', logo: 'acme.pack/alt' }, catalog)).toMatchObject({ palette: { id: 'acme.pack/dawn' }, logo: { id: 'acme.pack/alt' } });
+    expect(effectiveAppearance({ preset: 'acme.pack/night', palette: APPEARANCE_DEFAULT, logo: APPEARANCE_DEFAULT }, catalog)).toMatchObject({ palette: undefined, logo: undefined });
   });
 
   it('shows the default for a reference the catalog lacks, without rewriting what was stored', () => {

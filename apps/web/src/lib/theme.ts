@@ -233,6 +233,14 @@ export function useTheme(): { mode: ThemeMode; themeId: string; resolved: Resolv
   };
 }
 
+export function resolvedThemeMode(): ResolvedMode {
+  return store.get().resolved;
+}
+
+export function subscribeTheme(listener: () => void): () => void {
+  return store.subscribe(listener);
+}
+
 /** Restore the author's frozen appearance without changing workbench preferences. */
 export function resetShareAppearance(): void {
   if (!shareMode || preview || !originalAppearance) return;

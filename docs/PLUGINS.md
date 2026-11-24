@@ -12,6 +12,7 @@ SDK 的源码命名已统一为 `@riffet/plugin-api`；旧开发包的导入迁�
 | --- | --- | --- |
 | `gateway-models` | 安装（独立进程） | 兼容 OpenAI 的网关作为模型源；设置项与密钥；`models.provide`、`network`；异步 `prepare()` 配同步 `resolve()` |
 | `graphite-theme` | 安装（只有资源） | 配色（明暗各一套）与预设；不需要任何能力 |
+| `tux-theme` | 安装（只有资源） | 完整外观包：明暗配色、双景底层壁纸（`underlay`）、自定义 SVG 标志与组合预设 |
 | `echo` | 开发包（`riffet plugin dev`） | 非内置 ID 的最小 Agent：描述、打开、发送、回复、停止 |
 | `session-stats` | 开发包或安装 | 自定义 Web 视图：在隔离框架里经消息桥读会话（`sessions.read`） |
 
@@ -48,7 +49,7 @@ riffet plugin unlink example.echo
 | `commands.menus: selection` | `plugins/riffet/translate` | `translator.ts`：读 `context.selection`，返回 `text` |
 | `modelUses` | `plugins/riffet/translate` | `index.ts` 的声明与 `translator.ts` 里带 `use` 的调用 |
 | `tasks`、`taskProviders` | `official/android` | `gradle.ts`：识别项目、列出操作、构造命令、解析日志 |
-| `appearance` | `examples/plugins/graphite-theme`、`examples/plugins/mono-icons`、`official/appearance-paper` | 只有资源的包 |
+| `appearance` | `examples/plugins/graphite-theme`、`examples/plugins/tux-theme`、`examples/plugins/mono-icons`、`official/appearance-paper` | 只有资源的包 |
 | `avatarStyles` | `plugins/riffet/avatars` | `seal.ts` |
 | `agentTools`、`channels`、`page` | `plugins/riffet/browser` | `activate.ts`、`page.ts` |
 | `actions` | `plugins/riffet/browser` | `run` 类操作；`device-flow` 暂无公开参考：没有不绑定某家服务的真实场景 |

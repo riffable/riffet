@@ -114,6 +114,64 @@ describe('appearance catalog', () => {
     expect(await service(await pack({ 'theme.json': bytes }), declarations(), false).palette(key)).toBeUndefined();
   });
 
+  it('serves logos (raster and SVG) and extended background metadata, and drops invalid assets', async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>');
+    const darkPng = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 9)]);
+    const bigLogo = Buffer.concat([PNG, Buffer.alloc(512 * 1024)]);
+    const root = await pack({
+      'logo.svg': svg,
+      'logo-dark.png': darkPng,
+      'bg-dark.png': darkPng,
+      'big-logo.png': bigLogo,
+      'bad-logo.svg': 'not an svg',
+    });
+    const appearance: AppearanceDeclarations = {
+      backgrounds: [{
+        id: 'acme.pack/wallpaper',
+        title: { en: 'Wallpaper' },
+        asset: 'assets/grain.png',
+        darkAsset: 'assets/bg-dark.png',
+        areas: ['workbench'],
+        opacity: 0.9,
+        fit: 'contain',
+        placement: 'underlay',
+        position: 'bottom-right',
+        surfaceOpacity: 0.82,
+      }],
+      logos: [
+        { id: 'acme.pack/logo', title: { en: 'Logo' }, asset: 'assets/logo.svg', darkAsset: 'assets/logo-dark.png' },
+        { id: 'acme.pack/big', title: { en: 'Big' }, asset: 'assets/big-logo.png' },
+        { id: 'acme.pack/bad', title: { en: 'Bad' }, asset: 'assets/bad-logo.svg' },
+      ],
+      presets: [{ id: 'acme.pack/full', title: { en: 'Full' }, background: 'acme.pack/wallpaper', logo: 'acme.pack/logo' }],
+    };
+    expect(checkDeclarations('acme.pack', { appearance })).toBeUndefined();
+    expect(declaredIds({ appearance })).toEqual(['acme.pack/wallpaper', 'acme.pack/logo', 'acme.pack/big', 'acme.pack/bad', 'acme.pack/full']);
+    const enabled = service(root, appearance);
+    const catalog = await enabled.catalog();
+    expect(catalog.backgrounds[0]).toMatchObject({
+      id: 'acme.pack/wallpaper',
+      fit: 'contain',
+      placement: 'underlay',
+      position: 'bottom-right',
+      surfaceOpacity: 0.82,
+      darkAsset: { type: 'image/png', sha256: sha(darkPng) },
+    });
+    expect(catalog.logos).toMatchObject([{
+      id: 'acme.pack/logo',
+      asset: { type: 'image/svg+xml', sha256: sha(svg) },
+      darkAsset: { type: 'image/png', sha256: sha(darkPng) },
+    }]);
+    expect(catalog.presets[0]).toMatchObject({ logo: 'acme.pack/logo', background: 'acme.pack/wallpaper' });
+    expect((await enabled.asset('acme.pack', sha(svg))).type).toBe('image/svg+xml');
+    expect((await enabled.asset('acme.pack', sha(darkPng))).type).toBe('image/png');
+    await expect(service(root, appearance, false).asset('acme.pack', sha(svg))).rejects.toMatchObject({ statusCode: 404 });
+    expect(await enabled.problems({ id: 'acme.pack', root, appearance })).toHaveLength(2);
+    expect(checkDeclarations('acme.pack', { appearance: { logos: [{ id: 'acme.pack/logo', title: { en: 'Logo' }, asset: 'assets/logo.woff2' }] } })).toMatch(/\.svg/);
+    expect(checkDeclarations('acme.pack', { appearance: { backgrounds: [{ id: 'acme.pack/bg', title: { en: 'Bg' }, asset: 'assets/grain.png', areas: ['workbench'], placement: 'floating' as never }] } })).toMatch(/overlay or underlay/);
+    expect(checkDeclarations('acme.pack', { appearance: { backgrounds: [{ id: 'acme.pack/bg', title: { en: 'Bg' }, asset: 'assets/grain.png', areas: ['workbench'], surfaceOpacity: 1.5 }] } })).toMatch(/surfaceOpacity/);
+  });
+
   it('offers only what an enabled plugin declares', async () => {
     const root = await pack();
     const appearance = declarations();

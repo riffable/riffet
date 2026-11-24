@@ -1547,6 +1547,48 @@ html:root {
 .bg-card {
   background-color: var(--bg-card);
 }
+html[data-appearance-underlay] body,
+[data-appearance-underlay]:not(html) {
+  --bg-card: color-mix(in srgb, var(--bg) var(--appearance-surface-opacity, 86%), transparent);
+}
+:where(html[data-appearance-underlay]) .ui-floating-content:not(.bg-toast) {
+  background-color: color-mix(in srgb, color-mix(in srgb, var(--bg-popover) 72%, var(--bg-sidebar)) 64%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.8);
+  backdrop-filter: blur(12px) saturate(1.8);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.7), var(--shadow-pop);
+}
+:where(html.dark[data-appearance-underlay]) .ui-floating-content:not(.bg-toast) {
+  background-color: color-mix(in srgb, color-mix(in srgb, var(--bg-popover) 76%, var(--bg-sidebar)) 62%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.7);
+  backdrop-filter: blur(12px) saturate(1.7);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), var(--shadow-pop);
+}
+:where(html[data-appearance-underlay]) .ui-dialog-content:not(.bg-transparent) {
+  background-color: color-mix(in srgb, color-mix(in srgb, var(--bg-elevated) 78%, var(--bg-sidebar)) 78%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.65), var(--shadow-pop);
+}
+:where(html.dark[data-appearance-underlay]) .ui-dialog-content:not(.bg-transparent) {
+  background-color: color-mix(in srgb, color-mix(in srgb, var(--bg-elevated) 80%, var(--bg-sidebar)) 76%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), var(--shadow-pop);
+}
+html[data-appearance-underlay] .ui-dialog-content .mobile-sidebar,
+html[data-appearance-underlay] .shadow-peek {
+  background-color: color-mix(in srgb, var(--canvas) 74%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+}
+html[data-appearance-underlay] aside input {
+  background-color: color-mix(in srgb, var(--bg-elevated) 72%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+html[data-appearance-underlay] aside input:focus {
+  background-color: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+}
 html.dark {
   --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
   --shadow-composer-focus: 0 0 0 0.5px rgb(255 255 255 / 0.13), 0 12px 32px -12px rgb(0 0 0 / 0.75);
@@ -2379,12 +2421,41 @@ html.dark {
   .brand-live[data-style="run"] [data-part="speed"] { display: none; }
 }
 
+/* Override tw-animate-css enter/exit inside `@theme inline` so Tailwind v4 replaces the
+   emitted keyframes rather than appending `tw-animate-css`'s `filter: blur(0)` version after
+   ours; animating `filter` creates a backdrop root that disables `backdrop-filter` on frosted
+   floating surfaces and dialogs. */
+@theme inline {
+  @keyframes enter {
+    from {
+      opacity: var(--tw-enter-opacity, 1);
+      transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0)
+        scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), var(--tw-enter-scale, 1))
+        rotate(var(--tw-enter-rotate, 0));
+    }
+  }
+  @keyframes exit {
+    to {
+      opacity: var(--tw-exit-opacity, 1);
+      transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0)
+        scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1))
+        rotate(var(--tw-exit-rotate, 0));
+    }
+  }
+}
+
 /* Keep animation timing separate from callers' width/colour transition utilities. Both surfaces
    and scrims retain their exit frame until Radix Presence removes them. */
 .ui-dialog-overlay,
 .ui-dialog-content,
 .ui-floating-content {
   animation-duration: var(--duration-fast);
+  animation-fill-mode: backwards;
+}
+.ui-dialog-overlay[data-state="closed"],
+.ui-dialog-content[data-state="closed"],
+.ui-floating-content[data-state="closed"] {
+  animation-fill-mode: both;
 }
 .ui-dialog-overlay[data-state="closed"],
 .ui-dialog-content[data-state="closed"] {

@@ -65,7 +65,7 @@ export function SettingsSidebar({ section, onSelect, onClose, onCollapse, onPin 
           onChange={setQuery}
           placeholder={t`搜索设置`}
           aria-label={t`搜索设置`}
-          className="h-8 bg-bg text-xs"
+          inputClassName="text-xs"
         />
       </div>
 

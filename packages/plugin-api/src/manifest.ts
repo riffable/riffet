@@ -3,7 +3,7 @@ import { PLUGIN_API_MIN_VERSION, PLUGIN_API_VERSION, type PluginManifest } from 
 import {
   COMMAND_ICONS, COMMAND_MENUS, COMMAND_SCOPES, MODEL_USE_FALLBACKS, PLUGIN_CLIENTS, PLUGIN_ID, VIEW_INSTANCES, VIEW_LOCATIONS, isContributionOf,
   isAgentOfPlugin, isBuiltinBackendId, PLUGIN_CAPABILITIES,
-  APPEARANCE_BACKGROUND_AREAS, APPEARANCE_BACKGROUND_FITS, APPEARANCE_FONT_ROLES, APPEARANCE_FONT_STYLES,
+  APPEARANCE_BACKGROUND_AREAS, APPEARANCE_BACKGROUND_FITS, APPEARANCE_BACKGROUND_PLACEMENTS, APPEARANCE_BACKGROUND_POSITIONS, APPEARANCE_FONT_ROLES, APPEARANCE_FONT_STYLES,
   type CommandDeclaration, type PluginDeclarations, type TaskProviderDeclaration, type ViewDeclaration,
 } from '@riffet/contracts';
 import { validRange } from './semver.js';
@@ -255,7 +255,7 @@ function appearance(pluginId: string, value: unknown, seen: Set<string>): string
     seen.add(item.id);
     return localized(item.title, `${path}.title`, 80);
   };
-  for (const kind of ['palettes', 'fonts', 'backgrounds', 'presets', 'iconPacks'] as const) {
+  for (const kind of ['palettes', 'fonts', 'backgrounds', 'logos', 'presets', 'iconPacks'] as const) {
     const items = value[kind];
     if (items === undefined) continue;
     if (!Array.isArray(items) || items.length > 64) return `contributes.appearance.${kind} must be a list of at most 64 items`;
@@ -267,10 +267,18 @@ function appearance(pluginId: string, value: unknown, seen: Set<string>): string
       if ((kind === 'palettes' || kind === 'iconPacks') && !assetPath(entry.asset, /\.json$/i)) return `${path}.asset must be a .json file under assets/`;
       if (kind === 'backgrounds') {
         if (!assetPath(entry.asset, /\.(?:png|jpe?g|webp)$/i)) return `${path}.asset must be a .png, .jpg or .webp file under assets/`;
+        if (entry.darkAsset !== undefined && !assetPath(entry.darkAsset, /\.(?:png|jpe?g|webp)$/i)) return `${path}.darkAsset must be a .png, .jpg or .webp file under assets/`;
         const areas = oneOf(entry.areas, APPEARANCE_BACKGROUND_AREAS, `${path}.areas`, 'area');
         if (areas) return areas;
-        if (entry.opacity !== undefined && !(typeof entry.opacity === 'number' && entry.opacity >= 0 && entry.opacity <= 1)) return `${path}.opacity must be between 0 and 1`;
-        if (entry.fit !== undefined && !APPEARANCE_BACKGROUND_FITS.includes(entry.fit as never)) return `${path}.fit must be cover or tile`;
+        if (entry.opacity !== undefined && !(typeof entry.opacity === 'number' && Number.isFinite(entry.opacity) && entry.opacity >= 0 && entry.opacity <= 1)) return `${path}.opacity must be between 0 and 1`;
+        if (entry.fit !== undefined && !APPEARANCE_BACKGROUND_FITS.includes(entry.fit as never)) return `${path}.fit must be cover, tile or contain`;
+        if (entry.placement !== undefined && !APPEARANCE_BACKGROUND_PLACEMENTS.includes(entry.placement as never)) return `${path}.placement must be overlay or underlay`;
+        if (entry.position !== undefined && !APPEARANCE_BACKGROUND_POSITIONS.includes(entry.position as never)) return `${path}.position is invalid`;
+        if (entry.surfaceOpacity !== undefined && !(typeof entry.surfaceOpacity === 'number' && Number.isFinite(entry.surfaceOpacity) && entry.surfaceOpacity >= 0 && entry.surfaceOpacity <= 1)) return `${path}.surfaceOpacity must be between 0 and 1`;
+      }
+      if (kind === 'logos') {
+        if (!assetPath(entry.asset, /\.(?:png|jpe?g|webp|svg)$/i)) return `${path}.asset must be a .png, .jpg, .webp or .svg file under assets/`;
+        if (entry.darkAsset !== undefined && !assetPath(entry.darkAsset, /\.(?:png|jpe?g|webp|svg)$/i)) return `${path}.darkAsset must be a .png, .jpg, .webp or .svg file under assets/`;
       }
       if (kind === 'fonts') {
         if (!APPEARANCE_FONT_ROLES.includes(entry.role as never)) return `${path}.role must be ui or mono`;
@@ -286,11 +294,11 @@ function appearance(pluginId: string, value: unknown, seen: Set<string>): string
         const fallback = list(entry.fallback);
         if (!fallback || fallback.length > 8 || fallback.some(name => typeof name !== 'string' || !FONT_FAMILY.test(name))) return `${path}.fallback must list up to 8 family names`;
       }
-      if ((kind === 'fonts' || kind === 'backgrounds') && entry.license !== undefined && !(isRecord(entry.license) && typeof entry.license.redistributable === 'boolean')) return `${path}.license must be { "redistributable": true | false }`;
+      if ((kind === 'fonts' || kind === 'backgrounds' || kind === 'logos') && entry.license !== undefined && !(isRecord(entry.license) && typeof entry.license.redistributable === 'boolean')) return `${path}.license must be { "redistributable": true | false }`;
       if (kind === 'presets') {
         const fonts = entry.fonts;
         if (fonts !== undefined && (!isRecord(fonts) || Object.keys(fonts).some(key => key !== 'ui' && key !== 'mono'))) return `${path}.fonts may only name ui and mono`;
-        if (![entry.palette, entry.background, ...(isRecord(fonts) ? [fonts.ui, fonts.mono] : [])].every(optionalReference)) return `${path} references a contribution by an invalid id`;
+        if (![entry.palette, entry.background, entry.logo, ...(isRecord(fonts) ? [fonts.ui, fonts.mono] : [])].every(optionalReference)) return `${path} references a contribution by an invalid id`;
       }
     }
   }
@@ -366,8 +374,8 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
 
 /** The ids a plugin declares, for the registry's check that no two plugins claim one. */
 export function declaredIds(declarations: PluginDeclarations | undefined): string[] {
-  const { palettes, fonts, backgrounds, presets, iconPacks } = declarations?.appearance ?? {};
-  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.queries ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(declarations?.imChannels ?? []), ...(declarations?.modelUses ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
+  const { palettes, fonts, backgrounds, logos, presets, iconPacks } = declarations?.appearance ?? {};
+  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.queries ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(declarations?.imChannels ?? []), ...(declarations?.modelUses ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(logos ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
 }
 
 /** The members of a validated record that this version knows, in that order: whatever else a package wrote there is dropped. */
@@ -402,8 +410,8 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const channels = declarations.channels?.map(item => pick(item, ['id', 'scope']));
   const imChannels = declarations.imChannels?.map(item => pick(item, ['id', 'title']));
   const modelUses = declarations.modelUses?.map(item => pick(item, ['id', 'title', 'fallback']));
-  const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
-  const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
+  const { palettes, fonts, backgrounds, logos, presets, iconPacks } = appearance ?? {};
+  const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(logos?.length ? { logos } : {}), ...(presets?.length ? { presets } : {}) };
   const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(declarations.speechRecognizer ? { speechRecognizer: pick(declarations.speechRecognizer, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(queries?.length ? { queries } : {}), ...(assistantEvents?.length ? { assistantEvents } : {}), ...(declarations.assistantPack ? { assistantPack: pick(declarations.assistantPack, ['path']) } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(imChannels?.length ? { imChannels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
@@ -465,8 +473,9 @@ const appearanceSchema = z.object({
   palettes: z.array(z.object({ ...contributionSchema, asset: pathSchema })).max(64).optional(),
   iconPacks: z.array(z.object({ ...contributionSchema, asset: pathSchema })).max(64).optional(),
   fonts: z.array(z.object({ ...contributionSchema, role: z.enum(APPEARANCE_FONT_ROLES), family: z.string().regex(FONT_FAMILY), files: z.array(z.object({ path: pathSchema, weight: z.string().regex(FONT_WEIGHT).optional(), style: z.enum(APPEARANCE_FONT_STYLES).optional(), unicodeRange: z.string().max(1024).regex(UNICODE_RANGE).optional() })).min(1).max(16), fallback: z.array(z.string().regex(FONT_FAMILY)).max(8), license: licenseSchema.optional() })).max(64).optional(),
-  backgrounds: z.array(z.object({ ...contributionSchema, asset: pathSchema, areas: z.array(z.enum(APPEARANCE_BACKGROUND_AREAS)).min(1), opacity: z.number().min(0).max(1).optional(), fit: z.enum(APPEARANCE_BACKGROUND_FITS).optional(), license: licenseSchema.optional() })).max(64).optional(),
-  presets: z.array(z.object({ ...contributionSchema, palette: z.string().optional(), fonts: z.object({ ui: z.string().optional(), mono: z.string().optional() }).strict().optional(), background: z.string().optional() })).max(64).optional(),
+  backgrounds: z.array(z.object({ ...contributionSchema, asset: pathSchema, darkAsset: pathSchema.optional(), areas: z.array(z.enum(APPEARANCE_BACKGROUND_AREAS)).min(1), opacity: z.number().min(0).max(1).optional(), fit: z.enum(APPEARANCE_BACKGROUND_FITS).optional(), placement: z.enum(APPEARANCE_BACKGROUND_PLACEMENTS).optional(), position: z.enum(APPEARANCE_BACKGROUND_POSITIONS).optional(), surfaceOpacity: z.number().min(0).max(1).optional(), license: licenseSchema.optional() })).max(64).optional(),
+  logos: z.array(z.object({ ...contributionSchema, asset: pathSchema, darkAsset: pathSchema.optional(), license: licenseSchema.optional() })).max(64).optional(),
+  presets: z.array(z.object({ ...contributionSchema, palette: z.string().optional(), fonts: z.object({ ui: z.string().optional(), mono: z.string().optional() }).strict().optional(), background: z.string().optional(), logo: z.string().optional() })).max(64).optional(),
 }).passthrough();
 const declarationsSchema = z.object({
   modelSources: z.array(modelSourceSchema).max(64).optional(),

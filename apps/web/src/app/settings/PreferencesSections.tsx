@@ -5,7 +5,8 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, SETTING_DEFAULTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog, type TerminalProfile, type TerminalServerSettings, type TerminalServerSettingsUpdate } from '@contracts';
 import { IconArrowLeft, IconArrowRight, IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave, IconSquareTerminal, IconTrash2, IconX } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
-import { AppIconTile } from '@/components/BrandMark';
+import { AppIconTile, BrandMark } from '@/components/BrandMark';
+import { AppearanceBackdrop } from '@/components/appearance-backdrop';
 import { ThemeSwatch } from '@/components/theme-swatch';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -151,8 +152,13 @@ function ThemeLivePreview({ label }: { label: string }) {
         <span className="text-xs font-medium text-fg-3"><Trans>实时预览</Trans></span>
         <span className="truncate text-2xs text-fg-4">{label}</span>
       </div>
-      <div className="rounded-xl border border-line bg-canvas p-2.5">
-        <div className="flex flex-col gap-3 rounded-lg border border-line bg-card p-3.5">
+      <div className="relative overflow-hidden rounded-xl border border-line bg-canvas p-2.5">
+        <AppearanceBackdrop placement="underlay" />
+        <div className="relative flex items-center gap-1.5 px-1 pb-2 text-xs font-semibold text-fg">
+          <BrandMark className="size-4 shrink-0 text-fg" />
+          <span>Riffet</span>
+        </div>
+        <div className="relative flex flex-col gap-3 rounded-lg border border-line bg-card p-3.5">
           <div className="self-end rounded-xl bg-bubble px-3 py-2 text-xs leading-5 text-fg">
             <Trans>检查一下当前主题和代码高亮</Trans>
           </div>
@@ -175,6 +181,7 @@ function ThemeLivePreview({ label }: { label: string }) {
             </div>
           </div>
         </div>
+        <AppearanceBackdrop placement="overlay" />
       </div>
     </aside>
   );
@@ -236,12 +243,15 @@ export function ThemeSection() {
           <Segmented<ThemeMode> size="xs" value={mode} onChange={setThemeMode} ariaLabel={t`明暗`} options={[{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }]} />
         </Row>
       </Group>
-      {catalog && (catalog.presets.length > 0 || catalog.backgrounds.length > 0) && <Group>
+      {catalog && (catalog.presets.length > 0 || catalog.backgrounds.length > 0 || (catalog.logos?.length ?? 0) > 0) && <Group>
         {catalog.presets.length > 0 && <Row title={t`预设`}>
           <AppearanceChoice label={t`预设`} items={catalog.presets} value={catalog.presets.some((preset) => preset.id === selection.preset) ? selection.preset : undefined} onChange={(id) => selectPreset(id === APPEARANCE_DEFAULT ? undefined : id)} />
         </Row>}
         {catalog.backgrounds.length > 0 && <Row title={t`背景`}>
           <AppearanceChoice label={t`背景`} items={catalog.backgrounds} value={effective.background?.id} onChange={(id) => selectAppearanceItem('background', id)} />
+        </Row>}
+        {(catalog.logos?.length ?? 0) > 0 && <Row title={t`标志`}>
+          <AppearanceChoice label={t`标志`} items={catalog.logos ?? []} value={effective.logo?.id} onChange={(id) => selectAppearanceItem('logo', id)} />
         </Row>}
       </Group>}
       <Group title={t`配色`}>

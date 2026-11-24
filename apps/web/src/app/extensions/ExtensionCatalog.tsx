@@ -1,4 +1,5 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
+import type { SVGProps } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ExtensionRuntimeReport } from '@contracts';
 import { IconChevronRight, IconFolder, IconLock, IconPackage, IconPuzzle, IconSearch, IconTrash2, IconX } from '@/components/icons';
@@ -13,6 +14,10 @@ import { extensionActions, extensionContextKey, extensionStatus, isRiffetSource,
 
 // Keep this height in sync with .extensions-row in extensions.css.
 const rowHeight = 76;
+
+function RiffetSourceMark(props: SVGProps<SVGSVGElement>) {
+  return <BrandMark forceDefault {...props} />;
+}
 
 const CatalogRow = memo(function CatalogRow({ entry, active, checked, batchMode, disabled, runtime, onOpen, onSelect, rowIndex, rowCount }: {
   entry: ExtensionEntry; active: boolean; checked: boolean; batchMode: boolean; disabled: boolean;
@@ -32,7 +37,7 @@ const CatalogRow = memo(function CatalogRow({ entry, active, checked, batchMode,
   // File ownership and native management are independent: a read-only Skill can still be toggled.
   const skillReadOnly = item.kind === 'skill' && Boolean(item.readOnlyReason) && !isRiffetSource(entry.context);
   const skillDeletable = item.kind === 'skill' && extensionActions(entry).includes('uninstall');
-  const SourceIcon = item.ownerPluginId ? IconPuzzle : item.scope === 'riffet' ? BrandMark : item.scope === 'builtin' ? IconPackage : IconFolder;
+  const SourceIcon = item.ownerPluginId ? IconPuzzle : item.scope === 'riffet' ? RiffetSourceMark : item.scope === 'builtin' ? IconPackage : IconFolder;
   const sourceName = isRiffetSource(entry.context) ? 'Riffet' : label(entry.context.backendId);
   return <div role="listitem" aria-posinset={rowIndex} aria-setsize={rowCount} className={cn('extensions-row', active && 'is-active', checked && 'is-checked')}>
     {batchMode && <label className="flex h-full w-8 shrink-0 cursor-pointer items-center justify-center"><Checkbox checked={checked} disabled={disabled} aria-label={t`选择 ${item.name} · ${sourceName}`} onCheckedChange={() => onSelect(entry.key)} /></label>}

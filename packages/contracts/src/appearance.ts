@@ -10,12 +10,19 @@ export type AppearanceFontRole = typeof APPEARANCE_FONT_ROLES[number];
 export const APPEARANCE_FONT_STYLES = ['normal', 'italic'] as const;
 export const APPEARANCE_BACKGROUND_AREAS = ['workbench'] as const;
 export type AppearanceBackgroundArea = typeof APPEARANCE_BACKGROUND_AREAS[number];
-export const APPEARANCE_BACKGROUND_FITS = ['cover', 'tile'] as const;
+export const APPEARANCE_BACKGROUND_FITS = ['cover', 'tile', 'contain'] as const;
 export type AppearanceBackgroundFit = typeof APPEARANCE_BACKGROUND_FITS[number];
+export const APPEARANCE_BACKGROUND_PLACEMENTS = ['overlay', 'underlay'] as const;
+export type AppearanceBackgroundPlacement = typeof APPEARANCE_BACKGROUND_PLACEMENTS[number];
+export const APPEARANCE_BACKGROUND_POSITIONS = [
+  'center', 'top', 'bottom', 'left', 'right', 'top-left', 'top-right', 'bottom-left', 'bottom-right',
+] as const;
+export type AppearanceBackgroundPosition = typeof APPEARANCE_BACKGROUND_POSITIONS[number];
 
 /** Largest file the server will serve per kind of asset. */
 export const APPEARANCE_MAX_FONT_BYTES = 2 * 1024 * 1024;
 export const APPEARANCE_MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+export const APPEARANCE_MAX_LOGO_BYTES = 512 * 1024;
 export const APPEARANCE_MAX_PALETTE_BYTES = 256 * 1024;
 
 /** The value of a stored per-item choice that means "the host default", even when the selected preset names one. */
@@ -59,10 +66,28 @@ export interface BackgroundDeclaration {
   title: LocalizedText;
   /** A `.png`, `.jpg` or `.webp` path inside the package. */
   asset: string;
+  /** Optional dark-mode image; `asset` is used in both modes when omitted. */
+  darkAsset?: string;
   areas: AppearanceBackgroundArea[];
   /** 0 to 1; 1 when omitted. */
   opacity?: number;
   fit?: AppearanceBackgroundFit;
+  /** `overlay` draws over the workbench (paper grain); `underlay` sits behind surfaces (wallpaper). Defaults to `overlay`. */
+  placement?: AppearanceBackgroundPlacement;
+  /** CSS alignment within the viewport; defaults to `center`. */
+  position?: AppearanceBackgroundPosition;
+  /** 0 to 1 opacity of the main content card when `placement` is `underlay`. */
+  surfaceOpacity?: number;
+  license?: AppearanceLicense;
+}
+
+export interface LogoDeclaration {
+  id: string;
+  title: LocalizedText;
+  /** A `.png`, `.jpg`, `.webp` or `.svg` path inside the package. */
+  asset: string;
+  /** Optional dark-mode logo; `asset` is used in both modes when omitted. */
+  darkAsset?: string;
   license?: AppearanceLicense;
 }
 
@@ -73,6 +98,7 @@ export interface PresetDeclaration {
   palette?: string;
   fonts?: { ui?: string; mono?: string };
   background?: string;
+  logo?: string;
 }
 
 export interface IconPackDeclaration { id: string; title: LocalizedText; asset: string }
@@ -82,6 +108,7 @@ export interface AppearanceDeclarations {
   palettes?: PaletteDeclaration[];
   fonts?: FontDeclaration[];
   backgrounds?: BackgroundDeclaration[];
+  logos?: LogoDeclaration[];
   presets?: PresetDeclaration[];
 }
 
@@ -105,9 +132,20 @@ export interface AppearanceBackground {
   plugin: string;
   title: LocalizedText;
   asset: AppearanceAsset;
+  darkAsset?: AppearanceAsset;
   areas: AppearanceBackgroundArea[];
   opacity: number;
   fit: AppearanceBackgroundFit;
+  placement?: AppearanceBackgroundPlacement;
+  position?: AppearanceBackgroundPosition;
+  surfaceOpacity?: number;
+}
+export interface AppearanceLogo {
+  id: string;
+  plugin: string;
+  title: LocalizedText;
+  asset: AppearanceAsset;
+  darkAsset?: AppearanceAsset;
 }
 export interface AppearancePreset {
   id: string;
@@ -116,6 +154,7 @@ export interface AppearancePreset {
   palette?: string;
   fonts?: { ui?: string; mono?: string };
   background?: string;
+  logo?: string;
 }
 
 /** What the enabled plugins contribute. `revision` is a content hash of everything else. */
@@ -126,6 +165,7 @@ export interface AppearanceCatalog {
   palettes: AppearancePalette[];
   fonts: AppearanceFont[];
   backgrounds: AppearanceBackground[];
+  logos?: AppearanceLogo[];
   presets: AppearancePreset[];
 }
 
@@ -141,4 +181,5 @@ export interface AppearanceSelection {
   uiFont?: string;
   monoFont?: string;
   background?: string;
+  logo?: string;
 }

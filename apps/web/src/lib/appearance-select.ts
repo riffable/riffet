@@ -1,5 +1,5 @@
 import {
-  APPEARANCE_DEFAULT, type AppearanceBackground, type AppearanceCatalog, type AppearanceFont, type AppearancePalette, type AppearanceSelection,
+  APPEARANCE_DEFAULT, type AppearanceBackground, type AppearanceCatalog, type AppearanceFont, type AppearanceLogo, type AppearancePalette, type AppearanceSelection,
 } from '@contracts';
 
 /**
@@ -14,9 +14,10 @@ export interface EffectiveAppearance {
   uiFont?: AppearanceFont;
   monoFont?: AppearanceFont;
   background?: AppearanceBackground;
+  logo?: AppearanceLogo;
 }
 
-const KEYS = ['preset', 'palette', 'uiFont', 'monoFont', 'background'] as const;
+const KEYS = ['preset', 'palette', 'uiFont', 'monoFont', 'background', 'logo'] as const;
 
 /** Rebuilds a selection from storage: only known keys with plain, bounded text survive. */
 export function parseSelection(raw: string | null | undefined): AppearanceSelection {
@@ -42,6 +43,7 @@ export function effectiveAppearance(selection: AppearanceSelection, catalog: App
     uiFont: pick(catalog.fonts.filter((font) => font.role === 'ui'), selection.uiFont, preset?.fonts?.ui),
     monoFont: pick(catalog.fonts.filter((font) => font.role === 'mono'), selection.monoFont, preset?.fonts?.mono),
     background: pick(catalog.backgrounds.filter((item) => item.areas.includes('workbench')), selection.background, preset?.background),
+    logo: pick(catalog.logos ?? [], selection.logo, preset?.logo),
   };
 }
 

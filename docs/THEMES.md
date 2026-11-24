@@ -190,13 +190,14 @@ manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appear
 |---|---|
 | `palettes` | `asset` 是一份 JSON，结构与一套 `CustomTheme` 完全相同（53 个角色 × 明暗 + 各 16 个 ANSI）；服务端用 `validateCustomThemes` 校验，其中的 `id` 与 `name` 被忽略，配色以声明 ID 标识 |
 | `fonts` | `role` 为 `ui` 或 `mono`；`family` 是字体文件自带的族名；`files[]` 为 woff2（可带 `weight`、`style`、`unicodeRange`）；`fallback` 是回退族名；`license` 见下 |
-| `backgrounds` | 图片资产、`areas`（目前只有 `workbench`）、`opacity`、`fit`（`cover` 或 `tile`）、`license` |
-| `presets` | 引用配色、字体、背景的声明 ID，可以来自别的插件 |
+| `backgrounds` | 图片资产（及可选深色模式 `darkAsset`）、`areas`（目前只有 `workbench`）、`opacity`、`fit`（`cover`、`tile` 或 `contain`）、`placement`（`overlay` 默认纸纹覆层，或 `underlay` 垫在界面底层）、`position`（对齐位置，如 `center`、`bottom-right`）、`surfaceOpacity`（`underlay` 时主卡片不透明度，0–1，缺省 0.86）、`license` |
+| `logos` | 品牌标志图片资产（PNG/JPEG/WebP/SVG，≤512 KB）与可选深色模式 `darkAsset`、`license`；目前由 Web 消费（替换 `BrandMark`、`LiveBrandMark` 与标签页 favicon，SVG 资产以沙箱响应头返回并仅通过 `<img>` 绘制） |
+| `presets` | 引用配色、字体、背景、标志的声明 ID，可以来自别的插件 |
 | `iconPacks` | `id`、`title`、`asset`；资产为单色矢量 JSON，Android 在设置 → 外观 → 界面图标中选择，见 §7.5 |
 
 `GET /api/appearance` 只列已启用插件提供的资源，每个资产解析为 `{ url, sha256, size, type }`；`revision` 是目录内容的哈希。资产在 `GET /api/appearance/assets/:pluginId/:sha256`，地址里带内容哈希，所以响应是 `private, max-age=31536000, immutable`：鉴权与其他 `/api` 一致，共享代理不缓存。
 
-服务端逐个校验资产，不合格的资源从目录里省去：realpath 必须留在包目录内；类型在白名单内（woff2、png、jpeg、webp、json）且文件头与类型相符；字体 ≤ 2 MB、图片 ≤ 4 MB、配色 ≤ 256 KB；配色必须是合法主题。包停用后目录不再列出它，资产路径也随之 404。
+服务端逐个校验资产，不合格的资源从目录里省去：realpath 必须留在包目录内；类型在白名单内（woff2、png、jpeg、webp、json，以及标志允许 svg）且文件头与类型相符；字体 ≤ 2 MB、图片 ≤ 4 MB、标志 ≤ 512 KB、配色 ≤ 256 KB；配色必须是合法主题。包停用后目录不再列出它，资产路径也随之 404。
 
 字体和背景可声明 `license: { redistributable: boolean }`，表示冻结的分享能否带上这份文件；形状不对按其他声明错误处理，包被拒绝。不声明等于不可再分发。官方「纸墨」包的 Inter（SIL OFL）声明为可再分发，纸纹不声明。
 
@@ -211,13 +212,13 @@ manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appear
 | Web | `localStorage["riffet.appearance.selection"]` | 目录与配色 `riffet.appearance.cache.v1`；首帧配色 `riffet.appearance.palette.v1`；资产由 Service Worker 存入 `riffet-appearance-v1`；每次拿到目录后页面把仍列出的资产地址发给 Service Worker，其余的缓存项被删除（没有 Service Worker 或发送失败则不影响） |
 | macOS | `UserDefaults["riffet.appearance-selection\|<服务端>"]` | `~/Library/Application Support/Riffet/appearance/<服务端哈希>/`，资产按 sha256 命名，使用前复核；缓存的配色与字体在启动后片刻应用，不在首帧 |
 
-存储的是 `{ preset?, palette?, uiFont?, monoFont?, background? }`。每一项的优先级是：宿主默认值，选中的预设，单项选择；与插件加载顺序无关。单项值 `default` 表示宿主默认，即使预设指定了别的。引用的资源缺失或插件被停用时，该项显示为宿主默认，但选择仍保留，重新启用后恢复；只有用户自己的操作才改写它。选中预设时会清掉之前的单项选择，让预设生效。
+存储的是 `{ preset?, palette?, uiFont?, monoFont?, background?, logo? }`。每一项的优先级是：宿主默认值，选中的预设，单项选择；与插件加载顺序无关。单项值 `default` 表示宿主默认，即使预设指定了别的。引用的资源缺失或插件被停用时，该项显示为宿主默认，但选择仍保留，重新启用后恢复；只有用户自己的操作才改写它。选中预设时会清掉之前的单项选择，让预设生效。
 
 插件配色与 §4 的选择并存：它以 `[data-theme="plugin-<哈希>"]` 注入，走自定义主题的同一条 CSS 变量路径，不写入 `riffet.theme.id` / `riffet.theme-id`。生效时它盖在所选主题之上；用户在配色里选内置或自定义主题，就把单项配色设为 `default`，所选主题重新显示。
 
 ### 7.3 各端应用
 
-- Web：字体以 `FontFace` 从资产地址加载，写到 `--font-sans` / `--font-mono`，宿主字体栈（含 CJK）跟在后面；终端自带字体栈，不随之变化。背景是工作台上一层不接收指针的满铺图层，按 `opacity` 叠在界面之上，不改变布局。
+- Web：字体以 `FontFace` 从资产地址加载，写到 `--font-sans` / `--font-mono`，宿主字体栈（含 CJK）跟在后面；终端自带字体栈，不随之变化。背景按 `placement` 决定位置：`overlay` 是工作台上一层不接收指针的满铺图层，按 `opacity` 叠在界面之上；`underlay` 垫在界面底层并按 `surfaceOpacity` 让主卡片半透明透出，支持深色切图 `darkAsset`、`contain` 缩放与角落定位 `position`。标志替换 `BrandMark`、`LiveBrandMark` 与浏览器标签页 favicon，深浅色自动切换 `darkAsset`。
 - macOS：字体用 CoreText 在进程范围注册，作用于转录文字、代码、输入框、终端和 `RiffetFont`；SwiftUI 中直接写 `.font(.system(...))` 的界面仍用系统字体。背景是工作台上不接收点击的覆盖层。
 - 字体加载失败时回到宿主字体栈，不保留上一个插件字体；同一目录修订内不重试，修订变了才再试。
 - 想改插件配色：主题编辑器的「新建自」可选插件配色，保存时是带新 `custom-…` id 的独立副本。

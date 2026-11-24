@@ -1,6 +1,8 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
+import { activeAppearanceLogo, subscribeAppearance } from './appearance';
 import { createStore, useStore } from './store';
+import { resolvedThemeMode, subscribeTheme } from './theme';
 import { readStored, writeStored } from './utils';
 import { BRAND_BODY, BRAND_EYE, BRAND_TILE_TRANSFORM, BRAND_MANE } from './brand-geometry';
 
@@ -49,12 +51,22 @@ function faviconSvg(accent: string): string {
 
 /**
  * The default keeps the static file; another accent becomes a data: URL, which also stays clear of
- * the service worker's cache-first `/favicon.svg`.
+ * the service worker's cache-first `/favicon.svg`. When an appearance plugin logo is in effect it
+ * takes the tab icon too, and returns to the chosen app icon once cleared.
  */
 function apply(): void {
   const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+  if (!link) return;
+  const pluginLogo = activeAppearanceLogo();
+  if (pluginLogo) {
+    const asset = resolvedThemeMode() === 'dark' ? (pluginLogo.darkAsset ?? pluginLogo.asset) : pluginLogo.asset;
+    link.type = asset.type;
+    link.href = asset.url;
+    return;
+  }
   const icon = appIcons.find((entry) => entry.id === store.get().id);
-  if (!link || !icon) return;
+  if (!icon) return;
+  link.type = 'image/svg+xml';
   link.href = icon.id === DEFAULT_ICON ? '/favicon.svg' : `data:image/svg+xml,${encodeURIComponent(faviconSvg(icon.accent))}`;
 }
 
@@ -70,12 +82,18 @@ function onStorage(event: StorageEvent): void {
   apply();
 }
 
+let unsubAppearance: (() => void) | undefined;
+let unsubTheme: (() => void) | undefined;
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', onStorage);
+  unsubAppearance = subscribeAppearance(apply);
+  unsubTheme = subscribeTheme(apply);
   apply();
 }
 import.meta.hot?.dispose(() => {
   window.removeEventListener('storage', onStorage);
+  unsubAppearance?.();
+  unsubTheme?.();
 });
 
 export function useAppIcon(): AppIconId {

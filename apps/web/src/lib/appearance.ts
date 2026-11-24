@@ -17,7 +17,7 @@
 import { useSyncExternalStore } from 'react';
 import {
   APPEARANCE_DEFAULT, validateCustomThemes,
-  type AppearanceBackground, type AppearanceCatalog, type AppearanceFont, type AppearancePalette, type AppearanceSelection, type CustomCodeSyntax, type ThemeAnsi, type ThemeDesign, type ThemePalette,
+  type AppearanceBackground, type AppearanceCatalog, type AppearanceFont, type AppearanceLogo, type AppearancePalette, type AppearanceSelection, type CustomCodeSyntax, type ThemeAnsi, type ThemeDesign, type ThemePalette,
 } from '@contracts';
 import { api } from './api';
 import { effectiveAppearance, fontStack, paletteKey, parseSelection, type EffectiveAppearance } from './appearance-select';
@@ -44,6 +44,7 @@ let state: State = inert ? { selection: {}, palettes: {} } : readCache();
 let effective: EffectiveAppearance = effectiveAppearance(state.selection, state.catalog);
 let plugin: PluginPalette | undefined;
 let background: AppearanceBackground | undefined;
+let logo: AppearanceLogo | undefined;
 
 function isCatalog(value: unknown): value is AppearanceCatalog {
   const catalog = value as Partial<AppearanceCatalog> | null;
@@ -162,6 +163,17 @@ function writeFirstFrame(): void {
   }) : undefined);
 }
 
+function applyUnderlayRoot(bg: AppearanceBackground | undefined): void {
+  const root = document.documentElement;
+  if (bg?.placement === 'underlay') {
+    root.dataset.appearanceUnderlay = '';
+    root.style.setProperty('--appearance-surface-opacity', `${Math.round((bg.surfaceOpacity ?? 0.86) * 1000) / 10}%`);
+  } else {
+    delete root.dataset.appearanceUnderlay;
+    root.style.removeProperty('--appearance-surface-opacity');
+  }
+}
+
 /** Recomputes what is in effect from the state, applies it to the page, and tells subscribers. */
 function commit(next: State): void {
   state = next;
@@ -173,9 +185,11 @@ function commit(next: State): void {
   // The same palette keeps its object, so what renders on it does not render again.
   if (painted?.key !== plugin?.key || painted?.revision !== plugin?.revision) plugin = painted;
   background = effective.background;
+  logo = effective.logo;
   if (!inert) {
     injectPaletteCss();
     writeFirstFrame();
+    applyUnderlayRoot(background);
     void applyFont('--font-sans', effective.uiFont);
     void applyFont('--font-mono', effective.monoFont);
   }
@@ -211,7 +225,8 @@ function pruneAssetCache(catalog: AppearanceCatalog): void {
     const urls = [
       ...catalog.palettes.map((item) => item.asset.url),
       ...catalog.fonts.flatMap((font) => font.files.map((file) => file.url)),
-      ...catalog.backgrounds.map((item) => item.asset.url),
+      ...catalog.backgrounds.flatMap((item) => [item.asset.url, ...(item.darkAsset ? [item.darkAsset.url] : [])]),
+      ...(catalog.logos ?? []).flatMap((item) => [item.asset.url, ...(item.darkAsset ? [item.darkAsset.url] : [])]),
     ];
     navigator.serviceWorker?.controller?.postMessage({ type: APPEARANCE_PRUNE_MESSAGE, urls });
   } catch { /* the cache only grows until the next catalog */ }
@@ -239,7 +254,7 @@ async function fetchCatalog(): Promise<void> {
 
 // ── Selection ────────────────────────────────────────────────────────────────
 
-type Slot = 'palette' | 'uiFont' | 'monoFont' | 'background';
+type Slot = 'palette' | 'uiFont' | 'monoFont' | 'background' | 'logo';
 
 function select(selection: AppearanceSelection, persist = writeStored): void {
   persist(SELECTION_KEY, Object.keys(selection).length ? JSON.stringify(selection) : undefined);
@@ -275,6 +290,7 @@ export function releasePluginPalette(persist?: typeof writeStored): void {
 // ── Reading ──────────────────────────────────────────────────────────────────
 
 export function activePluginPalette(): PluginPalette | undefined { return plugin; }
+export function activeAppearanceLogo(): AppearanceLogo | undefined { return logo; }
 export function subscribeAppearance(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -290,6 +306,10 @@ export function useAppearance(): AppearanceView {
 
 export function useAppearanceBackground(): AppearanceBackground | undefined {
   return useSyncExternalStore(subscribeAppearance, () => background);
+}
+
+export function useAppearanceLogo(): AppearanceLogo | undefined {
+  return useSyncExternalStore(subscribeAppearance, () => logo);
 }
 
 /** The palettes a gallery lists beside the themes, with the key each one is painted under. */

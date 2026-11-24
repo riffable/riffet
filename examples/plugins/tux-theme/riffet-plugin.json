@@ -1,0 +1,55 @@
+{
+  "id": "example.tux-theme",
+  "vendor": "Example",
+  "name": "Tux Polar",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "title": { "zh-Hans": "极地企鹅", "en": "Tux Polar" },
+  "description": {
+    "zh-Hans": "Linux 企鹅极地主题：明暗冰川与极光调色板、双景底层壁纸和极简企鹅标志。",
+    "en": "Linux penguin polar theme: glacier light and aurora dark palette, underlay wallpapers, and a minimal Tux mark."
+  },
+  "contributes": {
+    "appearance": {
+      "palettes": [
+        {
+          "id": "example.tux-theme/polar",
+          "title": { "zh-Hans": "极地企鹅", "en": "Tux Polar" },
+          "asset": "assets/palette.json"
+        }
+      ],
+      "backgrounds": [
+        {
+          "id": "example.tux-theme/glacier-aurora",
+          "title": { "zh-Hans": "冰川与极光", "en": "Glacier & Aurora" },
+          "asset": "assets/bg-light.jpg",
+          "darkAsset": "assets/bg-dark.jpg",
+          "fit": "cover",
+          "placement": "underlay",
+          "position": "bottom-left",
+          "areas": ["workbench"],
+          "opacity": 1,
+          "surfaceOpacity": 0.86
+        }
+      ],
+      "logos": [
+        {
+          "id": "example.tux-theme/tux",
+          "title": { "zh-Hans": "企鹅标志", "en": "Tux Mark" },
+          "asset": "assets/logo.svg",
+          "darkAsset": "assets/logo-dark.svg"
+        }
+      ],
+      "presets": [
+        {
+          "id": "example.tux-theme/default",
+          "title": { "zh-Hans": "极地企鹅", "en": "Tux Polar" },
+          "palette": "example.tux-theme/polar",
+          "background": "example.tux-theme/glacier-aurora",
+          "logo": "example.tux-theme/tux"
+        }
+      ]
+    }
+  }
+}

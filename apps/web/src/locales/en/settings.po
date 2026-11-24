@@ -6753,6 +6753,10 @@ msgstr "Components marked New have no Mac implementation yet; when migrating, bu
 msgid "标准"
 msgstr "Standard"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "标志"
+msgstr "Logo"
+
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "标志 64（手机 48）· 标题 text-2xl 600"
 msgstr "Logo 64 (phone 48) · title text-2xl 600"
