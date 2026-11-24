@@ -54,6 +54,9 @@ describe('deferred native hook input', () => {
       data: { content: { text: '使用中文解释' }, sourceNativeId: 'tool-1' } }]);
     expect(h.inputs.receiptEvents(carrier, 'tool-1', 'now')).toEqual(receipt);
     expect(h.controller().receiptEvents(carrier, 'tool-1', 'now')).toEqual(receipt);
+    h.store.transitionNativeRun(run.id, ['dispatching'], { delivery: 'observed', stage: 'acknowledged', nativeMessageId: receipt[0]!.nativeId }, { state: 'completed' });
+    expect(h.controller().receiptEvents(carrier, 'tool-1', 'now')).toEqual([]);
+    expect(h.controller().receiptEvents(carrier, 'tool-1', 'now', { includeAcknowledged: true })).toEqual(receipt);
     const other = harness(); other.enqueue('command-1'); other.inputs.claim(other.target);
     expect(other.inputs.receiptEvents(carrier, 'tool-1', 'now')).toEqual([]);
   });

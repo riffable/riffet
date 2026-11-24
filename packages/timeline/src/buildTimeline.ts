@@ -529,6 +529,10 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     if (receipt) items.splice(items.indexOf(receipt), 0, resolved);
     else if (compaction) items.splice(items.indexOf(compaction), 0, resolved);
     else if (pending && native?.intent !== 'steer') items.push(resolved);
+    else if (pending && native?.intent === 'steer' && (native.delivery === 'queued' || native.delivery === 'preparing')) {
+      const end = targetTurnEndIndex(items, native);
+      items.splice(end >= 0 ? end + 1 : chronologicalIndex(items, Date.parse(run.createdAt)), 0, resolved);
+    }
     else items.splice(chronologicalIndex(items, native?.timings?.dispatchAt ?? Date.parse(run.createdAt)), 0, resolved);
   }
   return items;
@@ -654,6 +658,23 @@ export class IncrementalTimeline {
     this.runRows = placed;
     return this.items;
   }
+}
+
+/** Index of the last row belonging to a deferred steer's target turn, so a not-yet-delivered steer sits after work already emitted in that turn rather than jumping above it when timestamps skew. */
+function targetTurnEndIndex(items: readonly TimelineItem[], native: NonNullable<Run['native']>): number {
+  const turnId = native.nativeTurnId;
+  const ownerRunId = native.ownerRunId;
+  let last = -1;
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]!;
+    const itemTurn = (item.event as Partial<NativeWorkbenchEvent>).nativeTurnId
+      ?? (item.kind === 'user' ? item.run?.native?.nativeTurnId : undefined);
+    const sameTurn = (turnId !== undefined && itemTurn === turnId)
+      || (ownerRunId !== undefined && (item.event.runId === ownerRunId
+        || (item.kind === 'user' && (item.run?.id === ownerRunId || item.run?.native?.ownerRunId === ownerRunId))));
+    if (sameTurn) last = index;
+  }
+  return last;
 }
 
 const itemTimes = new WeakMap<TimelineItem, number>();

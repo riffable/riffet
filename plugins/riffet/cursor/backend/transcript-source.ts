@@ -65,6 +65,8 @@ export interface CursorTranscriptOptions {
   sessionId?: string;
   /** What a shell call changed in the working tree, seen around it (`AgentHost.workspaceChanges`); merged into its result. */
   observedChanges?(toolCallId: string): readonly Record<string, unknown>[] | undefined;
+  /** Turns a persisted `<riffet-steer>` tool-result carrier into its verified `native_input_receipt` events. */
+  additionalContext?(text: string, sourceNativeId: string, createdAt: string): NativeWorkbenchEvent[];
   /** The step each chat's CLI is streaming, ahead of its checkpoint in the store. */
   live?: Pick<CursorLive, 'read' | 'watch'>;
   limits?: Partial<CursorTranscriptLimits>;
@@ -73,7 +75,7 @@ export interface CursorTranscriptOptions {
 const DEFAULT_LIMITS: CursorTranscriptLimits = { stepMessages: 512, stepBytes: 4 * 1024 * 1024, tailTurns: 8, tailMessages: 512, sliceMs: 40 };
 const STATE_VERSION = 1;
 /** Normalized events can be upgraded without clearing turn ends or changing lane generations. */
-const MAPPING_VERSION = 3;
+const MAPPING_VERSION = 4;
 /** Events per commit while a lane reads on. */
 const COMMIT_EVENTS = 256;
 /** Turn ids opened lately; a request id seen among them again opens a turn of its own instead. */
@@ -277,6 +279,58 @@ class Slice {
 
 type Step = { op: 'event'; event: NativeWorkbenchEvent } | { op: 'end'; turn: TurnState } | { op: 'child'; toolCallId: string; agentId: string };
 
+interface MappedPart {
+  event: TranscriptEvent;
+  /** Occurrence alias suffix (`${rawPart}` or `${rawPart}:${receiptIndex}`) so multi-steer carriers stay distinct. */
+  aliasPart: string;
+  /** Canonical steer receipt alias (`steer:<sha256>`) preserved alongside the positional journal id. */
+  extraAlias?: string;
+}
+
+/**
+ * Maps one stored message and expands any verified `<riffet-steer>` tool-result context into
+ * `native_input_receipt` rows at the exact tool-result position, so steering stays causally ordered
+ * instead of falling back to timestamp placement.
+ */
+function expandMessage(
+  mapper: TranscriptMapper,
+  position: number,
+  blob: string,
+  message: ChatMessage,
+  seenAt: string | undefined,
+  additionalContext: CursorTranscriptOptions['additionalContext'],
+): MappedPart[] {
+  const raw = mapper.map({ id: `${position}:${blob}`, message, ...(seenAt ? { seenAt } : {}) });
+  if (!additionalContext) return raw.map((event, rawPart) => ({ event, aliasPart: String(rawPart) }));
+  const expanded: MappedPart[] = [];
+  raw.forEach((event, rawPart) => {
+    if (event.type !== 'cursor_tool_context') {
+      expanded.push({ event, aliasPart: String(rawPart) });
+      return;
+    }
+    const context = typeof event.data.text === 'string' ? event.data.text : '';
+    if (!context) return;
+    const sourceNativeId = `${position}:${blob}:${rawPart}`;
+    let receiptIndex = 0;
+    for (const receipt of additionalContext(context, sourceNativeId, event.createdAt)) {
+      if (receipt.type !== 'native_input_receipt') continue;
+      expanded.push({
+        event: {
+          type: 'native_input_receipt',
+          ...(receipt.runId ? { runId: receipt.runId } : {}),
+          ...(receipt.nativeTurnId ? { nativeTurnId: receipt.nativeTurnId } : {}),
+          createdAt: receipt.createdAt || event.createdAt,
+          data: receipt.data,
+        },
+        aliasPart: receiptIndex === 0 ? String(rawPart) : `${rawPart}:${receiptIndex}`,
+        ...(receipt.nativeId ? { extraAlias: receipt.nativeId } : {}),
+      });
+      receiptIndex += 1;
+    }
+  });
+  return expanded;
+}
+
 interface CompactionSignal { generationId?: string; trigger?: 'manual' | 'auto'; preTokens?: number; at: string }
 
 export class CursorTranscriptSource implements AgentTranscriptSource {
@@ -355,8 +409,8 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
             const blob = snapshot.messageIds[pos]!;
             const read = view.reader.readMessage(blob);
             if (read.status !== 'ok') continue;
-            const mapped = mapper.map({ id: `${pos}:${blob}`, message: read.message });
-            mapped.forEach((event, part) => {
+            const mapped = expandMessage(mapper, pos, blob, read.message, undefined, this.options.additionalContext);
+            mapped.forEach(({ event, aliasPart, extraAlias }, part) => {
               const opens = event.type === 'user_message_chunk' || event.type === 'task_notification';
               if (opens && event.runId !== activeTurn?.run) {
                 if (activeTurn) { flushBatch(); w.turnEnded(activeTurn.id, 'completed', activeTurn.at || new Date().toISOString()); }
@@ -366,9 +420,10 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
                 activeTurn = { id: `${prefix}turn:${pos}:${blob}`, ...(event.runId ? { run: event.runId } : {}), at: event.createdAt };
               }
               if (event.createdAt) activeTurn.at = event.createdAt;
+              const aliases = [`${prefix}${pos}:${blob}:${aliasPart}`, ...(extraAlias ? [extraAlias] : [])];
               batch.push({
                 sequence: 0, sessionId: this.sessionId, nativeId: `${prefix}${pos}:${part}`,
-                nativeAliases: [`${prefix}${pos}:${blob}:${part}`],
+                nativeAliases: aliases,
                 ...(event.runId ? { runId: event.runId } : {}), nativeTurnId: activeTurn.id,
                 type: event.type, data: event.data, createdAt: event.createdAt,
               });
@@ -571,6 +626,8 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
   }
 
   get sessionId(): string { return this.options.sessionId ?? ''; }
+
+  get additionalContext(): CursorTranscriptOptions['additionalContext'] { return this.options.additionalContext; }
 }
 
 /** What a subagent's row shows of it: what its `Task` call asked for, else what its own store records. */
@@ -698,6 +755,10 @@ class LaneRead {
     this.finishTurn(turn, outcome);
   }
 
+  private get additionalContext(): CursorTranscriptOptions['additionalContext'] {
+    return this.options.depth === 0 ? this.source.additionalContext : undefined;
+  }
+
   /** Repair old normalized payloads in place; CLI reads, receipts and terminal turn marks stay intact. */
   private async reprojectHistory(): Promise<boolean> {
     if (this.fresh || this.state.mapping === MAPPING_VERSION) return true;
@@ -734,17 +795,24 @@ class LaneRead {
       const children: Array<[string, string]> = [];
       if (read.status === 'ok') {
         bytes += read.bytes;
-        mapper.map({ id: `${position}:${blob}`, message: read.message }).forEach((event, part) => {
+        let rebuild = false;
+        expandMessage(mapper, position, blob, read.message, undefined, this.additionalContext).forEach(({ event, aliasPart, extraAlias }, part) => {
           this.noteTask(event, tasks);
           const result = event.type === 'tool_call_update' && isRecord(event.data.subagentResult) ? event.data.subagentResult : undefined;
           const toolCallId = text(event.data.toolCallId), agentId = text(result?.agentId);
-          const repaired = this.eventOf(event, position, blob, part, event.nativeTurnId ?? event.runId ?? '');
+          const repaired = this.eventOf(event, position, blob, part, event.nativeTurnId ?? event.runId ?? '', false, aliasPart, extraAlias);
           if ((event.type === 'tool_call' && (event.data.kind === 'agent' || event.data.toolName === 'Glob')) || result ||
-            (event.type === 'user_message_chunk' && Array.isArray(event.data.attachments))) {
-            events.push(repaired);
+            (event.type === 'user_message_chunk' && Array.isArray(event.data.attachments)) ||
+            event.type === 'native_input_receipt') {
+            if (event.type === 'native_input_receipt' && !this.w.canReproject(repaired)) rebuild = true;
+            else events.push(repaired);
           }
           if (toolCallId && agentId && AGENT_ID.test(agentId) && this.w.canReproject(repaired)) children.push([toolCallId, agentId]);
         });
+        if (rebuild) {
+          this.w.rebuild('identity-changed');
+          return this.abandon();
+        }
       }
       progress.n = position + 1;
       if (children.length) {
@@ -922,8 +990,8 @@ class LaneRead {
       if (result.status === 'missing') { blocked = true; break; }
       const kept = this.state.kept;
       if (kept && kept.at === position) {
-        const preview = result.status === 'ok' ? this.mapper.fork().map({ id: `${position}:${blob}`, message: result.message }) : [];
-        const opensNext = preview.length > 0 && (preview[0]!.type === 'user_message_chunk' || preview[0]!.type === 'task_notification');
+        const preview = result.status === 'ok' ? expandMessage(this.mapper.fork(), position, blob, result.message, undefined, this.additionalContext) : [];
+        const opensNext = preview.length > 0 && (preview[0]!.event.type === 'user_message_chunk' || preview[0]!.event.type === 'task_notification');
         if (opensNext) {
           this.w.rebuild('identity-changed');
           return this.abandon();
@@ -955,7 +1023,7 @@ class LaneRead {
       }
       if (kept && kept.at === undefined) {
         if (result.status === 'ok' && result.message.role === 'tool') {
-          const previewCount = this.mapper.fork().map({ id: `${position}:${blob}`, message: result.message }).length;
+          const previewCount = expandMessage(this.mapper.fork(), position, blob, result.message, undefined, this.additionalContext).length;
           const hadRetired = this.retired.has(position);
           if (hadRetired) {
             if (this.conflictsRetired(position, previewCount)) { this.w.rebuild('identity-changed'); return this.abandon(); }
@@ -978,7 +1046,7 @@ class LaneRead {
       // identity in the journal; rebuild if writing this message would invert identity order.
       const hadRetired = this.retired.has(position);
       if (result.status === 'ok' && hadRetired) {
-        const previewCount = this.mapper.fork().map({ id: `${position}:${blob}`, message: result.message }).length;
+        const previewCount = expandMessage(this.mapper.fork(), position, blob, result.message, undefined, this.additionalContext).length;
         if (this.conflictsRetired(position, previewCount)) { this.w.rebuild('identity-changed'); return this.abandon(); }
         if (previewCount >= (this.retired.get(position) ?? 0)) {
           this.retired.delete(position);
@@ -1044,7 +1112,7 @@ class LaneRead {
         const nextRead = this.view.reader.readMessage(nextBlob);
         if (nextRead.status !== 'ok' || nextRead.message.role !== 'tool') break;
         if (this.retired.has(this.state.n)) {
-          const nextCount = this.mapper.fork().map({ id: `${this.state.n}:${nextBlob}`, message: nextRead.message }).length;
+          const nextCount = expandMessage(this.mapper.fork(), this.state.n, nextBlob, nextRead.message, undefined, this.additionalContext).length;
           if (this.conflictsRetired(this.state.n, nextCount)) {
             this.events = []; this.drafts = []; this.retire = [];
             this.w.rebuild('identity-changed');
@@ -1126,7 +1194,7 @@ class LaneRead {
     const oldCounts = new Map<number, number>();
     for (let position = at; position < Math.min(before.n, oldIds.length); position += 1) {
       const message = this.view.reader.message(oldIds[position]!);
-      const count = message ? replay.map({ id: `${position}:${oldIds[position]}`, message }).length : 0;
+      const count = message ? expandMessage(replay, position, oldIds[position]!, message, undefined, this.additionalContext).length : 0;
       if (count > 0) oldCounts.set(position, count);
       for (let part = 0; part < count; part += 1) this.stale.add(`${position}:${part}`);
       if (slice.due && await slice.yield()) return this.abandon();
@@ -1149,7 +1217,7 @@ class LaneRead {
       .reduce((max, c) => Math.max(max, c.boundary), -1);
     for (let position = at; position < ids.length; position += 1) {
       const message = this.view.reader.message(ids[position]!);
-      const count = message ? preview.map({ id: `${position}:${ids[position]}`, message }).length : 0;
+      const count = message ? expandMessage(preview, position, ids[position]!, message, undefined, this.additionalContext).length : 0;
       const oldCount = Math.max(oldCounts.get(position) ?? 0, this.retired.get(position) ?? 0);
       if (count > 0 && (this.conflictsRetired(position, count) || (count > oldCount && (maxExisting > position || maxCompactionBound > position)))) {
         this.w.rebuild('identity-changed');
@@ -1193,8 +1261,8 @@ class LaneRead {
   /** What one message means for the lane: its events under their ids and turn, the turns it ends, the subagents it names. */
   private step(position: number, blob: string, message: ChatMessage): Step[] {
     const steps: Step[] = [];
-    const mapped = this.mapper.map({ id: `${position}:${blob}`, message, ...(this.seenAt ? { seenAt: this.seenAt } : {}) });
-    mapped.forEach((event, part) => {
+    const mapped = expandMessage(this.mapper, position, blob, message, this.seenAt, this.additionalContext);
+    mapped.forEach(({ event, aliasPart, extraAlias }, part) => {
       let turn = this.state.turn;
       const opens = event.type === 'user_message_chunk' || event.type === 'task_notification';
       if (opens && event.runId !== turn?.run) {
@@ -1213,7 +1281,7 @@ class LaneRead {
       if (event.createdAt) turn.at = event.createdAt;
       this.noteTask(event);
       const claims = event.type === 'user_message_chunk' && Boolean(event.nativeTurnId) && turn.id === event.nativeTurnId;
-      steps.push({ op: 'event', event: this.eventOf(event, position, blob, part, turn.id, claims) });
+      steps.push({ op: 'event', event: this.eventOf(event, position, blob, part, turn.id, claims, aliasPart, extraAlias) });
       const result = event.type === 'tool_call_update' && isRecord(event.data.subagentResult) ? event.data.subagentResult : undefined;
       const toolCallId = typeof event.data.toolCallId === 'string' ? event.data.toolCallId : undefined;
       if (toolCallId && typeof result?.agentId === 'string' && AGENT_ID.test(result.agentId)) steps.push({ op: 'child', toolCallId, agentId: result.agentId });
@@ -1236,8 +1304,8 @@ class LaneRead {
   }
 
   /** `claims`: the prompt a turn under its request id opens, also known by `cursorPromptAlias`. */
-  private eventOf(event: TranscriptEvent, position: number, blob: string, part: number, turnId: string, claims = false): NativeWorkbenchEvent {
-    const aliases = [...(blob ? [`${position}:${blob}:${part}`] : []), ...(claims ? [cursorPromptAlias(turnId)] : [])];
+  private eventOf(event: TranscriptEvent, position: number, blob: string, part: number, turnId: string, claims = false, aliasPart: string = String(part), extraAlias?: string): NativeWorkbenchEvent {
+    const aliases = [...(blob ? [`${position}:${blob}:${aliasPart}`] : []), ...(claims ? [cursorPromptAlias(turnId)] : []), ...(extraAlias ? [extraAlias] : [])];
     return {
       sequence: 0, sessionId: this.source.sessionId, nativeId: `${position}:${part}`, ...(aliases.length ? { nativeAliases: aliases } : {}),
       ...(event.runId ? { runId: event.runId } : {}), nativeTurnId: turnId, type: event.type, data: event.data, createdAt: event.createdAt,

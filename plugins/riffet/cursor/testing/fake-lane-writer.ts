@@ -165,8 +165,20 @@ export class FakeLaneWriter implements AgentLaneWriter {
     for (const event of batch.events) {
       if (batch.reproject) {
         if (!this.canReproject(event)) continue;
-        const saved = this.entity(event.nativeId)!.payload as NativeWorkbenchEvent;
-        inputs.push(eventInput({ ...saved, sequence: 0, sessionId: event.sessionId, data: { ...saved.data, ...event.data } }));
+        const known = this.entity(event.nativeId)!;
+        const saved = known.payload as NativeWorkbenchEvent;
+        const aliases = event.nativeAliases
+          ? [...new Set([...(saved.nativeAliases ?? []), ...event.nativeAliases])]
+          : saved.nativeAliases;
+        const repaired: NativeWorkbenchEvent = known.kind === event.type
+          ? { ...saved, sequence: 0, sessionId: event.sessionId, data: { ...saved.data, ...event.data } }
+          : {
+              ...saved, sequence: 0, sessionId: event.sessionId, type: event.type,
+              ...(event.runId ? { runId: event.runId } : {}),
+              ...(aliases?.length ? { nativeAliases: aliases } : {}),
+              data: event.data,
+            };
+        inputs.push(eventInput(repaired));
         continue;
       }
       start(event.nativeTurnId, event.createdAt);
@@ -193,7 +205,9 @@ export class FakeLaneWriter implements AgentLaneWriter {
 
   canReproject(event: NativeWorkbenchEvent): boolean {
     const known = this.entity(event.nativeId);
-    if (!known || known.kind !== event.type) return false;
+    const sameOrPromoted = known !== undefined
+      && (known.kind === event.type || (known.kind === 'cursor_tool_context' && event.type === 'native_input_receipt'));
+    if (!sameOrPromoted) return false;
     const saved = known.payload as NativeWorkbenchEvent;
     if (!event.nativeAliases?.some(alias => saved.nativeAliases?.includes(alias))) return false;
     const toolCallId = event.data.toolCallId;

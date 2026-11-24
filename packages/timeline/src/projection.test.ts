@@ -590,6 +590,30 @@ describe('timeline projection contract', () => {
     expect(timeline.items.map(item => item.event.runId)).toEqual(['owner', 'steer', 'next-turn', 'unknown-turn-1', 'unknown-turn-2']);
   });
 
+  it('keeps an undelivered preparing steer after its target turn work even when seenAt timestamps are newer', () => {
+    const events = [
+      ev(1, 'user_message_chunk', text('draw diagram'), { nativeId: 'msg-u1', nativeTurnId: 'turn-1', createdAt: at(1) }),
+      ev(2, 'agent_message_chunk', text('working on draft'), { nativeId: 'msg-a1', nativeTurnId: 'turn-1', createdAt: at(10) }),
+      ev(3, 'tool_call', { toolCallId: 'call-1', title: 'Write', status: 'completed' }, { nativeId: 'msg-a2', nativeTurnId: 'turn-1', createdAt: at(10) }),
+    ];
+    const runs = [
+      nativeRun('run-a', 'running', 'draw diagram', 1, { nativeMessageId: 'msg-u1', nativeSessionId: 'chat-1', nativeTurnId: 'turn-1' }),
+      nativeRun('run-s', 'running', 'keep subtle colors', 5, { intent: 'steer', ownerRunId: 'run-a', nativeTurnId: 'turn-1', nativeSessionId: 'chat-1', delivery: 'preparing' }),
+      nativeRun('run-q', 'queued', 'next task', 6, { delivery: 'queued' }),
+    ];
+    const projected = projectEvents(events);
+    const full = buildTimeline(projected, runs, undefined, undefined, 'chat-1');
+    const incremental = new IncrementalTimeline().build(projected, runs, undefined, 'chat-1');
+    expect(incremental).toEqual(full);
+    expect(timelineRows(full).map(row => [row.key, row.turn])).toEqual([
+      ['user:cmd-run-a', 'run:run-a'],
+      ['event:msg-a1', 'run:run-a'],
+      ['tool:call-1', 'run:run-a'],
+      ['user:cmd-run-s', 'run:run-a'],
+      ['user:cmd-run-q', 'run:run-q'],
+    ]);
+  });
+
   for (const scenario of scenarios) {
     it(scenario.name, () => {
       const rows = timelineRows(buildTimeline(projectEvents(scenario.events), scenario.runs, jobsOf(scenario), undefined, scenario.nativeChatId));

@@ -334,6 +334,12 @@ export class CursorSteerBridge {
     return receipts;
   }
 
+  /** Expands a persisted `<riffet-steer>` tool-result carrier for the transcript journal, including settled steers on replay/reproject. */
+  transcriptReceipts(sessionId: string, text: string, sourceNativeId: string, createdAt: string): NativeWorkbenchEvent[] {
+    return this.bind(sessionId).inputs.receiptEvents(text, sourceNativeId, createdAt, { includeAcknowledged: true })
+      .filter(event => event.type === 'native_input_receipt');
+  }
+
   private async handle(payload: Record<string, unknown>, signal: AbortSignal): Promise<Record<string, unknown>> {
     const nativeSessionId = typeof payload.conversation_id === 'string' ? payload.conversation_id : undefined;
     const turnId = typeof payload.generation_id === 'string' ? payload.generation_id : undefined;

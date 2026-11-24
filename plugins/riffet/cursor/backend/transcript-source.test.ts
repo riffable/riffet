@@ -221,7 +221,7 @@ describe('Cursor transcript source', () => {
     expect(JSON.parse(writer.cursor!).reproject.n).toBeLessThanOrEqual(4);
     writer.child = bindChild;
     for (let tries = 0; tries < 100; tries++) if ((await pullLane(source(), writer, new AbortController().signal)).caughtUp) break;
-    expect(JSON.parse(writer.cursor!).mapping).toBe(3);
+    expect(JSON.parse(writer.cursor!).mapping).toBe(4);
     expect(writer.generation).toBe(generation);
     expect(rowsOf(lanes).filter(row => row.kind === 'meta.turn_ended' && ['req-image', 'req-cancelled'].includes(row.turnId!))).toEqual(originalEnds);
     const repaired = rowsOf(lanes);
@@ -746,5 +746,64 @@ describe('Cursor transcript source', () => {
     expect(writer.entity('3:0')?.kind).toBe('agent_thought_chunk');
     expect(writer.entity('3:1')?.kind).toBe('agent_message_chunk');
     checkSession(lanes);
+  });
+
+  it('expands persisted steer tool context into native_input_receipt at its causal slot and upgrades legacy rows in place', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cursor-steer-receipt-'));
+    dirs.push(dir);
+    const meta = Buffer.from(JSON.stringify({
+      backendId: 'cursor', sessionId: 's', target: { nativeSessionId: 'chat-1', turnId: 'req-1' },
+      commandId: 'cmd-steer', nonce: 'a'.repeat(32),
+    })).toString('base64url');
+    const carrier = `<riffet-steer v="1" data="${meta}">\n补充：保留低饱和度配色\n</riffet-steer>`;
+    const messages: ChatMessage[] = [
+      ...SYSTEM,
+      ask('draw diagram', 'req-1'),
+      call('w1', 'Write', { path: 'draft.xml', content: '<mxfile/>' }),
+      { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'w1', toolName: 'Write', result: `{"success":{}}\n\nHook additional context:\n${carrier}` }] },
+      say('收到，调整配色。'),
+    ];
+    writeChat(dir, 'chat-1', { messages });
+    const additionalContext = (text: string, sourceNativeId: string, createdAt: string) => text.includes(carrier)
+      ? [{
+        sequence: 0, sessionId: 's', runId: 'run-steer', nativeTurnId: 'req-1',
+        type: 'native_input_receipt', nativeId: `steer:${sourceNativeId}`, createdAt,
+        data: { commandId: 'cmd-steer', content: { type: 'text', text: '补充：保留低饱和度配色' }, receiptKind: 'hook_context', sourceNativeId, targetTurnId: 'req-1' },
+      }] : [];
+
+    // 1. Live ingestion writes `native_input_receipt` directly between tool result and follow-up reply.
+    const live = openLanes();
+    const liveSource = new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's', additionalContext });
+    await catchUp(liveSource, live.writer);
+    const liveVisible = rowsOf(live.lanes).filter(row => !row.kind.startsWith('meta.') && row.kind !== 'tombstone');
+    expect(liveVisible.map(row => row.kind)).toEqual(['user_message_chunk', 'tool_call', 'tool_call_update', 'native_input_receipt', 'agent_message_chunk']);
+    const liveReceipt = live.writer.entity('4:1')!;
+    expect(liveReceipt.kind).toBe('native_input_receipt');
+    expect((liveReceipt.payload as { runId?: string; nativeAliases?: string[] })).toMatchObject({
+      runId: 'run-steer',
+      nativeAliases: expect.arrayContaining([expect.stringMatching(/^4:.*:1$/), expect.stringMatching(/^steer:4:.*:1$/)]),
+    });
+
+    // 2. Legacy `mapping: 3` journal row (`cursor_tool_context`) upgrades in place without rebuilding.
+    const legacy = openLanes();
+    await catchUp(new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's' }), legacy.writer);
+    const legacyRow = legacy.writer.entity('4:1')!;
+    expect(legacyRow.kind).toBe('cursor_tool_context');
+    const oldCursor = JSON.parse(legacy.writer.cursor!);
+    oldCursor.mapping = 3;
+    legacy.writer.commit({ events: [], cursor: JSON.stringify(oldCursor) });
+    const genBefore = legacy.writer.generation;
+
+    await catchUp(new CursorTranscriptSource({ chatsDir: () => dir, chatId: () => 'chat-1', sessionId: 's', additionalContext }), legacy.writer);
+    expect(legacy.writer.generation).toBe(genBefore);
+    const upgraded = legacy.writer.entity('4:1')!;
+    expect(upgraded.kind).toBe('native_input_receipt');
+    expect(upgraded.identity).toBe(legacyRow.identity);
+    expect(upgraded.turnId).toBe(legacyRow.turnId);
+    expect(upgraded.at).toBe(legacyRow.at);
+    expect((upgraded.payload as { runId?: string; nativeAliases?: string[] })).toMatchObject({
+      runId: 'run-steer',
+      nativeAliases: expect.arrayContaining([expect.stringMatching(/^4:.*:1$/), expect.stringMatching(/^steer:4:.*:1$/)]),
+    });
   });
 });

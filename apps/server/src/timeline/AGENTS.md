@@ -48,4 +48,5 @@ co-change:
 - 冷清理失败或磁盘不回收：`riffet logs --scope timeline`（`cold sweep failed`），`riffet doctor --compact` 在服务停止后整理数据库。
 - 大纲里多出重复的提示、刷新后消失：客户端没有按 `outline` 帧里 `rows: 0` 移除回合（`fold.ts` 删除回合时这样宣告）；服务端 `GET /api/v3/sessions/:id/outline` 是准的。
 - 长回答停在半句、下面出现「显示全部」：旧版本把超过 32KB 的 assistant 行也截成了 16KB 预览；现在模型输出整行下发（`budget.ts#MODEL_KINDS`），仍有截断说明折叠版本没更新，看 `timeline_heads.fold_version`。
+- 补充引导（steer）跑到本回合首条输出上方：核对 `journal_events` 对应工具结果处是否已写入 `native_input_receipt`（若仍为 `cursor_tool_context` 或未命中回执，会退化到 `placeRunRows` 按时间戳插队，在 Cursor 批量落盘 `seenAt > dispatchAt` 时跳到前面）；未送达的 `queued`/`preparing` steer 由 `packages/timeline/src/buildTimeline.ts` 的 `targetTurnEndIndex` 锚定在目标回合既有输出之后。
 - 打开旧会话慢：首次折叠要读完整日志，看 `timeline_heads.folded_through` 与 `journal_seq` 的差距。

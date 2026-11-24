@@ -152,14 +152,14 @@ export class DeferredSteerInputs {
   }
 
   /** Called only with actual persisted tool-result / hook-additional-context content and its native identity. */
-  receiptEvents(text: string, sourceNativeId: string, createdAt: string): NativeWorkbenchEvent[] {
+  receiptEvents(text: string, sourceNativeId: string, createdAt: string, options?: { includeAcknowledged?: boolean }): NativeWorkbenchEvent[] {
     const events: NativeWorkbenchEvent[] = [];
     for (const context of parseSteerContexts(text)) {
       if (context.backendId !== this.options.backendId || context.sessionId !== this.options.sessionId) continue;
       const runs = this.runs(context.target);
       const run = runs.find(candidate => candidate.commandId === context.commandId
         && candidate.native?.intent === 'steer' && candidate.native.renderedText === context.carrier
-        && !['steer_rejected', 'acknowledged', 'cancelled'].includes(candidate.native.stage ?? ''));
+        && !['steer_rejected', 'cancelled', ...(options?.includeAcknowledged ? [] : ['acknowledged'])].includes(candidate.native.stage ?? ''));
       if (!run?.native) continue;
       const nativeId = sourceId(sourceNativeId, context.commandId);
       events.push({ sequence: 0, sessionId: this.options.sessionId, runId: run.id, nativeTurnId: context.target.turnId,
@@ -167,6 +167,7 @@ export class DeferredSteerInputs {
         // The row lands in whatever turn its transcript groups it into, which need not be the turn the
         // steer named (an answered question reopens a turn under a key of its own): the target says.
         data: { commandId: context.commandId, content: { type: 'text', text: run.native.input.text }, receiptKind: 'hook_context', sourceNativeId, targetTurnId: context.target.turnId } });
+      if (run.native.stage === 'acknowledged') continue;
       // Recovery cannot rely on an in-memory Stop/receipt ordering cache. An explicitly settled
       // execution owner is durable evidence; `interrupted + uncertain` is deliberately excluded.
       const owner = runs.find(candidate => candidate.native?.intent !== 'steer'

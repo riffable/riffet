@@ -50,6 +50,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Sending a message (especially with an attachment or right after resuming an idle Cursor conversation) no longer drops the prompt or gets stuck on "Unable to confirm whether this was sent" when the CLI is briefly busy; custom "Other" question answers, Antigravity submits, and image-only Claude Code messages also confirm and retry Enter reliably.
 - Stopping an active Cursor turn no longer wipes out already-streamed thinking and tool calls while Cursor's transcript finishes flushing to disk; the rows stay visible in place and settle smoothly once persisted.
 - Clicking "Check status" on an unconfirmed Cursor message now verifies that Cursor is idle with an empty prompt bar and offers "Continue" to unblock queued messages instead of staying stuck indefinitely.
+- Mid-turn steer messages in Cursor conversations now stay at the tool boundary where Cursor received them instead of jumping above the turn's earlier reply and tool calls.
 
 ## 0.10.0 - 2026-11-22
 

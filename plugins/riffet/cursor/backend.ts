@@ -771,6 +771,7 @@ export class CursorBackend implements AgentBackend {
         return terminal?.state === 'exited' ? 'exited' : undefined;
       },
       ...(host.workspaceChanges ? { observedChanges: (toolCallId: string) => host.workspaceChanges?.changes(sessionId, toolCallId) } : {}),
+      additionalContext: (text, sourceNativeId, createdAt) => steering.transcriptReceipts(sessionId, text, sourceNativeId, createdAt),
       signals: listener => this.followTranscript(native, sessionId, listener),
     });
   }
