@@ -87,8 +87,8 @@ export function TerminalSearchBar({
           <IconArrowDown />
         </Button>
       </Tip>
-      <Tip label={t`关闭查找`}>
-        <Button size="icon-xs" variant="quiet" aria-label={t`关闭查找`} onClick={onClose}>
+      <Tip label={t({ message: '关闭查找', context: 'terminal-search' })}>
+        <Button size="icon-xs" variant="quiet" aria-label={t({ message: '关闭查找', context: 'terminal-search' })} onClick={onClose}>
           <IconX />
         </Button>
       </Tip>

@@ -159,7 +159,7 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
         };
         pendingKeys.clear();
         await api.updateSettings(body);
-      }).catch((error) => { console.warn('无法保存后端默认值', error); });
+      }).catch((error) => { console.warn('Could not save the default backend', error); });
     },
     /** Reports this client's time zone to the 助理 when it differs from the saved one. */
     syncAssistantTimeZone(): void { this.rememberAssistant({}); },

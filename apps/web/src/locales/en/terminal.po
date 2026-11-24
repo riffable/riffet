@@ -124,6 +124,7 @@ msgid "关闭分屏"
 msgstr "Close split"
 
 #: src/app/terminal/TerminalSearchBar.tsx
+msgctxt "terminal-search"
 msgid "关闭查找"
 msgstr "Close search"
 

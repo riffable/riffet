@@ -161,9 +161,12 @@ export function PublishSection({ project, status, sessionId, active, onError, on
     const failed = pr.checks.items.filter((item) => item.state === 'failure');
     // Sent to the Agent, not shown as interface text: keep it in one language.
     const text = [
+      // i18n-ignore: prompt sent to agent
       `PR #${pr.number} 的 CI 检查失败了，请定位原因并修复：`,
+      // i18n-ignore: prompt sent to agent
       ...failed.map((item) => `- ${item.name}${item.url ? `：${item.url}` : ''}`),
       '',
+      // i18n-ignore: prompt sent to agent
       "可以用 `gh pr checks` 和 `gh run view --log-failed` 读取失败日志。修好后在本地跑一遍相关检查，再告诉我结果。",
     ].join('\n');
     setBusy('fix');

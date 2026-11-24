@@ -28,7 +28,7 @@ import type { HeaderSlots } from './Header';
 import { NoProjects, NewSessionHome } from './ProjectHome';
 import { Sidebar, type SessionAction } from './Sidebar';
 import { councilAttention } from './state/councilStore';
-import { readDraft, writeDraft } from './session/Composer';
+import { readDraft, writeDraft } from './session/composerDraft';
 import { joinQuotes, splitQuotes } from './session/quotes';
 import { useSidebarSessions } from './useSidebarSessions';
 import { MobileSidebar } from './MobileSidebar';
@@ -858,40 +858,54 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const paletteActions = (): PaletteAction[] => [
     { id: 'new-session', label: t`新建会话`, keywords: 'new conversation', icon: <IconMessageCirclePlus className="size-4 shrink-0 text-fg-3" />, run: newSession },
     ...(assistantProject ? [{ id: 'open-assistant', label: t`打开个人助理`, keywords: 'assistant', icon: <IconBot className="size-4 shrink-0 text-fg-3" />, run: openAssistant }] : []),
+    // i18n-ignore: search keywords in both languages, not interface text
     { id: 'open-stats', label: t`打开统计`, keywords: 'stats statistics 统计 用量', icon: <IconChartColumn className="size-4 shrink-0 text-fg-3" />, run: () => openPage('stats') },
     // i18n-ignore: search keywords in both languages, not interface text
     ...(workItemsSupported ? [{ id: 'open-work-items', label: t`打开任务看板`, keywords: 'tasks board kanban inbox 任务 看板 收件箱', icon: <IconSquareKanban className="size-4 shrink-0 text-fg-3" />, run: () => openPage('tasks') }] : []),
+    // i18n-ignore: search keywords in both languages, not interface text
     { id: 'open-automations', label: t`打开自动化`, keywords: 'automations templates schedules cron 模板 定时', icon: <IconCalendarClock className="size-4 shrink-0 text-fg-3" />, run: () => openPage('automations') },
     // i18n-ignore: search keywords in both languages, not interface text
     { id: 'open-council', label: t`打开模型协作`, keywords: 'council debate prism insight 模型协作 讨论 辩论 审阅', icon: <IconMessagesSquare className="size-4 shrink-0 text-fg-3" />, run: () => openPage('council') },
+    // i18n-ignore: search keywords in both languages, not interface text
     { id: 'open-marks', label: t`打开收藏夹`, keywords: 'marks bookmarks highlights saved 收藏 收藏夹 高亮 书签', icon: <IconBookmark className="size-4 shrink-0 text-fg-3" />, run: () => openPage('marks') },
     { id: 'open-plugins', label: t`管理插件`, keywords: 'plugins install packages', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('plugins') },
     ...mainViews.map((view) => {
       const Icon = viewIcon(view);
       return { id: `open-view:${view.id}`, label: view.title, keywords: `plugin view ${view.id} ${view.title}`, icon: <Icon className="size-4 shrink-0 text-fg-3" />, run: () => openMainView(view.id) };
     }),
+    // i18n-ignore: search keywords in both languages, not interface text
     { id: 'open-extensions', label: t`打开扩展管理`, keywords: 'extensions skills mcp plugins hooks rules commands 拓展 扩展 管理', icon: <IconWrench className="size-4 shrink-0 text-fg-3" />, run: () => openPage('extensions') },
+    // i18n-ignore: search keywords in both languages, not interface text
     { id: 'toggle-sidebar', label: desktop ? (sidebarCollapsed ? t`展开侧栏` : t`收起侧栏`) : t`打开侧栏`, keywords: 'sidebar 侧栏', icon: <IconPanelLeft className="size-4 shrink-0 text-fg-3" />, run: () => { if (desktop) ui.setSidebarCollapsed((value) => !value); else ui.setMobileSidebar((value) => !value); } },
+    // i18n-ignore: search keywords in both languages, not interface text
     ...(quickChat || isAssistantProject(project) ? [] : [{ id: 'toggle-terminal', label: ui.get().dockOpen ? t`隐藏终端` : t`显示终端`, keywords: 'terminal 终端', icon: <IconTerminal className="size-4 shrink-0 text-fg-3" />, run: () => { void nav.navigate(() => ui.setDockOpen((value) => !value)); } }]),
     ...(project && !quickChat && !pageOpen ? [
+      // i18n-ignore: search keywords in both languages, not interface text
       ...(sidebarViews.some((view) => view.id === 'changes') ? [{ id: 'toggle-changes', label: panelShows('changes') ? t`收起变更面板` : t`打开变更面板`, keywords: 'git diff changes panel 变更 改动 差异', icon: <IconGitCompare className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'changes', shownTab()) }] : []),
+      // i18n-ignore: search keywords in both languages, not interface text
       ...(sidebarViews.some((view) => view.id === 'files') ? [{ id: 'toggle-files', label: panelShows('files') ? t`收起文件面板` : t`打开文件面板`, keywords: 'files explorer panel 文件 目录', icon: <IconFolder className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'files', shownTab()) }] : []),
     ] : []),
     // i18n-ignore: search keywords in both languages, not interface text
     ...(!pageOpen && !attemptsGroupId && !session?.archivedAt && runnerFits() ? [{ id: 'open-runner', label: t`黑马跑酷`, keywords: 'game runner horse dino 游戏 小游戏 跑酷 黑马', icon: <BrandMark forceDefault className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => openRunner() }] : []),
+    // i18n-ignore: search keywords in both languages, not interface text
     { id: 'toggle-color-mode', label: t`切换浅色 / 深色`, keywords: 'theme dark light appearance 主题 明暗 深色 浅色', icon: <IconMoon className="size-4 shrink-0 text-fg-3" />, run: () => setThemeMode(document.documentElement.classList.contains('dark') ? 'light' : 'dark') },
+    // i18n-ignore: search keywords in both languages, not interface text
     ...(session && !session.archivedAt ? [{ id: 'focus-composer', label: t`聚焦输入框`, keywords: 'composer input focus 输入 消息', icon: <IconPencilLine className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => document.querySelector<HTMLTextAreaElement>('textarea[data-composer-input]')?.focus() }] : []),
     // Opens the composer's model list; `ModelPicker` has no handle on it other than its trigger.
+    // i18n-ignore: search keywords in both languages, not interface text
     ...(composerShown ? [{ id: 'choose-model', label: t({ message: '选择模型', context: 'workbench-choose-model-action' }), keywords: 'model 模型 切换', icon: <IconBrain className="size-4 shrink-0 text-fg-3" />, takesFocus: true, run: () => {
       const trigger = document.querySelector<HTMLButtonElement>('main button[data-model-picker]:not(:disabled)');
       trigger?.focus();
       trigger?.click();
     } }] : []),
+    // i18n-ignore: search keywords in both languages, not interface text
     ...(session && ['starting', 'running', 'waiting'].includes(session.state) ? [{ id: 'stop-run', label: t`停止当前运行`, keywords: 'stop cancel interrupt 停止 中断', icon: <IconSquare className="size-4 shrink-0 text-fg-3" />, run: () => { if (!sendSessionCommand(session.id, 'stop')) void api.cancelSession(session.id).catch((error) => pushError(errorMessage(error, t({ message: '无法停止', context: 'workbench-stop-failed' })))); } }] : []),
+    // i18n-ignore: search keywords in both languages, not interface text
     ...(session ? [{ id: 'archive-session', label: session.archivedAt ? t`恢复当前会话` : t`归档当前会话`, keywords: 'archive restore 归档 恢复', icon: <IconArchive className="size-4 shrink-0 text-fg-3" />, run: () => void sessionAction(session, 'archive') }] : []),
     ...pluginCommands.actions(),
     { id: 'open-settings', label: t`打开设置`, keywords: 'settings preferences', icon: <IconSettings className="size-4 shrink-0 text-fg-3" />, run: () => openSettingsAt() },
     // The palette and the settings navigation list the same pages, matching section keywords too.
+    // i18n-ignore: search keywords in both languages, not interface text
     ...settingsSections.map(({ id, label, keywords, icon: Icon }) => ({ id: `settings:${id}`, label: t`设置：${label}`, keywords: `settings 设置 ${label} ${keywords}`, icon: <Icon className="size-4 shrink-0 text-fg-3" />, run: () => openSettingsAt(id) })),
   ];
 
