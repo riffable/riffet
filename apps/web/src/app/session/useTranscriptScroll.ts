@@ -13,7 +13,6 @@ export interface TranscriptScrollHandle {
 interface Options {
   scrollRef: RefObject<HTMLElement | null>;
   contentRef: RefObject<HTMLElement | null>;
-  spacerRef: RefObject<HTMLElement | null>;
   sessionId: string;
   resetVersion: number;
   loaded: boolean;
@@ -115,7 +114,6 @@ export function useTranscriptScroll(options: Options) {
     initialized: false,
     hidden: false,
     geometry: undefined as Geometry | undefined,
-    naturalContent: undefined as number | undefined,
     top: 0,
     owned: undefined as number | undefined,
     navigation: undefined as Navigation | undefined,
@@ -138,32 +136,6 @@ export function useTranscriptScroll(options: Options) {
       following.current = next;
       syncFollowing();
     };
-    const spacerHeight = () => {
-      const spacer = latest.current.spacerRef.current;
-      return spacer ? Number.parseFloat(spacer.style.height) || 0 : 0;
-    };
-    const setSpacer = (height: number) => {
-      const spacer = latest.current.spacerRef.current;
-      if (!spacer) return;
-      const next = height > 0.5 ? `${Math.ceil(height)}px` : '';
-      if (spacer.style.height !== next) spacer.style.height = next;
-    };
-    const naturalContent = (element: HTMLElement) => {
-      // Measure the un-clamped content column rather than `element.scrollHeight`, which is always
-      // floored at `element.clientHeight` and would undercount the spacer needed in short sessions.
-      const content = latest.current.contentRef.current;
-      return Math.max(0, (content ? content.offsetHeight : element.scrollHeight) - spacerHeight());
-    };
-    const naturalBottom = (element: HTMLElement) => Math.max(0, naturalContent(element) - element.clientHeight);
-    const spacerNeeded = (element: HTMLElement, top: number) =>
-      top > 0.5 ? Math.max(0, top + element.clientHeight - naturalContent(element)) : 0;
-    const reclaimSpacer = (element: HTMLElement) => {
-      if (state.current.held || state.current.navigation) return;
-      if (following.current) { setSpacer(0); return; }
-      const held = spacerHeight();
-      if (held <= 0) return;
-      setSpacer(Math.min(held, spacerNeeded(element, element.scrollTop)));
-    };
     const capture = () => {
       const element = current();
       if (element && visible(element) && !following.current && !state.current.navigation) {
@@ -173,28 +145,15 @@ export function useTranscriptScroll(options: Options) {
     const reportBottom = () => {
       const element = current();
       if (!element || !visible(element)) return;
-      const value = !latest.current.hasMoreLater && naturalBottom(element) - element.scrollTop < 64;
+      const value = !latest.current.hasMoreLater && bottom(element) - element.scrollTop < 64;
       if (bottomVisible.current !== value) { bottomVisible.current = value; setAtBottom(value); }
     };
     const remember = (element: HTMLElement) => {
       state.current.geometry = geometry(element);
-      state.current.naturalContent = naturalContent(element);
       state.current.top = element.scrollTop;
     };
-    const write = (element: HTMLElement, top: number, behavior: ScrollBehavior = 'auto', allowSpacer = false) => {
-      const desired = Math.max(0, top);
-      if (allowSpacer) {
-        const contentHeight = naturalContent(element);
-        const deficit = spacerNeeded(element, desired);
-        const contentShrank = state.current.naturalContent !== undefined && contentHeight < state.current.naturalContent - 0.5;
-        // A fold the reader clicked near the end lets the content above come down instead of leaving
-        // a blank tail under the held row; only folds nobody clicked keep the view with the spacer.
-        if (contentShrank && !state.current.held) setSpacer(deficit);
-        else if (spacerHeight() > 0) setSpacer(Math.min(spacerHeight(), deficit));
-      } else if (following.current) {
-        setSpacer(0);
-      }
-      const target = Math.max(0, Math.min(bottom(element), desired));
+    const write = (element: HTMLElement, top: number, behavior: ScrollBehavior = 'auto') => {
+      const target = Math.max(0, Math.min(bottom(element), top));
       // Keep ownership until a reader signal or an unknown native scroll. A one-frame lock
       // expires before delayed scroll events and native smooth-scroll inertia finish.
       state.current.owned = target;
@@ -241,10 +200,7 @@ export function useTranscriptScroll(options: Options) {
     const finishReader = () => {
       const hadReader = state.current.readerUntil > 0 || state.current.pointerHeld;
       const element = current();
-      if (hadReader && element && visible(element) && !state.current.navigation) {
-        reclaimSpacer(element);
-        reconcile();
-      }
+      if (hadReader && element && visible(element) && !state.current.navigation) reconcile();
       clearReader();
     };
     const deferReaderEnd = () => {
@@ -262,7 +218,6 @@ export function useTranscriptScroll(options: Options) {
         clearReader();
         setFollowing(true);
         anchor.current = null;
-        setSpacer(0);
         if (element) reconcile();
         return;
       }
@@ -287,15 +242,13 @@ export function useTranscriptScroll(options: Options) {
       // the view at its bottom, where the page probe brings the newest rows back.
       if (!state.current.initialized) {
         state.current.initialized = true;
-        if (following.current) setSpacer(0);
         write(element, following.current ? bottom(element) : 0);
         capture();
       } else if (!state.current.navigation) {
         const held = state.current.held;
         if (held?.target.isConnected) {
-          write(element, element.scrollTop + held.target.getBoundingClientRect().top - element.getBoundingClientRect().top - held.top, 'auto', true);
+          write(element, element.scrollTop + held.target.getBoundingClientRect().top - element.getBoundingClientRect().top - held.top);
         } else if (following.current) {
-          setSpacer(0);
           write(element, bottom(element));
         } else if (anchor.current) {
           const found = readingAnchorTop(element, anchor.current, latest.current.locate);
@@ -304,17 +257,14 @@ export function useTranscriptScroll(options: Options) {
           // Preserve native gesture movement since the last capture while compensating layout.
           // The scroller always disables native `overflow-anchor`, so `element.scrollTop - baseline`
           // is strictly reader gesture movement across every browser.
-          if ((state.current.pointerHeld || performance.now() < state.current.readerUntil) && anchored <= bottom(element)) {
-            const baseline = Math.max(0, Math.min(bottom(element), anchor.current.scrollTop));
-            top = anchored + element.scrollTop - baseline;
+          if (state.current.pointerHeld || performance.now() < state.current.readerUntil) {
+            const limit = bottom(element);
+            const baseline = Math.max(0, Math.min(limit, anchor.current.scrollTop));
+            top = Math.min(limit, anchored) + element.scrollTop - baseline;
           }
-          // The rows the reader was on left the transcript: no place is left to hold with a blank
-          // tail, so the view stays within the content that remains.
-          if (found === undefined) top = Math.min(top, naturalBottom(element));
-          write(element, top, 'auto', true);
+          write(element, top);
           capture();
         } else {
-          reclaimSpacer(element);
           remember(element);
           capture();
         }
@@ -328,9 +278,8 @@ export function useTranscriptScroll(options: Options) {
       const element = current();
       dropHold();
       if (!held || !element || !visible(element)) return;
-      if (following.current && (!held.following || latest.current.hasMoreLater || selecting(element) || naturalBottom(element) - element.scrollTop > 2)) setFollowing(false);
+      if (following.current && (!held.following || latest.current.hasMoreLater || selecting(element) || bottom(element) - element.scrollTop > 2)) setFollowing(false);
       if (following.current) {
-        setSpacer(0);
         anchor.current = null;
         reconcile();
         return;
@@ -377,12 +326,10 @@ export function useTranscriptScroll(options: Options) {
       clearReader();
       setFollowing(!latest.current.hasMoreLater);
       anchor.current = null;
-      if (following.current) setSpacer(0);
       if (following.current) reconcile(); else capture();
     };
     const navigate = (resolve: () => number | undefined, navigationOptions?: { behavior?: ScrollBehavior }) => {
       release();
-      setSpacer(0);
       anchor.current = null;
       const operation: Navigation = { frame: 0, resolve, behavior: navigationOptions?.behavior ?? 'auto', deadline: performance.now() + 1500, still: 0 };
       state.current.navigation = operation;
@@ -448,9 +395,8 @@ export function useTranscriptScroll(options: Options) {
         const target = Math.max(0, Math.min(bottom(element), element.scrollTop + delta));
         readerInput(delta < 0);
         write(element, target);
-        reclaimSpacer(element);
         state.current.owned = undefined;
-        if (!latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2) {
+        if (!latest.current.hasMoreLater && !selecting(element) && bottom(element) - element.scrollTop <= 2) {
           setFollowing(true);
           anchor.current = null;
         }
@@ -480,8 +426,7 @@ export function useTranscriptScroll(options: Options) {
             return;
           }
           if (reader && !owned) {
-            reclaimSpacer(element);
-            setFollowing(!latest.current.hasMoreLater && !selecting(element) && spacerHeight() === 0 && bottom(element) - element.scrollTop <= 2);
+            setFollowing(!latest.current.hasMoreLater && !selecting(element) && bottom(element) - element.scrollTop <= 2);
             state.current.owned = undefined;
             if (following.current) anchor.current = null; else capture();
             state.current.readerUntil = performance.now() + 240;
@@ -497,7 +442,6 @@ export function useTranscriptScroll(options: Options) {
               return;
             }
             cancelPending();
-            reclaimSpacer(element);
             capture();
           }
           remember(element);
@@ -567,7 +511,6 @@ export function useTranscriptScroll(options: Options) {
         element.ownerDocument.addEventListener('selectionchange', onSelectionChange);
         return () => {
           observer.disconnect();
-          setSpacer(0);
           element.removeEventListener('scroll', onScroll);
           element.removeEventListener('scrollend', finishReader);
           element.removeEventListener('wheel', onWheel);
@@ -596,11 +539,9 @@ export function useTranscriptScroll(options: Options) {
         cancelNavigation();
         dropHold();
         clearReader();
-        setSpacer(0);
         state.current.initialized = false;
         state.current.hidden = false;
         state.current.geometry = undefined;
-        state.current.naturalContent = undefined;
         state.current.owned = undefined;
         state.current.pointerHeld = false;
         state.current.touchY = undefined;

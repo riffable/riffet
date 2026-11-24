@@ -21,7 +21,7 @@ co-change:
 ## 入口
 
 - `TranscriptView.tsx#TranscriptView`：时间线容器、虚拟窗口化、选区冻结与行渲染。
-- `useTranscriptScroll.ts#useTranscriptScroll`：转录区唯一滚动所有者、跟底状态与底部临时 spacer。
+- `useTranscriptScroll.ts#useTranscriptScroll`：转录区唯一滚动所有者、跟底状态与披露切换期间的锚点保持。
 - `readingAnchor.ts#readingAnchorTop`：阅读锚点捕获/恢复、跨文件 DOM 契约 `TRANSCRIPT_ATTR` 与过程折叠策略 `decideProcessFold`。
 - `TurnProcess.tsx#TurnProcess`：回合过程组折叠与推迟收起调度。
 - `useSessionSync.ts#useSessionSync`：接入同步引擎并向视图提供时间线、状态与大纲。
@@ -31,7 +31,8 @@ co-change:
 
 - 滚动容器固定禁用浏览器原生锚定（`[overflow-anchor:none]`，`TranscriptView.tsx#TranscriptView`），`useTranscriptScroll.ts#useTranscriptScroll` 是唯一滚动所有者，不在非虚拟列表行上使用 `content-visibility: auto`。
 - 自动收起过程块必须在 render 期同步算出状态并通过 `apps/web/src/components/ui/collapse.tsx#Collapse` 的 `still` 在同一 commit 落位，禁止拆到 `useEffect` 产生首帧跳动。
-- `TurnProcess.tsx#TurnProcess`、锚定逻辑、`TurnRail.tsx` 与滚动容器共享 `readingAnchor.ts#TRANSCRIPT_ATTR` 与 `apps/web/src/components/ui/collapse.tsx#COLLAPSE_STATE_ATTR`，不各自手写 `data-*` 选择器；消息行统一挂在独立的 `[data-transcript-rows]` 容器内，与头尾 `FeedbackNotice`、`PageProbe`、交互卡和 `spacer` 隔离。
+- `TurnProcess.tsx#TurnProcess`、锚定逻辑、`TurnRail.tsx` 与滚动容器共享 `readingAnchor.ts#TRANSCRIPT_ATTR` 与 `apps/web/src/components/ui/collapse.tsx#COLLAPSE_STATE_ATTR`，不各自手写 `data-*` 选择器；消息行统一挂在独立的 `[data-transcript-rows]` 容器内，与头尾 `FeedbackNotice`、`PageProbe` 和交互卡隔离。
+- 禁止在转录区末尾用临时空白撑垫（spacer）保住旧 `scrollTop`：锚点上方的折叠会同步减小锚点目标与可滚底边（无需撑垫），锚点下方靠近末尾的折叠（如 `ToolRun` 自动收起或手动折叠）直接钳位到新底部，避免在末尾露出空白或阻断重新跟底。
 - 读者离底阅读过程块下方或同屏正文时（`!following` 且过程块底边在视口底边上方），无论上方 `scrollTop` 余量多少都走 `readingAnchor.ts#decideProcessFold` 的 `defer` 推迟收起，待恢复跟底（`data-transcript-following="true"`）或滚离使过程块落到视口下方（`boxTop >= viewBottom`）后再释放收起。
 - 过程块折叠触顶（目标值 < 0）时 `readingAnchor.ts#readingAnchorTop` 钳位到 `0`，不回退锚定到折叠中的过程块标题；流式草稿被正式行替换时凭 `data-row-slot` 保持锚点连续；`captureReadingAnchor` 二分查找跳过未参与布局的节点并在异常命中空结果时线性回退。
 - 读者在转录区内选中文字时由 `TranscriptView.tsx#TranscriptView` 冻结 `rowTurns` 重分组，避免流式工具/状态把选中正文卸载。
@@ -46,4 +47,4 @@ co-change:
 
 - 回合结束正文上跳：先看 `readingAnchor.ts#decideProcessFold`、`TurnProcess.tsx#TurnProcess`（`deferredFold` / `instantFold`）与 `useTranscriptScroll.ts#useTranscriptScroll`（`data-transcript-following` 是否同步），再用 `pnpm replay:transcript` 复现；若仅在完整 `Workbench`（带顶栏且有 `empty:hidden` `FeedbackNotice` 子节点）出现，检查 `readingAnchor.ts#captureReadingAnchor` 对非布局节点的二分跳过是否破坏单调性。
 - 切换草稿到正式回答时视口跳动：检查 `TranscriptView.tsx#TranscriptView` 的 `data-row-slot` 分配与 `readingAnchor.ts#readingAnchorTop` 的文本引用回退。
-- 折叠某工具或过程块后底部露出空白或回弹：检查 `useTranscriptScroll.ts#useTranscriptScroll` 的 `spacer` 回收与 `hold` 生命周期。
+- 折叠某工具或过程块后底部露出空白或回弹：确认转录区末尾未被任何撑高节点占位，再检查 `useTranscriptScroll.ts#useTranscriptScroll` 的 `hold` 生命周期与 `Collapse` 结束收拢状态。
