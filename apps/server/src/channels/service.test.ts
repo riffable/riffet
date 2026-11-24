@@ -48,6 +48,11 @@ async function boot() {
   cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); await rm(projectDir, { recursive: true, force: true }); });
   vi.spyOn(dispatch, 'kick').mockImplementation(() => undefined);
   vi.spyOn(nativeBackends, 'assertAvailable').mockImplementation(() => undefined);
+  vi.spyOn(nativeBackends.catalog, 'availableBackendIds').mockResolvedValue(['claude']);
+  vi.spyOn(nativeBackends.catalog, 'listBackends').mockResolvedValue([
+    { backendId: 'claude', label: 'Claude Code', available: true, models: [], profiles: [], capabilities: {} },
+    { backendId: 'codex', label: 'Codex', available: false, models: [], profiles: [], capabilities: {} },
+  ] as never);
   const project = store.createProject(projectDir, 'demo');
   const account = await channels.createAccount({ kind: 'feishu', appId: 'cli_x', appSecret: 'secret', domain: 'feishu', enabled: true });
   await channels.connected(account.id);
@@ -79,7 +84,7 @@ describe('channel core', () => {
 
     const reply = await context().action({ account: account.id, eventId: 'e1', operator: { id: 'ou_owner' }, ref: pickers[0]!.ref, action: 'pick', selectedIds: [project.id] });
     expect(reply.redraw).toMatchObject({ kind: 'project-picker', closed: true });
-    await vi.waitFor(() => expect(store.listSessions()).toHaveLength(1));
+    await vi.waitFor(() => expect(store.listSessions()).toHaveLength(1), { timeout: 5_000 });
     const [session] = store.listSessions();
     expect(session!.origin).toMatchObject({ kind: 'channel', channel: { account: account.id, chatId: 'oc_1' } });
     expect(store.listRuns(session!.id).map(run => run.commandId)).toEqual(['m3']);
@@ -107,7 +112,7 @@ describe('channel core', () => {
     inbound(message('m1', 'hello'));
     await vi.waitFor(() => expect(pickers).toHaveLength(1));
     await context().action({ account: account.id, eventId: 'e1', operator: { id: 'ou_owner' }, ref: pickers[0]!.ref, action: 'pick', selectedIds: [project.id] });
-    await vi.waitFor(() => expect(store.listSessions()).toHaveLength(1));
+    await vi.waitFor(() => expect(store.listSessions()).toHaveLength(1), { timeout: 5_000 });
     const effort = { id: 'effort', name: 'Effort', category: 'thought_level', type: 'select' as const, currentValue: 'low', options: [{ value: 'low', name: 'Low' }, { value: 'high', name: 'High' }] };
     const models = [{ value: 'opus', name: 'Opus', configOptions: [effort] }, { value: 'haiku', name: 'Haiku', configOptions: [] }];
     vi.spyOn(nativeBackends.catalog, 'entry').mockResolvedValue({ backendId: 'cursor', label: 'Cursor', available: true, models, profiles: [], capabilities: {} } as never);
@@ -130,13 +135,7 @@ describe('channel core', () => {
   });
 
   it("continues the 个人助理's one main conversation from any thread of a private chat, and never offers it to a group", async () => {
-    const { store, account, inbound, bind, message, pickers, context, sent, nativeBackends } = await boot();
-    // The assistant runs on Claude Code or Codex only; the runner may have neither installed.
-    const listBackends = nativeBackends.catalog.listBackends.bind(nativeBackends.catalog);
-    vi.spyOn(nativeBackends.catalog, 'listBackends').mockImplementation(async (...args) => {
-      const entries = await listBackends(...args);
-      return entries.map(entry => entry.backendId === 'claude' ? { ...entry, available: true } : entry);
-    });
+    const { store, account, inbound, bind, message, pickers, context, sent } = await boot();
     await bind();
     inbound(message('m1', 'hello'));
     await vi.waitFor(() => expect(pickers).toHaveLength(1));

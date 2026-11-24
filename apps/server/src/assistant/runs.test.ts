@@ -19,11 +19,11 @@ async function boot(stateDir: string) {
   const booted = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent' });
   vi.spyOn(booted.dispatch, 'kick').mockImplementation(() => undefined);
   vi.spyOn(booted.nativeBackends, 'assertAvailable').mockImplementation(() => undefined);
-  // Spy synchronously before the first macrotask so `delegations.start()`'s `setImmediate` tick
-  // already sees Claude as available on CI runners without `claude` or `codex` installed.
-  const listBackends = booted.nativeBackends.catalog.listBackends.bind(booted.nativeBackends.catalog);
-  vi.spyOn(booted.nativeBackends.catalog, 'listBackends').mockImplementation(async (...args) =>
-    (await listBackends(...args)).map(entry => entry.backendId === 'claude' ? { ...entry, available: true } : entry));
+  // Avoid spawning real CLI availability probes across all backends on every test boot.
+  vi.spyOn(booted.nativeBackends.catalog, 'listBackends').mockResolvedValue([
+    { backendId: 'claude', label: 'Claude Code', available: true, models: [], profiles: [], capabilities: {} },
+    { backendId: 'codex', label: 'Codex', available: false, models: [], profiles: [], capabilities: {} },
+  ] as never);
   const pushes: string[] = [];
   vi.spyOn(booted.push, 'notice').mockImplementation(async (_sessionId, body) => { pushes.push(body); return true; });
   return { ...booted, pushes };
@@ -89,7 +89,7 @@ describe('assistant background runs', () => {
     // The same change again starts nothing new.
     expect(runs.enqueue('delegation', `delegation:${d1}:v2`, brief, d1).id).toBe(run.id);
     const made = () => { const id = runs.get(run.id)?.sessionId; try { return Boolean(id && first.store.getSession(id)); } catch { return false; } };
-    for (let tries = 0; tries < 300 && !made() && runs.get(run.id)?.state === 'running'; tries++) await new Promise(resolve => setTimeout(resolve, 10));
+    await settled(() => made() || runs.get(run.id)?.state !== 'running');
     expect(runs.get(run.id)?.error).toBeUndefined();
     expect(made()).toBe(true);
     const sessionId = runs.get(run.id)!.sessionId!;

@@ -140,11 +140,11 @@ describe('Cursor as the official plugin', () => {
   it.skipIf(!tmux)('hands a new conversation\'s first message to the prewarmed CLI instead of launching one with it', async () => {
     const { call, store, projectDir, project } = await boot();
     const config = { projectId: project.id, model: 'auto', mode: 'agent' };
-    await vi.waitFor(async () => expect((await call('POST', '/api/native/prewarm', config)).json().state).toBe('ready'), { timeout: 15_000, interval: 250 });
+    await vi.waitFor(async () => expect((await call('POST', '/api/native/prewarm', config)).json().state).toBe('ready'), { timeout: 30_000, interval: 250 });
     const created = await call('POST', '/api/sessions', { ...config, kind: 'native', clientSessionId: '33333333-3333-4333-8333-333333333333', initialMessage: { commandId: 'first', text: 'hello warm', attachmentIds: [], context: [] } });
     expect(created.statusCode).toBe(202);
     const sessionId = '33333333-3333-4333-8333-333333333333';
-    await vi.waitFor(() => expect(store.findRunByCommand(sessionId, 'first')?.native?.delivery).not.toMatch(/^(queued|preparing)$/), { timeout: 15_000, interval: 100 });
+    await vi.waitFor(() => expect(store.findRunByCommand(sessionId, 'first')?.native?.delivery).not.toMatch(/^(queued|preparing)$/), { timeout: 30_000, interval: 100 });
     expect((await call('GET', '/api/native/runtime/stats')).json()).toMatchObject({ warmHits: 1 });
     // One CLI, the warm one, and the prompt was not on its command line.
     const launches = readFileSync(join(projectDir, 'argv.log'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as string[]);

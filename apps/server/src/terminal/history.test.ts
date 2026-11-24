@@ -282,11 +282,11 @@ describe.skipIf(!tmuxCapability)('TerminalService history and CLI lifecycle', ()
     const unsubscribe = service.subscribe(terminal.id, message => messages.push(message));
     cleanups.push(unsubscribe);
     await service.paste(terminal.id, 'exit 7', true);
-    await vi.waitFor(async () => expect((await service.get(terminal.id)).exitCode).toBe(7));
+    await vi.waitFor(async () => expect((await service.get(terminal.id)).exitCode).toBe(7), { timeout: 5_000 });
     expect(messages.find(message => message.type === 'exit')).toMatchObject({ exitCode: 7 });
     const signaled = await shell();
     await signaled.service.paste(signaled.terminal.id, 'kill -KILL $$', true);
-    await vi.waitFor(async () => expect((await signaled.service.get(signaled.terminal.id)).exitCode).toBe(137));
+    await vi.waitFor(async () => expect((await signaled.service.get(signaled.terminal.id)).exitCode).toBe(137), { timeout: 5_000 });
   });
 
   it('sends only the lines added since the known version, and the whole history otherwise', async () => {

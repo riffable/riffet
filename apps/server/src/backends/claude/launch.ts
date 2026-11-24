@@ -353,9 +353,17 @@ export async function runHelp(executable: string): Promise<ClaudeCliProbe> {
   try { const real = realpathSync(executable); key = `${real}@${statSync(real).mtimeMs}`; } catch { /* a bare command name: the path is the key */ }
   const cached = probes.get(key);
   if (cached) return cached;
+  const runStub = async (args: string[], maxBuffer: number) => {
+    try { return await execFileAsync(executable, args, { timeout: 15_000, maxBuffer, env: process.env }); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ETXTBSY') throw error;
+      await pause(25);
+      return await execFileAsync(executable, args, { timeout: 15_000, maxBuffer, env: process.env });
+    }
+  };
   const task = (async () => {
-    const versionResult = await execFileAsync(executable, ['--version'], { timeout: 8000, maxBuffer: 256 * 1024, env: process.env });
-    const helpResult = await execFileAsync(executable, ['--help'], { timeout: 8000, maxBuffer: 1024 * 1024, env: process.env });
+    const versionResult = await runStub(['--version'], 256 * 1024);
+    const helpResult = await runStub(['--help'], 1024 * 1024);
     const version = `${versionResult.stdout}\n${versionResult.stderr}`.trim();
     const parsed = parseVersion(version);
     const help = `${helpResult.stdout}\n${helpResult.stderr}`;

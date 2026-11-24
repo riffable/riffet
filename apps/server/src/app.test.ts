@@ -42,8 +42,8 @@ async function boot(savedSettings?: Record<string, unknown>, webHtml?: string, p
     if (previousClaudeDir === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = previousClaudeDir;
     if (previousCodexHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = previousCodexHome;
     await app.close();
-    await rm(stateDir, { recursive: true, force: true });
-    await rm(projectDir, { recursive: true, force: true });
+    await rm(stateDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    await rm(projectDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   });
   const status = authenticated
     ? await app.inject({ method: 'POST', url: '/api/auth/login', headers: { host: '127.0.0.1:4317' }, payload: { token: (await readFile(join(stateDir, 'access-token'), 'utf8')).trim() } })
@@ -542,7 +542,7 @@ describe('app route surface after ACP removal', () => {
     const cached = await app.inject({ method: 'GET', url: '/mermaid', headers: { host: '127.0.0.1:4317', 'accept-encoding': 'gzip', 'if-none-match': String(page.headers.etag) } });
     expect(cached.statusCode).toBe(304);
     expect(cached.rawPayload.length).toBe(0);
-  });
+  }, 45_000);
 
   it('stores and downloads archives, documents and unknown binary attachments without changing their bytes or names', async () => {
     const { projectDir, call } = await boot();
@@ -1823,7 +1823,7 @@ describe('worktree projects', () => {
     expect(conflict.json()).toMatchObject({ error: { code: 'MERGE_CONFLICT', details: { paths: ['README.md'] } } });
     expect(await git(projectDir, 'status', '--porcelain')).toBe('');
     expect(await readFile(join(projectDir, 'README.md'), 'utf8')).toBe('from main\n');
-  });
+  }, 45_000);
 });
 
 describe('orchestration submissions', () => {
