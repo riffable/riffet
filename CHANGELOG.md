@@ -29,6 +29,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On the web, code citation blocks and fenced code blocks written inside a nested list now stay indented with their list item instead of resetting to column zero and breaking subsequent sub-items.
 - The count in a background browser tab now follows the sidebar's filters. It counts conversations with unread results that you can find under “Unread only”. Conversations waiting for confirmation keep their status indicators.
 - On the web, task status rings in the sidebar now sit in the leading icon column instead of inline before the title, and conversation rows match the horizontal inset of navigation and project rows so all titles align on one vertical axis.
 - On the web, reading a reply above the bottom no longer jumps vertically when a turn finishes: the turn's process block updates to "Processed" and stays open above your reading position until you return to the bottom or scroll above it.

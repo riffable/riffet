@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { protectBareUrls } from './bareUrls';
 import { relaxUnderscoreEmphasis } from '../../../../../packages/timeline/src/cjkEmphasis';
 import { escapeCurrencyDollars, normalizeSlashMath } from './dollarMath';
+import { alignListFences } from './listFences';
 import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { ContentFence } from './ContentFence';
 import { codeFileMention, markdownLinkTarget, previewOnPlainClick, useFileAccess } from './fileAccess';
@@ -666,7 +667,7 @@ const MarkdownBlock = memo(function MarkdownBlock({ text, index, start, live, fr
  */
 function prepare(text: string, visualizationLabel: string): string {
   // Explicit TeX delimiters must survive the price heuristic, including `\(x\)2`.
-  return protectBareUrls(normalizeSlashMath(escapeCurrencyDollars(relaxUnderscoreEmphasis(rewriteVisualizationReferences(text, visualizationLabel)))));
+  return protectBareUrls(alignListFences(normalizeSlashMath(escapeCurrencyDollars(relaxUnderscoreEmphasis(rewriteVisualizationReferences(text, visualizationLabel))))));
 }
 
 /**
