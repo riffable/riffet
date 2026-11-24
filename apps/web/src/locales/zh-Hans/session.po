@@ -41,7 +41,7 @@ msgstr "{0} 个附件"
 msgid "{0} 后自动拒绝"
 msgstr "{0} 后自动拒绝"
 
-#. placeholder {0}: runs.length
+#. placeholder {0}: count ?? runs.length
 #: src/app/session/ComposerDock.tsx
 msgid "{0} 条排队消息"
 msgstr "{0} 条排队消息"

@@ -31,7 +31,7 @@ interface ComposerAutosizeOptions {
 export function useComposerAutosize(options: ComposerAutosizeOptions): void {
   const optionsRef = useRef(options);
   optionsRef.current = options;
-  const measureRef = useRef<(() => void) | null>(null);
+  const measureRef = useRef<((textChanged?: boolean) => void) | null>(null);
   const restyleRef = useRef<(() => void) | null>(null);
 
   useLayoutEffect(() => {
@@ -57,7 +57,14 @@ export function useComposerAutosize(options: ComposerAutosizeOptions): void {
     // (width, text scale, theme, fonts, mode): a keystroke changes the text, not the styles.
     let copied: { padding: number; borders: number; borderBox: boolean; line: number } | undefined;
 
-    const measure = () => {
+    // Set by the textarea's own `input`: the next text change is the reader's, not the app's.
+    let typed = false;
+    const onInput = () => { typed = true; };
+    element.addEventListener('input', onInput);
+
+    const measure = (textChanged = false) => {
+      const byReader = typed;
+      if (textChanged) typed = false;
       const { text, minimum, maximum, enabled } = optionsRef.current;
       if (!enabled) {
         copied = undefined;
@@ -95,11 +102,13 @@ export function useComposerAutosize(options: ComposerAutosizeOptions): void {
       if (element.style.height !== height) {
         const previous = parseFloat(element.style.height);
         element.style.height = height;
-        // Typing moves a line at a time and follows the caret at once; a jump of several lines
-        // (the draft sent and cleared, a paste, a restored draft) slides to its new height.
+        // Typing moves a line at a time and follows the caret at once; a paste of several lines
+        // slides. Text the app put there (a draft sent and cleared, a queued message handed back)
+        // slides at any size, in step with the dock above that changes with it.
         const step = parseFloat(height) - previous;
         const line = copied.line;
-        if (Math.abs(step) > line * 1.5 && !reducedMotion.matches) {
+        const slides = textChanged && !byReader ? step !== 0 : Math.abs(step) > line * 1.5;
+        if (slides && Number.isFinite(previous) && !reducedMotion.matches) {
           cancelAnimations(element, RESIZE_ID);
           element.animate([{ height: `${previous}px` }, { height }], { id: RESIZE_ID, duration: RESIZE_MS, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
         }
@@ -142,6 +151,7 @@ export function useComposerAutosize(options: ComposerAutosizeOptions): void {
 
     return () => {
       disposed = true;
+      element.removeEventListener('input', onInput);
       measureRef.current = null;
       restyleRef.current = null;
       resizeObserver.disconnect();
@@ -155,7 +165,12 @@ export function useComposerAutosize(options: ComposerAutosizeOptions): void {
 
   // Anything but the text may come with new styles on the textarea (a mode, a layout).
   useLayoutEffect(() => { restyleRef.current?.(); }, [options.placeholder, options.minimum, options.maximum, options.enabled]);
-  useLayoutEffect(() => { measureRef.current?.(); }, [
+  const measuredText = useRef(options.text);
+  useLayoutEffect(() => {
+    const textChanged = measuredText.current !== options.text;
+    measuredText.current = options.text;
+    measureRef.current?.(textChanged);
+  }, [
     options.textareaRef, options.text, options.placeholder, options.minimum, options.maximum, options.enabled,
   ]);
 }

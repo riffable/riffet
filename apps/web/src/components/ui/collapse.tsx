@@ -71,17 +71,20 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
     if (latest.current.open || latest.current.keep) setSettled(true);
     else setMounted(false);
   };
-  useEffect(() => {
+  // In a layout effect so a region opening and one closing in the same commit move together: one
+  // that waited a frame to open would leave the stack short for that frame.
+  useLayoutEffect(() => {
     // Nothing to animate: the first render already shows this state, or a [still] / find-in-page change landed it.
     if (shown.current === open || (open && expanded && settled)) { shown.current = open; return; }
     shown.current = open;
     setInstant(false);
     if (!open) setExpanded(false);
+    // Folded in the DOM already: it can start now. Otherwise the layout effect below starts it once mounted.
+    else if (mounted) { void outer.current?.offsetHeight; setExpanded(true); }
     else setMounted(true);
     setSettled(false);
     let frame = requestAnimationFrame(() => {
       frame = requestAnimationFrame(() => {
-        if (open) setExpanded(true);
         // A region that cannot run its transition (inside content the browser skips, or not
         // rendered at all) never sends `transitionend`; it settles now instead of staying half done.
         // No animation means that only once the DOM shows the target: under load React may not have
@@ -97,6 +100,12 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
     });
     return () => cancelAnimationFrame(frame);
   }, [open]);
+  // Just mounted folded to open: read the folded box first so the height transitions from it, before paint.
+  useLayoutEffect(() => {
+    if (!mounted || expanded || settled || !latest.current.open) return;
+    void outer.current?.offsetHeight;
+    setExpanded(true);
+  }, [mounted]);
 
   const hidden = Boolean(keep && !open && !expanded && settled);
   // React only writes `hidden` as a boolean, so `until-found` is set here. A browser without it

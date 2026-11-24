@@ -862,8 +862,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
    */
   const paneAnswers = backendCapabilities?.interactionTransport === 'both';
   const compactCommand = !quickChat && !archived && !held ? backendCapabilities?.compactCommand?.replace(/^\//, '').trim() || undefined : undefined;
-  const latest = useRef({ native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain });
-  latest.current = { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain };
+  const latest = useRef({ native, queuedRuns, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain });
+  latest.current = { native, queuedRuns, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain };
   const queuedRun = (runId: string) => latest.current.native.runs.find((item) => item.id === runId);
   const stop = useCallback(() => { void latest.current.native.cancel(); }, []);
   const sendQueuedNowById = useCallback((runId: string) => {
@@ -874,20 +874,40 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     const run = queuedRun(runId);
     if (run) void latest.current.native.steerQueued(run);
   }, []);
+  // A queued message handed back to the composer keeps its row until the draft lands: the server's
+  // frame dropping it and the draft arriving would otherwise move the stack twice, down then up.
+  // Once handed back (`done`) it stays out of the dock even while the server still lists it, until its frame drops it.
+  const [handingBack, setHandingBack] = useState<{ run: Run; index: number; done?: true }>();
   const editQueued = useCallback((runId: string) => {
     const run = queuedRun(runId);
     if (!run) return;
-    void latest.current.native.cancelNativeRun(run).then(async (cancelled) => {
-      if (!cancelled || !recipientAlive.current) return;
-      const ids = run.native?.input.attachmentIds ?? [];
-      const checked = await Promise.all(ids.map(async id => {
+    setHandingBack({ run, index: Math.max(0, latest.current.queuedRuns.findIndex(item => item.id === runId)) });
+    const ids = run.native?.input.attachmentIds ?? [];
+    void Promise.all([
+      latest.current.native.cancelNativeRun(run),
+      Promise.all(ids.map(async id => {
         try { return { attachment: await api.attachmentMetadata(id) }; }
         catch (error) { return { missing: { key: `missing:${id}`, attachmentId: id, name: t`附件`, size: 0, image: false, error: error instanceof HttpError && error.status === 404 ? t`请重新选择文件` : t`无法读取附件` } }; }
-      }));
+      })),
+    ]).then(([cancelled, checked]) => {
       if (!recipientAlive.current) return;
+      setHandingBack(current => current?.run.id !== runId ? current : cancelled ? { ...current, done: true } : undefined);
+      if (!cancelled) return;
       setRestoreDraft({ text: run.native?.input.text ?? run.prompt, attachments: checked.flatMap(item => item.attachment ? [item.attachment] : []), context: restoreContext({ context: run.native?.input.context, references: run.native?.input.references, agents: run.native?.input.agents }, run), missingAttachments: checked.flatMap(item => item.missing ? [item.missing] : []), nonce: Date.now() });
     });
   }, []);
+  const handedBackListed = Boolean(handingBack?.done && queuedRuns.some(item => item.id === handingBack.run.id));
+  useEffect(() => {
+    if (handingBack?.done && !handedBackListed) setHandingBack(current => current === handingBack ? undefined : current);
+  }, [handingBack, handedBackListed]);
+  const dockRuns = useMemo(() => {
+    if (!handingBack) return queuedRuns;
+    if (handingBack.done) return queuedRuns.filter(item => item.id !== handingBack.run.id);
+    if (queuedRuns.some(item => item.id === handingBack.run.id)) return queuedRuns;
+    const runs = [...queuedRuns];
+    runs.splice(Math.min(handingBack.index, runs.length), 0, handingBack.run);
+    return runs;
+  }, [queuedRuns, handingBack]);
   const removeQueued = useCallback((runId: string) => {
     const run = queuedRun(runId);
     if (run) void latest.current.native.cancelNativeRun(run);
@@ -924,8 +944,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     || !native.connected || Boolean(connectionState && connectionState !== 'connected')
     || native.sending || native.interrupting || native.hasUnknownSubmission;
   const { sending, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer } = native;
-  const queuedPending = useCallback((runId: string) => archived || !native.connected || Boolean(connectionState && connectionState !== 'connected') || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
-    [archived, native.connected, connectionState, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
+  const queuedPending = useCallback((runId: string) => archived || !native.connected || Boolean(connectionState && connectionState !== 'connected') || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId) || handingBack?.run.id === runId,
+    [archived, native.connected, connectionState, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer, handingBack]);
   const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || switchingApproval || switchingModel
     || (native.control ? !native.control.activeTurn?.canSteer || native.hasUncertainSubmission
       : phase !== 'busy' || Boolean(interaction) || native.hasUncertainSubmission);
@@ -980,7 +1000,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       planInAside={layout.plan === 'aside'}
       goal={goal}
       todos={todoEntries}
-      runs={queuedRuns}
+      runs={dockRuns}
       running={working}
       unconfirmed={queueUnconfirmed}
       onRevealUnconfirmed={unconfirmedRunId ? revealUnconfirmed : undefined}
@@ -997,7 +1017,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       followUps={followUpList}
       plans={assistant ? <PlanDock /> : undefined}
     />
-    ), [assistant, followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, canSendQueuedNow, inboxActions, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
+    ), [assistant, followUpList, layout.plan, goal, todoEntries, dockRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, canSendQueuedNow, inboxActions, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
   // Without the backend's permissions there is no name to show, only an id.
   const approvalSummary = useMemo(() => (backendCapabilities?.permissions.length ? <ApprovalSummary mode={approval} options={backendCapabilities.permissions} /> : undefined), [approval, backendCapabilities]);
   const approvalPicker = useMemo(() => (backendCapabilities?.permissions.length ? (

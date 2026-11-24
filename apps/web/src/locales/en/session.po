@@ -41,7 +41,7 @@ msgstr "{0, plural, one {# attachment} other {# attachments}}"
 msgid "{0} 后自动拒绝"
 msgstr "Auto-deny in {0}"
 
-#. placeholder {0}: runs.length
+#. placeholder {0}: count ?? runs.length
 #: src/app/session/ComposerDock.tsx
 msgid "{0} 条排队消息"
 msgstr "{0, plural, one {# queued message} other {# queued messages}}"

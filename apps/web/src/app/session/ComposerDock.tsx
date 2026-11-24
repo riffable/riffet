@@ -167,6 +167,23 @@ function offersQueueAction(actions: readonly InboxAction[] | undefined, name: In
   return actions ? actions.includes(name) : fallback;
 }
 
+/** What is leaving the queue fades out ahead of its fold, at the exit pace (foundations §7.1); the height keeps the composer's pace. */
+const queueExit = 'opacity-0 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-accelerate)]';
+
+/** The rows on screen: the runs, plus any that just left, folding away where they were. */
+function useLeavingRows(runs: Run[]): { run: Run; leaving: boolean }[] {
+  const [state, setState] = useState(() => ({ source: runs, rows: runs.map(run => ({ run, leaving: false })) }));
+  if (state.source === runs) return state.rows;
+  const present = new Set(runs.map(run => run.id));
+  const rows = runs.map(run => ({ run, leaving: false }));
+  // A row already leaving is dropped by the next change; its fold is over or nearly so.
+  state.rows.forEach((row, index) => {
+    if (!row.leaving && !present.has(row.run.id)) rows.splice(Math.min(index, rows.length), 0, { run: row.run, leaving: true });
+  });
+  setState({ source: runs, rows });
+  return rows;
+}
+
 export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendNow, onSteer, steerDisabled, onEdit, onRemove, inboxActions, steerUnlisted, sendUnlisted }: {
   runs: Run[];
   running: boolean;
@@ -190,8 +207,18 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
   const { t } = useLingui();
   const [open, setOpen] = useState(false);
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
-  if (!runs.length) return null;
+  const rows = useLeavingRows(runs);
+  const section = useRef<HTMLElement>(null);
+  /** Set when 移回输入框编辑 is picked from the menu, whose closing would hand focus back to its trigger. */
+  const editPicked = useRef(false);
+  // Editing happens in the composer: focus it at the pick, so a phone's composer leaves its compact
+  // form then, not in the frame the message lands in it while the row is still folding.
+  const focusComposer = () => section.current?.parentElement?.closest(':has(textarea[data-composer-input])')
+    ?.querySelector<HTMLTextAreaElement>('textarea[data-composer-input]')?.focus({ preventScroll: true });
   const expandable = runs.length > 1;
+  // The header keeps its count while it folds away.
+  const count = useHeld(expandable && runs.length);
+  if (!runs.length) return null;
   const visible = !expandable || open;
   const row = (run: Run, showLead: boolean) => {
     const blocked = pending?.(run.id) ?? false;
@@ -207,7 +234,7 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
     const steerPrimary = steerOn && !steerDisabled;
     const hasMore = Boolean(onEdit || onRemove || (steerPrimary ? sendOn : steerOn));
     return (
-      <li key={run.id} className="flex min-h-11 min-w-0 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 md:min-h-9 md:gap-2">
+      <div className="flex min-h-11 min-w-0 shrink-0 items-center gap-1 rounded-lg px-1.5 py-1 md:min-h-9 md:gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {showLead && <IconMessagesSquare className="size-3.5 shrink-0 text-fg-4" />}
           {attachments.length > 0 && <span className="flex min-w-0 max-w-[35%] items-center gap-1 overflow-hidden md:max-w-none md:gap-2">
@@ -223,33 +250,35 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
               : sendOn && onSendNow && <Tip label={t`停止并发送`}><button type="button" aria-label={t`停止并发送`} disabled={sendLocked} onClick={() => onSendNow(run.id)} className={queueAction}><IconArrowUp className="size-3.5" strokeWidth={2.2} /></button></Tip>}
             {hasMore && <DropdownMenu>
               <DropdownMenuTrigger asChild><button type="button" aria-label={t`更多`} disabled={blocked} className={queueAction}><IconEllipsis className="size-3.5" /></button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" onCloseAutoFocus={(event) => { if (!editPicked.current) return; editPicked.current = false; event.preventDefault(); focusComposer(); }}>
                 {!steerPrimary && steerOn && onSteer && <DropdownMenuItem disabled={steerLocked} onSelect={() => onSteer(run.id)}><IconCornerUpRight /><Trans>补充到当前任务</Trans></DropdownMenuItem>}
                 {steerPrimary && sendOn && onSendNow && <DropdownMenuItem disabled={sendLocked} onSelect={() => onSendNow(run.id)}><IconArrowUp /><Trans>停止并发送</Trans></DropdownMenuItem>}
-                {onEdit && <DropdownMenuItem disabled={blocked} onSelect={() => onEdit(run.id)}><IconPencilLine /><Trans>移回输入框编辑</Trans></DropdownMenuItem>}
+                {onEdit && <DropdownMenuItem disabled={blocked} onSelect={() => { editPicked.current = true; onEdit(run.id); }}><IconPencilLine /><Trans>移回输入框编辑</Trans></DropdownMenuItem>}
                 {onRemove && <DropdownMenuItem disabled={blocked} variant="danger" onSelect={() => onRemove(run.id)}><IconTrash2 /><Trans>移出队列</Trans></DropdownMenuItem>}
               </DropdownMenuContent>
             </DropdownMenu>}
           </> : <>
             {steerOn && onSteer && <Tip label={t`补充到当前任务`}><button type="button" aria-label={t`补充到当前任务`} disabled={steerLocked} onClick={() => onSteer(run.id)} className={queueAction}><IconCornerUpRight className="size-3.5" /></button></Tip>}
             {sendOn && onSendNow && <Tip label={t`停止并发送`}><button type="button" aria-label={t`停止并发送`} disabled={sendLocked} onClick={() => onSendNow(run.id)} className={queueAction}><IconArrowUp className="size-3.5" strokeWidth={2.2} /></button></Tip>}
-            {onEdit && <Tip label={t`移回输入框编辑`}><button type="button" aria-label={t`编辑`} disabled={blocked} onClick={() => onEdit(run.id)} className={queueAction}><IconPencilLine className="size-3.5" /></button></Tip>}
+            {onEdit && <Tip label={t`移回输入框编辑`}><button type="button" aria-label={t`编辑`} disabled={blocked} onClick={() => { onEdit(run.id); focusComposer(); }} className={queueAction}><IconPencilLine className="size-3.5" /></button></Tip>}
             {onRemove && <Tip label={t`移出队列`}><button type="button" aria-label={t`移出队列`} disabled={blocked} onClick={() => onRemove(run.id)} className={cn(queueAction, 'hover:text-danger')}><IconTrash2 className="size-3.5" /></button></Tip>}
           </>}
         </span>}
-      </li>
+      </div>
     );
   };
   return (
-    <section className={cn(dockSurface, 'rounded-t-2xl px-2 py-1.5 max-md:rounded-t-3xl max-md:border-b-0')} aria-label={t`排队消息`}>
-      {expandable && (
-        <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className="flex h-11 w-full items-center gap-2 px-1 text-left md:h-8">
+    <section ref={section} className={cn(dockSurface, 'rounded-t-2xl px-2 py-1.5 max-md:rounded-t-3xl max-md:border-b-0')} aria-label={t`排队消息`}>
+      <Collapse open={expandable}>
+        <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)} className={cn('flex h-11 w-full items-center gap-2 px-1 text-left md:h-8', !expandable && queueExit)}>
           <IconMessagesSquare className="size-3.5 shrink-0 text-fg-4" />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg"><Trans>{runs.length} 条排队消息</Trans></span>
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg"><Trans>{count ?? runs.length} 条排队消息</Trans></span>
           <IconChevronDown className={cn('size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)]', open && 'rotate-180')} />
         </button>
-      )}
-      <Collapse open={visible}><ul className="flex max-h-[180px] flex-col overflow-y-auto">{runs.map((run) => row(run, !expandable))}</ul></Collapse>
+      </Collapse>
+      <Collapse open={visible}><ul className="flex max-h-[180px] flex-col overflow-y-auto">{rows.map(({ run, leaving }) => (
+        <li key={run.id} className={cn('shrink-0', leaving && queueExit)} inert={leaving}><Collapse open={!leaving}>{row(run, !expandable)}</Collapse></li>
+      ))}</ul></Collapse>
       {unconfirmed && (onRevealUnconfirmed
         ? <button type="button" onClick={onRevealUnconfirmed} className="block px-1.5 pb-1 text-left text-xs text-fg-3 underline-offset-2 transition-colors hover:text-fg hover:underline"><Trans>等待上一条消息确认</Trans></button>
         : <p className="px-1.5 pb-1 text-xs text-fg-3"><Trans>等待上一条消息确认</Trans></p>)}
@@ -303,7 +332,7 @@ export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todo
       <Collapse open={Boolean(showGoal)}>{heldGoal && <div className="pb-1.5"><GoalDock goal={heldGoal} /></div>}</Collapse>
       <Collapse open={Boolean(showTodos)}>{heldTodos && <div className="pb-1.5"><TodoDock entries={heldTodos} running={running} /></div>}</Collapse>
       <Collapse open={Boolean(followUps)}>{heldFollowUps && <div className="pb-1.5">{heldFollowUps}</div>}</Collapse>
-      <Collapse open={queue.length > 0}>{heldQueue && <div ref={queueRef}><QueueDock runs={queue.length ? queue : heldQueue} running={running} unconfirmed={unconfirmed} onRevealUnconfirmed={onRevealUnconfirmed} pending={pending} onSendNow={onSendQueuedNow} onSteer={onSteerQueued} steerDisabled={steerDisabled} onEdit={onEditQueued} onRemove={onRemoveQueued} inboxActions={inboxActions} steerUnlisted={steerUnlisted} sendUnlisted={sendUnlisted} /></div>}</Collapse>
+      <Collapse open={queue.length > 0}>{heldQueue && <div ref={queueRef} className={cn(!queue.length && queueExit)} inert={!queue.length}><QueueDock runs={queue.length ? queue : heldQueue} running={running} unconfirmed={unconfirmed} onRevealUnconfirmed={onRevealUnconfirmed} pending={pending} onSendNow={onSendQueuedNow} onSteer={onSteerQueued} steerDisabled={steerDisabled} onEdit={onEditQueued} onRemove={onRemoveQueued} inboxActions={inboxActions} steerUnlisted={steerUnlisted} sendUnlisted={sendUnlisted} /></div>}</Collapse>
     </div>
   );
 });

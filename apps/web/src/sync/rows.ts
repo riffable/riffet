@@ -73,6 +73,11 @@ export function timelineItems(rows: readonly TimelineRow[], sessionId: string, r
   const next: TimelineItem[] = [];
   for (const row of rows) {
     const run = row.kind === 'user' && row.runId ? byId.get(row.runId) : undefined;
+    // A queued message withdrawn before it was sent (edited back, removed) leaves the queue dock with
+    // the control frame, while the timeline drops its pending row only on a later fold. Shown here in
+    // between, it would flash into the transcript; the Run already says it is gone (`buildTimeline`
+    // skips the same runs).
+    if (row.kind === 'user' && row.pending === 'queued' && run?.state === 'cancelled' && run.native?.delivery === 'cancelled' && !run.native.nativeMessageId) continue;
     const outcome = run ? nativeTaskOutcome(run) : undefined;
     const failureShown = Boolean(run && (run.state === 'failed' || run.native?.delivery === 'failed')
       && run.native?.delivery !== 'uncertain' && run.native?.stage !== 'acknowledged' && outcome !== 'unknown'

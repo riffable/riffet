@@ -145,7 +145,8 @@ export function useComposerDraftSync(options: {
     };
   }, [flushDraft]);
 
-  useEffect(() => {
+  // Before paint: whatever handed the draft back (a queue row) leaves in the same frame it lands.
+  useLayoutEffect(() => {
     if (!restoreDraft) return;
     const current = textRef.current;
     const restored = splitQuotes(restoreDraft.text);

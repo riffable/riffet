@@ -626,6 +626,32 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       </button>
     </Tip>
   ) : null;
+  const stripContent = (visibleReferences.length > 0 || quotes.length > 0 || attachments.length > 0 || uploading) ? <>
+    {/*
+      Desktop shows the rail outright; a phone keeps the one-line summary and its expand
+      toggle it has always had, because the rail would push the textarea off a small screen.
+      Both variants come from one component, so a draft can never look different on the two.
+    */}
+    {(!isMobile || attachmentsExpanded) && <ComposerAttachments
+      variant="rail"
+      attachments={attachments}
+      references={visibleReferences}
+      quotes={quotes}
+      onOpenReferenceSession={props.onOpenReferenceSession ? openReferenceSession : undefined}
+      pending={pendingUploads}
+      onRetryUpload={retryUpload}
+      onRemoveUpload={removeUpload}
+      disabled={disabled}
+      {...railHandlers}
+    />}
+    <button type="button" className="flex min-h-11 items-center gap-2 px-3 pt-2 text-left text-xs text-fg-3 md:hidden" aria-expanded={attachmentsExpanded} onClick={() => setAttachmentsExpanded((value) => !value)}>
+      <IconPaperclip className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{attachedSummary}</span>
+      <IconChevronDown className={cn('size-3.5 shrink-0 transition-transform', attachmentsExpanded && 'rotate-180')} />
+    </button>
+  </> : undefined;
+  // Its last contents stay while it folds away.
+  const heldStrip = useHeld(stripContent);
 
   return (
     <div className={cn('relative', fullscreen && 'flex min-h-0 flex-1 flex-col')} onPointerDown={holdComposerFocus} onMouseDown={holdComposerFocus}>
@@ -709,30 +735,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           onDragLeave={() => setDragging(false)}
           onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); setDragging(false); void ingestFiles(event.dataTransfer.files); } }}
         >
-          {(visibleReferences.length > 0 || quotes.length > 0 || attachments.length > 0 || uploading) && <>
-            {/*
-              Desktop shows the rail outright; a phone keeps the one-line summary and its expand
-              toggle it has always had, because the rail would push the textarea off a small screen.
-              Both variants come from one component, so a draft can never look different on the two.
-            */}
-            {(!isMobile || attachmentsExpanded) && <ComposerAttachments
-              variant="rail"
-              attachments={attachments}
-              references={visibleReferences}
-              quotes={quotes}
-              onOpenReferenceSession={props.onOpenReferenceSession ? openReferenceSession : undefined}
-              pending={pendingUploads}
-              onRetryUpload={retryUpload}
-              onRemoveUpload={removeUpload}
-              disabled={disabled}
-              {...railHandlers}
-            />}
-            <button type="button" className="flex min-h-11 items-center gap-2 px-3 pt-2 text-left text-xs text-fg-3 md:hidden" aria-expanded={attachmentsExpanded} onClick={() => setAttachmentsExpanded((value) => !value)}>
-              <IconPaperclip className="size-3.5 shrink-0" />
-              <span className="min-w-0 flex-1 truncate">{attachedSummary}</span>
-              <IconChevronDown className={cn('size-3.5 shrink-0 transition-transform', attachmentsExpanded && 'rotate-180')} />
-            </button>
-          </>}
+          {/* Slides like the textarea and the dock above, so a draft handed back grows the stack in one motion. */}
+          <Collapse open={Boolean(stripContent)} className={cn(compact && 'hidden')}><div inert={!stripContent}>{heldStrip}</div></Collapse>
 
           {props.agentMentions && <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />}
           <textarea
