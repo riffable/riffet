@@ -1,651 +1,40 @@
 import { createPortal, flushSync } from 'react-dom';
-import { memo, useCallback, useContext, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
+import { useCallback, useContext, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowDown, IconChevronDown, IconChevronRight, IconRefreshCw, IconSearch, IconWrench, IconX } from '@/components/icons';
-import { Input, Spinner } from '@/components/ui/controls';
+import { IconArrowDown, IconRefreshCw } from '@/components/icons';
+import { Spinner } from '@/components/ui/controls';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/lib/toast';
-import { matches } from '../shortcuts';
 import { cn, scrollBehavior } from '@/lib/utils';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH, discardContentWidthPreview, previewContentWidth, resetContentWidth, setContentWidth } from '@/lib/content-width';
-import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecovery, type DiscussionSource, type MarkQuote, type Run, type RunMetrics, type TurnOutlineV3 } from '@contracts';
+import type { LaneFind, NativeRunRecovery, DiscussionSource, Run, RunMetrics, TurnOutlineV3 } from '@contracts';
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
-import { timelineItemTime, type TimelineItem } from './model';
-import { AnswerActions, AssistantMessage, ImageBlock, MergedToolRow, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, useItemsDiffStats, UserMessage, type TurnAction } from './Timeline';
-import { AgentCallRow, agentToolName } from './agentCalls';
+import type { TimelineItem } from './model';
+import type { TurnAction } from './Timeline';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
-import { ActivityRow, showsRunningCompaction } from './Activities';
-import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
+import { showsRunningCompaction } from './Activities';
+import { TranscriptCatchUp } from './TurnProcess';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { SWITCH_HOLD_MS, useSwitchedIn } from './sessionFrame';
-import { Collapse } from '@/components/ui/collapse';
 import { TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
-import { rowKeyForMessage, type MessageFocus } from './focus-message';
-import { captureReadingAnchor, findRow, type ReadingAnchor } from './readingAnchor';
+import type { MessageFocus } from './focus-message';
+import { findRow, type ReadingAnchor } from './readingAnchor';
 import { useTranscriptScroll, type TranscriptScrollHandle } from './useTranscriptScroll';
 import { heldFooterRow, transcriptTurns, type TranscriptRow, type TranscriptTurn } from './transcriptRows';
 import { useEarlierHistory, type EarlierLoad } from './useEarlierHistory';
-import { findQuote, rangeAt } from './textQuote';
-import { markedTurns, markTargetOf, MarkSourceContext, SessionMarksContext } from './marks';
+import { markedTurns, SessionMarksContext } from './marks';
 import { MarkLayer } from './MarkLayer';
-import { shareModelKey, shareModelLabel, useTranscriptResources } from './transcriptResources';
-import { buildLayout, indexAt, OVERSCAN_MIN, rescaledHeight, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
-import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
-import { groupAdjacentToolRunEntries, toolKind, toolRunSummary } from './toolView';
-import { isComposingKey } from './composerKeyboard';
-import { countOccurrences, findableText, findNeedle } from '../../../../../packages/timeline/src/findText';
-import { POS_STEP } from '../../../../../packages/timeline/src/rows';
-import { laneTurnOf, truncationOf } from '@/sync/rows';
+import { useTranscriptResources } from './transcriptResources';
+import { buildLayout, indexAt, OVERSCAN_MIN, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
+import { RememberedScope, RememberedValues } from './rememberedState';
+import { laneTurnOf } from '@/sync/rows';
 import { FailureDetails } from './FailureDetails';
 import { ChapterNavigation } from './ChapterNavigation';
-import { useViewPrefs, type ProcessFoldTiming } from './viewPrefs';
-import { animationsOf } from '@/lib/motion';
-
-const time = (value: string) => { const at = new Date(value).getTime(); return Number.isFinite(at) ? at : undefined; };
-
-/** Settled `/new` topic boundary in the personal assistant's main conversation. */
-function isSettledNewTopic(item: TimelineItem): boolean {
-  if (item.kind !== 'user' || item.text.trim() !== '/new' || item.attachments.length || item.references?.length) return false;
-  if (!item.run) return true;
-  return item.run.state === 'completed' && !item.run.error;
-}
-
-/**
- * A new row fades in where it lands. No slide: following the end, a row rising into place while the
- * view keeps the bottom reads as the whole transcript bouncing.
- */
-const enter = 'animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]';
-
-/** Delegations stand on their own inside the process rather than joining tools; so does a call of another Agent (docs/AGENT-CALLS.md). */
-function isToolRunItem(item: TimelineItem | undefined): item is Extract<TimelineItem, { kind: 'tool' }> {
-  return item?.kind === 'tool' && toolKind(item.event) !== 'agent' && agentToolName(item.event.data) !== 'agent_call';
-}
-
-/**
- * The runs in a process block, start index to end: tool calls and the folded reasoning between
- * them, so a thought does not split one stretch of work into lone calls. Prose, delegations and
- * anything else end a run; it needs a call in it and two items, or its items stand on their own.
- */
-function toolRuns(items: TimelineItem[]): Map<number, number> {
-  const runs = new Map<number, number>();
-  const joins = (item: TimelineItem | undefined) => isToolRunItem(item) || (item?.kind === 'thought' && item.channel === 'thinking');
-  for (let start = 0; start < items.length;) {
-    let end = start;
-    while (joins(items[end])) end += 1;
-    if (end - start > 1 && items.slice(start, end).some(isToolRunItem)) runs.set(start, end);
-    start = Math.max(end, start + 1);
-  }
-  return runs;
-}
-
-function rememberedItemOpen(remembered: ReadonlyMap<string, unknown> | undefined, item: TimelineItem): boolean {
-  if (!remembered) return false;
-  const prefix = `${item.key}\n`;
-  return remembered.get(`${prefix}tool`) === true
-    || remembered.get(`${prefix}job`) === true
-    || remembered.get(`${prefix}thought`) === true
-    || remembered.get(`${prefix}notice`) === true
-    || remembered.get(`${prefix}activity`) === true;
-}
-
-function hasOpenProcessDetail(remembered: ReadonlyMap<string, unknown> | undefined, items: readonly TimelineItem[], runs: ReadonlyMap<number, number>): boolean {
-  if (!remembered?.size) return false;
-  for (let index = 0; index < items.length;) {
-    const end = runs.get(index);
-    if (end !== undefined) {
-      const choice = remembered.get(`${items[index]!.key}\ntool-run-choice`);
-      if (choice === true) return true;
-      if (choice !== false) {
-        for (let at = index; at < end; at += 1) if (rememberedItemOpen(remembered, items[at]!)) return true;
-      }
-      index = end;
-      continue;
-    }
-    if (rememberedItemOpen(remembered, items[index]!)) return true;
-    index += 1;
-  }
-  return false;
-}
-
-/** A run of ordinary tool calls within the open process. */
-function ToolRun({ items, entries, followedByContent, latestTurn, root, children, reveal }: { items: Extract<TimelineItem, { kind: 'tool' }>[]; entries: readonly TimelineItem[]; followedByContent: boolean; latestTurn: boolean; root?: string; children: ReactNode; reveal?: number }) {
-  const remembered = useContext(RememberedValues);
-  const [, refresh] = useState(0);
-  const summary = useMemo(() => toolRunSummary(items, root), [items, root]);
-  const diffStats = useItemsDiffStats(items, root);
-  const Icon = toolIcons[summary.kind] ?? IconWrench;
-  const [choice, setChoice] = useRemembered<boolean | undefined>('tool-run-choice', undefined);
-  const { catchingUp, quiet } = useContext(TranscriptCatchUp);
-  // Mounted before the transcript caught up, a run of the newest turn may be the tail of the copy only:
-  // it waits folded until what follows it is known, rather than showing open and folding as the rest
-  // arrives. An earlier turn is over; nothing catching up brings changes it.
-  const unconfirmed = useRef(catchingUp && latestTurn);
-  if (!catchingUp) unconfirmed.current = false;
-  const childOpen = entries.some((entry) => rememberedItemOpen(remembered, entry));
-  // Subsequent content (prose, delegation, or the answer) folds a tool run regardless of whether a
-  // command inside it is still running in the background, unless the reader opened a row inside it.
-  // A growing tail opens by default, while an explicit reader choice still controls it.
-  const open = choice ?? (unconfirmed.current ? false : !followedByContent || childOpen);
-  const contentsId = useId();
-  useLayoutEffect(() => { if (reveal !== undefined) setChoice(true); }, [reveal, setChoice]);
-  return (
-    <div data-tool-run-open={open} data-tool-run-choice={choice === true ? 'true' : undefined} className="flex min-w-0 flex-col">
-      <button type="button" aria-expanded={open} aria-controls={open ? contentsId : undefined} onClick={() => setChoice(!open)}
-        className="group/tool-run flex min-h-[calc(24px*var(--text-scale))] w-fit max-w-full items-center gap-2 rounded-md text-left text-sm text-fg-3 transition-colors hover:text-fg-2 no-hover:min-h-9">
-        <span className="grid size-4 shrink-0 place-items-center text-fg-4 [&_svg]:size-[15px]"><Icon /></span>
-        <span className="min-w-0 truncate">{summary.label}</span>
-        {diffStats && (diffStats.added > 0 || diffStats.removed > 0) && (
-          <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs tabular-nums">
-            {diffStats.added > 0 && <span className="text-[var(--diff-add-marker)]">+{diffStats.added}</span>}
-            {diffStats.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{diffStats.removed}</span>}
-          </span>
-        )}
-        {/* Like a tool row's: the chevron shows under the pointer or while open, and always on touch. */}
-        <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft', open ? 'rotate-90' : 'can-hover:opacity-0 can-hover:group-hover/tool-run:opacity-100')} />
-      </button>
-      <Collapse open={open} keep still={quiet} id={contentsId} onReveal={() => setChoice(true)}>
-        <div className="ml-2 mt-0.5 mb-1.5 flex min-w-0 flex-col edge-l pl-4 pt-0.5" onClick={() => refresh((n) => n + 1)}>{children}</div>
-      </Collapse>
-    </div>
-  );
-}
-/**
- * How long a row that arrived live counts as new. The entrance plays once, as it mounts; a row that
- * mounts again later (a folded block opened, a row scrolled back into a recycled list) must not
- * replay it, so the mark expires rather than lasting for the session.
- */
-const FRESH_MS = 1000;
-/** How long after catching up its last changes still land without animating. */
-const SETTLE_MS = 300;
-interface Fresh { until: number; row?: string }
-/**
- * Whether [key]'s entrance plays inside [row]. Only the row it first showed in plays it: an answer
- * folded into its turn's process block when the next tool lands remounts there, and fading in a
- * second time is the blink the reader sees.
- */
-const isFresh = (fresh: ReadonlyMap<string, Fresh> | undefined, key: string, row: string) => {
-  const entry = fresh?.get(key);
-  if (!entry || entry.until <= performance.now()) return false;
-  entry.row ??= row;
-  return entry.row === row;
-};
-/** How long typing pauses before a find asks the server about the whole lane. */
-const FIND_DEBOUNCE_MS = 200;
-/** Pages of older history a focus request reads looking for its message before giving up. */
-const SEEK_PAGES = 30;
-/** Where a target taller than most of the viewport starts, from the top. */
-const SETTLE_TOP = 56;
-const wait = (ms: number) => new Promise<void>((resolve) => { window.setTimeout(resolve, ms); });
-
-/** The words [quote] names in [row]'s answer body, where a highlight is drawn. */
-function quoteRange(row: HTMLElement, quote: MarkQuote): Range | undefined {
-  const body = row.querySelector<HTMLElement>('[data-mark-ids]') ?? row;
-  const at = findQuote(body.textContent ?? '', quote);
-  return at ? rangeAt(body, at.start, at.end) : undefined;
-}
-
-/**
- * Flashes [range] the way a focused row flashes (`::highlight(mark-focus)`), or keeps it marked
- * until the next one when [hold]. No range clears the mark.
- */
-function flashRange(range: Range | undefined, hold = false) {
-  if (typeof CSS === 'undefined' || !('highlights' in CSS)) return;
-  if (!range) { CSS.highlights.delete('mark-focus'); return; }
-  const highlight = new Highlight(range);
-  CSS.highlights.set('mark-focus', highlight);
-  if (!hold) window.setTimeout(() => { if (CSS.highlights.get('mark-focus') === highlight) CSS.highlights.delete('mark-focus'); }, 1600);
-}
-
-/**
- * What 会话内查找 counts in an item (`findableText`, the server's rule too), kept per item object with
- * the count for the last query, so a streamed frame only rescans the rows it replaced. The model holds
- * every row, mounted or not, which is what the page's own find cannot reach once the list is windowed.
- */
-const findable = new WeakMap<TimelineItem, { text: string; root?: string; needle?: string; count?: number }>();
-function findableEntry(item: TimelineItem, root?: string) {
-  let entry = findable.get(item);
-  if (entry && entry.root === root) return entry;
-  entry = { text: findableText(item, root), root };
-  findable.set(item, entry);
-  return entry;
-}
-
-/**
- * A row [needle] occurs in [count] times, at its lane place [pos]; [row] is the index of the
- * transcript row that shows it, absent for one the window does not hold, which a step loads first.
- */
-interface FindHit { key: string; pos: number; count: number; row?: number }
-
-/** An item's lane place: its row's, which the item's sequence keeps to the step (`timelineItem`). */
-const placeOf = (item: TimelineItem) => item.event.sequence * POS_STEP;
-
-function findHits(rows: readonly TranscriptRow[], needle: string, root?: string): FindHit[] {
-  const hits: FindHit[] = [];
-  rows.forEach((row, index) => {
-    for (const item of row.type === 'item' ? [row.item] : row.type === 'process' ? row.items : row.notices) {
-      const entry = findableEntry(item, root);
-      if (entry.needle !== needle) {
-        entry.needle = needle;
-        entry.count = countOccurrences(entry.text, needle);
-      }
-      if (entry.count) hits.push({ key: item.key, pos: placeOf(item), count: entry.count, row: index });
-    }
-  });
-  return hits;
-}
-
-/**
- * The server's hits for the whole lane around the ones counted here: a row the window holds is
- * counted as it shows now (a streamed or expanded row may have moved on since the server read it),
- * and the rest stand before or after the window, which they cannot be inside of.
- */
-function laneHits(served: readonly LaneFindHit[], held: readonly FindHit[], rows: readonly TranscriptRow[]): FindHit[] {
-  const keys = new Set<string>();
-  let low = Infinity;
-  for (const row of rows) for (const item of row.type === 'item' ? [row.item] : row.type === 'process' ? row.items : row.notices) {
-    keys.add(item.key);
-    const place = placeOf(item);
-    if (place < PENDING_ROW_POS) low = Math.min(low, place);
-  }
-  const away = served.filter((hit) => !keys.has(hit.key)).map((hit) => ({ key: hit.key, pos: hit.pos, count: hit.count }));
-  return [...away.filter((hit) => hit.pos < low), ...held, ...away.filter((hit) => hit.pos >= low)];
-}
-
-/** The occurrence a new query starts from: the first at or below [reading], else the last above it. */
-function startIndex(hits: readonly FindHit[], reading: number): number {
-  let index = 0, seen = 0;
-  for (const hit of hits) {
-    if (hit.pos >= reading) return seen;
-    seen += hit.count;
-    index = seen - 1;
-  }
-  return index;
-}
-
-/** Occurrence [index] counted across [hits]: its row and its place among the row's own. */
-function occurrenceAt(hits: readonly FindHit[], index: number): { hit: FindHit; nth: number } | undefined {
-  let rest = index;
-  for (const hit of hits) {
-    if (rest < hit.count) return { hit, nth: rest };
-    rest -= hit.count;
-  }
-  return undefined;
-}
-
-/** Where [at] stands counted across [hits], or -1 once its row no longer holds it. */
-function occurrenceIndex(hits: readonly FindHit[], at: { key: string; nth: number } | undefined): number {
-  if (!at) return -1;
-  let seen = 0;
-  for (const hit of hits) {
-    if (hit.key === at.key) return at.nth < hit.count ? seen + at.nth : -1;
-    seen += hit.count;
-  }
-  return -1;
-}
-
-/**
- * The [nth] occurrence of [needle] in [element]'s text. None when the rendered text holds fewer than
- * the model counted (a folded part, syntax the count misjudged): the row then flashes as a whole,
- * rather than every later step stopping on its last occurrence again.
- */
-function occurrenceRange(element: HTMLElement, needle: string, nth: number): Range | undefined {
-  const text = (element.textContent ?? '').toLowerCase();
-  let start = text.indexOf(needle);
-  for (let count = 0; start >= 0 && count < nth; count += 1) start = text.indexOf(needle, start + needle.length);
-  return start < 0 ? undefined : rangeAt(element, start, start + needle.length);
-}
-
-/**
- * Measures the mounted rows. A row's extent is its box plus its margins, because the gaps between
- * rows are margins and the list's offsets must add up to what the column really occupies. The
- * heights are only written down here; the list reads them the next time it lays itself out, since
- * a mounted row is in the DOM at its real size whatever the list believes about it.
- */
-function createRowObserver(heights: Map<string, number>, markDirty: () => void) {
-  const observed = new Map<string, HTMLElement>();
-  let observer: ResizeObserver | undefined;
-  const extent = (element: HTMLElement, box: number, style = getComputedStyle(element)) =>
-    box + (parseFloat(style.marginTop) || 0) + (parseFloat(style.marginBottom) || 0);
-  const record = (key: string, height: number) => {
-    if (Math.abs((heights.get(key) ?? -1) - height) <= 0.5) return false;
-    heights.set(key, height);
-    return true;
-  };
-  return {
-    measure(key: string, element: HTMLElement | null) {
-      const held = observed.get(key);
-      if (held && held !== element) { observer?.unobserve(held); observed.delete(key); }
-      if (!element || held === element) return;
-      observed.set(key, element);
-      observer ??= new ResizeObserver((entries) => {
-        let changed = false;
-        for (const entry of entries) {
-          const target = entry.target as HTMLElement;
-          const rowKey = target.dataset.rowKey;
-          if (rowKey && target.isConnected) changed = record(rowKey, extent(target, entry.borderBoxSize?.[0]?.blockSize ?? target.getBoundingClientRect().height)) || changed;
-        }
-        if (changed) markDirty();
-      });
-      observer.observe(element);
-    },
-    /**
-     * The column's text width went from [from] to [to] px: every remembered height was for the old
-     * wrapping. Mounted rows are measured again; the rest are rescaled (`rescaledHeight`) rather
-     * than dropped back to the flat estimate, so the rows the reader has not reached yet keep
-     * roughly their place.
-     */
-    rewrap(from: number, to: number) {
-      for (const [key, height] of heights) {
-        const element = observed.get(key);
-        heights.set(key, element?.isConnected ? extent(element, element.getBoundingClientRect().height) : rescaledHeight(height, from, to));
-      }
-      for (const [key, element] of observed) if (!heights.has(key)) heights.set(key, extent(element, element.getBoundingClientRect().height));
-      markDirty();
-    },
-    /**
-     * Synchronously refreshes heights of currently mounted rows so windowed layout checks inside a
-     * commit (such as an instant process fold) see the new heights before the async ResizeObserver.
-     */
-    syncMounted() {
-      let changed = false;
-      for (const [key, element] of observed) {
-        if (!element.isConnected) continue;
-        changed = record(key, extent(element, element.getBoundingClientRect().height)) || changed;
-      }
-      return changed;
-    },
-    disconnect() { observer?.disconnect(); observed.clear(); },
-  };
-}
-
-/** What every row needs besides its own data. The handlers are stable for the view's lifetime. */
-interface RowContext {
-  sessionId: string;
-  onOpenSession?: (id: string) => void;
-  /** Reports a mounted row's element (or its going away) so its height is known to the windowed list. */
-  measure: (key: string, element: HTMLElement | null) => void;
-  /** The list is windowed: rows scroll out of the DOM and come back, so their layout must not depend on staying mounted. */
-  virtual: boolean;
-  /** Rows that arrived after the transcript first showed, until when their entrance may play. */
-  fresh: ReadonlyMap<string, Fresh> | undefined;
-  root?: string;
-  onOpenPath?: ((path: string, line?: number) => void) | undefined;
-  onOpenInEditor?: (path: string, line?: number) => void;
-  onOpenTerminal?: () => void;
-  onRetryNativeRun?: (run: Run) => void;
-  onCancelNativeRun?: (run: Run) => void;
-  onCheckNativeRun?: (run: Run) => void;
-  onContinueNativeRun?: (run: Run) => void;
-  nativeRecoveries?: Record<string, NativeRunRecovery>;
-  onRestoreNativeRun?: (run: Run) => void;
-  onTurnAction?: (action: TurnAction, runId: string) => void;
-  /** Fetches the whole of a row sent cut to a preview (sync v3). */
-  onExpandRow?: (key: string) => Promise<boolean>;
-  completedProcessesOpen?: boolean;
-  foldTiming: ProcessFoldTiming;
-  newTopicDivider?: boolean;
-  latestTopicKey?: string;
-  canCollapseEarlier?: boolean;
-  earlierTopicsCollapsed?: boolean;
-  onToggleEarlierTopics?: () => void;
-}
-
-/** Under a row the server sent cut to a preview: fetches the rest when asked. */
-function TruncatedMore({ item, expand }: { item: TimelineItem; expand?: (key: string) => Promise<boolean> }) {
-  const { t } = useLingui();
-  const [busy, setBusy] = useState(false);
-  if (!expand || !truncationOf(item)) return null;
-  return (
-    <Button size="xs" variant="quiet" className="mt-1 self-start text-fg-3" busy={busy} onClick={() => { setBusy(true); void expand(item.key).finally(() => setBusy(false)); }}>
-      <IconChevronDown />{t`显示全部`}
-    </Button>
-  );
-}
-
-/**
- * Where more history loads as the reader nears it: a spinner while a page is on its way, a retry once loading keeps failing.
- * Its box is the retry's height whenever there is more history that way, so neither a page starting nor a failure moves the rows.
- */
-function PageProbe({ probeRef, failed, loading, onRetry, className }: { probeRef: Ref<HTMLDivElement>; failed: boolean; loading?: boolean; onRetry: () => void; className: string }) {
-  const { t } = useLingui();
-  return (
-    <div ref={probeRef} className={cn('flex h-6 items-center justify-center', className)}>
-      {failed ? <Button size="xs" variant="quiet" className="text-fg-3" onClick={onRetry}><IconRefreshCw />{t`重新加载`}</Button> : loading && <Spinner />}
-    </div>
-  );
-}
-
-function revealInRange(items: readonly TimelineItem[], start: number, end: number, reveal?: { item: string; version: number }): { item: string; version: number } | undefined {
-  if (!reveal) return undefined;
-  for (let i = start; i < end; i += 1) {
-    if (items[i]!.key === reveal.item) return reveal;
-  }
-  return undefined;
-}
-
-const ToolRunBlock = memo(function ToolRunBlock({ items, start, end, lastOutputIndex, rowKey, gap, running, latestTurn, followedByContent, reveal, fresh, root, onOpenPath, onOpenInEditor, onExpandRow }: {
-  items: readonly TimelineItem[];
-  start: number;
-  end: number;
-  lastOutputIndex: number;
-  rowKey: string;
-  gap?: string;
-  running: boolean;
-  latestTurn: boolean;
-  followedByContent: boolean;
-  reveal?: { item: string; version: number };
-  fresh?: ReadonlyMap<string, Fresh>;
-  root?: string;
-  onOpenPath?: (path: string, line?: number) => void;
-  onOpenInEditor?: (path: string, line?: number) => void;
-  onExpandRow?: RowContext['onExpandRow'];
-}) {
-  const run = useMemo(() => items.slice(start, end), [items, start, end]);
-  const tools = useMemo(() => run.filter(isToolRunItem), [run]);
-  const grouped = useMemo(() => groupAdjacentToolRunEntries(run, root), [run, root]);
-  const moreOf = useCallback(
-    (entry: Extract<TimelineItem, { kind: 'tool' }>) =>
-      onExpandRow && truncationOf(entry) ? <TruncatedMore item={entry} expand={onExpandRow} /> : undefined,
-    [onExpandRow],
-  );
-  const firstKey = items[start]!.key;
-  return (
-    <RememberedScope.Provider value={firstKey}>
-      <div className={cn('min-w-0', gap, isFresh(fresh, firstKey, rowKey) && enter)}>
-        <ToolRun items={tools} entries={run} latestTurn={latestTurn} root={root} followedByContent={followedByContent} reveal={reveal?.version}>
-          {grouped.map((entry) => entry.kind === 'single' ? (
-            <div key={entry.item.key} data-item-key={entry.item.key} className={cn('min-w-0', isFresh(fresh, entry.item.key, rowKey) && enter)}>
-              <RememberedScope.Provider value={entry.item.key}><MarkSourceContext.Provider value={entry.item.event}>
-                {entry.item.kind === 'tool'
-                  ? <ToolRow item={entry.item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={!running} more={moreOf(entry.item)} />
-                  : entry.item.kind === 'thought' ? <ThoughtRow text={entry.item.text} channel={entry.item.channel} running={running && start + entry.index === lastOutputIndex} /> : null}
-              </MarkSourceContext.Provider></RememberedScope.Provider>
-            </div>
-          ) : (
-            <div key={entry.key} className={cn('min-w-0', isFresh(fresh, entry.key, rowKey) && enter)}>
-              <RememberedScope.Provider value={entry.key}>
-                <MergedToolRow
-                  items={entry.items}
-                  presentation={entry.presentation}
-                  onOpenPath={onOpenPath}
-                  onOpenInEditor={onOpenInEditor}
-                  root={root}
-                  moreOf={moreOf}
-                  reveal={reveal && entry.items.some(sub => reveal.item === sub.key) ? reveal.version : undefined}
-                />
-              </RememberedScope.Provider>
-            </div>
-          ))}
-        </ToolRun>
-      </div>
-    </RememberedScope.Provider>
-  );
-});
-
-/**
- * `actionPending` is the row's own answer to `runActionPending`, asked by the list: a send or an
- * interrupt flips it for every message at once, and as a plain flag it re-renders only the rows
- * whose answer actually changed, instead of invalidating the shared context for all of them.
- */
-const TranscriptRowView = memo(function TranscriptRowView({ row, slot, highlighted, reveal, actionPending, progress, progressShown = false, suppressHeldFooter, latestTurn, footerPinned, context }: { row: TranscriptRow; slot: string; highlighted: boolean; reveal?: { item: string; version: number }; actionPending: boolean; progress?: ReactNode; progressShown?: boolean; suppressHeldFooter: boolean; latestTurn: boolean; footerPinned: boolean; context: RowContext }) {
-  const { fresh, root, onOpenPath, onOpenInEditor, measure } = context;
-  const resources = useTranscriptResources();
-  const remembered = useContext(RememberedValues);
-  const attach = useCallback((element: HTMLElement | null) => measure(row.key, element), [measure, row.key]);
-  // Both explicit choices survive virtual unmounting; undefined means automatic folding.
-  const [processChoice, rememberProcessChoice] = useRemembered<boolean | undefined>('process', undefined);
-  const markTarget = useMemo(() => row.type === 'item' ? markTargetOf(row.item, row.runId) : undefined, [row]);
-  const hasTurnFooter = row.type !== 'trigger' && row.footer !== 'none' && (row.footer !== 'held' || !suppressHeldFooter);
-  const footerProgress = row.type !== 'trigger' && row.footer === 'held' && !suppressHeldFooter ? { progress: progress ?? null } : {};
-  if (row.type === 'process') {
-    const { items, gaps, running } = row;
-    // Background task status can settle much later than its owning process. Its elapsed time
-    // belongs to the task row; the process header and footer follow actual model output.
-    const output = (item: TimelineItem) => item.kind !== 'activity' && item.kind !== 'task_notification';
-    const first = items.find(output)!;
-    const lastOutputIndex = items.findLastIndex(output);
-    const runs = toolRuns(items);
-    const detailOpen = hasOpenProcessDetail(remembered, items, runs);
-    const runCovered = new Set([...runs].flatMap(([start, end]) => Array.from({ length: end - start - 1 }, (_, offset) => start + 1 + offset)));
-    const lastTime = timelineItemTime(items[lastOutputIndex]!);
-    return (
-      <div ref={attach} data-row-key={row.key} data-row-slot={slot} className={cn(
-        // `-mx-2` widens the row by the turn header's own padding so the icon stays on the text
-        // column; `TurnProcess` cancels it for the expanded contents.
-        '-mx-2 min-w-0',
-        hasTurnFooter && 'turn-footer-row can-hover:-mx-6 can-hover:px-4',
-        row.spaced ? 'timeline-gap-block' : '',
-        highlighted && 'timeline-focus-hit',
-      )}>
-        <TurnProcess
-          running={running}
-          issueCount={row.issueCount}
-          interrupted={row.interrupted}
-          stopped={row.stopped}
-          startedAt={time(first.event.createdAt)}
-          endedAt={time(lastTime)}
-          footerTime={row.settled ? lastTime : undefined}
-          footerPinned={footerPinned}
-          footerActions={<AnswerActions text={row.answerText} runId={row.runId} onTurnAction={context.onTurnAction} at={lastTime} />}
-          defaultOpen={context.completedProcessesOpen}
-          canAutoFold={row.canAutoFold && (context.foldTiming === 'turn-end' || !latestTurn)}
-          detailOpen={detailOpen}
-          choice={processChoice}
-          onOpenChange={rememberProcessChoice}
-          reveal={reveal?.version}
-          {...footerProgress}
-        >
-          {items.map((item, itemIndex) => {
-            if (runCovered.has(itemIndex)) return null;
-            const end = runs.get(itemIndex);
-            if (end !== undefined) {
-              return (
-                <ToolRunBlock
-                  key={item.key}
-                  items={items}
-                  start={itemIndex}
-                  end={end}
-                  lastOutputIndex={lastOutputIndex}
-                  rowKey={row.key}
-                  gap={gaps[itemIndex]}
-                  running={running}
-                  latestTurn={latestTurn}
-                  followedByContent={(!row.interrupted && row.followedByAnswer) || end < items.length}
-                  reveal={revealInRange(items, itemIndex, end, reveal)}
-                  fresh={fresh}
-                  root={root}
-                  onOpenPath={onOpenPath}
-                  onOpenInEditor={onOpenInEditor}
-                  onExpandRow={context.onExpandRow}
-                />
-              );
-            }
-            let inner: ReactNode = null;
-            switch (item.kind) {
-              case 'tool': inner = agentToolName(item.event.data) === 'agent_call' ? <AgentCallRow item={item} stale={!running} /> : <ToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={!running} more={context.onExpandRow && truncationOf(item) ? <TruncatedMore item={item} expand={context.onExpandRow} /> : undefined} />; break;
-              case 'thought': inner = <ThoughtRow text={item.text} channel={item.channel} running={running && itemIndex === lastOutputIndex} />; break;
-              case 'assistant': inner = <AssistantMessage text={item.text} showActions={false} streaming={running && itemIndex === lastOutputIndex} mark={markTargetOf(item, row.runId)} />; break;
-              case 'plan': inner = <PlanBlock entries={item.entries} />; break;
-              case 'image': inner = <ImageBlock src={item.src} />; break;
-              case 'activity': inner = <ActivityRow item={item} root={root} />; break;
-              case 'task_notification': inner = <TaskNotificationRow item={item} root={root} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />; break;
-              default: inner = null;
-            }
-            return (
-              <div key={item.key} data-item-key={item.key} className={cn('min-w-0', gaps[itemIndex], isFresh(fresh, item.key, row.key) && enter)}>
-                <RememberedScope.Provider value={item.key}><MarkSourceContext.Provider value={item.event}>{inner}</MarkSourceContext.Provider></RememberedScope.Provider>
-                {item.kind !== 'tool' && item.kind !== 'task_notification' && <TruncatedMore item={item} expand={context.onExpandRow} />}
-              </div>
-            );
-          })}
-        </TurnProcess>
-      </div>
-    );
-  }
-  if (row.type === 'trigger') {
-    return (
-      <div ref={attach} data-row-key={row.key} data-row-slot={slot} className={cn('-ml-1.5 min-w-0 pl-1.5', row.gap)}>
-        <TurnTriggerBlock notices={row.notices} root={context.root} moreOf={(notice) => <TruncatedMore item={notice} expand={context.onExpandRow} />} />
-      </div>
-    );
-  }
-  const { item, settled } = row;
-  let content: ReactNode = null;
-  if (item.kind === 'user') {
-    if (context.newTopicDivider && isSettledNewTopic(item)) {
-      content = (
-        <TopicDivider
-          time={timelineItemTime(item) || undefined}
-          collapsible={Boolean(context.canCollapseEarlier && item.key === context.latestTopicKey)}
-          collapsed={Boolean(context.earlierTopicsCollapsed)}
-          onToggle={context.onToggleEarlierTopics}
-        />
-      );
-    } else {
-      content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
-    }
-  }
-  else if (item.kind === 'assistant') {
-    const models = resources?.modelInfo
-      ? item.event.sourceEvents
-          .map((source) => ('nativeId' in source && typeof source.nativeId === 'string' && Object.hasOwn(resources.modelInfo!, source.nativeId) ? resources.modelInfo![source.nativeId] : undefined))
-          .filter((info): info is NonNullable<typeof info> => Boolean(info))
-      : [];
-    const showModels = models.length > 0 && (!resources?.commonModelKey || models.some((info) => shareModelKey(info) !== resources.commonModelKey));
-    const modelLabel = showModels ? [...new Map(models.map((info) => [shareModelKey(info), shareModelLabel(info)])).values()].join(' / ') : undefined;
-    content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={row.footer === 'held'} time={settled ? timelineItemTime(item) || undefined : undefined} modelLabel={modelLabel} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
-  }
-  else if (item.kind === 'tool') {
-    content = (
-      <div className="group/message flex min-w-0 flex-col gap-2.5">
-        <RememberedScope.Provider value={item.key}><MarkSourceContext.Provider value={item.event}>
-          <ToolRow item={item} onOpenPath={onOpenPath} onOpenInEditor={onOpenInEditor} root={root} stale={row.footer !== 'held'} more={context.onExpandRow && truncationOf(item) ? <TruncatedMore item={item} expand={context.onExpandRow} /> : undefined} />
-          {hasTurnFooter && <MessageFooter text={row.answerText} showActions={settled} stopped={row.stopped && settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} {...footerProgress} />}
-        </MarkSourceContext.Provider></RememberedScope.Provider>
-      </div>
-    );
-  }
-  else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} root={context.root} more={<TruncatedMore item={item} expand={context.onExpandRow} />} />;
-  else if (item.kind === 'activity') content = <ActivityRow item={item} root={context.root} />;
-  else if (item.kind === 'status') content = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined}
-    footer={<MessageFooter text={row.answerText} showActions={settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} {...footerProgress} />} />;
-  return (
-    <div
-      ref={attach}
-      data-row-key={item.key}
-      data-row-slot={slot}
-      data-turn={item.kind === 'user' ? item.key : undefined}
-      // `-ml-1.5 pl-1.5` widens the row by 6px on the left without moving its content, matching
-      // the footer's outward action pill.
-      className={cn('-ml-1.5 min-w-0 pl-1.5', hasTurnFooter && 'turn-footer-row can-hover:-ml-5.5 can-hover:-mr-4 can-hover:pl-5.5 can-hover:pr-4', row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
-    >
-      {content}
-      {item.kind !== 'task_notification' && item.kind !== 'tool' && <TruncatedMore item={item} expand={context.onExpandRow} />}
-    </div>
-  );
-});
+import { useViewPrefs } from './viewPrefs';
+import { createRowObserver, isSettledNewTopic, PageProbe, SETTLE_MS, FRESH_MS, TranscriptRowView, type Fresh, type RowContext } from './TranscriptRowView';
+import { TranscriptFindBar, useTranscriptFind } from './transcriptFind';
+import { useTranscriptFocus } from './useTranscriptFocus';
 
 interface Props {
   /** A small embedded chat uses its own width and omits main-conversation navigation. */
@@ -758,9 +147,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   }, [sessionId, running, pendingConfirmationCount]);
   /** The row a search result pointed at, rung for a moment so the reader can find it. */
   const [highlight, setHighlight] = useState<string>();
-  /** The process row a focus opened to reach something inside it. */
-  const [reveal, setReveal] = useState<{ row: string; item: string; version: number }>();
-  const [landingTick, setLandingTick] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const spacerRef = useRef<HTMLDivElement>(null);
@@ -1053,206 +439,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   // and the observer and the scroll listener cover everything that moves them after that.
   }, [sessionId, pendingConfirmationCount]);
 
-  /**
-   * Scrolls to the item with [key] and marks it: the words [rangeIn] picks inside it, or the item as
-   * a whole when it picks none; [hold] keeps the mark (words or ring) until the next landing. Returns false
-   * while the item is not there to land on yet — windowed out (the scroll mounts it, and the new
-   * window runs the caller again) or inside a folded block that is opening — so a caller retries on
-   * the next change and honours a request once it returned true.
-   */
-  const landOn = (key: string, rangeIn: (found: HTMLElement) => Range | undefined, hold = false): boolean => {
-    const scroller = scrollRef.current;
-    if (!scroller) return false;
-    let row = findRow(scroller, key);
-    let target = key;
-    let item: HTMLElement | undefined;
-    if (!row) {
-      const parent = plannedTurns.current?.flatMap((turn) => turn.rows).find((candidate) => candidate.type === 'process'
-        ? candidate.items.some((entry) => entry.key === key)
-        : candidate.type === 'trigger' && candidate.notices.some((entry) => entry.key === key));
-      if (parent) {
-        target = parent.key;
-        row = findRow(scroller, target);
-        // Inside a folded process (a picture, a tool call): open it, and come back once it shows.
-        if (row) {
-          item = row.querySelector<HTMLElement>(`[data-item-key="${CSS.escape(key)}"]`) ?? undefined;
-          const folded = row.querySelector('[data-process-open="false"]') || item?.closest('[data-tool-run-open="false"]');
-          let opening = false;
-          // Only containing disclosures affect the target's placement. A transition elsewhere
-          // in the row (such as a hovered tool button) must not block search navigation.
-          for (let container = item?.parentElement; container && container !== row; container = container.parentElement) {
-            opening ||= animationsOf(container).some(animation => 'transitionProperty' in animation && animation.playState === 'running');
-          }
-          if (parent.type === 'process' && (!item || folded || item.closest('[hidden]') || opening)) {
-            if (reveal?.row !== target || reveal.item !== key) {
-              setReveal({ row: target, item: key, version: (reveal?.version ?? 0) + 1 });
-            }
-            return false;
-          }
-        }
-      }
-    }
-    if (!row) {
-      // Windowed out: scroll to where the list places it. The window that mounts it re-runs this.
-      const placed = locate(target);
-      if (placed === undefined) return false;
-      scroll.navigate(() => {
-        const top = locate(target);
-        return top === undefined ? undefined : top - scroller.clientHeight / 2;
-      });
-      ensureWindow(false);
-      return false;
-    }
-    const found = item ?? row;
-    const range = rangeIn(found);
-    // Held in refs, not the caller's effect cleanup: the timeline changes many times while it settles.
-    focusSettle.current?.();
-    focusSettle.current = scroll.navigate(() => {
-      const currentRow = findRow(scroller, target);
-      if (!currentRow) return undefined;
-      const currentItem = item ? currentRow.querySelector<HTMLElement>(`[data-item-key="${CSS.escape(key)}"]`) : undefined;
-      const current = currentItem ?? currentRow;
-      const box = (rangeIn(current) ?? current).getBoundingClientRect();
-      const view = scroller.getBoundingClientRect();
-      const offset = box.height > view.height * 0.6 ? SETTLE_TOP : (view.height - box.height) / 2;
-      return scroller.scrollTop + box.top - view.top - offset;
-    });
-    clearFlash();
-    flashRange(range, hold);
-    if (range) return true;
-    if (item) { item.classList.add('timeline-focus-hit'); flashedItem.current = item; }
-    else setHighlight(found.dataset.rowKey ?? key);
-    // Held like marked words when [hold]: a find hit the page cannot mark (a folded tool's command)
-    // stays ringed until the next step or the end of find, the same as one it can.
-    if (!hold) focusFlash.current = window.setTimeout(clearFlash, 1600);
-    return true;
-  };
-
-  /**
-   * Scrolls to the message a search result asked for. It waits until that row exists, because the
-   * message may only arrive with the stream or with a page of older history, and it honours one
-   * request once — a later timeline change must not pull the reader back to it.
-   */
-  const focusHandled = useRef<MessageFocus | undefined>(undefined);
-  const focusRequest = useRef<{ value: MessageFocus; scope: string; version: number }>(undefined);
   const scrollScope = `${sessionId}:${resetVersion}`;
-  // Opening two nested regions can commit after the request effect, even with no new timeline
-  // data. Retry while their DOM settles; reader navigation still cancels through the same gate.
-  useEffect(() => {
-    if (!reveal) return;
-    const started = performance.now();
-    let frame = 0;
-    const tick = () => {
-      setLandingTick(value => value + 1);
-      if (performance.now() - started < 1500) frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [reveal, scrollScope]);
-  useEffect(() => {
-    if (!focus || !loaded || loadingEarlier) return;
-    if (focusRequest.current?.value !== focus || focusRequest.current.scope !== sessionId) {
-      scroll.release();
-      focusHandled.current = undefined;
-      focusRequest.current = { value: focus, scope: sessionId, version: scroll.navigationVersion.current };
-    }
-    if (focusHandled.current === focus) return;
-    if (focusRequest.current.version !== scroll.navigationVersion.current) { focusHandled.current = focus; setReveal(undefined); return; }
-    const key = rowKeyForMessage(timeline, focus);
-    if (key && earlierTopicsCollapsed && !rowKeyForMessage(displayTimeline, focus)) {
-      setExpandedTopicKey(latestTopicKey);
-      return;
-    }
-    if (key && landOn(key, (found) => focus.quote ? quoteRange(found, focus.quote) : undefined)) { focusHandled.current = focus; setReveal(undefined); }
-    focusRequest.current.version = scroll.navigationVersion.current;
-  }, [focus, loaded, scrollScope, timeline, displayTimeline, timelineVersion, earlierTopicsCollapsed, latestTopicKey, loadingEarlier, windowTick, reveal, landingTick, scroll]);
-
-  /** The occurrence 会话内查找 moved to; landed the same way as a focus, and once. */
-  const [findTarget, setFindTarget] = useState<{ key: string; needle: string; nth: number }>();
-  const findHandled = useRef<typeof findTarget>(undefined);
-  const findRequest = useRef<{ value: NonNullable<typeof findTarget>; version: number; scope: string }>(undefined);
-  useEffect(() => {
-    if (!findTarget || findHandled.current === findTarget) return;
-    if (findRequest.current?.value !== findTarget) {
-      scroll.release();
-      findRequest.current = { value: findTarget, version: scroll.navigationVersion.current, scope: scrollScope };
-    }
-    // The rows replaced whole (the page a step loaded lands a frame after the step) reset the
-    // scroll and move its version: that is not the reader going elsewhere, so the request stands.
-    if (findRequest.current.scope !== scrollScope) findRequest.current = { ...findRequest.current, version: scroll.navigationVersion.current, scope: scrollScope };
-    if (findRequest.current.version !== scroll.navigationVersion.current) { findHandled.current = findTarget; setReveal(undefined); return; }
-    if (landOn(findTarget.key, (found) => occurrenceRange(found, findTarget.needle, findTarget.nth), true)) { findHandled.current = findTarget; setReveal(undefined); }
-    findRequest.current.version = scroll.navigationVersion.current;
-  }, [findTarget, timeline, timelineVersion, windowTick, reveal, landingTick, scroll, scrollScope]);
-  const focusSettle = useRef<() => void>(undefined);
-  const focusFlash = useRef<number>(undefined);
-  /** An item flashed inside a row; its ring is a class on the element, not state, so it is taken off by hand. */
-  const flashedItem = useRef<HTMLElement | undefined>(undefined);
-  /** Ends the current flash at once: a new landing (whose timer replaces this one's) or the end of find. */
-  const clearFlash = () => {
-    window.clearTimeout(focusFlash.current);
-    flashedItem.current?.classList.remove('timeline-focus-hit');
-    flashedItem.current = undefined;
-    setHighlight(undefined);
-  };
-  useEffect(() => () => { focusSettle.current?.(); window.clearTimeout(focusFlash.current); flashedItem.current?.classList.remove('timeline-focus-hit'); flashedItem.current = undefined; }, [scrollScope]);
-
-  /**
-   * A focused message older than anything loaded: pages back through the history until it is
-   * there (the effect above then scrolls to it), the history ends, or [SEEK_PAGES] pages were read.
-   * It waits for the stream's first snapshot, since a message newer than the cached copy arrives
-   * with that rather than with an older page.
-   */
-  const [seeking, setSeeking] = useState(false);
-  /** The end of the rows the window was last told the reader is nearer to; a seek heads for the top whatever the view shows. */
-  const readerEnd = useRef<boolean | undefined>(undefined);
-  const seekingUp = useRef(false);
-  const tellReaderEnd = (atEnd: boolean) => {
-    if (!onReaderEnd || readerEnd.current === atEnd) return;
-    readerEnd.current = atEnd;
-    onReaderEnd(atEnd);
-  };
-  useEffect(() => { readerEnd.current = undefined; }, [scrollScope]);
-  const seek = useRef({ timeline, hasMoreHistory, onLoadEarlier, loadingEarlier, tellReaderEnd, earlierTopicsCollapsed, latestTopicKey });
-  seek.current = { timeline, hasMoreHistory, onLoadEarlier, loadingEarlier, tellReaderEnd, earlierTopicsCollapsed, latestTopicKey };
-  const historyReady = loaded && historyLoad.state === 'ready' && !historyStale;
-  useEffect(() => {
-    if (!focus || !historyReady || focusHandled.current === focus) return;
-    let cancelled = false;
-    const version = scroll.navigationVersion.current;
-    const currentRequest = () => !cancelled && version === scroll.navigationVersion.current;
-    void (async () => {
-      let pages = 0, failures = 0, idle = 0;
-      while (currentRequest()) {
-        const current = seek.current;
-        if (rowKeyForMessage(current.timeline, focus)) return;
-        if (current.earlierTopicsCollapsed && current.latestTopicKey) setExpandedTopicKey(current.latestTopicKey);
-        if (!current.hasMoreHistory || !current.onLoadEarlier || pages >= SEEK_PAGES) {
-          toast.info(pages >= SEEK_PAGES ? t`向前翻了 ${SEEK_PAGES} 页仍未找到这条消息` : t`没有在会话中找到这条消息，它可能已被删除或改写`);
-          return;
-        }
-        setSeeking(true);
-        seekingUp.current = true;
-        current.tellReaderEnd(false);
-        // A page the transcript is already loading on its own counts as this one; wait for it.
-        const result = current.loadingEarlier ? 'none' : await current.onLoadEarlier();
-        if (!currentRequest()) return;
-        if (result === 'progress') { pages += 1; failures = 0; idle = 0; await wait(32); }
-        else if (result === 'failed') {
-          if (++failures >= 3) { toast.error(t`无法加载更早的历史，未能定位到这条消息`); return; }
-          await wait(1000 * failures);
-        } else {
-          if (++idle > 40) { toast.info(t`暂时无法定位这条消息`); return; }
-          await wait(250);
-        }
-      }
-    })().finally(() => {
-      // The view says where the reader is again from its next move.
-      seekingUp.current = false;
-      if (!cancelled) setSeeking(false);
-    });
-    return () => { cancelled = true; seekingUp.current = false; setSeeking(false); };
-  }, [focus, historyReady, scrollScope, scroll]);
+  useEffect(() => { setHighlight(undefined); }, [scrollScope]);
 
   const earlier = useEarlierHistory({
     scrollRef, probeRef: earlierProbe, scope: `${sessionId}:${resetVersion}`,
@@ -1264,14 +452,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     scrollRef, probeRef: laterProbe, scope: `${sessionId}:${resetVersion}:later`, below: true,
     enabled: loaded && Boolean(hasMoreLater && onLoadLater), paused: Boolean(loadingLater), version: timelineVersion, load: onLoadLater,
   });
-  positionChange.current = (synchronous) => {
-    ensureWindow(synchronous);
-    // Before any page is asked for: which end a full window keeps decides what that page may cost.
-    const scroller = scrollRef.current;
-    if (scroller?.clientHeight) tellReaderEnd(!seekingUp.current && (scroll.following.current || scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= scroller.scrollTop));
-    earlier.check();
-    later.check();
-  };
 
   const scrollToBottom = () => {
     // The newest rows are not loaded: they replace these, and the view starts at their end.
@@ -1470,6 +650,51 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     segments = windowSegments(layout.offsets, rowsAll.length, tailStart, top, viewport, Math.max(OVERSCAN_MIN, viewport));
   }
   renderedSegments.current = segments;
+
+  const {
+    reveal,
+    setReveal,
+    landingTick,
+    seeking,
+    setSeeking,
+    seekingUp,
+    tellReaderEnd,
+    clearFlash,
+    landOn,
+  } = useTranscriptFocus({
+    sessionId,
+    scrollScope,
+    loaded,
+    historyReady: loaded && historyLoad.state === 'ready' && !historyStale,
+    focus,
+    timeline,
+    displayTimeline,
+    timelineVersion,
+    plannedTurns,
+    scrollRef,
+    scroll,
+    locate,
+    ensureWindow,
+    windowTick,
+    earlierTopicsCollapsed,
+    latestTopicKey,
+    onExpandEarlierTopics: (key) => setExpandedTopicKey(key),
+    hasMoreHistory,
+    loadingEarlier,
+    onLoadEarlier,
+    onReaderEnd,
+    setHighlight,
+  });
+
+  positionChange.current = (synchronous) => {
+    ensureWindow(synchronous);
+    // Before any page is asked for: which end a full window keeps decides what that page may cost.
+    const scroller = scrollRef.current;
+    if (scroller?.clientHeight) tellReaderEnd(!seekingUp.current && (scroll.following.current || scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop <= scroller.scrollTop));
+    earlier.check();
+    later.check();
+  };
+
   /** What rows keep across being windowed out and back (`useRemembered`), for this conversation only. */
   const remembered = useMemo(() => new Map<string, unknown>(), [sessionId]);
   const rowIndex = useMemo<RowIndex>(() => ({
@@ -1552,160 +777,30 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     </RememberedScope.Provider>
   );
 
-  /*
-   * 会话内查找. ⌘F / Ctrl+F over the conversation on screen opens a find bar that matches the model
-   * instead of the DOM: a windowed list and a block never opened leave most of a long transcript out
-   * of the page, where the browser's own find cannot see it. A second press inside the bar is the
-   * browser's again.
-   */
-  /**
-   * [at] is the occurrence on show, by row and place in it, so a list that grows around it (the
-   * server's answer, a page loaded, a streamed row) keeps it; [reading] is the lane place the query
-   * started from, and [moved] whether the reader has stepped since.
-   */
-  const [find, setFind] = useState<{ query: string; at?: { key: string; nth: number }; reading: number; moved: boolean }>();
-  const findInput = useRef<HTMLInputElement>(null);
-  /** Where the keyboard was before the bar took it, and goes back to when it closes. */
-  const findReturn = useRef<HTMLElement | null>(null);
-  const needle = (find && findNeedle(find.query)) ?? '';
-  const heldHits = useMemo(() => (needle ? findHits(rowsAll, needle, root) : []), [rowsAll, needle, root]);
-  /** The server's count of the whole lane for [needle]; until it answers, or without it, the held rows are what is counted. */
-  const [served, setServed] = useState<{ needle: string; result: LaneFind }>();
-  const hits = useMemo(() => (served && served.needle === needle ? laneHits(served.result.hits, heldHits, rowsAll) : heldHits), [served, needle, heldHits, rowsAll]);
-  const findTotal = hits.reduce((sum, hit) => sum + hit.count, 0);
-  const findIndex = occurrenceIndex(hits, find?.at);
-  const findOpen = useRef(false);
-  findOpen.current = Boolean(find);
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      // Esc closes an open bar wherever the keyboard is, as a browser's own find does, except in a
-      // field of its own (the draft) or a dialog, whose Esc is theirs. The bar handles its own.
-      if (event.key === 'Escape' && findOpen.current && !event.defaultPrevented && !isComposingKey(event)) {
-        const scroller = scrollRef.current;
-        const active = document.activeElement;
-        const editable = active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea, select'));
-        if (!scroller || !scroller.getClientRects().length || scroller.closest('[inert]') || editable || active?.closest('[role="dialog"],[role="alertdialog"]')) return;
-        event.preventDefault();
-        closeFindRef.current();
-        return;
-      }
-      if (event.defaultPrevented || !matches(event, 'find')) return;
-      const scroller = scrollRef.current;
-      // Only the conversation on screen: not one hidden behind a subagent page, behind the
-      // fullscreen composer or under a dialog, and not while the keyboard is in a side panel or a
-      // terminal (the dock shares the session's `main`; the page's own find still reads its rows).
-      if (!scroller || !scroller.getClientRects().length || scroller.closest('[inert]')) return;
-      const active = document.activeElement;
-      const dialog = scroller.closest('[role="dialog"],[role="alertdialog"]');
-      const region = dialog ?? scroller.closest('main') ?? frameRef.current?.parentElement;
-      if (active === findInput.current || (active instanceof Element && active !== document.body && region && !region.contains(active))) return;
-      if (active instanceof Element && (active.closest('[data-terminal]') || active.closest('[role="dialog"],[role="alertdialog"]') !== dialog)) return;
-      event.preventDefault();
-      if (!findOpen.current) findReturn.current = active instanceof HTMLElement && active !== document.body ? active : null;
-      flushSync(() => setFind((current) => current ?? { query: '', reading: 0, moved: false }));
-      findInput.current?.focus();
-      findInput.current?.select();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-  // A page or a jump replaces the rows, not the conversation: the bar and its place stay.
-  useEffect(() => { setFind(undefined); setServed(undefined); setFindTarget(undefined); }, [sessionId]);
-  useEffect(() => { setHighlight(undefined); }, [scrollScope]);
-  // The whole lane is asked once typing pauses. What streams in later is held, and counted here.
-  useEffect(() => {
-    if (!needle || !onFind || !find) return;
-    const query = find.query;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void onFind(query, controller.signal).then((result) => {
-        if (!controller.signal.aborted) setServed(result ? { needle, result } : undefined);
-      });
-    }, FIND_DEBOUNCE_MS);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-    // Asked again for a new query, not for each keystroke's object.
-  }, [needle, onFind]);
-  /** Shows occurrence [nth] of [hit]: landed on when the rows hold it, else once the rows around it are loaded. */
-  const findPage = useRef<AbortController | undefined>(undefined);
-  const showHit = (hit: FindHit, lower: string, nth: number) => {
-    findPage.current?.abort();
-    findPage.current = undefined;
-    if (hit.row !== undefined) { setFindTarget({ key: hit.key, needle: lower, nth }); return; }
-    if (earlierTopicsCollapsed && latestTopicKey) {
-      setExpandedTopicKey(latestTopicKey);
-      if (timeline.some((item) => item.key === hit.key) || !onLoadPlace) {
-        setFindTarget({ key: hit.key, needle: lower, nth });
-        return;
-      }
-    }
-    if (!onLoadPlace) { setFindTarget({ key: hit.key, needle: lower, nth }); return; }
-    const request = scroll.beginRequest();
-    findPage.current = new AbortController();
-    const page = findPage.current;
-    request.signal.addEventListener('abort', () => page.abort());
-    setSeeking(true);
-    void onLoadPlace(hit.pos, page.signal).catch(() => false).then((loaded) => {
-      if (page.signal.aborted) return;
-      if (loaded) setFindTarget({ key: hit.key, needle: lower, nth });
-      else toast.error(t`无法加载这处结果所在的历史`);
-    }).finally(() => {
-      request.finish();
-      if (findPage.current === page) findPage.current = undefined;
-      // A later step that needs no page clears the request without one taking its place.
-      if (!findPage.current) setSeeking(false);
-    });
-  };
-  /** The lane place the reader is at: the row at the top of the view, else the first row held. */
-  const readingPlace = () => {
-    const scroller = scrollRef.current;
-    const anchor = scroller ? captureReadingAnchor(scroller, modelAnchor).rows[0]?.key : undefined;
-    const row = (anchor ? rowsAll.find((candidate) => candidate.key === anchor) : undefined) ?? rowsAll[0];
-    const item = row ? (row.type === 'item' ? row.item : row.type === 'process' ? row.items[0] : row.notices[0]) : undefined;
-    return item ? placeOf(item) : 0;
-  };
-  /** A new query starts from the reader: the first occurrence at or below the top of the view, else the last one above it. */
-  const search = (query: string) => {
-    const lower = findNeedle(query) ?? '';
-    const list = lower ? findHits(rowsAll, lower, root) : [];
-    const reading = readingPlace();
-    const at = occurrenceAt(list, startIndex(list, reading));
-    setFind({ query, reading, moved: false, ...(at ? { at: { key: at.hit.key, nth: at.nth } } : {}) });
-    if (at) showHit(at.hit, lower, at.nth);
-    else { findPage.current?.abort(); flashRange(undefined); }
-  };
-  // The server's answer can hold an occurrence nearer the reader than any the rows held (one above
-  // the window, say): until the reader steps, the query starts from there instead.
-  const startedFrom = useRef<typeof served>(undefined);
-  useEffect(() => {
-    if (!find || find.moved || !served || served.needle !== needle || startedFrom.current === served) return;
-    startedFrom.current = served;
-    const at = occurrenceAt(hits, startIndex(hits, find.reading));
-    if (!at || (find.at?.key === at.hit.key && find.at.nth === at.nth)) return;
-    setFind({ ...find, at: { key: at.hit.key, nth: at.nth } });
-    showHit(at.hit, needle, at.nth);
-    // Once per answer.
-  }, [served, hits]);
-  const step = (delta: number) => {
-    if (!find || !findTotal) return;
-    const from = findIndex < 0 ? (delta > 0 ? -1 : 0) : findIndex;
-    const at = occurrenceAt(hits, (((from + delta) % findTotal) + findTotal) % findTotal);
-    if (!at) return;
-    setFind({ ...find, at: { key: at.hit.key, nth: at.nth }, moved: true });
-    showHit(at.hit, needle, at.nth);
-  };
-  const closeFindRef = useRef(() => {});
-  const closeFind = () => {
-    setFind(undefined);
-    setServed(undefined);
-    setFindTarget(undefined);
-    findPage.current?.abort();
-    clearFlash();
-    flashRange(undefined);
-    const back = findReturn.current;
-    findReturn.current = null;
-    if (back?.isConnected) back.focus({ preventScroll: true });
-  };
-  closeFindRef.current = closeFind;
+  const { find, findInput, findTotal, findIndex, search, step, closeFind } = useTranscriptFind({
+    sessionId,
+    scrollScope,
+    timeline,
+    timelineVersion,
+    rowsAll,
+    root,
+    scrollRef,
+    frameRef,
+    scroll,
+    modelAnchor,
+    windowTick,
+    reveal,
+    landingTick,
+    earlierTopicsCollapsed,
+    latestTopicKey,
+    onExpandEarlierTopics: (key) => setExpandedTopicKey(key),
+    onFind,
+    onLoadPlace,
+    landOn,
+    clearFlash,
+    setReveal,
+    setSeeking,
+  });
 
   return (
     <div ref={frameRef} className="relative flex min-h-0 flex-1 flex-col">
@@ -1776,32 +871,15 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       <div role="status" className="sr-only">{announcement.text && <span key={announcement.seq}>{announcement.text}</span>}</div>
       {!resources && <MarkLayer scrollRef={scrollRef} onDiscuss={onDiscuss} onQuote={onQuote} />}
       {find && (
-        <div
-          role="search"
-          className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-xl border border-line bg-elevated/95 p-1 shadow-soft backdrop-blur max-md:left-3"
-          // The field and the buttons alike: a step clicked with the mouse leaves the keyboard on its button.
-          onKeyDown={(event) => { if (event.key === 'Escape' && !isComposingKey(event.nativeEvent)) { event.preventDefault(); closeFind(); } }}
-        >
-          <label className="relative min-w-0 flex-1">
-            <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-4" />
-            <Input
-              ref={findInput}
-              autoFocus
-              value={find.query}
-              aria-label={t`在会话中查找`}
-              className="h-7 w-56 pl-8 max-md:w-full"
-              onChange={(event) => search(event.target.value)}
-              onKeyDown={(event) => {
-                if (isComposingKey(event.nativeEvent)) return;
-                if (event.key === 'Enter') { event.preventDefault(); step(event.shiftKey ? -1 : 1); }
-              }}
-            />
-          </label>
-          {find.query && <span role="status" className="shrink-0 px-1.5 text-xs tabular-nums text-fg-3">{findTotal ? Math.max(findIndex, 0) + 1 : 0}/{findTotal}</span>}
-          <Button size="icon-sm" variant="quiet" aria-label={t`上一个`} disabled={!findTotal} onClick={() => step(-1)}><IconChevronDown className="rotate-180" /></Button>
-          <Button size="icon-sm" variant="quiet" aria-label={t`下一个`} disabled={!findTotal} onClick={() => step(1)}><IconChevronDown /></Button>
-          <Button size="icon-sm" variant="quiet" aria-label={t`关闭查找`} onClick={closeFind}><IconX /></Button>
-        </div>
+        <TranscriptFindBar
+          find={find}
+          findInput={findInput}
+          findTotal={findTotal}
+          findIndex={findIndex}
+          onSearch={search}
+          onStep={step}
+          onClose={closeFind}
+        />
       )}
       {seeking && (
         <div role="status" className="absolute left-1/2 top-3 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-elevated/95 px-3 text-xs text-fg-2 shadow-soft backdrop-blur">

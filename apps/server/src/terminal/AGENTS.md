@@ -25,10 +25,10 @@ Riffet 私有 tmux 服务器上的终端：创建与回收 pane，经 control mo
 - protocol 3 的积压上限是 `service.ts#MAX_UNACKED_CHARS` 加上该 viewer 最近一次快照的长度。不加快照长度，大回看的种状态本身就会超限，下一条输出又触发重新种状态，形成循环。
 - 种状态按行以 `ESC[0m` 收尾并重述延续的样式（`seed.ts#assembleSeed`）；bracketed paste 与光标形状 tmux 没有格式变量，来自原始流（`protocol-state.ts#OuterTerminalState`）。
 - 启动命令的整条 `new-session` 经一条不超过 16 KiB 的 tmux 消息发送，参数按 UTF-8 字节量并留余量；换行安全，以 `;` 结尾的参数必须转义（`launch-args.ts#tmuxArgument`）。派发器用同一规则（`launch-args.ts#launchArgAccepted`）判断能否作为参数，不能的改为粘贴。
-- 没有 viewer 的 CLI 按 100x40 渲染，对话框才不会被裁剪；有 viewer 后延迟恢复（`service.ts#restoreBackgroundSize`）。
+- 没有 viewer 的 CLI 按 100x40 渲染，对话框才不会被裁剪；有 viewer 后延迟恢复（`stream.ts#restoreBackgroundSize`）。
 - 多个轮询方共享一次 120 ms 内的 `capture-pane`，任何写入或输出提前作废（`service.ts#SCREEN_CACHE_MS`）。要读最新画面传 `fresh`。
 - 所有外部命令走 `apps/server/src/exec.ts` 的 worker，不在主线程 `execFile`；主线程 spawn 曾造成 0.8 至 3.5 s 的事件循环阻塞，使投递证据「迟到」变成「没看到」。
-- 终端的 CLI 启动失败时，在销毁保留的 pane 前读它最后的行，用驱动的 `TerminalBehaviour` 判断，pane 已显示就绪的不算失败启动（`service.ts#finishExit`）。
+- 终端的 CLI 启动失败时，在销毁保留的 pane 前读它最后的行，用驱动的 `TerminalBehaviour` 判断，pane 已显示就绪的不算失败启动（`stream.ts#finishExit`）。
 
 ## 外部行为
 
@@ -39,7 +39,7 @@ Riffet 私有 tmux 服务器上的终端：创建与回收 pane，经 control mo
 ## 排障
 
 - 终端创建报 `TMUX_COMMAND_FAILED` 或 `TMUX_TOO_OLD`：先看 `service.ts#assertTmuxVersion` 的版本，缺任务目录会先报目录不存在，再看 tmux。
-- 重连后历史重复或错位：检查 `service.ts#sendSnapshot` 的 `sequence`、`streamId` 与客户端 ack，再看是否触发了 `MAX_UNACKED_CHARS` 重新种状态。
+- 重连后历史重复或错位：检查 `stream.ts#sendSnapshot` 的 `sequence`、`streamId` 与客户端 ack，再看是否触发了 `MAX_UNACKED_CHARS` 重新种状态。
 - 孤儿 tmux 服务器或残留终端：`orphans.ts#listRiffetTmuxServers`，回收日志 `reaped stray terminal sessions`、`ended unreachable tmux servers`（无 scope，按文本过滤 `riffet logs`）。
 - Codex 终端被报连接冲突：端点验证先看启动记录与 `service.ts#inspectPane` 的共享 `list-panes -a`，进程扫描只是回退；未验证只读为重连，只有证明用了别的 app-server 才是冲突。
 - 终端状态在 `terminals` 表（`apps/server/src/store.ts`），`epoch` 在退出与被预热认领时递增。

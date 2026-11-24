@@ -1,21 +1,3 @@
 {
-  "lines": {
-    "apps/server/src/backends/droid/runtime.ts": 1770,
-    "apps/server/src/backends/dsh/runtime.ts": 1489,
-    "apps/server/src/backends/pi/runtime.ts": 1397,
-    "apps/server/src/backends/service.ts": 1449,
-    "apps/server/src/channels/service.ts": 1286,
-    "apps/server/src/extensions/discovery.ts": 1051,
-    "apps/server/src/git/index.ts": 2172,
-    "apps/server/src/journal/journal.ts": 1220,
-    "apps/server/src/native/session-actor.ts": 1534,
-    "apps/server/src/orchestration/service.ts": 1127,
-    "apps/server/src/plugins/registry.ts": 1826,
-    "apps/server/src/previews/browser-structured.ts": 1714,
-    "apps/server/src/store.ts": 1665,
-    "apps/server/src/terminal/service.ts": 1983,
-    "apps/web/src/app/session/Composer.tsx": 1918,
-    "apps/web/src/app/session/Timeline.tsx": 1012,
-    "apps/web/src/app/session/TranscriptView.tsx": 1771
-  }
+  "lines": {}
 }

@@ -1,547 +1,52 @@
 import { flushSync } from 'react-dom';
-import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { i18n, type MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
+import { memo, useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconCompress, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconKeyboard, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
-import { AGENT_CALL_BUDGET, isNativeBackendId, REMOTE_SPEECH_RECOGNIZER, type Attachment, type NativeBackendId, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
-import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { ToolsPickerInMenu } from './ToolsPicker';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { IconArrowUp, IconAtSign, IconChevronDown, IconKeyboard, IconMaximize, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
+import { REMOTE_SPEECH_RECOGNIZER, type Attachment } from '@contracts';
+import { Collapse } from '@/components/ui/collapse';
+import { Spinner } from '@/components/ui/controls';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
-import { Spinner, StatusDot } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
+import { isAgentReference, isSessionReference, type PromptContextReference } from '@/lib/api';
 import { usePlugins } from '@/lib/plugins';
-import { agentMentionCandidates, ComposerMentionLayer, droppedMentions, mentionAt, mentionRanges, mentionText, referenceLabel, type AgentMentionSource } from './agentMentions';
-import { api, HttpError, isAgentReference, isFileReference, isSessionReference, sameContextReference, restoreContext, mergeRestoredReferences, type NativeSessionCreateInput, type PromptContextReference } from '@/lib/api';
-import { cn, errorMessage } from '@/lib/utils';
-import { AgentLogo } from '@/components/AgentLogo';
-import { backendLabel, sessionBackend } from '@/lib/backends';
-import type { ProjectRecord } from '@/lib/api';
-import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { isTextField, keepsComposerFocus, pressTarget } from '@/lib/tap-focus';
-import type { ModelParam } from '@/lib/models';
-import type { Choice, ContextUsage, SlashCommand } from './model';
-import { ModelPicker, type ModelProviderChoices } from './ModelPicker';
-import { clipboardFiles, readUploadData, uploadName } from './image-upload';
-import { classifyEnterGesture, isComposingKey, primaryEnterHint, readEnterKeyBehavior, resolveEnter, resolveEscapeLayer, type EnterKeyBehavior } from './composerKeyboard';
-import { ComposerFullscreen } from './ComposerFullscreen';
+import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
+import { cn } from '@/lib/utils';
 import { formatWhen } from '../automations/automation';
 import { SendLaterMenu } from '../automations/SendLater';
 import { useSettings } from '../state/stores';
-import { DictationBar } from './DictationBar';
-import { useDictation } from './useDictation';
-import { holdDocked, HoldToTalkBar, HoldToTalkOverlay, type HoldEnd, type HoldSession } from './HoldToTalk';
-import { useComposerAutosize } from './useComposerAutosize';
-import { useHeld, useLingering, WAIT_GRACE_MS } from './sessionLayout';
-import { useSwitchSettling } from './sessionFrame';
-import { Collapse } from '@/components/ui/collapse';
-import { shouldForwardWheel } from './composerFullscreenGeometry';
+import { ComposerMentionLayer, droppedMentions, mentionAt, mentionRanges, referenceLabel } from './agentMentions';
 import { ComposerAttachments } from './ComposerAttachments';
+import { acknowledgeRecoveredCreationDraft, readDraft, readVoiceMode, unsavedDrafts, writeVoiceMode } from './composerDraft';
+import { ComposerFullscreen } from './ComposerFullscreen';
+import { shouldForwardWheel } from './composerFullscreenGeometry';
+import { primaryEnterHint, readEnterKeyBehavior, type EnterKeyBehavior } from './composerKeyboard';
+import { handleComposerKeyDown } from './composerKeyDown';
+import { ComposerTriggerMenu } from './ComposerMenus';
+import { compactTokens, ComposerMobileSettings, ContextMeter, ModePicker } from './ComposerPickers';
+import type { ComposerProps } from './composerTypes';
+import { DictationBar } from './DictationBar';
+import { holdDocked, HoldToTalkBar, HoldToTalkOverlay, type HoldEnd, type HoldSession } from './HoldToTalk';
+import { clipboardFiles } from './image-upload';
+import type { SlashCommand } from './model';
+import { ModelPicker } from './ModelPicker';
 import { joinQuotes, splitQuotes } from './quotes';
-import { attachmentMimeType, planIntake, type CandidateFile, type PendingUpload } from './composerAttachmentIntake';
-import { mentionsDeletedSession } from '@/lib/session-deletion';
-import { detectSlashTrigger, invokedSlashItems, removeSlashToken, slashCandidates, slashMenuGroups } from './slashMenu';
-import { findAnimation } from '@/lib/motion';
+import { useSwitchSettling } from './sessionFrame';
+import { useHeld } from './sessionLayout';
+import { removeSlashToken } from './slashMenu';
+import { ToolsPickerInMenu } from './ToolsPicker';
+import { useComposerAutosize } from './useComposerAutosize';
+import { useComposerDraftSync } from './useComposerDraftSync';
+import { useComposerTrigger } from './useComposerTrigger';
+import { useComposerUploads } from './useComposerUploads';
+import { followContentHeight, useComposerWindowDrop } from './useComposerWindowDrop';
+import { useDictation } from './useDictation';
 
-const NO_FILES: FileEntry[] = [];
-
-const modeMeta: Record<string, { icon: typeof IconInfinity; description: MessageDescriptor }> = {
-  agent: { icon: IconInfinity, description: msg`自主读写文件、执行命令` },
-  plan: { icon: IconListTodo, description: msg`先出方案，确认后再动手` },
-  ask: { icon: IconMessageCircleQuestion, description: msg`只读问答，不修改文件` },
-};
-
-export const compactTokens = (value: number) => value >= 1000 ? `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k` : String(Math.round(value));
-
-/**
- * Context-window gauge. Renders only what the agent actually reported; when nothing has
- * been reported yet there is no meter at all, which is why it is safe to show nothing
- * rather than an invented number.
- */
-const contextLabels: Record<string, MessageDescriptor> = {
-  system_prompt: msg`系统提示词`, tools: msg`工具定义`, rules: msg`规则`, skills: msg`Skills`, mcp: msg`MCP 与动态工具`,
-  subagents: msg`子 Agent 定义`, summarized_conversation: msg`已压缩的对话`, conversation: msg`对话`,
-  cached_input: msg`缓存输入`, cacheRead: msg`缓存读取`, cache_write: msg`缓存写入`, cacheWrite: msg`缓存写入`, reasoning_output: msg`思考输出`,
-  systemPrompt: msg`系统提示词`, toolDefinitions: msg`工具定义`, developerMessages: msg`指令`, userMessages: msg`你的消息`,
-  assistantMessages: msg`回复`, toolResponses: msg`工具结果`, otherMessages: msg`其他`,
-};
-
-function contextPartLabel(id: string, parts: readonly { id: string }[]): string | undefined {
-  if (id === 'input') {
-    const splitFromCache = parts.some((item) => ['cached_input', 'cacheRead', 'cacheWrite'].includes(item.id));
-    return i18n._(splitFromCache ? msg`未缓存输入` : msg`输入`);
-  }
-  if (id === 'output') return i18n._(parts.some((item) => item.id === 'reasoning_output') ? msg`回复输出` : msg`输出`);
-  return contextLabels[id] ? i18n._(contextLabels[id]!) : undefined;
-}
-
-function formatContextShare(tokens: number, base: number): string {
-  const pct = (tokens / Math.max(1, base)) * 100;
-  return tokens > 0 && pct < 1 ? '<1%' : `${Math.round(pct)}%`;
-}
-
-const ContextMeter = memo(function ContextMeter({ usage, onCompact, compacting = false, compactDisabled = false }: {
-  usage: ContextUsage;
-  onCompact?: () => Promise<boolean> | boolean;
-  compacting?: boolean;
-  compactDisabled?: boolean;
-}) {
-  const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const ratio = Math.min(1, Math.max(0, usage.used / usage.size));
-  const percent = Math.round(usage.used / usage.size * 100);
-  const title = t`上下文用量`;
-  // The ring alone, in the toolbar's own ink until the window runs short; the figures live in the
-  // tooltip and the popover, so the row never carries a number that changes every turn.
-  const color = ratio >= 0.9 ? 'var(--danger)' : ratio >= 0.75 ? 'var(--warning)' : 'currentColor';
-  const cost = usage.cost ? ` · ${usage.cost.currency} ${usage.cost.amount.toFixed(2)}` : '';
-  const limitLabel = usage.limitKind === 'compaction' ? t`自动压缩阈值` : t`上下文长度`;
-  const label = `${title} ${percent}% · ${compactTokens(usage.used)} / ${limitLabel} ${compactTokens(usage.size)} tokens${cost}`;
-  // 2πr for r = 6, so the dash length maps directly onto the ratio.
-  const circumference = 2 * Math.PI * 6;
-  const parts = usage.breakdown?.filter((item) => item.tokens > 0) ?? [];
-  const breakdownTotal = parts.reduce((total, item) => total + item.tokens, 0);
-  const breakdownBase = usage.breakdownEstimated
-    ? Math.max(1, breakdownTotal)
-    : Math.max(1, usage.size, usage.used, breakdownTotal);
-  const compactBusy = compacting || submitting;
-  const compactBlocked = compactDisabled || usage.used <= 0;
-  const handleCompact = async () => {
-    if (!onCompact || compactBusy || compactBlocked) return;
-    setSubmitting(true);
-    try {
-      const ok = await onCompact();
-      if (ok) setOpen(false);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tip label={`${title} ${percent}%`} side="top">
-        <PopoverTrigger
-          aria-label={label}
-          // The same square as the toolbar's other glyph buttons, so the meter sits one footer gap
-          // from the model name exactly as the attach and approval buttons sit from each other.
-          className="grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus aria-expanded:bg-hover aria-expanded:text-fg md:size-7"
-        >
-          <svg viewBox="0 0 16 16" className="size-4 shrink-0 -rotate-90" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" fill="none" stroke="var(--line-strong)" strokeWidth="2" />
-            <circle cx="8" cy="8" r="6" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeDasharray={`${ratio * circumference} ${circumference}`} />
-          </svg>
-        </PopoverTrigger>
-      </Tip>
-      <PopoverContent
-        side="top"
-        align="start"
-        className="w-72 p-3"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          (event.currentTarget as HTMLElement).focus({ preventScroll: true });
-        }}
-      >
-        <div className="flex items-baseline justify-between text-sm">
-          <span className="font-medium text-fg">{title} <span className="tabular-nums text-fg-3">{percent}%</span></span>
-          <span className="tabular-nums text-fg-3">{compactTokens(usage.used)} / {compactTokens(usage.size)}</span>
-        </div>
-        <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-line">
-          {parts.length && !usage.breakdownEstimated
-            ? parts.map((item, index) => <span key={item.id} className="h-full shrink-0" style={{ width: `${ratio * item.tokens / Math.max(1, usage.used, breakdownTotal) * 100}%`, background: color, opacity: 1 - index * (0.7 / parts.length) }} />)
-            : <span className="h-full" style={{ width: `${ratio * 100}%`, background: color }} />}
-        </div>
-        {usage.limitKind === 'compaction' && <div className="mt-2 text-xs text-fg-3"><Trans>自动压缩阈值：{compactTokens(usage.size)} tokens；按最近一次模型响应计量</Trans></div>}
-        {parts.length > 0 && (
-          <ul className="mt-3 flex flex-col gap-1.5 text-xs">
-            {usage.breakdownEstimated && <li className="text-fg-3"><Trans>内容估算 · ~{compactTokens(breakdownTotal)}</Trans></li>}
-            {parts.map((item) => (
-              <li key={item.id} className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-fg-2">{contextPartLabel(item.id, parts) ?? item.label}</span>
-                <span className="tabular-nums text-fg-3">{usage.breakdownEstimated ? '~' : ''}{compactTokens(item.tokens)}</span>
-                <span className="w-10 text-right tabular-nums text-fg-3">{formatContextShare(item.tokens, breakdownBase)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {usage.cost && <div className="mt-2 text-xs text-fg-3"><Trans>费用 {usage.cost.currency} {usage.cost.amount.toFixed(2)}</Trans></div>}
-        {onCompact && (
-          <div className="mt-2.5 border-t border-line pt-1.5">
-            <div className="-mx-1.5 -mb-1 flex">
-              <Button
-                size="xs"
-                variant="ghost"
-                className="h-7 flex-1 justify-start px-1.5 font-normal text-fg-2 hover:text-fg no-hover:min-h-11"
-                busy={compactBusy}
-                disabled={!compactBusy && compactBlocked}
-                onClick={() => void handleCompact()}
-              >
-                <IconCompress className="size-3.5 text-fg-3" />
-                <Trans>压缩上下文</Trans>
-              </Button>
-            </div>
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
-  );
-});
-
-const fallbackModes: Choice[] = [
-  { id: 'agent', label: 'Agent' },
-  { id: 'plan', label: 'Plan' },
-  { id: 'ask', label: 'Ask' },
-];
-
-export function ModePicker({ modes, value, onChange, disabled, className }: { modes: Choice[]; value?: string; onChange: (id: string) => void; disabled?: boolean; className?: string }) {
-  const { t } = useLingui();
-  const list = modes.length ? modes : fallbackModes;
-  const current = list.find((mode) => mode.id === value) ?? list[0];
-  const Icon = modeMeta[current?.id ?? '']?.icon ?? IconInfinity;
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger disabled={disabled} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 data-[state=open]:bg-hover data-[state=open]:text-fg", className)}>
-        <Icon className="size-3.5" />
-        <span>{current?.label ?? t`模式`}</span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" className="w-64">
-        <DropdownMenuLabel>{t`模式`}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup value={current?.id} onValueChange={onChange}>
-          {list.map((mode) => {
-            const meta = modeMeta[mode.id];
-            const ItemIcon = meta?.icon ?? IconInfinity;
-            return (
-              <DropdownMenuRadioItem key={mode.id} value={mode.id} className="h-auto items-start py-2">
-                <ItemIcon className="mt-0.5" />
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="font-medium">{mode.label}</span>
-                  <span className="text-xs text-fg-3">{meta?.description ? i18n._(meta.description) : mode.description ?? mode.id}</span>
-                </span>
-              </DropdownMenuRadioItem>
-            );
-          })}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-type Trigger = { type: 'slash' | 'mention'; query: string; start: number; leading?: boolean };
-
-function detectTrigger(text: string, caret: number, mentions = true): Trigger | null {
-  const before = text.slice(0, caret);
-  if (mentions) {
-    const mention = /(?:^|\s)@([^\s@]*)$/.exec(before);
-    if (mention) return { type: 'mention', query: mention[1]!, start: caret - mention[1]!.length - 1 };
-  }
-  const slash = detectSlashTrigger(text, caret);
-  if (slash) return { type: 'slash', query: slash.query, start: slash.start, leading: slash.leading };
-  return null;
-}
-
-export interface ComposerProps {
-  projectId: string;
-  variant?: 'dock' | 'hero';
-  /** A chat already inside a floating surface needs no second floating-card shadow. */
-  embedded?: boolean;
-  placeholder?: string;
-  /**
-   * What Enter does on a physical keyboard, from `AppSettings.composerEnterBehavior`. Cmd/Ctrl+Enter
-   * sends either way, so an absent or unreadable value can only change whether plain Enter sends —
-   * never whether this composer can send at all.
-   */
-  enterBehavior?: string;
-  disabled?: boolean;
-  /** Prevents sending while keeping the draft editable. */
-  submitDisabled?: boolean;
-  pickersDisabled?: boolean;
-  /**
-   * Why the pickers are unavailable, shown inside the mobile settings sheet.
-   *
-   * The sheet's own trigger must stay pressable: a `disabled` button dispatches no pointer events, so
-   * the tap neither opened the sheet nor let `holdComposerFocus` hold the field — on a phone that is
-   * indistinguishable from a broken control that also stole the keyboard.
-   */
-  pickersBlockedReason?: string;
-  draftKey?: string;
-  autoFocus?: boolean;
-  /** Embedded conversations only receive file drops in their own pane. */
-  windowDrop?: boolean;
-  attachmentsAllowed?: boolean;
-  models?: Choice[];
-  modelsLoading?: boolean;
-  /** Why the model catalog could not be read; the picker carries it and its retry. */
-  modelsError?: string;
-  onRetryModels?: () => void;
-  /** Reads account quota and per-model load for the model list, keyed by choice id. */
-  loadModelUsage?: (signal: AbortSignal) => Promise<NativeBackendUsage>;
-  /** Re-reads the model catalog as the list opens, so membership cannot stay stale all day. */
-  refreshCatalog?: (signal: AbortSignal) => Promise<void> | void;
-  /** The agent, provider and session behind [loadModelUsage], so a same-id provider switch drops the old figures. */
-  usageScopeKey?: string;
-  model?: string;
-  onModelChange?: (id: string) => void;
-  /** Every provider the new session may draw models from; absent for an open session, whose provider is fixed. */
-  providers?: ModelProviderChoices[];
-  activeProviderId?: string;
-  /** A provider other than the active one was previewed in the model menu (see `ModelPicker`). */
-  onPreviewModelProvider?: (id: string) => void;
-  /** An available agent or provider was clicked to switch directly (see `ModelPicker`). */
-  onSelectModelProvider?: (id: string) => void;
-  onModelPickerOpenChange?: (open: boolean) => void;
-  /** Before the model's name on its trigger, e.g. the agent's mark when the menu also picks the agent. */
-  modelLeading?: ReactNode;
-  /** Quiet banner at the top of the model menu when agents and models come from a linked server. */
-  modelSourceLabel?: string;
-  /**
-   * The left group of pickers: how the agent should behave (mode, approval). The context meter and
-   * the model sit on the right, next to the send button, because they describe what the message will
-   * run as rather than how it was requested.
-  */
-  toolbar?: ReactNode;
-  /** The heading `toolbar` gets in the mobile settings sheet; it is not always a permission. */
-  toolbarLabel?: string;
-  /** Optional current-value summary for opaque custom pickers shown in the mobile settings sheet. */
-  mobileSettingsLabel?: string;
-  /** Shown before `mobileSettingsLabel`, e.g. the approval mode's short name. */
-  mobileSettingsPrefix?: ReactNode;
-  /**
-   * A picker shown immediately before the model, for a choice the model depends on. The agent
-   * sits here when a session is being created: it decides which models exist, so it reads first.
-   */
-  startPickers?: ReactNode;
-  /** The conversation's skills and tools: inline after `toolbar`, and its own section in the mobile settings sheet. */
-  toolsPicker?: ReactNode;
-  /** Current-value summary for `startPickers` in the mobile settings sheet. */
-  startPickersLabel?: string;
-  /** A picker that belongs with the model on the right, e.g. the CLI's own model control. */
-  endPickers?: ReactNode;
-  /**
-   * Fullscreen editing (§4), owned by the host.
-   *
-   * The host has to know, because fullscreen makes the conversation behind the card `inert` — that
-   * is the host's markup to change, and a composer that expanded without it would leave Tab walking
-   * a column the user can no longer see. Passing both halves keeps one owner: a host that does not
-   * offer them gets no expand toggle, rather than a button that pretends to change the layout.
-   */
-  fullscreen?: boolean;
-  onFullscreenChange?: (open: boolean) => void;
-  /** Lets the host spend a wheel gesture once the draft reaches its scrolling edge. */
-  onTranscriptWheel?: (deltaY: number, deltaMode: number) => boolean;
-  /** Shown next to a typed slash command that is not in `commands`. */
-  unknownCommandHint?: string;
-  modelParams?: ModelParam[];
-  onModelParamChange?: (id: string, value: string) => void;
-  /** Context-window usage reported by the agent; omit to render no meter. */
-  usage?: ContextUsage;
-  /** Triggers manual context compaction via the backend's native command; omit when unsupported. */
-  onCompact?: () => Promise<boolean> | boolean;
-  compacting?: boolean;
-  compactDisabled?: boolean;
-  /** The `/` menu: built-in commands and discovered skills. */
-  commands?: SlashCommand[];
-  /** The backend loads a skill named mid-message, so `/` opens the skill list anywhere in the draft. */
-  inlineSkills?: boolean;
-  /** Whether `@` opens the file picker; a project-less chat has no files to offer. */
-  fileMentions?: boolean;
-  sessionMentions?: boolean;
-  /** Agents `@` offers to mention, and their model menus: the conversation's Agent may then call them (docs/AGENT-CALLS.md). */
-  agentMentions?: AgentMentionSource;
-  referenceSessions?: Session[];
-  referenceProjects?: ProjectRecord[];
-  recipientSessionId?: string;
-  onOpenReferenceSession?: (id: string) => void;
-  /** Shared task/chat drafts keep task references while the chat neither displays nor sends them. */
-  referencesEnabled?: boolean;
-  /** The task directory those references belong to when the upload/submit project is a quick chat. */
-  referenceProjectId?: string;
-  /** Called as the `/` menu opens, so the host can refresh a stale catalog. */
-  onSlashMenuOpen?: () => void;
-  references: PromptContextReference[];
-  onReferencesChange: (references: PromptContextReference[]) => void;
-  /**
-   * Whether this draft keeps the references. The host's list is one list; a second composer showing
-   * it (the attempts dialog over the home page) must not save it under its own key and bring back,
-   * on its next opening, references the first one has since removed.
-   */
-  persistReferences?: boolean;
-  running?: boolean;
-  onStop?: () => void;
-  stopping?: boolean;
-  stopDisabled?: boolean;
-  /** Background agents still working while the main turn is idle. */
-  backgroundCount?: number;
-  /** Puts a message (e.g. one taken back from the queue) into the draft; a new `nonce` applies it again. */
-  restoreDraft?: { text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: PendingUpload[]; scheduledAt?: Date; onPersisted?: () => void; nonce: number };
-  /** Adds a quote taken from the transcript to the draft; a new `nonce` adds it again. */
-  quote?: { text: string; nonce: number };
-  /** Dock cards rendered directly above the input card (todos, outgoing queue). */
-  dock?: ReactNode;
-  /** Delivery and other blocking feedback must remain reachable in fullscreen editing. */
-  feedback?: ReactNode;
-  /** Whether the last dock card is attached to the input card and squares off its top edge. */
-  dockAttached?: boolean;
-  /** The host routes the ordinary send action; this only describes its accessible label. */
-  submitIntent?: 'queue' | 'steer';
-  /** A durable draft update acknowledges a previously accepted creation request. */
-  onSubmitPersisted?: (recover?: boolean) => void;
-  /** Lets the host react to an unsent draft without receiving its contents. */
-  onDraftChange?: (hasContent: boolean) => void;
-  onSubmit: (prompt: string, attachments: Attachment[], context: PromptContextReference[], onStored?: () => boolean) => Promise<boolean>;
-  /** Queue the message for a later time instead of sending it; shows a clock beside Send. */
-  onSendLater?: (prompt: string, attachments: Attachment[], context: PromptContextReference[], at: Date) => Promise<boolean>;
-  onError: (message: string) => void;
-}
-
-/**
- * How deep the current file drag is inside the window, counted across every mounted composer.
- *
- * `dragenter`/`dragleave` fire for each element the pointer crosses, so a per-component boolean
- * flickers off whenever the pointer moves onto a child of the very element that armed it.
- */
-let windowDragDepth = 0;
+export { acknowledgeRecoveredCreationDraft, compactTokens, ModePicker };
+export type { ComposerProps };
 
 const NO_COMMANDS: SlashCommand[] = [];
-
-/**
- * What a draft keeps in `sessionStorage`: the text, the attachments as the server recorded them, and
- * the file references — with the project they name paths in, since a draft can follow the reader to
- * another project (the new-session draft does) and references do not travel.
- */
-/** `keys` holds each attachment's duplicate-check key by id, so the same file dropped again after a reload is still recognized. */
-interface StoredDraft { text: string; attachments: Attachment[]; references: PromptContextReference[]; projectId?: string; keys?: Record<string, string>; pendingUploads?: PendingUpload[] }
-
-const isAttachment = (value: unknown): value is Attachment => {
-  const item = value as Partial<Attachment> | null;
-  return typeof item?.id === 'string' && typeof item.name === 'string' && typeof item.mimeType === 'string' && typeof item.path === 'string' && typeof item.size === 'number';
-};
-const isReference = (value: unknown): value is PromptContextReference => {
-  const item = value as Partial<PromptContextReference> | null;
-  if (item?.kind === 'agent') return typeof item.backendId === 'string' && isNativeBackendId(item.backendId) && (item.backendProfileId === undefined || typeof item.backendProfileId === 'string') && (item.label === undefined || typeof item.label === 'string');
-  return item?.kind === 'session' ? typeof item.sessionId === 'string' && Boolean(item.sessionId) && (item.fromRunId === undefined || typeof item.fromRunId === 'string' && Boolean(item.fromRunId)) && (item.title === undefined || typeof item.title === 'string') && (item.backendId === undefined || isNativeBackendId(item.backendId)) : typeof item?.path === 'string' && (item.line === undefined || typeof item.line === 'number');
-};
-
-const recoveredCreationEvent = 'riffet:acknowledge-creation-draft';
-
-function creationDraftRemainder(draft: StoredDraft, body: NativeSessionCreateInput): StoredDraft {
-  const submittedIds = new Set(body.initialMessage.attachments?.map(({ id }) => id) ?? []);
-  const submittedReferences = restoreContext(body.initialMessage);
-  return {
-    ...draft,
-    text: draft.text.trim() === body.initialMessage.text.trim() ? '' : draft.text,
-    attachments: draft.attachments.filter(({ id }) => !submittedIds.has(id)),
-    references: body.backendId !== 'chat'
-      ? draft.references.filter(reference => (isFileReference(reference) && draft.projectId !== body.projectId) || !submittedReferences.some(item => sameContextReference(item, reference)))
-      : draft.references,
-    ...(draft.keys ? { keys: Object.fromEntries(Object.entries(draft.keys).filter(([id]) => !submittedIds.has(id))) } : {}),
-  };
-}
-
-/** Synchronize the mounted composer before navigating, then acknowledge its persisted sent text. */
-export function acknowledgeRecoveredCreationDraft(body: NativeSessionCreateInput): boolean {
-  const detail = { body, handled: false, saved: true };
-  window.dispatchEvent(new CustomEvent(recoveredCreationEvent, { detail }));
-  if (detail.handled) return detail.saved;
-  if (!detail.saved) return false;
-  const key = 'riffet.draft.new:home';
-  try { sessionStorage.getItem(key); } catch { return false; }
-  const draft = readDraft(key);
-  return writeDraft(key, creationDraftRemainder(draft, body));
-}
-
-/** Never throws: storage can be unavailable (private browsing, a policy), and a draft is best effort. */
-export function readDraft(key: string): StoredDraft {
-  const empty: StoredDraft = { text: '', attachments: [], references: [] };
-  let raw: string | null = null;
-  try { raw = key ? sessionStorage.getItem(key) : null; } catch { return empty; }
-  if (!raw) return key === 'riffet.draft.new:home' ? mergeQuickChatDraft(empty) : empty;
-  try {
-    const value = JSON.parse(raw) as Partial<StoredDraft> | null;
-    if (value && typeof value.text === 'string' && Array.isArray(value.attachments) && Array.isArray(value.references)) {
-      const draft: StoredDraft = {
-        text: value.text,
-        attachments: value.attachments.filter(isAttachment),
-        references: value.references.filter(isReference),
-        ...(Array.isArray(value.pendingUploads) ? { pendingUploads: value.pendingUploads.filter(item => typeof item.key === 'string' && typeof item.name === 'string').map(item => ({ ...item, error: i18n._(msg`请重新选择文件`) })) } : {}),
-        ...(typeof value.projectId === 'string' ? { projectId: value.projectId } : {}),
-        ...(value.keys && typeof value.keys === 'object' ? { keys: Object.fromEntries(Object.entries(value.keys).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) } : {}),
-      };
-      return key === 'riffet.draft.new:home' ? mergeQuickChatDraft(draft) : draft;
-    }
-  } catch { /* the bare text drafts were stored as before attachments and references were kept */ }
-  const draft = { ...empty, text: raw };
-  return key === 'riffet.draft.new:home' ? mergeQuickChatDraft(draft) : draft;
-}
-
-/** Retire the old separate chat draft only after both drafts are safely stored together. */
-function mergeQuickChatDraft(task: StoredDraft): StoredDraft {
-  const legacyKey = 'riffet.draft.quick-chat:home';
-  const chat = readDraft(legacyKey);
-  if (!chat.text && !chat.attachments.length) return task;
-  const merged: StoredDraft = {
-    ...task,
-    text: [task.text, chat.text !== task.text ? chat.text : ''].filter(Boolean).join('\n\n'),
-    attachments: [...task.attachments, ...chat.attachments.filter((item) => !task.attachments.some((other) => other.id === item.id))],
-    keys: { ...chat.keys, ...task.keys },
-  };
-  if (writeDraft('riffet.draft.new:home', merged)) {
-    try { sessionStorage.removeItem(legacyKey); } catch { /* Keep the old copy until storage is writable again. */ }
-  }
-  return merged;
-}
-
-/** Whether the write went through; an empty draft removes its key. */
-export function writeDraft(key: string, draft: StoredDraft): boolean {
-  // A conversation deleted meanwhile must not get its draft back from a pending flush.
-  if (mentionsDeletedSession(key)) return true;
-  try {
-    if (draft.text || draft.attachments.length || draft.references.length || draft.pendingUploads?.length) sessionStorage.setItem(key, JSON.stringify(draft));
-    else sessionStorage.removeItem(key);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Keys whose failed write was already reported: a full storage fails every 400ms of typing. */
-const unsavedDrafts = new Set<string>();
-
-const FOLLOW_ID = 'composer-feedback-resize';
-/** `--duration-base`. */
-const FOLLOW_MS = 200;
-
-/**
- * Ref for the box around the notices above the card. `Collapse` moves only as the area opens and
- * closes; a swap while it stays open (the catalog's loading line turning into an error) slides this
- * box from the old height to the new one instead of moving the card in a single frame. A width
- * change reflows at once, like the text it holds.
- */
-function followContentHeight(frame: HTMLDivElement | null) {
-  const content = frame?.firstElementChild;
-  if (!frame || !(content instanceof HTMLElement)) return;
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let last: { width: number; height: number } | undefined;
-  const observer = new ResizeObserver(([entry]) => {
-    const size = entry?.borderBoxSize[0];
-    if (!size) return;
-    const next = { width: size.inlineSize, height: size.blockSize };
-    const previous = last;
-    last = next;
-    // `Collapse` clips its box while closed or moving: opening and closing are its move, and sliding
-    // this box too would run two animations on one edge.
-    const moving = frame.parentElement && getComputedStyle(frame.parentElement).overflow !== 'visible';
-    if (!previous || moving || previous.width !== next.width || Math.abs(previous.height - next.height) < 1 || reducedMotion.matches) return;
-    // A swap mid-slide starts from where the box is now, not from where the last one began.
-    const running = findAnimation(frame, FOLLOW_ID);
-    const from = running ? frame.getBoundingClientRect().height : previous.height;
-    running?.cancel();
-    frame.animate([{ height: `${from}px`, overflow: 'hidden' }, { height: `${next.height}px`, overflow: 'hidden' }], { id: FOLLOW_ID, duration: FOLLOW_MS, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
-  });
-  observer.observe(content);
-  return () => observer.disconnect();
-}
 
 /**
  * Memoized: a streaming conversation renders its host on every frame, and a host that keeps its
@@ -551,51 +56,18 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const { t } = useLingui();
   const { projectId, referenceProjectId = projectId, referencesEnabled = true, variant = 'dock', disabled, draftKey, references, onReferencesChange, persistReferences = true, running, commands = NO_COMMANDS, onError, fileMentions = true, sessionMentions = false } = props;
   const visibleReferences = referencesEnabled ? references : [];
-  const openReferenceSession = (id: string) => {
-    if (storageKey) {
-      pendingDraftRef.current = { key: storageKey, draft: currentDraft() };
-      flushDraft();
-      if (unsavedDrafts.has(storageKey)) { onError(t`草稿无法保存到浏览器，刷新后会丢失`); return; }
-    }
-    props.onOpenReferenceSession?.(id);
-  };
   const storageKey = draftKey ? `riffet.draft.${draftKey}` : '';
-  const [, refreshDraftPersistence] = useState(0);
   const draftWarningId = useId();
   const enterBehavior = readEnterKeyBehavior(props.enterBehavior);
   // A stored draft keeps its quotes as the block quotes its text starts with (quotes.ts).
   const [text, setText] = useState(() => splitQuotes(readDraft(storageKey).text).body);
   const [quotes, setQuotes] = useState<string[]>(() => splitQuotes(readDraft(storageKey).text).quotes);
-  const [attachments, setAttachments] = useState<Attachment[]>(() => readDraft(storageKey).attachments);
-  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>(() => readDraft(storageKey).pendingUploads ?? []);
-  const pendingUploadsRef = useRef(pendingUploads);
-  const uploadFilesRef = useRef(new Map<string, File>());
-  const activeUploadKeysRef = useRef(new Set<string>());
-  const reselectUploadKeyRef = useRef<string | undefined>(undefined);
-  const updatePendingUploads = (update: (current: PendingUpload[]) => PendingUpload[]) => {
-    pendingUploadsRef.current = update(pendingUploadsRef.current);
-    setPendingUploads(pendingUploadsRef.current);
-  };
-  const uploading = pendingUploads.length > 0;
-  const draftAtRisk = unsavedDrafts.has(storageKey) && Boolean(text || quotes.length || attachments.length || (persistReferences && references.length));
   const [submitting, setSubmitting] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date | null>(null);
-  const [trigger, setTrigger] = useState<Trigger | null>(null);
-  const [highlight, setHighlight] = useState(0);
-  /** The project an `@` menu has been stepped into, tied to the `@` it was opened from. */
-  const [browse, setBrowse] = useState<{ start: number; projectId: string } | null>(null);
-  // Results carry the project and query they answer, so what is on screen is always known to belong to a (possibly earlier) query.
-  const [found, setFound] = useState<{ project: string; query: string; entries: FileEntry[] }>();
   const [dragging, setDragging] = useState(false);
-  /**
-   * Whole-window drag target: a file dragged anywhere over the page is on its way to this composer.
-   * The shared depth counter above decides when the drag has really left; this is only its face.
-   */
-  const [windowDragging, setWindowDragging] = useState(false);
   const [attachmentsExpanded, setAttachmentsExpanded] = useState(false);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   useEffect(() => {
-    setTrigger(null);
     setMobileSettingsOpen(false);
   }, [projectId, fileMentions, sessionMentions]);
   const [viewportHeight, setViewportHeight] = useState(() => typeof window === 'undefined' ? 0 : window.visualViewport?.height ?? window.innerHeight);
@@ -612,24 +84,12 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const fullscreenOffered = props.onFullscreenChange !== undefined;
   const fullscreenRequested = props.fullscreen ?? fullscreenOpen;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mentionBlurTimerRef = useRef<number | undefined>(undefined);
   const transcriptWheelRef = useRef(props.onTranscriptWheel);
   transcriptWheelRef.current = props.onTranscriptWheel;
-  const dismissedTriggerRef = useRef<{ text: string; caret: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textRef = useRef(text);
   const textRevisionRef = useRef(0);
-  const attachmentsRef = useRef(attachments);
-  /**
-   * Dedupe key per accepted attachment id. Draft attachments are plain `Attachment` records, which
-   * carry no `lastModified`, so the key `validateIntake`/`newCandidates` work with is the one the
-   * `File` produced — kept here rather than on the record so nothing downstream has to know about it.
-   */
-  const attachmentKeysRef = useRef(new Map<string, string>());
-  const pendingAttachmentKeysRef = useRef(new Set<string>());
   const draftGenerationRef = useRef(0);
-  const uploadControllersRef = useRef(new Map<string, AbortController>());
-  useEffect(() => () => { for (const controller of uploadControllersRef.current.values()) controller.abort(); }, []);
   const referencesRef = useRef(references);
   const referencesRevisionRef = useRef(0);
   const submittingRef = useRef(false);
@@ -659,6 +119,160 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<number | undefined>(undefined);
+
+  const refocusDraft = () => requestAnimationFrame(() => {
+    const active = document.activeElement;
+    if ((!active || active === document.body) && !window.matchMedia(MOBILE_LAYOUT_QUERY).matches) textareaRef.current?.focus({ preventScroll: true });
+  });
+
+  const {
+    attachments,
+    attachmentsRef,
+    pendingUploads,
+    pendingUploadsRef,
+    attachmentKeysRef,
+    reselectUploadKeyRef,
+    uploading,
+    updateAttachments,
+    updatePendingUploads,
+    ingestFiles,
+    retryUpload,
+    removeUpload,
+    removeAttachment,
+    resetForDraft,
+  } = useComposerUploads({
+    projectId,
+    initialAttachments: () => readDraft(storageKey).attachments,
+    initialPendingUploads: () => readDraft(storageKey).pendingUploads ?? [],
+    disabled,
+    attachmentsAllowed: props.attachmentsAllowed,
+    draftGenerationRef,
+    fileInputRef,
+    onError,
+    refocusDraft,
+  });
+
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+
+  const updateText = (next: string) => {
+    textRef.current = next;
+    textRevisionRef.current += 1;
+    setText(next);
+  };
+
+  const quotesRef = useRef(quotes);
+  /** Quotes are part of the text that is sent, so a change to them is a change to the text. */
+  const updateQuotes = (next: string[]) => {
+    quotesRef.current = next;
+    textRevisionRef.current += 1;
+    setQuotes(next);
+  };
+
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  const updateReferences = (next: PromptContextReference[]) => {
+    referencesRef.current = next;
+    referencesRevisionRef.current += 1;
+    onReferencesChange(next);
+  };
+
+  const submitUnknownRef = useRef<() => void>(() => {});
+  const {
+    trigger,
+    setTrigger,
+    highlight,
+    setHighlight,
+    browsing,
+    browsingName,
+    searching,
+    showSearching,
+    files,
+    agentCandidates,
+    agentRows,
+    sessionFiles,
+    projectRows,
+    slashGroups,
+    slashItems,
+    invokedItems,
+    slashQuery,
+    unknownSlashCommand,
+    menuOpen,
+    menuLength,
+    menuListRef,
+    menuId,
+    optionId,
+    syncTrigger,
+    browseInto,
+    choose,
+    resetTrigger,
+    dismissTrigger,
+    clearBlurTimer,
+    scheduleBlurClose,
+  } = useComposerTrigger({
+    projectId,
+    text,
+    textRef,
+    textareaRef,
+    disabled,
+    commands,
+    inlineSkills: props.inlineSkills,
+    fileMentions,
+    sessionMentions,
+    agentMentions: props.agentMentions,
+    referenceSessions: props.referenceSessions,
+    referenceProjects: props.referenceProjects,
+    recipientSessionId: props.recipientSessionId,
+    referencesRef,
+    onSlashMenuOpen: props.onSlashMenuOpen,
+    updateText,
+    updateReferences,
+    onError,
+    onSubmitUnknownSlash: () => submitUnknownRef.current(),
+  });
+
+  const {
+    draftAtRisk,
+    pendingDraftRef,
+    draftTimerRef,
+    saveDraft,
+    currentDraft,
+    openReferenceSession,
+  } = useComposerDraftSync({
+    storageKey,
+    projectId,
+    referenceProjectId,
+    persistReferences,
+    text,
+    quotes,
+    textRef,
+    quotesRef,
+    textRevisionRef,
+    draftGenerationRef,
+    references,
+    referencesRef,
+    referencesRevisionRef,
+    attachments,
+    attachmentsRef,
+    pendingUploads,
+    pendingUploadsRef,
+    attachmentKeysRef,
+    updateText,
+    updateQuotes,
+    updateReferences,
+    updateAttachments,
+    updatePendingUploads,
+    resetForDraft,
+    resetTrigger,
+    setScheduledAt,
+    textareaRef,
+    restoreDraft: props.restoreDraft,
+    quote: props.quote,
+    onDraftChange: props.onDraftChange,
+    onOpenReferenceSession: props.onOpenReferenceSession,
+    onError,
+  });
+
   /** 语音输入 (docs/VOICE.md §7): offered once a recognizer is chosen in settings, while it is still there to use. */
   const recognizer = useSettings((settings) => settings.voiceInput?.recognizer);
   const plugins = usePlugins();
@@ -704,179 +318,6 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    */
   const toggleEntrance = isMobile && variant === 'dock' && !compact ? cn('animate-in fade-in-0 ease-[var(--ease-decelerate)]', switchSettling ? 'duration-0' : 'duration-[var(--duration-base)]') : undefined;
 
-  const updateText = (next: string) => {
-    textRef.current = next;
-    textRevisionRef.current += 1;
-    setText(next);
-  };
-
-  const quotesRef = useRef(quotes);
-  /** Quotes are part of the text that is sent, so a change to them is a change to the text. */
-  const updateQuotes = (next: string[]) => {
-    quotesRef.current = next;
-    textRevisionRef.current += 1;
-    setQuotes(next);
-  };
-
-  const updateAttachments = (next: Attachment[] | ((current: Attachment[]) => Attachment[])) => {
-    const value = typeof next === 'function' ? next(attachmentsRef.current) : next;
-    const ids = new Set(value.map((item) => item.id));
-    for (const id of attachmentKeysRef.current.keys()) {
-      if (!ids.has(id)) attachmentKeysRef.current.delete(id);
-    }
-    attachmentsRef.current = value;
-    setAttachments(value);
-  };
-
-  const mountedRef = useRef(true);
-  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
-  const updateReferences = (next: PromptContextReference[]) => {
-    referencesRef.current = next;
-    referencesRevisionRef.current += 1;
-    onReferencesChange(next);
-  };
-
-  /*
-   * A draft key brings its whole draft back: text, attachments and references.
-   *
-   * The attachments are shown at once and checked against the server behind them; one it no longer
-   * has (cleaned up, another machine's) leaves the draft, and the reader is told. The references
-   * return through the host, which clears its list when the conversation changes — in the same
-   * update that changes this key, so this effect runs after that clear, not before it.
-   *
-   * A project change alone takes nothing: attachments are server-wide records
-   * (`/api/attachments/:id`), usable from any project, and the text is the reader's.
-   */
-  useEffect(() => {
-    draftGenerationRef.current += 1;
-    const generation = draftGenerationRef.current;
-    pendingAttachmentKeysRef.current = new Set();
-    const stored = readDraft(storageKey);
-    uploadFilesRef.current.clear();
-    activeUploadKeysRef.current.clear();
-    updatePendingUploads(() => stored.pendingUploads ?? []);
-    const storedText = splitQuotes(stored.text);
-    updateText(storedText.body);
-    updateQuotes(storedText.quotes);
-    updateAttachments(stored.attachments);
-    for (const item of stored.attachments) if (stored.keys?.[item.id]) attachmentKeysRef.current.set(item.id, stored.keys[item.id]!);
-    dismissedTriggerRef.current = null;
-    setTrigger(null);
-    setScheduledAt(null);
-    const current = referencesRef.current;
-    const restored = persistReferences
-      ? stored.references.filter(item => !isFileReference(item) || stored.projectId === referenceProjectId).filter((item) => !current.some((other) => sameContextReference(other, item)))
-      : [];
-    if (restored.length) updateReferences([...current, ...restored]);
-    if (!stored.attachments.length) return;
-    void Promise.all(stored.attachments.map((item) => api.attachmentMetadata(item.id, stored.projectId ?? projectId).then(
-      (fresh) => [item.id, fresh] as const,
-      // Only "not found" means unusable; a server that is merely unreachable keeps the draft as it is.
-      (error: unknown) => [item.id, error instanceof HttpError && error.status === 404 ? null : item] as const,
-    ))).then((checked) => {
-      if (generation !== draftGenerationRef.current) return;
-      const verdict = new Map<string, Attachment | null>(checked);
-      const gone = checked.filter(([, value]) => !value).length;
-      if (!gone) return;
-      updatePendingUploads(current => [...current, ...attachmentsRef.current.filter(item => verdict.get(item.id) === null).map(item => ({ key: `missing:${item.id}`, name: item.name, size: item.size, image: item.mimeType.startsWith('image/'), attachmentId: item.id, error: t`请重新选择文件` }))]);
-      updateAttachments(items => items.filter(item => verdict.get(item.id) !== null));
-    });
-  }, [storageKey]);
-
-  const referenceScope = useRef(referenceProjectId);
-  useLayoutEffect(() => {
-    if (referenceScope.current !== referenceProjectId) {
-      referenceScope.current = referenceProjectId;
-      if (referencesRef.current.some(isFileReference)) updateReferences(referencesRef.current.filter(item => !isFileReference(item)));
-      return;
-    }
-    if (referencesRef.current === references) return;
-    referencesRef.current = references;
-    referencesRevisionRef.current += 1;
-  }, [referenceProjectId, references]);
-
-  /*
-   * The draft is mirrored to sessionStorage on a short debounce rather than per keystroke: a
-   * synchronous storage write on every key is measurable on a long draft. Whatever is still pending
-   * is written when the key changes, on unmount, and when the page is hidden, so nothing typed is
-   * lost to a session switch, a reload or a backgrounded tab. A failed write leaves a local warning
-   * until storage accepts the draft again, without repeating a toast on every pause in typing.
-   */
-  const pendingDraftRef = useRef<{ key: string; draft: StoredDraft } | null>(null);
-  const draftTimerRef = useRef<number | undefined>(undefined);
-  const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
-  const saveDraft = useRef((key: string, draft: StoredDraft) => {
-    const wasUnsaved = unsavedDrafts.has(key);
-    const saved = writeDraft(key, draft);
-    if (saved) unsavedDrafts.delete(key);
-    else unsavedDrafts.add(key);
-    if (wasUnsaved !== !saved) refreshDraftPersistence((revision) => revision + 1);
-  }).current;
-  const flushDraft = useRef(() => {
-    window.clearTimeout(draftTimerRef.current);
-    const pending = pendingDraftRef.current;
-    pendingDraftRef.current = null;
-    if (pending) saveDraft(pending.key, pending.draft);
-  }).current;
-  /** The draft as it stands, read from the refs the updaters keep current ahead of the next render. */
-  const currentDraft = (): StoredDraft => ({
-    text: joinQuotes(quotesRef.current, textRef.current), attachments: attachmentsRef.current, references: persistReferences ? referencesRef.current : [], projectId: referenceScope.current,
-    ...(pendingUploadsRef.current.length ? { pendingUploads: pendingUploadsRef.current } : {}),
-    keys: Object.fromEntries(attachmentsRef.current.flatMap((item) => { const key = attachmentKeysRef.current.get(item.id); return key ? [[item.id, key]] : []; })),
-  });
-  useEffect(() => {
-    if (!storageKey) return;
-    pendingDraftRef.current = { key: storageKey, draft: currentDraft() };
-    window.clearTimeout(draftTimerRef.current);
-    draftTimerRef.current = window.setTimeout(flushDraft, 400);
-  }, [storageKey, text, quotes, attachments, references, pendingUploads, referenceProjectId, flushDraft]);
-  // Cleanups run before the next commit's effects, so the old key is written before the reset reads the new one.
-  useEffect(() => flushDraft, [storageKey, flushDraft]);
-  useEffect(() => {
-    const onHidden = () => { if (document.visibilityState === 'hidden') flushDraft(); };
-    window.addEventListener('pagehide', flushDraft);
-    document.addEventListener('visibilitychange', onHidden);
-    return () => {
-      window.removeEventListener('pagehide', flushDraft);
-      document.removeEventListener('visibilitychange', onHidden);
-    };
-  }, [flushDraft]);
-
-  const restoreDraft = props.restoreDraft;
-  useEffect(() => {
-    if (!restoreDraft) return;
-    const current = textRef.current;
-    const restored = splitQuotes(restoreDraft.text);
-    const nextText = current.trim() ? `${restored.body}\n${current}` : restored.body;
-    updateText(nextText);
-    if (restored.quotes.length) updateQuotes([...restored.quotes, ...quotesRef.current]);
-    updateAttachments((existing) => [...restoreDraft.attachments.filter((item) => !existing.some((other) => other.id === item.id)), ...existing]);
-    // An Agent an older message mentioned beside its text has no mark to show here; it is not restored unseen.
-    const context = restoreDraft.context?.filter(item => !isAgentReference(item) || mentionRanges(nextText, [referenceLabel(item)]).length > 0);
-    if (context?.length) updateReferences(mergeRestoredReferences(referencesRef.current, context));
-    if (restoreDraft.missingAttachments) updatePendingUploads(current => [...current, ...restoreDraft.missingAttachments!.filter(item => !current.some(other => other.key === item.key))]);
-    if (restoreDraft.scheduledAt && restoreDraft.scheduledAt.getTime() > Date.now()) {
-      setScheduledAt((existing) => (existing && existing.getTime() > Date.now() ? existing : restoreDraft.scheduledAt!));
-    }
-    if (storageKey) {
-      saveDraft(storageKey, currentDraft());
-      if (!unsavedDrafts.has(storageKey)) restoreDraft.onPersisted?.();
-    }
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [restoreDraft]);
-
-  const quote = props.quote;
-  useEffect(() => {
-    if (!quote) return;
-    updateQuotes([...quotesRef.current, quote.text]);
-    requestAnimationFrame(() => textareaRef.current?.focus());
-  }, [quote]);
-
-  useEffect(() => {
-    props.onDraftChange?.(Boolean(text.trim() || quotes.length || attachments.length));
-  }, [attachments.length, props.onDraftChange, quotes.length, text]);
-
   const heldFeedback = useHeld(props.feedback);
   const minimumHeight = variant === 'hero' ? 76 : compact ? 44 : 52;
   const maximumHeight = props.embedded ? 120 : variant === 'hero' ? 320 : 240;
@@ -890,25 +331,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     enabled: !fullscreen,
   });
 
-  useEffect(() => () => { window.clearTimeout(blurTimerRef.current); window.clearTimeout(mentionBlurTimerRef.current); }, []);
-
-  useEffect(() => {
-    if (storageKey !== 'riffet.draft.new:home') return;
-    const acknowledge = (event: Event) => {
-      const detail = (event as CustomEvent<{ body: NativeSessionCreateInput; handled: boolean; saved: boolean }>).detail;
-      if (detail.handled) return;
-      detail.handled = true;
-      const remaining = creationDraftRemainder(currentDraft(), detail.body);
-      if (remaining.text !== textRef.current) updateText(remaining.text);
-      updateAttachments(remaining.attachments);
-      if (remaining.references !== referencesRef.current) updateReferences(remaining.references);
-      pendingDraftRef.current = null;
-      window.clearTimeout(draftTimerRef.current);
-      detail.saved = writeDraft(storageKey, currentDraft());
-    };
-    window.addEventListener(recoveredCreationEvent, acknowledge);
-    return () => window.removeEventListener(recoveredCreationEvent, acknowledge);
-  }, [storageKey]);
+  useEffect(() => () => { window.clearTimeout(blurTimerRef.current); }, []);
 
   /**
    * A wheel the draft cannot spend belongs to the transcript.
@@ -1008,275 +431,6 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     textareaRef.current?.focus({ preventScroll: true });
   }, [fullscreen]);
 
-  /** Commands while the token opens the message; mid-message only skills, and only where the backend loads them there. */
-  const slashGroups = useMemo(() => {
-    if (trigger?.type !== 'slash') return [];
-    return slashMenuGroups(slashCandidates(commands, trigger.leading === true, props.inlineSkills === true), trigger.query);
-  }, [trigger, commands, props.inlineSkills]);
-  const slashItems = useMemo(() => slashGroups.flatMap((group) => group.items), [slashGroups]);
-  const commandsByName = useMemo(() => new Map(commands.map((item) => [item.name, item])), [commands]);
-  const invokedItems = useMemo(() => invokedSlashItems(text, commandsByName, props.inlineSkills === true), [text, commandsByName, props.inlineSkills]);
-
-  const slashQuery = trigger?.type === 'slash' ? trigger.query.trim() : '';
-  /**
-   * The menu lists the commands the caller advertises. Commands it does not list
-   * (the CLI's TUI-only ones, e.g. /summarize) are still sendable as ordinary prompt text,
-   * so offer that explicitly instead of silently showing an empty menu. Only for the leading
-   * token: mid-message a slash is just as likely a path.
-   */
-  const unknownSlashCommand = trigger?.type === 'slash' && trigger.leading === true && Boolean(slashQuery) && !slashItems.some((command) => command.name === slashQuery);
-  const slashMenuOpen = trigger?.type === 'slash';
-  const onSlashMenuOpen = props.onSlashMenuOpen;
-  useEffect(() => { if (slashMenuOpen) onSlashMenuOpen?.(); }, [slashMenuOpen, onSlashMenuOpen]);
-
-  const mentionQuery = trigger?.type === 'mention' ? trigger.query : undefined;
-  if (browse && (trigger?.type !== 'mention' || trigger.start !== browse.start)) setBrowse(null);
-  const browsing = sessionMentions && trigger?.type === 'mention' && browse?.start === trigger.start ? browse.projectId : undefined;
-  const browsingName = browsing ? props.referenceProjects?.find(item => item.id === browsing)?.name ?? '' : '';
-  const searchable = fileMentions && Boolean(mentionQuery) && !browsing;
-  const foundHere = found?.project === projectId ? found : undefined;
-  // The previous query's results stay up while the next loads; "no match" only speaks for a settled query.
-  const files = searchable && foundHere ? foundHere.entries : NO_FILES;
-  const searching = searchable && foundHere?.query !== mentionQuery;
-  const showSearching = useLingering(searching, WAIT_GRACE_MS);
-  useEffect(() => {
-    if (!searchable || !mentionQuery) return;
-    let active = true;
-    const controller = new AbortController();
-    const settle = (entries: FileEntry[]) => { if (active) setFound({ project: projectId, query: mentionQuery, entries }); };
-    const timer = window.setTimeout(() => {
-      api.find(projectId, mentionQuery, controller.signal)
-        .then((result) => {
-          const entries = Array.isArray(result) ? result : result.entries ?? [];
-          settle(entries.filter((entry) => entry.kind === 'file').slice(0, 10));
-        })
-        .catch(() => settle([]));
-    }, 140);
-    return () => { active = false; controller.abort(); window.clearTimeout(timer); };
-  }, [projectId, mentionQuery, searchable]);
-
-  const referenceCandidates = useMemo(() => (props.referenceSessions ?? []).filter(item => item.id !== props.recipientSessionId), [props.referenceSessions, props.recipientSessionId]);
-  const sessionFiles = useMemo(() => {
-    if (!sessionMentions || mentionQuery === undefined) return [];
-    const query = mentionQuery.toLocaleLowerCase();
-    const projects = new Map(props.referenceProjects?.map(item => [item.id, item.name]));
-    // An empty `@` lists this project's latest sessions; every project, this one included, opens to its full list.
-    const here = !browsing && !query && referenceCandidates.some(item => item.projectId === projectId);
-    const scope = browsing ?? (here ? projectId : undefined);
-    return referenceCandidates.filter(item => scope === undefined || item.projectId === scope).map(item => {
-      const project = projects.get(item.projectId) ?? '';
-      const title = item.title.toLocaleLowerCase();
-      const other = `${browsing ? '' : project} ${backendLabel(sessionBackend(item))}`.toLocaleLowerCase();
-      const score = !query ? 0 : title === query ? 4 : title.startsWith(query) ? 3 : title.includes(query) ? 2 : other.includes(query) ? 1 : -1;
-      return { session: item, project, score };
-    }).filter(item => item.score >= 0 && (query || !item.session.archivedAt)).sort((a, b) => b.score - a.score
-      || Number(Boolean(a.session.archivedAt)) - Number(Boolean(b.session.archivedAt))
-      || Number(b.session.projectId === projectId) - Number(a.session.projectId === projectId)
-      || (b.session.lastActivityAt ?? b.session.updatedAt).localeCompare(a.session.lastActivityAt ?? a.session.updatedAt)).slice(0, browsing ? undefined : 10);
-  }, [sessionMentions, mentionQuery, browsing, referenceCandidates, props.referenceProjects, projectId]);
-  const agentCandidates = useMemo(() => props.agentMentions ? agentMentionCandidates(props.agentMentions.backends) : [], [props.agentMentions]);
-  const agentRows = useMemo(() => {
-    if (!agentCandidates.length || mentionQuery === undefined || browsing) return [];
-    const query = mentionQuery.toLocaleLowerCase();
-    return agentCandidates.filter(item => !query || item.label.toLocaleLowerCase().includes(query) || item.backendId.toLocaleLowerCase().includes(query));
-  }, [agentCandidates, mentionQuery, browsing]);
-  /** Projects with a live session, this one first (its full list is one step in), then most recently active; a query narrows them by name. */
-  const projectRows = useMemo(() => {
-    if (!sessionMentions || mentionQuery === undefined || browsing) return [];
-    const query = mentionQuery.toLocaleLowerCase();
-    const latest = new Map<string, string>();
-    for (const item of referenceCandidates) {
-      if (item.archivedAt) continue;
-      const at = item.lastActivityAt ?? item.updatedAt;
-      if ((latest.get(item.projectId) ?? '') < at) latest.set(item.projectId, at);
-    }
-    return (props.referenceProjects ?? []).filter(item => !item.system && latest.has(item.id) && (!query || item.name.toLocaleLowerCase().includes(query)))
-      .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId) || latest.get(b.id)!.localeCompare(latest.get(a.id)!)).slice(0, query ? 5 : 50);
-  }, [sessionMentions, mentionQuery, browsing, referenceCandidates, props.referenceProjects, projectId]);
-  const menuLength = trigger?.type === 'slash' ? slashItems.length + (unknownSlashCommand ? 1 : 0) : files.length + agentRows.length + sessionFiles.length + projectRows.length;
-  const highlightScope = `${trigger?.type}|${trigger?.query}|${browsing}|${files.length}|${agentRows.length}|${sessionFiles.length}|${projectRows.length}`;
-  const [highlightedScope, setHighlightedScope] = useState(highlightScope);
-  if (highlightedScope !== highlightScope) { setHighlightedScope(highlightScope); setHighlight(0); }
-  const menuListRef = useRef<HTMLDivElement>(null);
-  // The textarea stays focused while the menu is open, so the active row is announced through
-  // `aria-activedescendant` (the CommandPalette pattern) rather than by moving focus.
-  const menuId = useId();
-  const optionId = (index: number) => `${menuId}-option-${index}`;
-  useEffect(() => {
-    menuListRef.current?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
-  }, [highlight]);
-
-  const syncTrigger = (value: string, caret: number) => {
-    const dismissed = dismissedTriggerRef.current;
-    if (dismissed?.text === value && dismissed.caret === caret) return;
-    dismissedTriggerRef.current = null;
-    setTrigger(detectTrigger(value, caret, fileMentions || sessionMentions || agentCandidates.length > 0));
-  };
-
-  const replaceRange = (start: number, end: number, insert: string) => {
-    const current = textRef.current;
-    const next = current.slice(0, start) + insert + current.slice(end);
-    updateText(next);
-    setTrigger(null);
-    requestAnimationFrame(() => {
-      const element = textareaRef.current;
-      if (!element) return;
-      element.focus();
-      const caret = start + insert.length;
-      element.setSelectionRange(caret, caret);
-    });
-  };
-
-  /** Step into a project's sessions (or back out); the typed query is cleared, the `@` stays. */
-  const browseInto = (next: string | undefined) => {
-    if (!trigger || trigger.type !== 'mention') return;
-    const caret = textareaRef.current?.selectionStart ?? textRef.current.length;
-    const from = trigger.start + 1;
-    if (caret > from) updateText(textRef.current.slice(0, from) + textRef.current.slice(caret));
-    setTrigger({ type: 'mention', query: '', start: trigger.start });
-    setBrowse(next ? { start: trigger.start, projectId: next } : null);
-    requestAnimationFrame(() => textareaRef.current?.setSelectionRange(from, from));
-  };
-
-  const choose = (index: number) => {
-    if (disabled || !trigger) return;
-    const caret = textareaRef.current?.selectionStart ?? textRef.current.length;
-    if (trigger.type === 'slash') {
-      const command = slashItems[index];
-      // Only the typed token is replaced, so a skill picked mid-message keeps the words around it.
-      if (command) replaceRange(trigger.start, caret, /^\s/.test(textRef.current.slice(caret)) ? `/${command.name}` : `/${command.name} `);
-      // Index past the advertised list is the "send verbatim" row.
-      else if (unknownSlashCommand) { setTrigger(null); void submit(); }
-    } else {
-      const file = files[index];
-      const agent = agentRows[index - files.length];
-      const selected = sessionFiles[index - files.length - agentRows.length]?.session;
-      const project = projectRows[index - files.length - agentRows.length - sessionFiles.length];
-      if (project) { browseInto(project.id); return; }
-      if (agent) {
-        const reference = { kind: 'agent' as const, backendId: agent.backendId, label: agent.label };
-        if (!referencesRef.current.some(item => sameContextReference(item, reference))) {
-          if (referencesRef.current.filter(isAgentReference).length >= AGENT_CALL_BUDGET.mentions) { onError(t`最多提到 ${AGENT_CALL_BUDGET.mentions} 个 Agent`); return; }
-          updateReferences([...referencesRef.current, reference]);
-        }
-        // The mention is written where the `@` was, so the sentence reads as the request it is.
-        replaceRange(trigger.start, caret, `${mentionText(agent.label)} `);
-        return;
-      } else if (file) {
-        const reference = { path: file.path };
-        if (!referencesRef.current.some(item => sameContextReference(item, reference))) updateReferences([...referencesRef.current, reference]);
-      } else if (selected) {
-        const reference = { kind: 'session' as const, sessionId: selected.id, title: selected.title, backendId: sessionBackend(selected) };
-        if (!referencesRef.current.some(item => sameContextReference(item, reference))) {
-          if (referencesRef.current.filter(isSessionReference).length >= 5) { onError(t`最多引用 5 个会话`); return; }
-          updateReferences([...referencesRef.current, reference]);
-        }
-      } else return;
-      replaceRange(trigger.start, caret, '');
-    }
-  };
-
-  /**
-   * The one intake path for every source: the picker, a paste, the card's drop and the window's.
-   *
-   * The decisions — refuse the batch, drop duplicates, or upload these files — belong to
-   * `planIntake`, which is pure and tested; this function holds the side effects: reading, uploading
-   * and appending to the draft. A refused batch is refused whole, before a single byte is read, so
-   * the user learns now instead of after 19 files have uploaded and the server rejects the message.
-   */
-  const ingestFiles = async (list: FileList | File[] | null, replaceKey?: string) => {
-    if (disabled || props.attachmentsAllowed === false) return;
-    const items = list ? Array.from(list) : [];
-    if (!items.length) return;
-    const candidates: CandidateFile[] = items.map((file) => ({ name: file.name, size: file.size, type: file.type, lastModified: file.lastModified }));
-    const pending = pendingAttachmentKeysRef.current;
-    const generation = draftGenerationRef.current;
-    const plan = planIntake(candidates, attachmentsRef.current.length + pendingUploadsRef.current.filter(upload => upload.key !== replaceKey).length, new Set([...attachmentKeysRef.current.values(), ...pending]));
-    if (plan.kind === 'rejected') { onError(plan.reason); return; }
-    if (plan.kind === 'empty') return;
-    if (replaceKey) { uploadFilesRef.current.delete(replaceKey); pending.delete(replaceKey); }
-    // Reserve the whole batch before the first await, including its dedupe keys.
-    for (const entry of plan.entries) pending.add(entry.key);
-    updatePendingUploads(current => [...current.filter(upload => upload.key !== replaceKey), ...plan.entries.map(entry => {
-      const file = items[entry.index]!;
-      uploadFilesRef.current.set(entry.key, file);
-      return { key: entry.key, name: file.name, size: file.size, image: attachmentMimeType(file).startsWith('image/') };
-    })]);
-    // Each file settles independently. A failed neighbour never discards an uploaded attachment.
-    for (const entry of plan.entries) {
-      if (generation !== draftGenerationRef.current) return;
-      await uploadFile(entry.key, items[entry.index]!, generation);
-    }
-  };
-
-  const uploadFile = async (key: string, original: File, generation = draftGenerationRef.current) => {
-    if (activeUploadKeysRef.current.has(key)) return;
-    activeUploadKeysRef.current.add(key);
-    const controller = new AbortController();
-    uploadControllersRef.current.set(key, controller);
-    updatePendingUploads(current => current.map(item => item.key === key ? { ...item, error: undefined } : item));
-    try {
-      const mimeType = attachmentMimeType(original);
-      const file = mimeType === original.type ? original : new File([original], original.name, { type: mimeType, lastModified: original.lastModified });
-      const data = await readUploadData(file);
-      const attachment = await api.upload(projectId, {
-        name: uploadName(file, data.mimeType), mimeType: data.mimeType, dataBase64: data.dataBase64,
-        ...(data.width && data.height ? { width: data.width, height: data.height } : {}),
-      }, controller.signal);
-      if (controller.signal.aborted) return;
-      if (generation !== draftGenerationRef.current) return;
-      attachmentKeysRef.current.set(attachment.id, key);
-      updateAttachments(current => [...current, attachment]);
-      updatePendingUploads(current => current.filter(item => item.key !== key));
-      uploadFilesRef.current.delete(key);
-    } catch (error) {
-      if (generation === draftGenerationRef.current && !controller.signal.aborted) updatePendingUploads(current => current.map(item => item.key === key ? { ...item, error: errorMessage(error, t`上传失败`) } : item));
-    } finally {
-      if (uploadControllersRef.current.get(key) === controller) uploadControllersRef.current.delete(key);
-      if (generation === draftGenerationRef.current) { pendingAttachmentKeysRef.current.delete(key); activeUploadKeysRef.current.delete(key); }
-    }
-  };
-
-  const retryUpload = async (key: string) => {
-    const file = uploadFilesRef.current.get(key);
-    if (file) { await uploadFile(key, file); return; }
-    const upload = pendingUploadsRef.current.find(item => item.key === key);
-    if (upload?.attachmentId) {
-      const generation = draftGenerationRef.current;
-      if (activeUploadKeysRef.current.has(key)) return;
-      activeUploadKeysRef.current.add(key);
-      try {
-        const attachment = await api.attachmentMetadata(upload.attachmentId, projectId);
-        if (generation !== draftGenerationRef.current || !pendingUploadsRef.current.some(item => item.key === key)) return;
-        updateAttachments(current => current.some(item => item.id === attachment.id) ? current : [...current, attachment]);
-        updatePendingUploads(current => current.filter(item => item.key !== key));
-        return;
-      } catch (error) {
-        if (generation !== draftGenerationRef.current) return;
-        if (!(error instanceof HttpError && error.status === 404)) {
-          updatePendingUploads(current => current.map(item => item.key === key ? { ...item, error: errorMessage(error, t`无法读取附件`) } : item));
-          return;
-        }
-      } finally { activeUploadKeysRef.current.delete(key); }
-    }
-    // Browser reloads retain metadata, but cannot promise access to the original local file.
-    reselectUploadKeyRef.current = key;
-    fileInputRef.current?.click();
-  };
-
-  const removeUpload = (key: string) => {
-    uploadControllersRef.current.get(key)?.abort();
-    uploadControllersRef.current.delete(key);
-    uploadFilesRef.current.delete(key);
-    pendingAttachmentKeysRef.current.delete(key);
-    updatePendingUploads(current => current.filter(item => item.key !== key));
-  };
-
-  /**
-   * After a chip or tile goes, its ✕ goes with it. The rail moves focus to a neighbour (§7.3); with
-   * none, the caret returns to the draft rather than `<body>`. Not on a phone, where focusing the
-   * draft would raise a keyboard the tap did not ask for.
-   */
   /** Voice and keyboard take turns: entering voice puts the keyboard away, leaving it brings the keyboard back. */
   const setVoiceMode = (on: boolean, focus = true) => {
     writeVoiceMode(on);
@@ -1304,17 +458,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     <HoldToTalkBar pressed={Boolean(hold && !hold.released)} disabled={disabled || (dictating && !hold) || Boolean(hold?.released)} busy={Boolean(hold?.released) && dictation.view.phase === 'finishing'} tall={tall} className={className}
       onPress={holdPress} onZone={holdZone} onEnd={holdEnd} />
   );
-  const refocusDraft = () => requestAnimationFrame(() => {
-    const active = document.activeElement;
-    if ((!active || active === document.body) && !window.matchMedia(MOBILE_LAYOUT_QUERY).matches) textareaRef.current?.focus({ preventScroll: true });
-  });
 
-  /** Drop one draft attachment, and the key that identified it, together. */
-  const removeAttachment = (id: string) => {
-    attachmentKeysRef.current.delete(id);
-    updateAttachments((current) => current.filter((item) => item.id !== id));
-    refocusDraft();
-  };
   const removeReference = (index: number) => {
     updateReferences(referencesRef.current.filter((_, itemIndex) => itemIndex !== index));
     refocusDraft();
@@ -1347,65 +491,15 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     onError: (message: string) => onErrorRef.current(message),
   }));
 
-  /*
-   * The window is a drop target, not just the card.
-   *
-   * Two things have to be true at once: the browser must not navigate to the dropped file (its own
-   * default for a drop anywhere on the page), and the drop that lands on the transcript — where the
-   * user is actually looking — must reach this composer. `cardRef.contains(target)` is what keeps
-   * the card's own handler authoritative: it already cancelled the event, and ingesting here too
-   * would upload every file twice or race itself.
-   *
-   * The depth counter is shared by every mounted composer so one `dragenter` on a child does not
-   * read as "left the window"; it is reset on drop and on dragend, because a drag can end outside
-   * the window without ever firing the matching `dragleave`.
-   */
-  useEffect(() => {
-    if (disabled || props.windowDrop === false || props.attachmentsAllowed === false) return;
-    const draggingFiles = (event: DragEvent) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
-    const onDragEnter = (event: DragEvent) => {
-      if (!draggingFiles(event)) return;
-      windowDragDepth += 1;
-      setWindowDragging(true);
-    };
-    const onDragOver = (event: DragEvent) => {
-      // Without this the browser refuses the drop and opens the file instead.
-      if (draggingFiles(event)) event.preventDefault();
-    };
-    const onDragLeave = (event: DragEvent) => {
-      if (!draggingFiles(event)) return;
-      windowDragDepth = Math.max(0, windowDragDepth - 1);
-      if (!windowDragDepth) setWindowDragging(false);
-    };
-    const onDrop = (event: DragEvent) => {
-      windowDragDepth = 0;
-      setWindowDragging(false);
-      const target = event.target instanceof Node ? event.target : null;
-      if (target instanceof Element && target.closest('[data-composer-drop="none"]')) { event.preventDefault(); return; }
-      if (target && cardRef.current?.contains(target)) return;
-      const dropped = Array.from(event.dataTransfer?.files ?? []);
-      if (!dropped.length || event.defaultPrevented) return;
-      event.preventDefault();
-      void ingestFiles(dropped);
-    };
-    const onDragEnd = () => {
-      windowDragDepth = 0;
-      setWindowDragging(false);
-    };
-    window.addEventListener('dragenter', onDragEnter);
-    window.addEventListener('dragover', onDragOver);
-    window.addEventListener('dragleave', onDragLeave);
-    window.addEventListener('drop', onDrop);
-    window.addEventListener('dragend', onDragEnd);
-    return () => {
-      window.removeEventListener('dragenter', onDragEnter);
-      window.removeEventListener('dragover', onDragOver);
-      window.removeEventListener('dragleave', onDragLeave);
-      window.removeEventListener('drop', onDrop);
-      window.removeEventListener('dragend', onDragEnd);
-      windowDragDepth = 0;
-    };
-  }, [disabled, projectId, storageKey, props.windowDrop, props.attachmentsAllowed]);
+  const windowDragging = useComposerWindowDrop({
+    cardRef,
+    disabled,
+    windowDrop: props.windowDrop,
+    attachmentsAllowed: props.attachmentsAllowed,
+    projectId,
+    storageKey,
+    ingestFiles,
+  });
 
   // Not while dictating: the result still to come rewrites the draft, and would bring back what was just sent.
   const sendLaterDisabled = disabled || props.submitDisabled || submitting || uploading || dictating;
@@ -1485,8 +579,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       setSubmitting(false);
     }
   };
+  submitUnknownRef.current = () => { void submit(); };
 
-  const menuOpen = Boolean(trigger && (trigger.type === 'mention' || slashItems.length || unknownSlashCommand));
   const hero = variant === 'hero';
   const currentModel = props.models?.find((item) => item.id === props.model)?.label ?? props.model ?? t`默认模型`;
   const settingsSummary = (props.mobileSettingsLabel ?? ([
@@ -1547,89 +641,37 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           stretches, so fullscreen spends its extra height on the text and never pushes the toolbar
           or the attachment rail past the panel's edge.
         */}
-        <div
-          className={cn('relative', fullscreen && 'flex min-h-0 flex-1 flex-col')}
-        >
+        <div className={cn('relative', fullscreen && 'flex min-h-0 flex-1 flex-col')}>
           {menuOpen && trigger && (
-            <div className={cn('inset-x-0 z-(--z-dock) overflow-hidden rounded-xl bg-popover shadow-pop animate-in fade-in-0 duration-[var(--duration-fast)] ease-[var(--ease-decelerate)]', fullscreen ? 'absolute bottom-14 mx-3 mb-2' : isMobile ? 'relative mb-2' : hero ? 'absolute top-full mt-2 slide-in-from-top-1' : 'absolute bottom-full mb-2 slide-in-from-bottom-1')}>
-              <div className="flex h-8 items-center gap-1.5 edge-b px-3 text-xs text-fg-3">
-                {trigger.type === 'slash'
-                  ? <><IconSlash className="size-3" />{slashGroups.length > 1 ? t`命令与 Skills` : slashGroups[0]?.kind === 'skill' ? t`Skills` : t({ message: '命令', context: 'session-commands-label' })}</>
-                  : browsing
-                    ? <button type="button" tabIndex={-1} aria-label={t`返回`} onMouseDown={event => { event.preventDefault(); browseInto(undefined); }} className="-mx-1 flex min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-hover hover:text-fg-2"><IconArrowLeft className="size-3 shrink-0" /><span className="truncate">{browsingName}</span></button>
-                    : <><IconAtSign className="size-3" />{sessionMentions ? t`引用` : t`引用文件`}{showSearching && <Spinner className="ml-auto size-3" />}</>}
-              </div>
-              {/* File results arrive per keystroke in varying counts, so their list keeps one height
-                  from the moment `@` opens it; the phone's menu is in the flow above the card. */}
-              <div ref={menuListRef} id={menuId} className={cn('overflow-y-auto overscroll-contain p-1', trigger.type === 'mention' ? 'h-64 max-md:h-[min(144px,calc(var(--app-height,100dvh)*0.28))]' : 'max-h-64 max-md:max-h-[min(144px,calc(var(--app-height,100dvh)*0.28))]')} role="listbox" aria-label={trigger.type === 'slash' ? t({ message: '命令', context: 'session-commands-label' }) : sessionMentions ? t`引用` : t`引用文件`}>
-                {trigger.type === 'slash' && slashGroups.map((group, groupIndex) => {
-                  const offset = slashGroups.slice(0, groupIndex).reduce((total, previous) => total + previous.items.length, 0);
-                  return (
-                    <div key={group.kind} role="group" aria-label={group.kind === 'skill' ? t`Skills` : t({ message: '命令', context: 'session-commands-label' })}>
-                      {slashGroups.length > 1 && <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">{group.kind === 'skill' ? t`Skills` : t({ message: '命令', context: 'session-commands-label' })}</div>}
-                      {group.items.map((command, itemIndex) => {
-                        const index = offset + itemIndex;
-                        return (
-                          <button key={command.name} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} title={command.description} onPointerMove={() => setHighlight(index)} onMouseDown={(event) => { event.preventDefault(); choose(index); }} className={cn('flex min-h-11 w-full items-center gap-3 md:min-h-8 rounded-lg px-2 py-1.5 text-left text-sm', index === highlight && 'bg-hover')}>
-                            <span className="max-w-[60%] shrink-0 truncate font-mono text-fg">/{command.name}</span>
-                            <span className="min-w-0 truncate text-xs text-fg-3">{command.description ?? command.hint}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-                {trigger.type === 'slash' && unknownSlashCommand && (
-                  <button id={optionId(slashItems.length)} type="button" tabIndex={-1} role="option" aria-selected={highlight === slashItems.length} onPointerMove={() => setHighlight(slashItems.length)} onMouseDown={(event) => { event.preventDefault(); choose(slashItems.length); }} className={cn('flex min-h-11 w-full items-center gap-3 md:min-h-8 rounded-lg px-2 py-1.5 text-left text-sm', highlight === slashItems.length && 'bg-hover')}>
-                    <span className="shrink-0 font-mono text-fg">/{slashQuery}</span>
-                    <span className="min-w-0 truncate text-xs text-fg-3">{props.unknownCommandHint ?? t`将作为普通消息原样发送`}</span>
-                  </button>
-                )}
-                {trigger.type === 'mention' && files.length > 0 && sessionMentions && <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4"><Trans>文件</Trans></div>}
-                {trigger.type === 'mention' && files.map((file, index) => (
-                  <button key={file.path} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} onPointerMove={() => setHighlight(index)} onMouseDown={(event) => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 md:h-8 rounded-lg px-2 text-left text-sm', index === highlight && 'bg-hover')}>
-                    <IconFileText className="size-3.5 shrink-0 text-fg-3" />
-                    <span className="max-w-[50%] shrink-0 truncate text-fg">{file.name}</span>
-                    <span className="min-w-0 truncate font-mono text-2xs text-fg-3">{file.path}</span>
-                  </button>
-                ))}
-                {trigger.type === 'mention' && agentRows.length > 0 && <div role="group" aria-label="Agent">
-                  <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">Agent</div>
-                  {agentRows.map((item, itemIndex) => {
-                    const index = files.length + itemIndex;
-                    return <button key={item.backendId} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm md:h-8', index === highlight && 'bg-hover')}>
-                      <AgentLogo backend={item.backendId} size={14} className="shrink-0 text-fg-3" />
-                      <span className="min-w-0 flex-1 truncate text-fg">{item.label}</span>
-                    </button>;
-                  })}
-                </div>}
-                {trigger.type === 'mention' && sessionFiles.length > 0 && <div role="group" aria-label={t`会话`}>
-                  <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4"><Trans>会话</Trans></div>
-                  {sessionFiles.map(({ session: item, project }, itemIndex) => {
-                    const index = files.length + agentRows.length + itemIndex;
-                    const selected = references.some(reference => isSessionReference(reference) && reference.sessionId === item.id);
-                    const blocked = !selected && references.filter(isSessionReference).length >= 5;
-                    return <button key={item.id} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} disabled={blocked} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm disabled:opacity-50 md:h-8', index === highlight && 'bg-hover')}>
-                      <AgentLogo backend={sessionBackend(item)} size={14} className="shrink-0 text-fg-3" />
-                      <span className="min-w-0 flex-1 truncate text-fg">{item.title}</span>
-                      <span className="max-w-[45%] truncate text-2xs text-fg-3">{[browsing ? '' : project, backendLabel(sessionBackend(item)), item.archivedAt ? t`已归档` : '', props.referenceSessions?.some(other => other.id !== item.id && other.title === item.title) ? item.id.slice(0, 8) : ''].filter(Boolean).join(' · ')}</span>
-                    </button>;
-                  })}
-                </div>}
-                {trigger.type === 'mention' && projectRows.length > 0 && <div role="group" aria-label={t({ message: '项目', context: 'mention-projects' })}>
-                  <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">{t({ message: '项目', context: 'mention-projects' })}</div>
-                  {projectRows.map((item, itemIndex) => {
-                    const index = files.length + agentRows.length + sessionFiles.length + itemIndex;
-                    return <button key={item.id} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} title={item.cwd} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm md:h-8', index === highlight && 'bg-hover')}>
-                      <IconFolder className="size-3.5 shrink-0 text-fg-3" />
-                      <span className="min-w-0 flex-1 truncate text-fg">{item.name}</span>
-                      <IconChevronRight className="size-3.5 shrink-0 text-fg-3" />
-                    </button>;
-                  })}
-                </div>}
-                {trigger.type === 'mention' && !files.length && !agentRows.length && !sessionFiles.length && !projectRows.length && trigger.query && <div className="px-2 py-3 text-sm text-fg-3">{searching ? t`搜索中…` : browsing ? t`没有匹配的会话` : sessionMentions ? t`没有匹配的会话或文件` : t`没有匹配的文件`}</div>}
-              </div>
-            </div>
+            <ComposerTriggerMenu
+              trigger={trigger}
+              fullscreen={fullscreen}
+              isMobile={isMobile}
+              hero={hero}
+              browsing={browsing}
+              browsingName={browsingName}
+              sessionMentions={sessionMentions}
+              showSearching={showSearching}
+              searching={searching}
+              menuListRef={menuListRef}
+              menuId={menuId}
+              optionId={optionId}
+              slashGroups={slashGroups}
+              slashItems={slashItems}
+              slashQuery={slashQuery}
+              unknownSlashCommand={unknownSlashCommand}
+              unknownCommandHint={props.unknownCommandHint}
+              highlight={highlight}
+              setHighlight={setHighlight}
+              choose={choose}
+              browseInto={browseInto}
+              files={files}
+              agentRows={agentRows}
+              sessionFiles={sessionFiles}
+              projectRows={projectRows}
+              references={references}
+              referenceSessions={props.referenceSessions}
+            />
           )}
         {/* Notices above the card come and go with the session's state; they grow in rather than
             pushing the card and the transcript's bottom edge in a single frame. */}
@@ -1690,7 +732,6 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               <span className="min-w-0 flex-1 truncate">{attachedSummary}</span>
               <IconChevronDown className={cn('size-3.5 shrink-0 transition-transform', attachmentsExpanded && 'rotate-180')} />
             </button>
-
           </>}
 
           {props.agentMentions && <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />}
@@ -1719,8 +760,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               if (at !== undefined) setMentionMenu(at);
             }}
             onSelect={(event) => syncTrigger(event.currentTarget.value, event.currentTarget.selectionStart)}
-            onFocus={() => { window.clearTimeout(mentionBlurTimerRef.current); if (voice && !dictating) setVoiceMode(false, false); }}
-            onBlur={() => { window.clearTimeout(mentionBlurTimerRef.current); mentionBlurTimerRef.current = window.setTimeout(() => setTrigger(null), 120); }}
+            onFocus={() => { clearBlurTimer(); if (voice && !dictating) setVoiceMode(false, false); }}
+            onBlur={scheduleBlurClose}
             onPaste={(event) => {
               const pasted = clipboardFiles(event.clipboardData);
               if (!pasted.length || disabled || props.attachmentsAllowed === false) return;
@@ -1728,89 +769,34 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               if (!event.clipboardData.getData('text/plain')) event.preventDefault();
               void ingestFiles(pasted);
             }}
-            onKeyDown={(event) => {
-              // While dictating the draft is the recognizer's: Esc cancels and Enter finishes, nothing else edits it.
-              if (dictating) {
-                if (event.key === 'Escape') { event.preventDefault(); dictation.cancel(); }
-                else if (event.key === 'Enter' && dictation.view.phase === 'recording') { event.preventDefault(); dictation.finish(); }
-                return;
-              }
-              // Both composition signals once: the legacy one (229) is what some engines report
-              // instead of `isComposing`, so checking only the standard flag ships a known IME bug.
-              const composing = isComposingKey({ isComposing: event.nativeEvent.isComposing, keyCode: event.keyCode });
-              // The IME's Enter picks a candidate, and the menu keys below are ours: neither may be
-              // adjudicated while a composition is open.
-              if (composing) return;
-              // Inside a project, ← or ⌫ on an empty query steps back out instead of leaving the `@`.
-              if (browsing && !trigger?.query && (event.key === 'ArrowLeft' || event.key === 'Backspace') && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
-                event.preventDefault(); browseInto(undefined); return;
-              }
-              if (projectRows.length && event.key === 'ArrowRight' && highlight >= files.length + agentRows.length + sessionFiles.length && highlight < menuLength) {
-                event.preventDefault(); choose(highlight); return;
-              }
-              // A written mention is deleted whole: a broken `@Claude Co` would read as text that names nothing.
-              if ((event.key === 'Backspace' || event.key === 'Delete') && props.agentMentions && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
-                const element = event.currentTarget;
-                const probe = event.key === 'Backspace' ? element.selectionStart - 1 : element.selectionStart;
-                const at = probe >= 0 ? mentionAt(element.value, referencesRef.current, probe) : undefined;
-                const reference = at === undefined ? undefined : referencesRef.current[at];
-                const range = reference && isAgentReference(reference) ? mentionRanges(element.value, [referenceLabel(reference)]).find(item => probe >= item.start && probe < item.end) : undefined;
-                if (range) {
-                  event.preventDefault();
-                  // Through the browser's own edit, so ⌘Z brings it back.
-                  element.setSelectionRange(range.start, range.end);
-                  if (!document.execCommand('delete')) {
-                    const next = element.value.slice(0, range.start) + element.value.slice(range.end);
-                    updateText(next); dropUnwrittenMentions(next);
-                    requestAnimationFrame(() => element.setSelectionRange(range.start, range.start));
-                  }
-                  return;
-                }
-              }
-              // ↓ with the caret in a written mention opens its model menu, as a click on it does.
-              if (!menuOpen && event.key === 'ArrowDown' && props.agentMentions && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
-                const at = mentionAt(event.currentTarget.value, referencesRef.current, event.currentTarget.selectionStart);
-                if (at !== undefined) { event.preventDefault(); setMentionMenu(at); return; }
-              }
-              if (menuOpen && menuLength) {
-                if (event.key === 'ArrowDown') { event.preventDefault(); setHighlight((value) => (value + 1) % menuLength); return; }
-                if (event.key === 'ArrowUp') { event.preventDefault(); setHighlight((value) => (value - 1 + menuLength) % menuLength); return; }
-                if (event.key === 'Enter' || event.key === 'Tab') { event.preventDefault(); choose(highlight); return; }
-              }
-              /*
-               * Escape closes the innermost layer and nothing else (`resolveEscapeLayer`). The menu is
-               * this composer's own; the fullscreen panel is not — `ComposerFullscreen` owns that key,
-               * because it also has to stand aside for a picker portalled above the panel and for the
-               * lightbox, which this handler cannot see.
-               */
-              if (event.key === 'Escape' && resolveEscapeLayer({ menuOpen, fullscreen: false }) === 'menu') {
-                event.preventDefault();
-                dismissedTriggerRef.current = { text: textRef.current, caret: event.currentTarget.selectionStart };
-                setTrigger(null);
-                return;
-              }
-              if (event.key !== 'Enter') return;
-              /*
-               * One policy for both the keyboard and the Send button (`resolveEnter`), so the button
-               * can never do something the key it advertises would not.
-               *
-               * A phone keeps the behavior it has always had — a hardware Enter sends — because the
-               * setting is described as applying to the desktop's physical keyboard, and a soft
-               * keyboard's Return never reaches keydown at all. Anything else would make a paired
-               * phone change behavior when the desktop user flips a switch.
-               */
-              const outcome = resolveEnter({
-                kind: classifyEnterGesture({
-                  key: event.key, altKey: event.altKey, ctrlKey: event.ctrlKey, metaKey: event.metaKey, shiftKey: event.shiftKey,
-                  composing: false, repeat: event.repeat,
-                }),
-                composing: false,
-                repeat: event.repeat,
-                hasDraft: Boolean(textRef.current.trim()),
-              }, isMobile ? 'send' : keyBehavior);
-              if (outcome.preventDefault) event.preventDefault();
-              if (outcome.action === 'send') void submit();
-            }}
+            onKeyDown={(event) => handleComposerKeyDown(event, {
+              dictating,
+              dictationPhase: dictation.view.phase,
+              cancelDictation: dictation.cancel,
+              finishDictation: dictation.finish,
+              browsing,
+              trigger,
+              browseInto,
+              projectRowsCount: projectRows.length,
+              highlight,
+              setHighlight,
+              filesCount: files.length,
+              agentRowsCount: agentRows.length,
+              sessionFilesCount: sessionFiles.length,
+              menuLength,
+              choose,
+              agentMentions: props.agentMentions,
+              referencesRef,
+              updateText,
+              dropUnwrittenMentions,
+              setMentionMenu,
+              menuOpen,
+              dismissTrigger,
+              textRef,
+              isMobile,
+              keyBehavior,
+              submit: () => { void submit(); },
+            })}
           />
 
           {/* An empty draft in voice mode: the bar stands where the text would be. */}
@@ -1888,57 +874,34 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 }}
               />
             )}
-            <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
-              {/* Shrinkable, or a backend that names a permission in a whole sentence pushes the
-                  model and send controls off the row instead of truncating itself. */}
-              <div className="hidden min-w-0 items-center gap-1 md:flex">
-                {!isMobile && props.toolbar}
-                {/* Fixed icons first, then the model; a control that comes and goes (fullscreen) waits by send. */}
-                {modelLeadsRow && props.onModelChange && <span className="inline-flex min-w-0">{renderModelPicker()}</span>}
-                {!modelLeadsRow && fullscreenToggle}
-              </div>
-              {hasMobileSettings && <>
-                {isMobile && props.usage && !compact && !holdInFooter && <ContextMeter usage={props.usage} onCompact={props.onCompact} compacting={props.compacting} compactDisabled={props.compactDisabled} />}
-                <DialogTrigger asChild>
-                  <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact || holdInFooter ? 'hidden' : toggleEntrance)}>
-                    {props.mobileSettingsPrefix}
-                    <span className="min-w-0 truncate">{settingsSummary}</span>
-                    {modelsIssue && <StatusDot tone="warning" />}
-                    {props.modelsLoading && <Spinner className="size-3 shrink-0 text-fg-4" />}
-                  </button>
-                </DialogTrigger>
-                <DialogContent mobileSheet aria-describedby={undefined} className="max-h-[min(78dvh,560px)] w-full max-w-none rounded-b-none rounded-t-2xl p-0 md:hidden">
-                  <DialogHeader className="shrink-0 px-4 pb-3 pt-4 pr-14">
-                    <DialogTitle className="text-base"><Trans>发送设置</Trans></DialogTitle>
-                  </DialogHeader>
-                  {props.pickersDisabled && props.pickersBlockedReason && (
-                    <p className="shrink-0 px-4 pb-3 -mt-1 text-xs text-warning">{props.pickersBlockedReason}</p>
-                  )}
-                  <div className="min-h-0 overflow-y-auto px-4 pb-6">
-                    {isMobile && props.toolbar && <section className="flex flex-col gap-2 edge-t py-3">
-                      <h4 className="text-xs font-medium text-fg-3"><Trans>权限</Trans></h4>
-                      <div className="[&>button]:!h-11 [&>button]:!w-full [&>button]:!justify-between [&>button]:!rounded-xl [&>button]:!border [&>button]:!border-line-strong [&>button]:!px-3 [&>button]:!text-base">{props.toolbar}</div>
-                    </section>}
-                    {isMobile && props.toolsPicker && <section className="flex flex-col gap-2 edge-t py-3">
-                      <h4 className="text-xs font-medium text-fg-3"><Trans>技能与工具</Trans></h4>
-                      <div className="[&>button]:!h-11 [&>button]:!w-full [&>button]:!justify-between [&>button]:!rounded-xl [&>button]:!border [&>button]:!border-line-strong [&>button]:!px-3 [&>button]:!text-base">{props.toolsPicker}</div>
-                    </section>}
-                    {isMobile && props.startPickers && <section className="flex flex-col gap-2 edge-t py-3">
-                      <h4 className="text-xs font-medium text-fg-3">Agent</h4>
-                      <div className="min-w-0">{props.startPickers}</div>
-                    </section>}
-                    {isMobile && props.onModelChange && <section className="flex flex-col gap-2 edge-t py-3">
-                      <h4 className="text-xs font-medium text-fg-3"><Trans>模型与参数</Trans></h4>
-                      {renderModelPicker()}
-                    </section>}
-                    {isMobile && props.endPickers && <section className="flex flex-col gap-2 edge-t py-3">
-                      <h4 className="text-xs font-medium text-fg-3"><Trans>模型与参数</Trans></h4>
-                      <div className="min-w-0">{props.endPickers}</div>
-                    </section>}
-                  </div>
-                </DialogContent>
-              </>}
-            </Dialog>
+            <ComposerMobileSettings
+              open={mobileSettingsOpen}
+              onOpenChange={setMobileSettingsOpen}
+              isMobile={isMobile}
+              compact={compact}
+              holdInFooter={holdInFooter}
+              toggleEntrance={toggleEntrance}
+              disabled={disabled}
+              pickersDisabled={props.pickersDisabled}
+              pickersBlockedReason={props.pickersBlockedReason}
+              modelsIssue={modelsIssue}
+              modelsLoading={props.modelsLoading}
+              settingsSummary={settingsSummary}
+              mobileSettingsPrefix={props.mobileSettingsPrefix}
+              usage={props.usage}
+              onCompact={props.onCompact}
+              compacting={props.compacting}
+              compactDisabled={props.compactDisabled}
+              toolbar={props.toolbar}
+              toolsPicker={props.toolsPicker}
+              startPickers={props.startPickers}
+              hasModelPicker={Boolean(props.onModelChange)}
+              renderModelPicker={renderModelPicker}
+              endPickers={props.endPickers}
+              hasMobileSettings={hasMobileSettings}
+              modelLeadsRow={modelLeadsRow}
+              fullscreenToggle={fullscreenToggle}
+            />
 
             {/*
               Each slot renders only when it has content. The wrappers used to be unconditional, and
@@ -1994,17 +957,6 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           </div>
         </div>
       )}
-
-
     </div>
   );
 });
-
-/** Voice mode is this browser's: a phone that switched to it stays there, the desktop is never asked. */
-const VOICE_MODE_KEY = 'riffet.composer.voice-mode';
-function readVoiceMode(): boolean {
-  try { return window.localStorage.getItem(VOICE_MODE_KEY) === '1'; } catch { return false; }
-}
-function writeVoiceMode(on: boolean) {
-  try { if (on) window.localStorage.setItem(VOICE_MODE_KEY, '1'); else window.localStorage.removeItem(VOICE_MODE_KEY); } catch { /* Storage may be unavailable. */ }
-}

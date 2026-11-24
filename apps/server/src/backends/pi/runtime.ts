@@ -1,23 +1,19 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import type {
-  ModelInfo, NativeContext, NativeInteraction, NativeInteractionResponse, NativeInteractionResult,
+  ModelInfo, NativeInteraction, NativeInteractionResponse, NativeInteractionResult,
   NativeRunConfig, NativeRunInput, NativeStatus, NativeWorkbenchEvent,
   Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
-import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { PiStepMetering } from './metering.js';
 import { activityEvent, activityId, withActivity } from '../../journal/activity.js';
-import type { TranscriptSource } from '../../journal/ingest.js';
 import { firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
 import { DormancyClock } from '../shared/dormancy.js';
 import { nativeModelEffort, parseNativeModelSelection } from '../shared/model-selection.js';
-import { KeyedTurnTrackers } from '../shared/turn-tracker.js';
 import type {
   NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage,
   NativeDispatchBinding,
@@ -27,223 +23,23 @@ import {
   piDefaultModel, piLaunchCommand, piEnvironment, listPiModels, piModelInfos,
   probePiCli, readPiSettings,
 } from './models.js';
-import { isPiPrompt, piBlockEventId, piTurnEndId, projectPiTurnEnd, type PiTurnOutcome } from './projection.js';
+import { isPiPrompt, piTurnEndId, projectPiTurnEnd, type PiTurnOutcome } from './projection.js';
 import { piCustomEndpoint, piCustomModelId, piProviderExtension, piProviderId, piRiffetMcpExtension } from './provider.js';
 import { PiTranscriptSource } from './transcript.js';
 import { PiRpcError, PiRpcTransport } from './transport.js';
+import { handlePiUpdate, reconcilePiEntries, restorePiDeliveries } from './runtime-reconcile.js';
+import {
+  IDLE_STOP_MS, PROMPT_ACK_GRACE_MS, REQUEST_TIMEOUT_MS, START_TIMEOUT_MS, STDERR_TAIL,
+  dropPending, errorMessage, isEntry, notify, piModelValue, piTurns, promptText, readReported,
+  record, sameSelection, splitModel, str, wake,
+  type PiConversation, type PiDelivery, type PiDesired, type PiDraft, type PiProcess, type RecordValue,
+} from './runtime-shared.js';
+import { handlePiUiRequest, materializePiInput, piAnswerFor } from './runtime-ui.js';
 
-/** A conversation with nothing running gives its process back after this long (droid's own choice). */
-const IDLE_STOP_MS = AGENT_PROCESS_BUDGET.headlessIdleMinutes * 60_000;
-const START_TIMEOUT_MS = 60_000;
-const REQUEST_TIMEOUT_MS = 30_000;
-/** How long a written prompt may go unacknowledged before pi is stopped; until then a late ack still confirms it. */
-const PROMPT_ACK_GRACE_MS = 5 * 60_000;
-const STDERR_TAIL = 4 * 1024;
-const MAX_INLINE_IMAGE_BYTES = 20 * 1024 * 1024;
-const IMAGE_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+export type { PiDraft };
+export { piModelValue };
 
-type RecordValue = Record<string, unknown>;
-
-/** One streamed assistant block that has not reached pi's session file yet. */
-export interface PiDraft {
-  key: string;
-  contentIndex: number;
-  thought: boolean;
-  text: string;
-  at: string;
-  entryId?: string;
-  messageTimestamp?: number;
-  turnId?: string;
-  runId?: string;
-}
-
-interface PiDelivery {
-  readonly commandId: string;
-  readonly runId: string;
-  readonly text: string;
-  expectedText?: string;
-  disposition?: string;
-  readonly at: string;
-  /** Entry index at the dispatch fence: ownership only looks after it. */
-  readonly lastEntryId: string | null;
-  readonly leafId: string | null;
-  readonly recovered?: boolean;
-  entryId?: string;
-}
-
-interface PiPendingUi {
-  readonly requestId: string;
-  readonly method: string;
-  interaction: NativeInteraction;
-  resolve(response: RecordValue): Promise<void>;
-  timer?: NodeJS.Timeout;
-}
-
-interface PiProcess {
-  readonly child: ChildProcess;
-  readonly rpc: PiRpcTransport;
-  stderr: string;
-  stopping: boolean;
-  exited: boolean;
-  launchKey: string;
-  exitTask?: Promise<void>;
-  settling?: Promise<void>;
-  pendingSettle?: RecordValue;
-  stopTask?: Promise<void>;
-  /** A settled run was aborted by pi. */
-  settledAborted: boolean;
-  /** Final retry failure, which outranks the last assistant's stop reason. */
-  retryError?: string;
-  lastAssistant?: RecordValue;
-}
-
-interface PiDesired {
-  provider?: string;
-  modelId?: string;
-  thinkingLevel?: string;
-}
-
-interface PiConversation {
-  readonly workbenchSessionId: string;
-  session: Session;
-  project: Project;
-  profile: NativeBackendProfileConfig;
-  nativeSessionId?: string;
-  readonly listeners: Set<(message: NativeControlMessage) => void>;
-  readonly wakers: Set<() => void>;
-  context?: NativeContext;
-  proc?: PiProcess;
-  starting?: Promise<PiProcess>;
-  status: NativeStatus;
-  failure?: string;
-  disposed: boolean;
-  nativeActive: boolean;
-  /** The selection a send must apply before its prompt. */
-  desired?: PiDesired;
-  /** What pi last reported. */
-  reported: PiDesired;
-  /** Unsettled prompts, by workbench command id. */
-  readonly deliveries: Map<string, PiDelivery>;
-  /** Confirmed native user entries, mapped to the command they answered. */
-  readonly turns: Map<string, { commandId: string; runId: string }>;
-  readonly drafts: Map<string, PiDraft>;
-  readonly metering: PiStepMetering;
-  /** The turn the streamed blocks belong to: a confirmed entry id, else the command id. */
-  streamTurn?: string;
-  activeTurn?: string;
-  activeRunId?: string;
-  /** Increments for each assistant message in a turn; draft keys stay unique across tool loops. */
-  assistantStep: number;
-  /** A stop was requested; the settled event is the outcome. */
-  stopRequested: boolean;
-  readonly pending: PiPendingUi[];
-  readonly knownEntries: Set<string>;
-  /** The last entry id the runtime has seen. */
-  boundary?: string;
-  loaded: boolean;
-  firstMessage?: string;
-  readonly dormancy: DormancyClock;
-  compaction?: string;
-  compactions: number;
-  idleTimer?: NodeJS.Timeout;
-  /** A non-fatal provider message, shown with its own level. */
-  notice?: string;
-  noticeLevel?: 'info' | 'warning' | 'error';
-  /** An automatic retry still running: shown over `notice` without replacing it, gone once the retry or its turn ends. */
-  retryNotice?: string;
-}
-
-const piTurns = new KeyedTurnTrackers<object>();
 const runtimes = new WeakMap<NativeBackendHost, PiRuntime>();
-
-function str(value: unknown): string | undefined {
-  return typeof value === 'string' && value ? value : undefined;
-}
-
-function record(value: unknown): RecordValue | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as RecordValue : undefined;
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-function isEntry(value: unknown): value is PiEntry {
-  const entry = record(value);
-  return typeof entry?.id === 'string' && typeof entry.type === 'string';
-}
-
-function messageOf(entry: PiEntry): RecordValue | undefined {
-  return record(entry.message);
-}
-
-/** The user text of a prompt entry, ignoring images. */
-function promptText(entry: PiEntry): string {
-  const content = messageOf(entry)?.content;
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content.flatMap(value => {
-    const block = record(value);
-    return block?.type === 'text' && typeof block.text === 'string' ? [block.text] : [];
-  }).join('\n');
-}
-
-/** Compares what the workbench sent with what pi persisted; an extension may rewrite the text. */
-function samePrompt(sent: string, stored: string): boolean {
-  return sent.trim() === stored.trim();
-}
-
-/** The workbench model form pi understands: `provider/modelId[effort=level]`. */
-export function piModelValue(provider: string | undefined, modelId: string, thinkingLevel?: string): string {
-  return `${provider ? `${provider}/` : ''}${modelId}${thinkingLevel ? `[effort=${thinkingLevel}]` : ''}`;
-}
-
-function splitModel(value: string | undefined): { provider?: string; modelId?: string } {
-  const model = value?.trim();
-  if (!model) return {};
-  const slash = model.indexOf('/');
-  if (slash <= 0) return { modelId: model };
-  return { provider: model.slice(0, slash), modelId: model.slice(slash + 1) };
-}
-
-function readReported(data: RecordValue): PiDesired {
-  const model = record(data.model);
-  const provider = str(model?.provider);
-  const modelId = str(model?.id);
-  const thinking = str(data.thinkingLevel);
-  return {
-    ...(provider ? { provider } : {}),
-    ...(modelId ? { modelId } : {}),
-    ...(thinking ? { thinkingLevel: thinking } : {}),
-  };
-}
-
-/** A model selection is already in force when pi reports the same provider, id and level. */
-function sameSelection(reported: PiDesired, desired: PiDesired): boolean {
-  if (desired.modelId && desired.modelId !== reported.modelId) return false;
-  if (desired.provider && desired.provider !== reported.provider) return false;
-  if (desired.thinkingLevel && desired.thinkingLevel !== reported.thinkingLevel) return false;
-  return true;
-}
-
-function notify(state: PiConversation, message: NativeControlMessage): void {
-  for (const listener of state.listeners) {
-    try { listener(message); } catch { /* one subscriber must not stop the others */ }
-  }
-}
-
-function wake(state: PiConversation): void {
-  for (const waker of state.wakers) {
-    try { waker(); } catch { /* one reader must not stop the others */ }
-  }
-}
-
-function dropPending(state: PiConversation): void {
-  for (const pending of state.pending.splice(0)) {
-    if (pending.timer) clearTimeout(pending.timer);
-    void pending.resolve({ cancelled: true }).catch(() => undefined);
-  }
-}
 
 /** Owns one `pi --mode rpc` child per open conversation. */
 export class PiRuntime {
@@ -378,7 +174,7 @@ export class PiRuntime {
     commitDispatchFence(binding?: NativeDispatchBinding): unknown;
   }): Promise<void> {
     const state = this.conversation(input.session, input.project, input.profile);
-    const prompt = await this.materialize(input.input);
+    const prompt = await materializePiInput(this.host, input.input);
     if (input.isCancelled()) return;
     const desired = await this.desiredSelection(state, input.config);
     const proc = await this.ensureProcess(state, desired);
@@ -558,7 +354,7 @@ export class PiRuntime {
     if (!current.actions.some(action => action.id === response.action)) {
       return { status: 'uncertain', interaction: current, message: 'The selected action is not available for this request.' };
     }
-    const answer = this.answerFor(pending, response);
+    const answer = piAnswerFor(pending, response);
     if (pending.timer) clearTimeout(pending.timer);
     state.pending.shift();
     try {
@@ -769,7 +565,7 @@ export class PiRuntime {
       const at = new Date().toISOString();
       // File append follows message_end; close means all stdout records have been consumed.
       const transcript = await this.transcript(state).catch(() => undefined);
-      if (transcript) this.reconcileEntries(state, transcript.entries);
+      if (transcript) reconcilePiEntries(this.host, state, transcript.entries);
       await this.host.transcript?.drain(state.workbenchSessionId);
       const deliveries = [...state.deliveries.values()];
       for (const delivery of deliveries) {
@@ -882,8 +678,8 @@ export class PiRuntime {
   private async loadTranscript(state: PiConversation): Promise<void> {
     const transcript = await this.transcript(state);
     if (!transcript) return;
-    this.restoreDeliveries(state, transcript.entries);
-    this.reconcileEntries(state, transcript.entries);
+    restorePiDeliveries(this.host, state);
+    reconcilePiEntries(this.host, state, transcript.entries);
     const first = transcript.chain.find(isPiPrompt);
     const text = first ? promptText(first) : undefined;
     if (text) {
@@ -899,103 +695,11 @@ export class PiRuntime {
     return { entries, leafId: str(data.leafId) };
   }
 
-  /**
-   * Matches the entries pi appended to the prompt the workbench sent. Only a unique user entry after
-   * that prompt's fence claims the run; a rewrite or a second candidate leaves it unclaimed rather
-   * than guessing, and nothing is replayed.
-   */
-  private restoreDeliveries(state: PiConversation, entries: PiEntry[]): void {
-    for (const run of this.host.listRuns?.(state.workbenchSessionId) ?? []) {
-      const native = run.native;
-      if (!native || native.nativeSessionId !== state.nativeSessionId) continue;
-      if (native.nativeMessageId?.startsWith('msg:')) {
-        state.turns.set(native.nativeMessageId.slice(4), { runId: run.id, commandId: run.commandId });
-        continue;
-      }
-      if (!['dispatching', 'input_sent', 'uncertain'].includes(native.delivery) || !native.nativeInputBoundary || state.deliveries.has(run.commandId)) continue;
-      try {
-        const boundary = record(JSON.parse(native.nativeInputBoundary));
-        if (boundary?.v !== 1 || !(boundary.lastEntryId === null || typeof boundary.lastEntryId === 'string') || !(boundary.leafId === null || typeof boundary.leafId === 'string')) continue;
-        state.deliveries.set(run.commandId, {
-          runId: run.id, commandId: run.commandId, text: native.renderedText ?? native.input.text,
-          at: new Date(native.timings?.dispatchAt ?? Date.parse(run.createdAt)).toISOString(),
-          lastEntryId: boundary.lastEntryId as string | null, leafId: boundary.leafId as string | null,
-          recovered: true,
-        });
-      } catch { /* An invalid fence cannot establish receipt ownership. */ }
-    }
-  }
-
   private async reconcile(state: PiConversation, proc: PiProcess, initial = false): Promise<void> {
     if (state.proc !== proc || proc.exited) return;
     const { entries } = await this.getEntries(proc);
-    if (initial) this.restoreDeliveries(state, entries);
-    this.reconcileEntries(state, entries);
-  }
-
-  private reconcileEntries(state: PiConversation, entries: PiEntry[]): void {
-    const byId = new Map(entries.map(entry => [entry.id, entry]));
-    // A native user entry must be after the complete append boundary and descend from the leaf
-    // captured at dispatch. Count the whole candidate set before claiming either side.
-    const candidates = new Map<PiDelivery, PiEntry[]>();
-    for (const delivery of state.deliveries.values()) {
-      if (delivery.entryId) continue;
-      if (!delivery.recovered && delivery.disposition !== 'started' && delivery.expectedText === undefined) continue;
-      const index = delivery.lastEntryId === null ? -1 : entries.findIndex(entry => entry.id === delivery.lastEntryId);
-      if (delivery.lastEntryId !== null && index < 0) continue;
-      const users = entries.slice(index + 1).filter(entry => {
-        if (!isPiPrompt(entry) || !samePrompt(delivery.expectedText ?? delivery.text, promptText(entry))) return false;
-        if (!Number.isFinite(Date.parse(entry.timestamp)) || Date.parse(entry.timestamp) < Date.parse(delivery.at)) return false;
-        let parent = entry.parentId ?? null;
-        const seen = new Set<string>();
-        while (parent !== delivery.leafId) {
-          if (parent === null || seen.has(parent)) return false;
-          seen.add(parent);
-          const ancestor = byId.get(parent);
-          if (!ancestor || isPiPrompt(ancestor)) return false;
-          parent = ancestor.parentId ?? null;
-        }
-        return true;
-      });
-      candidates.set(delivery, users);
-    }
-    for (const [delivery, users] of candidates) {
-      if (users.length !== 1) continue;
-      const entry = users[0]!;
-      if ([...candidates.values()].filter(values => values.some(value => value.id === entry.id)).length !== 1) continue;
-      if ([...state.turns.keys()].includes(entry.id)) continue;
-      delivery.entryId = entry.id;
-      state.turns.set(entry.id, { commandId: delivery.commandId, runId: delivery.runId });
-      // The JSONL reader may have consumed the user entry before the get_entries response arrived.
-      // A tagged receipt publishes the now-proven association without replaying provider input.
-      this.host.emitEvent(state.workbenchSessionId, {
-        sequence: 0, sessionId: state.workbenchSessionId, runId: delivery.runId,
-        type: 'native_input_receipt', nativeId: `msg:${entry.id}`, nativeTurnId: entry.id,
-        createdAt: entry.timestamp,
-        data: { commandId: delivery.commandId, nativeSessionId: state.nativeSessionId },
-      });
-      if (!delivery.recovered) {
-        state.activeTurn = entry.id;
-        state.activeRunId = delivery.runId;
-        for (const draft of state.drafts.values()) if (draft.turnId === delivery.commandId) draft.turnId = entry.id;
-        state.streamTurn = entry.id;
-      } else {
-        state.deliveries.delete(delivery.commandId);
-      }
-    }
-    for (const entry of entries) {
-      const message = messageOf(entry);
-      if (message?.role !== 'assistant' || !Array.isArray(message.content)) continue;
-      const timestamp = typeof message.timestamp === 'number' ? message.timestamp : undefined;
-      if (timestamp === undefined) continue;
-      for (const draft of state.drafts.values()) {
-        if (draft.entryId || draft.messageTimestamp !== timestamp) continue;
-        draft.entryId = entry.id;
-      }
-      state.metering.recordEntry(state.workbenchSessionId, entry, message, timestamp, byId, state.turns);
-    }
-    state.boundary = entries.at(-1)?.id ?? state.boundary;
-    wake(state);
+    if (initial) restorePiDeliveries(this.host, state);
+    reconcilePiEntries(this.host, state, entries);
   }
 
   private handleEvent(state: PiConversation, proc: PiProcess, frame: RecordValue): void {
@@ -1024,7 +728,7 @@ export class PiRuntime {
         return;
       }
       case 'message_update':
-        this.handleUpdate(state, frame);
+        handlePiUpdate(state, frame);
         return;
       case 'message_end':
         this.handleMessageEnd(state, proc, frame);
@@ -1080,7 +784,7 @@ export class PiRuntime {
         wake(state);
         return;
       case 'extension_ui_request':
-        this.handleUiRequest(state, frame);
+        handlePiUiRequest(state, frame, target => this.emitStatus(target));
         return;
       case 'extension_error':
         state.failure = str(frame.error) ? `${str(frame.event) ?? 'extension'}: ${str(frame.error)}` : 'A pi extension failed.';
@@ -1088,38 +792,6 @@ export class PiRuntime {
         return;
       default:
     }
-  }
-
-  private handleUpdate(state: PiConversation, frame: RecordValue): void {
-    const update = record(frame.assistantMessageEvent);
-    const kind = str(update?.type);
-    if (!update || !kind) return;
-    const partial = record(frame.message);
-    const messageTimestamp = typeof partial?.timestamp === 'number' ? partial.timestamp : undefined;
-    state.metering.update(state.assistantStep, kind, str(update.delta), messageTimestamp, state.activeTurn ?? state.streamTurn, state.activeRunId);
-    const contentIndex = typeof update.contentIndex === 'number' && Number.isSafeInteger(update.contentIndex) && update.contentIndex >= 0 ? update.contentIndex : 0;
-    const thought = kind.startsWith('thinking');
-    if (!thought && !kind.startsWith('text')) return;
-    if (!kind.endsWith('_start') && !kind.endsWith('_delta') && !kind.endsWith('_end')) return;
-    const turn = state.activeTurn ?? state.streamTurn ?? 'live';
-    const key = `${state.workbenchSessionId}:${state.activeRunId ?? turn}:${state.assistantStep}:${contentIndex}:${thought ? 'thinking' : 'text'}`;
-    const draft = state.drafts.get(key) ?? {
-      key,
-      contentIndex,
-      thought,
-      text: '',
-      at: new Date().toISOString(),
-      ...(state.activeTurn ? { entryId: undefined, turnId: state.activeTurn } : { turnId: state.streamTurn }),
-      ...(state.activeRunId ? { runId: state.activeRunId } : {}),
-    };
-    if (kind.endsWith('_delta')) draft.text += str(update.delta) ?? '';
-    if (kind.endsWith('_end')) {
-      const content = str(update.content);
-      if (content) draft.text = content;
-    }
-    if (messageTimestamp !== undefined) draft.messageTimestamp = messageTimestamp;
-    state.drafts.set(key, draft);
-    wake(state);
   }
 
   private handleMessageEnd(state: PiConversation, proc: PiProcess, frame: RecordValue): void {
@@ -1249,119 +921,6 @@ export class PiRuntime {
     this.emitStatus(state);
   }
 
-  private handleUiRequest(state: PiConversation, frame: RecordValue): void {
-    const requestId = str(frame.id);
-    const method = str(frame.method);
-    if (!requestId || !method) return;
-    if (method === 'notify') {
-      const message = str(frame.message);
-      if (message) {
-        state.notice = message;
-        state.noticeLevel = frame.notifyType === 'error' ? 'error' : frame.notifyType === 'warning' ? 'warning' : 'info';
-        this.emitStatus(state);
-      }
-      return;
-    }
-    const interaction = this.uiInteraction(requestId, method, frame);
-    if (!interaction) return;
-    const proc = state.proc;
-    if (!proc || proc.exited) {
-      void proc?.rpc.send({ type: 'extension_ui_response', id: requestId, cancelled: true }).catch(() => undefined);
-      return;
-    }
-    const pending: PiPendingUi = { requestId, method, interaction, resolve: answer => proc.rpc.send({ type: 'extension_ui_response', id: requestId, ...answer }) };
-    if (interaction.expiresAt) {
-      pending.timer = setTimeout(() => {
-        const index = state.pending.indexOf(pending);
-        if (index < 0) return;
-        state.pending.splice(index, 1);
-        void pending.resolve({ cancelled: true }).catch(() => undefined);
-        this.emitStatus(state);
-      }, Math.max(0, Date.parse(interaction.expiresAt) - Date.now()));
-      pending.timer.unref();
-    }
-    state.pending.push(pending);
-    this.emitStatus(state);
-  }
-
-  private uiInteraction(requestId: string, method: string, frame: RecordValue): NativeInteraction | undefined {
-    const base = {
-      id: `pi:${requestId}`,
-      revision: `${requestId}:0`,
-      transport: 'protocol' as const,
-      requestId,
-      ...(typeof frame.timeout === 'number' && frame.timeout > 0 ? { expiresAt: new Date(Date.now() + frame.timeout).toISOString() } : {}),
-    };
-    const title = str(frame.title);
-    if (method === 'confirm') {
-      return {
-        ...base,
-        kind: 'confirmation',
-        title: title ?? 'Confirm',
-        ...(str(frame.message) ? { message: str(frame.message) } : {}),
-        options: [],
-        actions: [{ id: 'confirm', label: 'Confirm', tone: 'primary' }, { id: 'cancel', label: 'Cancel', tone: 'danger' }],
-      };
-    }
-    if (method === 'select') {
-      const options = Array.isArray(frame.options) ? frame.options.flatMap(item => str(item) ?? []) : [];
-      return {
-        ...base,
-        kind: 'choice',
-        title: title ?? 'Choose',
-        ...(str(frame.message) ? { message: str(frame.message) } : {}),
-        options: options.map((label, index) => ({ id: `option:${index}`, label, selected: false })),
-        actions: [{ id: 'answer', label: 'Choose', tone: 'primary' }, { id: 'cancel', label: 'Cancel', tone: 'danger' }],
-      };
-    }
-    if (method === 'input' || method === 'editor') {
-      return {
-        ...base,
-        kind: 'question',
-        title: title ?? 'Input',
-        ...(str(frame.placeholder) ? { message: str(frame.placeholder) } : {}),
-        options: [],
-        allowOther: true,
-        ...(str(frame.prefill) ? { otherValue: str(frame.prefill), otherSelected: true } : {}),
-        actions: [{ id: 'answer', label: 'Submit', tone: 'primary' }, { id: 'cancel', label: 'Cancel', tone: 'danger' }],
-      };
-    }
-    return undefined;
-  }
-
-  private answerFor(pending: PiPendingUi, response: NativeInteractionResponse): RecordValue {
-    if (response.action === 'cancel') return { cancelled: true };
-    if (pending.method === 'confirm') return { confirmed: true };
-    if (pending.method === 'select') {
-      const selected = response.selectedIds ?? [];
-      const option = pending.interaction.options.find(item => item.id === selected[0]);
-      if (selected.length !== 1 || !option) throw new AppError('INVALID_INTERACTION_RESPONSE', 'Choose one available pi option.', 400);
-      return { value: option.label };
-    }
-    return { value: response.otherText ?? '' };
-  }
-
-  private async materialize(input: NativeRunInput): Promise<{ text: string; images: Array<{ type: 'image'; data: string; mimeType: string }> }> {
-    const extras = input.context.map(item => `@${item.path}${item.line ? `:${item.line}` : ''}`);
-    const images: Array<{ type: 'image'; data: string; mimeType: string }> = [];
-    for (const id of input.attachmentIds) {
-      const { attachment, data } = await this.host.readAttachment(id);
-      const mimeType = attachment.mimeType.toLowerCase();
-      if (IMAGE_MEDIA_TYPES.has(mimeType) && data.length <= MAX_INLINE_IMAGE_BYTES) {
-        images.push({ type: 'image', data: data.toString('base64'), mimeType });
-        continue;
-      }
-      // pi reads files through its own tools; anything it cannot take as an image is handed over as a path.
-      const directory = join(tmpdir(), 'riffet-attachments', attachment.id);
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      const target = join(directory, basename(attachment.name) || 'attachment');
-      await writeFile(target, data, { mode: 0o600 });
-      extras.push(target);
-    }
-    return { text: [input.text, ...(extras.length ? ['', ...extras] : [])].join('\n'), images };
-  }
-
-
   async listModels(session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<ModelInfo[]> {
     const state = this.conversation(session, project, profile);
     const proc = state.proc;
@@ -1377,8 +936,6 @@ export class PiRuntime {
     }
     return await listPiModels(profile);
   }
-
-
 }
 
 export function getPiRuntime(host: NativeBackendHost, stateDir?: string): PiRuntime {

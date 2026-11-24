@@ -7,60 +7,42 @@ import type {
   ModelConfigOption, ModelInfo, NativeActivity, NativeRunConfig, NativeSlashItem, NativeInteraction, NativeInteractionResponse,
   NativeInteractionResult, NativeStatus, NativeWorkbenchEvent, Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
-import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
-import { estimateTokens } from '../../metrics/tokens.js';
-import { runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import { AppError } from '../../errors.js';
-import { firstHumanMessage, firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
 import type { NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding } from '../types.js';
-import { projectDshEvent } from './events.js';
-import { dshGoalChange } from './goal.js';
 import type { ActivityLedger } from '../../journal/activity.js';
 import { JOB_ACTIVITY_PREFIX, STOP_DEADLINE_MS, noteKilled, type JobWire } from './activities.js';
 import { DshTranscriptSource } from './journal-source.js';
 import { DshLogStore } from './log-store.js';
-import { dshNativeContext, foldDshContext, type DshContextBreakdown } from './context.js';
 import { DshRpcPeer } from './rpc.js';
-import type { DshModelInfo, DshSessionReadResult, PendingInteraction, DshAttachmentInfo, DshConversation, DshSubagent, DshAttempt } from './types.js';
+import type { DshModelInfo, DshSessionReadResult, PendingInteraction, DshAttachmentInfo, DshConversation, DshSubagent } from './types.js';
 import { nonEmpty, asRecord } from './util.js';
 import {
   DEFAULT_PROVIDER, runtimeSettings, nativeDshSessionId, requireSafeNativeSessionId, probeDshCli, resolveExecutable, scrubbedEnvironment,
   type DshRuntimeSettings,
 } from './settings.js';
 import {
-  MODEL_UNAVAILABLE, PERMISSION_UNAVAILABLE, DSH_PERMISSIONS, dshPermission, displayedPermission, toDshSelection, canonicalDshModelValue, configAdoption,
-  parseModelSelection, modelValue, type DshConfigureResponse, type DshConfigureFailure,
+  MODEL_UNAVAILABLE, PERMISSION_UNAVAILABLE, DSH_PERMISSIONS, dshPermission, toDshSelection, canonicalDshModelValue,
+  modelValue, type DshConfigureResponse, type DshConfigureFailure,
 } from './selection.js';
 import { BRIDGE_PROTOCOL, peerHandlers, listenForBridge, waitForBridge, provisionBridgeProfile, closeServer } from './bridge.js';
+import { dshTurns, statusFor, interactionRequestId } from './transcript.js';
 import {
-  readDshUsage, mergeDshUsage, dshAttemptWindow, sessionGeneration, sameBreakdown, openTurn, recentRecord,
-  statusFor, dshTurns, interactionRequestId, pickRunId,
-} from './transcript.js';
+  configuredDshModelFallback, dshStatusFromResponse, dshTurnFailureMessage, IDLE_PUMP_INTERVAL_MS, IDLE_STOP_MS, notifyListeners,
+  PUMP_INTERVAL_MS, STARTUP_TIMEOUT_MS, type DshObserver,
+} from './runtime-shared.js';
+import {
+  cacheDshEvents, handleDshAgentStatus, handleDshAssistantStream, handleDshSessionEvent, pollDshConversation,
+  refreshDshConversation, refreshDshSubagents, type DshEventHost,
+} from './runtime-events.js';
 
 export { nativeDshSessionId, validateDshNativeSessionId, probeDshCli } from './settings.js';
 export { DSH_PERMISSIONS, dshPermission, canonicalDshModelValue, configAdoption, type DshConfigureFailure, type DshPermission } from './selection.js';
 export { dshProfilePatch } from './bridge.js';
+export type { DshObserver } from './runtime-shared.js';
 
-/** Records of a conversation kept for what later ones need of them (a prompt's echo, a subagent's result). */
-const REMEMBERED_EVENTS = 8_000;
-const TRANSCRIPT_PAGE_SIZE = 200;
-const IDLE_STOP_MS = AGENT_PROCESS_BUDGET.bridgeIdleSeconds * 1000;
-const STARTUP_TIMEOUT_MS = 25_000;
-const PUMP_INTERVAL_MS = 1_000;
-/** Every transcript read replays the whole DSH log, so an idle session is checked less often. */
-const IDLE_PUMP_INTERVAL_MS = 5_000;
-/** Child records read when a subagent panel first loads; older ones page through its own cursor. */
-const SUBAGENT_INITIAL_RECORDS = 1_000;
-/** Projected events kept in memory per subagent. */
-const SUBAGENT_LIMIT = 64;
-/** A finished continuable child can be woken by `send_message`, so it is still rechecked, slowly. */
-const SUBAGENT_IDLE_POLL_MS = 30_000;
 const profileRuntimes = new WeakMap<NativeBackendHost, Map<string, DshProfileRuntime>>();
 const profileStarts = new WeakMap<NativeBackendHost, Map<string, Promise<void>>>();
-
-/** A follower of one DSH session's changes; see {@link DshProfileRuntime.observe}. */
-export type DshObserver = (method: string, params: Record<string, unknown>) => void;
 
 /** Different connection settings may share a persistent profile, but never an active writer. */
 async function withProfileStart<T>(host: NativeBackendHost, directory: string, operation: () => Promise<T>): Promise<T> {
@@ -75,6 +57,7 @@ async function withProfileStart<T>(host: NativeBackendHost, directory: string, o
   try { return await operation(); }
   finally { release(); if (locks.get(directory) === tail) locks.delete(directory); }
 }
+
 /** Owns the no-TUI DSH profile process and routes its durable events to native sessions. */
 export class DshProfileRuntime {
   readonly settings: DshRuntimeSettings;
@@ -97,6 +80,22 @@ export class DshProfileRuntime {
 
   constructor(public profile: NativeBackendProfileConfig, private readonly host: NativeBackendHost, settings = runtimeSettings(profile)) {
     this.settings = settings;
+  }
+
+  private eventHost(): DshEventHost {
+    return {
+      settings: this.settings,
+      isConfiguring: sessionId => this.configuring.has(sessionId),
+      ensureStarted: provision => this.ensureStarted(provision),
+      readPage: (state, before, limit, nativeSessionId, after) => this.readPage(state, before, limit, nativeSessionId, after),
+      noteObservers: (nativeSessionId, method, params) => this.noteObservers(nativeSessionId, method, params),
+      cacheEvents: (state, rawEvents) => this.cacheEvents(state, rawEvents),
+      refreshSubagents: (state, items) => this.refreshSubagents(state, items),
+      statusFromResponse: (state, response) => this.statusFromResponse(state, response),
+      emitStatus: state => this.emitStatus(state),
+      markOffline: (state, error) => this.markOffline(state, error),
+      turnFailureMessage: (data, profile) => this.turnFailureMessage(data, profile),
+    };
   }
 
   /** Refresh picker/default preferences without touching the models held by open conversations. */
@@ -175,7 +174,7 @@ export class DshProfileRuntime {
   }
 
   async models(): Promise<ModelInfo[]> {
-    if (!this.peer) return this.configuredModelFallback();
+    if (!this.peer) return configuredDshModelFallback(this.settings.defaultModel);
     const response = await this.request<{ models?: DshModelInfo[] }>('runtime/models', {}, 20_000);
     return (response.models ?? []).map(model => {
       const efforts = model.reasoning?.efforts ?? [];
@@ -218,56 +217,8 @@ export class DshProfileRuntime {
     return { nativeSessionId: state.nativeSessionId, status: state.status };
   }
 
-  /**
-   * Reads the conversation's newest records once a subscriber attaches: the status, context and settings
-   * DSH reports with them, and the subagents they started. Their transcript reaches clients through the
-   * journal (`journal-source.ts`).
-   */
   private async refresh(state: DshConversation): Promise<void> {
-    const statusBeforeRead = state.status;
-    let result: DshSessionReadResult;
-    try {
-      if (!await this.ensureStarted(false)) return;
-      result = await this.readRecentEvents(state);
-    } catch (error) {
-      this.markOffline(state, error);
-      return;
-    }
-    if (!result.found) {
-      if (state.status === statusBeforeRead) { state.status = { phase: 'offline' }; this.emitStatus(state); }
-      return;
-    }
-    // Before the events are folded, so the fact that arrived with this page and the ones inside it
-    // publish as one frame.
-    this.noteContextBreakdown(state, result.contextBreakdown);
-    const events = this.cacheEvents(state, result.events);
-    state.historyTotal = result.total;
-    this.noteSubagents(state, events);
-    await this.refreshSubagents(state);
-    // Reading history and children can take seconds. A live notification received during either
-    // read is newer than this and must keep its activity phase.
-    if (state.status === statusBeforeRead) {
-      state.status = state.active ? this.statusFromResponse(state, result.status) : { ...this.statusFromResponse(state, result.status), phase: dshTurns.report(state, 'idle') };
-    }
-    const adoption = configAdoption({
-      // Only a preset DSH itself reported is followed: an idle read, or knob values matching no
-      // preset, report none, and the record is re-applied at the next open or send instead.
-      reported: { model: state.status.model, approval: result.status?.permission },
-      recorded: { model: state.session.model, approval: state.session.approval },
-      configuring: this.configuring.has(state.workbenchSessionId),
-      canonical: value => canonicalDshModelValue(value, this.settings.defaultModel),
-    });
-    const permission = displayedPermission(adoption.approval);
-    state.status = {
-      ...state.status,
-      model: adoption.model,
-      ...(permission !== undefined ? { approval: permission, permission } : {}),
-    };
-    if (adoption.patch) {
-      state.session = adoption.bump ? state.host.bumpConfig(state.workbenchSessionId, adoption.patch) : state.host.updateSession(state.workbenchSessionId, adoption.patch);
-      notifyListeners(state, { type: 'session', session: state.session });
-    }
-    this.emitStatus(state);
+    await refreshDshConversation(this.eventHost(), state);
   }
 
   subscribe(session: Session, project: Project, profile: NativeBackendProfileConfig, listener: (message: NativeControlMessage) => void): () => void {
@@ -372,7 +323,7 @@ export class DshProfileRuntime {
   }): Promise<void> {
     let state = this.byWorkbenchId.get(input.session.id);
     if (!state?.active || !this.peer) {
-      const opened = await this.open(input.session, input.project, input.profile);
+      await this.open(input.session, input.project, input.profile);
       state = this.byWorkbenchId.get(input.session.id);
       if (!state) throw new Error('DeepSeek Harness session did not open');
     }
@@ -586,7 +537,7 @@ export class DshProfileRuntime {
     }
     const nativeOwner = this.byNativeId.get(nativeSessionId);
     if (nativeOwner && (nativeOwner.workbenchSessionId !== session.id || resolve(nativeOwner.project.cwd) !== requestedCwd || nativeOwner.profile.id !== profile.id)) {
-      throw new AppError('NATIVE_SESSION_ID_IN_USE', 'This DeepSeek Harness session is already owned by another workbench session or workspace.', 409);
+      throw new AppError('NATIVE_SESSION_ID_INUSE', 'This DeepSeek Harness session is already owned by another workbench session or workspace.', 409);
     }
     const state: DshConversation = {
       workbenchSessionId: session.id,
@@ -631,232 +582,20 @@ export class DshProfileRuntime {
 
   /** Projects records just read and remembers them; returns the projected events. */
   private cacheEvents(state: DshConversation, rawEvents: unknown[]): NativeWorkbenchEvent[] {
-    this.noteContext(state, rawEvents);
-    const projected = this.projectEvents(state, rawEvents);
-    for (const event of projected) this.remember(state, event);
-    return projected;
-  }
-
-  /** Remembers an event, forgetting the oldest beyond the limit; false when it was known. */
-  private remember(state: DshConversation, event: NativeWorkbenchEvent): boolean {
-    if (state.events.has(event.nativeId)) return false;
-    state.events.set(event.nativeId, event);
-    for (const id of state.events.keys()) {
-      if (state.events.size <= REMEMBERED_EVENTS) break;
-      state.events.delete(id);
-    }
-    return true;
-  }
-
-  private async readRecentEvents(state: DshConversation): Promise<DshSessionReadResult> {
-    let page = await this.readPage(state, undefined, TRANSCRIPT_PAGE_SIZE);
-    if (!page.found || !page.hasMore) return page;
-    const newest: unknown[][] = [page.events];
-    let start = page.start;
-    let collected = page.events.length;
-    while (start > 0 && collected < REMEMBERED_EVENTS) {
-      page = await this.readPage(state, start, Math.min(TRANSCRIPT_PAGE_SIZE, REMEMBERED_EVENTS - collected));
-      if (!page.found || !page.events.length) break;
-      newest.unshift(page.events);
-      collected += page.events.length;
-      start = page.start;
-    }
-    const last = page;
-    return {
-      ...last,
-      found: true,
-      nativeSessionId: state.nativeSessionId,
-      events: newest.flat(),
-      start,
-      before: last.total,
-      total: last.total,
-      hasMore: start > 0,
-    };
-  }
-
-  private projectEvents(state: DshConversation, rawEvents: unknown[]): NativeWorkbenchEvent[] {
-    const result: NativeWorkbenchEvent[] = [];
-    let activeTurn: number | undefined;
-    const turnCommands = new Map<number, string>();
-    for (const raw of rawEvents) {
-      const event = asRecord(raw);
-      if (!event) continue;
-      const data = asRecord(event.data) ?? {};
-      if (event.type === 'turn/start' && Number.isSafeInteger(data.turn)) activeTurn = data.turn as number;
-      const messageCommandId = event.type === 'user/message' && asRecord(data.source)?.kind === 'user'
-        ? nonEmpty(asRecord(data.source)?.rpcId)
-        : undefined;
-      if (event.type === 'user/message' && asRecord(data.source)?.kind !== 'user') continue;
-      if (messageCommandId && activeTurn !== undefined) {
-        turnCommands.set(activeTurn, messageCommandId);
-        this.rememberTurnCommand(state, activeTurn, messageCommandId);
-      }
-      const commandId = messageCommandId ?? (event.type === 'turn/end' && Number.isSafeInteger(data.turn) ? turnCommands.get(data.turn as number) : undefined);
-      const resolvedCommandId = commandId ?? (event.type === 'turn/end' && Number.isSafeInteger(data.turn) ? state.turnCommands.get(data.turn as number) : undefined);
-      const liveCommand = resolvedCommandId ? this.liveCommand(state, resolvedCommandId) : undefined;
-      result.push(...projectDshEvent(event, {
-        sessionId: state.workbenchSessionId,
-        ...(liveCommand ? { runId: liveCommand.runId } : {}),
-        ...(resolvedCommandId ? { commandId: resolvedCommandId } : {}),
-        ...(liveCommand?.attachments ? { attachments: liveCommand.attachments } : {}),
-        ...(event.type === 'turn/end' ? { failureMessage: this.safeTurnFailureMessage(state, data) } : {}),
-      }));
-      if (event.type === 'turn/end' && Number.isSafeInteger(data.turn)) {
-        turnCommands.delete(data.turn as number);
-        if (activeTurn === data.turn) activeTurn = undefined;
-      }
-    }
-    return result;
-  }
-
-  private rememberTurnCommand(state: DshConversation, turn: number, commandId: string): void {
-    state.turnCommands.set(turn, commandId);
-    while (state.turnCommands.size > REMEMBERED_EVENTS) {
-      state.turnCommands.delete(state.turnCommands.keys().next().value!);
-    }
-  }
-
-  private safeTurnFailureMessage(state: DshConversation, data: Record<string, unknown>): string | undefined {
-    return this.turnFailureMessage(data, state.profile);
+    return cacheDshEvents(this.eventHost(), state, rawEvents);
   }
 
   /** What a failed `turn/end` record says went wrong, without the profile's secrets. */
   turnFailureMessage(data: Record<string, unknown>, profile: NativeBackendProfileConfig = this.profile): string | undefined {
-    const reason = asRecord(data.reason);
-    const nativeError = asRecord(reason?.error);
-    let message = nonEmpty(nativeError?.message) ?? nonEmpty(nativeError?.code);
-    if (!message) return undefined;
-    if (this.settings.apiKey) message = message.split(this.settings.apiKey).join('[REDACTED]');
-    for (const [key, value] of Object.entries(profile.config)) {
-      if (/(?:secret|token|password|credential|api[_-]?key)/i.test(key) && typeof value === 'string' && value) message = message.split(value).join('[REDACTED]');
-    }
-    return message.replace(/\bBearer\s+[^\s,;}]+/gi, 'Bearer [REDACTED]').slice(0, 300);
+    return dshTurnFailureMessage(this.settings, data, profile);
   }
 
-  private liveCommand(state: DshConversation, commandId: string): { runId: string; attachments?: DshAttachmentInfo[] } | undefined {
-    return state.commandMap.get(commandId);
-  }
-
-  /**
-   * Publish the context facts carried by committed DSH records. `assistant/message.usage` is the
-   * provider's own prompt accounting and `request/context` names the route's window, so the meter
-   * shows what the CLI measured; a record without either contributes nothing, and a replayed page
-   * (or an older history load) can never replace newer facts because each is guarded by its
-   * sequence.
-   */
-  private noteContext(state: DshConversation, rawEvents: unknown[]): void {
-    if (!foldDshContext(state.contextFacts, rawEvents)) return;
-    this.refreshContext(state);
-  }
-
-  /**
-   * Adopt the composition the bridge projected off the live session — or drop it when the session
-   * has none (no live projection, an older DSH without the registry, a projection that refuses to
-   * fold). The three parts describe the surface *now*, so a value from an earlier read is not a
-   * fallback: without a fresh one the popover draws the measured ratio as a single bar, which is
-   * what it did before this existed.
-   */
-  private noteContextBreakdown(state: DshConversation, breakdown: DshContextBreakdown | undefined): void {
-    if (sameBreakdown(state.contextBreakdown, breakdown)) return;
-    state.contextBreakdown = breakdown;
-    this.refreshContext(state);
-  }
-
-  /** Rebuild the published frame from the facts and the composition, notifying only on a change. */
-  private refreshContext(state: DshConversation): void {
-    const next = dshNativeContext(state.contextFacts, state.contextBreakdown);
-    if ((next ? JSON.stringify(next) : '') === (state.context ? JSON.stringify(state.context) : '')) return;
-    state.context = next;
-    notifyListeners(state, { type: 'context', ...(next ? { context: next } : {}) });
-  }
-
-  /** Registers the children that newly projected parent or child events started. */
-  private noteSubagents(state: DshConversation, events: readonly NativeWorkbenchEvent[]): DshSubagent[] {
-    const created: DshSubagent[] = [];
-    for (const event of events) {
-      if (event.type !== 'tool_call_update') continue;
-      const toolCallId = nonEmpty(event.data.toolCallId);
-      const childId = nonEmpty(asRecord(event.data.subagentResult)?.agentId);
-      if (!toolCallId || !childId || state.subagents.has(toolCallId)) continue;
-      const item: DshSubagent = { toolCallId, childId, total: 0, loaded: false, running: false, lastChangeAt: Date.now(), lastSyncAt: 0 };
-      state.subagents.set(toolCallId, item);
-      created.push(item);
-    }
-    while (state.subagents.size > SUBAGENT_LIMIT) {
-      const items = [...state.subagents.values()];
-      const evicted = items.filter(item => !item.running).sort((left, right) => left.lastChangeAt - right.lastChangeAt)[0] ?? items[0]!;
-      state.subagents.delete(evicted.toolCallId);
-    }
-    return created.filter(item => state.subagents.has(item.toolCallId));
-  }
-
-  private followSubagents(state: DshConversation, events: readonly NativeWorkbenchEvent[]): void {
-    const created = this.noteSubagents(state, events);
-    if (created.length) void this.refreshSubagents(state, created);
-  }
-
-  /** Running children sync on every call; finished ones at most every SUBAGENT_IDLE_POLL_MS. */
-  private async refreshSubagents(state: DshConversation, items: readonly DshSubagent[] = [...state.subagents.values()]): Promise<void> {
-    const now = Date.now();
-    await Promise.all(items.map(async (item) => {
-      if (item.syncing) return await item.syncing;
-      if (item.loaded && !item.running && now - item.lastSyncAt < SUBAGENT_IDLE_POLL_MS) return;
-      const task = this.syncSubagent(state, item).catch(() => { /* an unreadable child keeps its last state */ });
-      item.syncing = task;
-      try { await task; } finally { if (item.syncing === task) item.syncing = undefined; }
-    }));
-  }
-
-  /** Reads what a child committed since the last sync: whether it runs, and the children it started; its lane reads the same records. */
-  private async syncSubagent(state: DshConversation, item: DshSubagent): Promise<void> {
-    item.lastSyncAt = Date.now();
-    const newest = await this.readPage(state, undefined, 1, item.childId);
-    if (!newest.found || !state.subagents.has(item.toolCallId)) return;
-    const reset = !item.loaded || sessionGeneration(item.childId, newest) !== item.generation
-      || newest.total < item.total || newest.total - item.total > SUBAGENT_INITIAL_RECORDS;
-    if (reset) {
-      const page = await this.readPage(state, undefined, SUBAGENT_INITIAL_RECORDS, item.childId);
-      if (!page.found || !state.subagents.has(item.toolCallId)) return;
-      item.total = page.before;
-      item.generation = sessionGeneration(item.childId, page);
-      item.loaded = true;
-      // The window can start after the turn opened; a crashed child must not spin forever.
-      item.running = openTurn(page.events) ?? recentRecord(page.events);
-      item.lastChangeAt = Date.now();
-      this.noteObservers(state.nativeSessionId, 'subagent/read', { agentId: item.childId, total: page.total });
-      notifyListeners(state, { type: 'subagent', toolCallId: item.toolCallId, agentId: item.childId, running: item.running });
-      this.followSubagents(state, this.projectChild(state, page.events));
-      return;
-    }
-    if (newest.total === item.total) return;
-    this.noteObservers(state.nativeSessionId, 'subagent/read', { agentId: item.childId, total: newest.total });
-    const delta = await this.readPage(state, newest.total, newest.total - item.total, item.childId);
-    if (!delta.found || !state.subagents.has(item.toolCallId) || delta.start !== item.total) return;
-    const events = this.projectChild(state, delta.events);
-    const running = openTurn(delta.events) ?? item.running;
-    item.total = delta.before;
-    item.lastChangeAt = Date.now();
-    if (!events.length && running === item.running) return;
-    item.running = running;
-    notifyListeners(state, { type: 'subagent', toolCallId: item.toolCallId, agentId: item.childId, running });
-    this.followSubagents(state, events);
-  }
-
-  /** The delegated prompt and runtime context in a child's records come from its parent. */
-  private projectChild(state: DshConversation, rawEvents: readonly unknown[]): NativeWorkbenchEvent[] {
-    return rawEvents.flatMap(raw => projectDshEvent(raw, { sessionId: state.workbenchSessionId }));
+  private async refreshSubagents(state: DshConversation, items?: readonly DshSubagent[]): Promise<void> {
+    await refreshDshSubagents(this.eventHost(), state, items);
   }
 
   private statusFromResponse(state: DshConversation, response: DshSessionReadResult['status'] | { status?: 'busy' | 'idle'; model?: string; provider?: string; reasoningEffort?: string; approval?: string; permission?: string } | undefined): NativeStatus {
-    const phase = response?.status === 'busy' ? 'busy' : 'idle';
-    const model = response?.provider && response.model ? modelValue(response.provider, response.model, response.reasoningEffort) : state.session.model;
-    const approval = displayedPermission(response?.permission ?? state.session.approval);
-    return {
-      phase: dshTurns.report(state, state.interaction ? 'attention' : phase),
-      ...(model ? { model } : {}),
-      ...(approval ? { approval, permission: approval } : {}),
-      ...(state.interaction ? { interaction: state.interaction } : {}),
-    };
+    return dshStatusFromResponse(state, response);
   }
 
   handleNotification(method: string, params: Record<string, unknown>): void {
@@ -865,259 +604,19 @@ export class DshProfileRuntime {
     if (typeof params.sessionId === 'string' && params.sessionId !== state.workbenchSessionId) return;
     this.noteObservers(state.nativeSessionId, method, params);
     if (method === 'session/event') {
-      this.handleSessionEvent(state, params);
+      handleDshSessionEvent(this.eventHost(), state, params);
     } else if (method === 'agent/status') {
       // A bridge older than the fix above packed stream frames into `agent/status`. Accepting
       // both keeps live text working until the profile is reprovisioned on the next start.
-      if (asRecord(params.assistantStream)) this.handleAssistantStream(state, params);
-      else this.handleAgentStatus(state, params);
+      if (asRecord(params.assistantStream)) handleDshAssistantStream(state, params);
+      else handleDshAgentStatus(this.eventHost(), state, params);
     } else if (method === 'agent/assistant-stream') {
-      this.handleAssistantStream(state, params);
+      handleDshAssistantStream(state, params);
     } else if (method === 'interaction/cancel') {
       this.cancelInteraction(state, nonEmpty(params.requestId));
     } else if (method === 'bridge/error') {
       this.markOffline(state, new Error(nonEmpty(params.message) ?? 'DeepSeek Harness bridge reported an error'));
     }
-  }
-
-  /**
-   * Name the conversation after its first human message. Idempotent: once the title carries
-   * `titleSource: 'prompt'` the patch is empty, so replaying history cannot rename it twice.
-   */
-  private nameFromMessage(state: DshConversation, text: string): void {
-    const patch = firstMessageTitlePatch(state.host.getSession(state.workbenchSessionId), text);
-    if (!patch) return;
-    const session = state.host.updateSession(state.workbenchSessionId, patch);
-    notifyListeners(state, { type: 'session', session });
-  }
-
-  private handleSessionEvent(state: DshConversation, params: Record<string, unknown>): void {
-    const raw = params.event;
-    const event = asRecord(raw);
-    if (!event) return;
-    this.noteContext(state, [event]);
-    const eventData = asRecord(event.data) ?? {};
-    const commandId = nonEmpty(params.commandId);
-    const runId = pickRunId(params);
-    const attachments = Array.isArray(params.attachments) ? params.attachments.flatMap((item) => {
-      const value = asRecord(item);
-      if (!value || typeof value.id !== 'string' || typeof value.name !== 'string' || typeof value.mimeType !== 'string') return [];
-      return [{ id: value.id, name: value.name, mimeType: value.mimeType, ...(typeof value.width === 'number' ? { width: value.width } : {}), ...(typeof value.height === 'number' ? { height: value.height } : {}) }];
-    }) : undefined;
-    if (commandId && runId) {
-      state.commandMap.set(commandId, { runId, ...(attachments ? { attachments } : {}) });
-      // Bind the turn here rather than waiting for the poll, so a response that starts immediately
-      // still reports its speed against the run the user actually sent.
-      if (state.activeTurn !== undefined) this.rememberTurnCommand(state, state.activeTurn, commandId);
-    }
-    if (event.type === 'turn/start' && Number.isSafeInteger(eventData.turn)) state.activeTurn = eventData.turn as number;
-    if (event.type === 'turn/end' && Number.isSafeInteger(eventData.turn) && state.activeTurn === eventData.turn) state.activeTurn = undefined;
-    if (event.type === 'session/title' && typeof asRecord(event.data)?.title === 'string') {
-      // DSH's own title is a ~10-character summary aimed at its own UI; here it is only a stopgap
-      // for a conversation that has no name yet (see session-title.ts).
-      const patch = providerTitlePatch(state.host.getSession(state.workbenchSessionId), asRecord(event.data)?.title as string);
-      if (patch) {
-        const session = state.host.updateSession(state.workbenchSessionId, patch);
-        notifyListeners(state, { type: 'session', session });
-      }
-      return;
-    }
-    if (event.type === 'user/message' && asRecord(eventData.source)?.kind !== 'user') return;
-    const projected = projectDshEvent(event, {
-      sessionId: state.workbenchSessionId,
-      ...(runId ? { runId } : {}),
-      ...(commandId ? { commandId } : {}),
-      ...(attachments?.length ? { attachments } : {}),
-      ...(event.type === 'turn/end' ? { failureMessage: this.safeTurnFailureMessage(state, eventData) } : {}),
-    });
-    // A replayed history carries the conversation's first human message, which is what finally
-    // names a resumed conversation (DSH's own title only ever fills a placeholder).
-    const humanMessage = firstHumanMessage(projected);
-    if (humanMessage) this.nameFromMessage(state, humanMessage);
-    const fresh = projected.filter(item => this.remember(state, item));
-    this.followSubagents(state, fresh);
-    const goal = dshGoalChange(state.host.getSession(state.workbenchSessionId).goal, fresh);
-    if (goal !== undefined) notifyListeners(state, { type: 'session', session: state.host.updateSession(state.workbenchSessionId, { goal: goal ?? undefined }) });
-    // The committed record carries the provider's exact accounting even when no `usage` chunk
-    // was streamed, and it commits before the attempt's `end` frame, so the running attempt can
-    // still adopt the number rather than settling on an estimate.
-    if (event.type === 'assistant/message') this.adoptCommittedUsage(state, eventData);
-    if (event.type === 'turn/start') state.status = statusFor(state, 'busy');
-    // Goal continuations and queued inbox messages can start another turn immediately. Only the
-    // live agent lifecycle (notification or session/read) can say the agent is actually idle.
-    this.emitStatus(state);
-  }
-
-  private handleAgentStatus(state: DshConversation, params: Record<string, unknown>): void {
-    if (params.status === 'disposed') {
-      state.active = false;
-      state.status = statusFor(state, 'offline');
-    } else if (params.status === 'running') {
-      state.active = true;
-      state.status = statusFor(state, 'busy');
-    } else if (params.status === 'idle') {
-      state.active = true;
-      state.status = statusFor(state, 'idle');
-    }
-    this.emitStatus(state);
-  }
-
-  private handleAssistantStream(state: DshConversation, params: Record<string, unknown>): void {
-    const frame = asRecord(params.assistantStream);
-    if (!frame) return;
-    const attemptId = nonEmpty(frame.attemptId) ?? 'attempt';
-    if (frame.type === 'start') {
-      // The opening frame is the only one that names the turn; every later chunk arrives with
-      // just the attempt id, so the turn has to be remembered here.
-      state.attempts.set(attemptId, {
-        turn: typeof frame.turn === 'number' ? frame.turn : -1,
-        step: typeof frame.step === 'number' ? frame.step : -1,
-        attemptId,
-        text: '',
-        startedAt: 0,
-        lastAt: 0,
-        startedWallAt: Date.now(),
-      });
-      return;
-    }
-    if (frame.type === 'end') {
-      this.settleAttempt(state, attemptId);
-      return;
-    }
-    const chunk = asRecord(frame.chunk);
-    if (!chunk) return;
-    if (chunk.type === 'usage') {
-      // Provider accounting for the whole attempt, usually delivered just before `finish`. It is
-      // the only exact count DSH offers, so it replaces whatever the deltas estimated. The ledger
-      // write waits until the attempt settles.
-      const attempt = state.attempts.get(attemptId);
-      const usage = readDshUsage(asRecord(chunk.usage), nonEmpty(chunk.model) ?? nonEmpty(frame.model));
-      if (attempt && usage) attempt.usage = mergeDshUsage(attempt.usage, usage);
-      return;
-    }
-    // Tool-call arguments are generated output too: they take real time to stream and the provider
-    // bills them, so they extend the measured window and feed the estimate. They are deliberately
-    // not turned into transcript rows — the durable tool call is what the timeline renders — but
-    // leaving them out of the measurement ended the window early on every tool-using step and made
-    // the reported rate read high.
-    if (chunk.type === 'tool-call') {
-      const attempt = state.attempts.get(attemptId);
-      if (attempt) attempt.hasUnstreamed = true;
-      return;
-    }
-    const streamingAnswer = chunk.type === 'text-delta' || chunk.type === 'reasoning-delta';
-    if (!streamingAnswer && chunk.type !== 'tool-call-delta') return;
-    const produced = streamingAnswer
-      ? (typeof chunk.text === 'string' ? chunk.text : '')
-      : (typeof chunk.argumentsDelta === 'string' ? chunk.argumentsDelta : '');
-    if (!produced) return;
-    const attempt = state.attempts.get(attemptId) ?? {
-      turn: typeof frame.turn === 'number' ? frame.turn : -1, step: -1, attemptId, text: '',
-      startedAt: 0, lastAt: 0, startedWallAt: Date.now(),
-    };
-    state.attempts.set(attemptId, attempt);
-    // `frame.time` is the session's own timestamp for the chunk, not our receive time, so the
-    // measured window is model generation rather than network transit.
-    const at = typeof frame.time === 'number' ? frame.time : Date.now();
-    attempt.text += produced;
-    if (!attempt.startedAt) attempt.startedAt = at;
-    attempt.lastAt = at;
-    this.publishAttempt(state, attempt);
-  }
-
-  /**
-   * Adopt a committed message's usage onto the attempt that produced it. Turn and step identify
-   * the attempt because DSH only names them on the opening frame, which is why the running
-   * attempts are keyed by attempt id but searched by position here.
-   */
-  private adoptCommittedUsage(state: DshConversation, eventData: Record<string, unknown>): void {
-    const usage = readDshUsage(asRecord(eventData.usage), nonEmpty(eventData.model));
-    if (!usage) return;
-    const turn = typeof eventData.turn === 'number' ? eventData.turn : undefined;
-    const step = typeof eventData.step === 'number' ? eventData.step : undefined;
-    if (turn === undefined || step === undefined) return;
-    for (const attempt of state.attempts.values()) {
-      if (attempt.turn !== turn || attempt.step !== step) continue;
-      attempt.usage = mergeDshUsage(attempt.usage, usage);
-      return;
-    }
-  }
-
-  /** The run a turn belongs to, so a step's speed lands on the turn the user actually sent. */
-  private runForTurn(state: DshConversation, turn: number): string | undefined {
-    // With exactly one turn in flight there is only one answer, which covers the window between a
-    // stream starting and its turn becoming known. Two concurrent turns stay unresolved on purpose.
-    const commandId = state.turnCommands.get(turn)
-      ?? (state.turnCommands.size === 1 ? state.turnCommands.values().next().value : undefined);
-    return commandId ? state.commandMap.get(commandId)?.runId : undefined;
-  }
-
-  private metricsFor(state: DshConversation, runId: string | undefined, turn: number): RunMetricsTracker {
-    return runTracker(state.metrics, runId ?? `turn:${turn}`, { runId }, {
-      emit: message => notifyListeners(state, message), save: (id, run) => state.host.saveRunMetrics(id, run),
-    });
-  }
-
-  private publishAttempt(state: DshConversation, attempt: DshAttempt): void {
-    const range = dshAttemptWindow(attempt);
-    if (!range) return;
-    const tracker = this.metricsFor(state, this.runForTurn(state, attempt.turn), attempt.turn);
-    tracker.update({
-      stepId: attempt.attemptId,
-      text: attempt.text,
-      ...(attempt.usage ? { outputTokens: attempt.usage.outputTokens } : {}),
-      ...range,
-      live: true,
-    });
-  }
-
-  /** Publish a finished attempt once, with the provider's count when it reported one. */
-  private settleAttempt(state: DshConversation, attemptId: string): void {
-    const attempt = state.attempts.get(attemptId);
-    if (!attempt) return;
-    state.attempts.delete(attemptId);
-    const range = dshAttemptWindow(attempt);
-    if (!range) return;
-    const tracker = this.metricsFor(state, this.runForTurn(state, attempt.turn), attempt.turn);
-    tracker.update({
-      stepId: attemptId,
-      text: attempt.text,
-      ...(attempt.usage ? { outputTokens: attempt.usage.outputTokens } : {}),
-      ...(attempt.usage?.reasoningTokens === undefined ? {} : { reasoningTokens: attempt.usage.reasoningTokens }),
-      ...range,
-      live: false,
-    }, true);
-    this.recordSettledAttempt(state, attempt, range);
-  }
-
-  /**
-   * One settled DSH attempt. The step id is `turn:<n>:step:<n>` when the opening frame named both,
-   * which is also what a durable `assistant/message` carries, so a disk backfill uses the same
-   * rule. An attempt that never learned its position falls back to `attempt:<attemptId>`.
-   */
-  private recordSettledAttempt(state: DshConversation, attempt: DshAttempt, range: { startedAt: number; endedAt: number; window: 'stream' | 'transcript' | 'observed' }): void {
-    const usage = attempt.usage;
-    const provider = usage !== undefined;
-    const outputTokens = provider ? usage.outputTokens : Math.max(0, Math.round(estimateTokens(attempt.text)));
-    if (!provider && !attempt.text.trim()) return;
-    const stepId = attempt.turn >= 0 && attempt.step >= 0
-      ? `turn:${attempt.turn}:step:${attempt.step}`
-      : `attempt:${attempt.attemptId}`;
-    try {
-      state.host.stats?.recordUsage(state.workbenchSessionId, this.runForTurn(state, attempt.turn), {
-        stepId,
-        ...(usage?.model ? { model: usage.model } : {}),
-        startedAt: range.startedAt,
-        endedAt: range.endedAt,
-        window: range.window,
-        tokenSource: provider ? 'provider' : 'estimated',
-        outputTokens,
-        ...(usage?.inputTokens === undefined ? {} : { inputTokens: usage.inputTokens }),
-        ...(usage?.cacheReadTokens === undefined ? {} : { cacheReadTokens: usage.cacheReadTokens }),
-        ...(usage?.cacheWriteTokens === undefined ? {} : { cacheWriteTokens: usage.cacheWriteTokens }),
-        ...(usage?.reasoningTokens === undefined ? {} : { reasoningTokens: usage.reasoningTokens }),
-      });
-    } catch { /* statistics must never affect the stream */ }
   }
 
   async handleRequest(method: string, params: Record<string, unknown>): Promise<unknown> {
@@ -1300,54 +799,7 @@ export class DshProfileRuntime {
   }
 
   private async poll(state: DshConversation): Promise<void> {
-    if (!state.listeners.size || !this.peer) return;
-    const statusBeforeRead = state.status;
-    try {
-      // Every read replays the whole DSH log, so the newest window and the records after the cursor
-      // come back from one read; only a gap wider than a page needs more.
-      const newest = await this.readPage(state, undefined, TRANSCRIPT_PAGE_SIZE, state.nativeSessionId, state.historyTotal);
-      if (!newest.found) return;
-      const previousTotal = state.historyTotal;
-      if (newest.total !== previousTotal) this.noteObservers(state.nativeSessionId, 'session/read', { total: newest.total });
-      const resetRequired = newest.total < previousTotal || newest.total - previousTotal > REMEMBERED_EVENTS;
-      if (resetRequired) {
-        const result = await this.readRecentEvents(state);
-        const events = this.cacheEvents(state, result.events);
-        state.historyTotal = result.total;
-        this.noteSubagents(state, events);
-        await this.refreshSubagents(state);
-        if (result.status && state.status === statusBeforeRead) {
-          state.status = this.statusFromResponse(state, result.status);
-          this.emitStatus(state);
-        }
-        return;
-      }
-      if (newest.total > state.historyTotal) {
-        const newestStart = newest.start ?? Math.max(0, newest.total - newest.events.length);
-        let before = newestStart;
-        const rawPages: unknown[][] = [newest.events.slice(Math.max(0, state.historyTotal - newestStart))];
-        while (before > state.historyTotal) {
-          const limit = Math.min(TRANSCRIPT_PAGE_SIZE, before - state.historyTotal);
-          const page = await this.readPage(state, before, limit);
-          if (!page.found || page.start >= before) break;
-          rawPages.unshift(page.events);
-          before = page.start;
-        }
-        const rawEvents = rawPages.flat();
-        const previous = new Set(state.events.keys());
-        this.noteSubagents(state, this.cacheEvents(state, rawEvents).filter(event => !previous.has(event.nativeId)));
-      }
-      state.historyTotal = newest.total;
-      await this.refreshSubagents(state);
-      // Status can change without a durable record. Polling also repairs missed notifications,
-      // but never replaces a live update that arrived while the snapshot/children were read.
-      if (newest.status && state.status === statusBeforeRead) {
-        state.status = this.statusFromResponse(state, newest.status);
-        this.emitStatus(state);
-      }
-    } catch (error) {
-      this.markOffline(state, error);
-    }
+    await pollDshConversation(this.eventHost(), state, Boolean(this.peer));
   }
 
   handleClose(error: Error): void {
@@ -1379,12 +831,6 @@ export class DshProfileRuntime {
   private markOffline(state: DshConversation, error: unknown): void {
     state.status = { phase: dshTurns.report(state, 'offline'), noticeLevel: 'error', notice: error instanceof Error ? error.message.slice(0, 240) : String(error).slice(0, 240) };
     this.emitStatus(state);
-  }
-
-  private configuredModelFallback(): ModelInfo[] {
-    const parsed = parseModelSelection(this.settings.defaultModel, DEFAULT_PROVIDER);
-    const value = modelValue(parsed.provider, parsed.model, parsed.reasoningEffort);
-    return [{ value, name: `${parsed.provider}: ${parsed.model}`, configOptions: [] }];
   }
 
   private scheduleIdleStop(): void {
@@ -1479,11 +925,5 @@ export async function closeDshProfileRuntimes(host: NativeBackendHost): Promise<
     await Promise.allSettled([...runtimes.values()].map(runtime => runtime.disposeProfile()));
   } finally {
     runtimes.clear();
-  }
-}
-
-function notifyListeners(state: DshConversation, message: NativeControlMessage): void {
-  for (const listener of state.listeners) {
-    try { listener(message); } catch { /* one subscriber must not stop the others */ }
   }
 }

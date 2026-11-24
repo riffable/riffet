@@ -16,11 +16,11 @@
  * may include other sessions' edits in a shared checkout: pass paths to narrow it).
  *
  * File sizes (docs/guide/aif.md §5.1): a non-test source file in a module that is not in
- * scripts/aif-baseline.json may not pass LINE_LIMIT. A file listed there may grow past its entry with a
- * warning, not a failure: whether it is split follows the hotspots `sizes` prints, not its line count.
- * `--update` lowers entries and drops the ones back under the limit; `--update --add <path>` also records
- * <path> at its current size. A file kept large on purpose is listed under `exempt` with a hard limit and
- * the reason, which `sizes` prints for review.
+ * scripts/aif-baseline.json may not pass LINE_LIMIT, and a file listed there may not grow past its
+ * baseline entry (if an addition pushes it over, split first or grant a temporary `exempt` cap).
+ * `--update` lowers entries and drops the ones back under the limit; `--update --add <path>` also
+ * records <path> at its current size. A file kept large on purpose is listed under `exempt` with a
+ * hard limit and the reason, which `sizes` prints for review.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -399,27 +399,27 @@ function check(args: string[]) {
     sizes.set(file, text.split('\n').length - (text.endsWith('\n') ? 1 : 0));
   }
   const over: string[] = [];
-  const grown: string[] = [];
   for (const [file, lines] of sizes) {
     const exempt = baseline.exempt[file];
     const recorded = baseline.lines[file];
     if (exempt) {
       if (lines > exempt.limit) over.push(`${file}: ${lines} lines, its exemption allows ${exempt.limit}`);
     } else if (recorded !== undefined) {
-      if (lines > recorded) grown.push(`${file}: ${lines} lines, ${lines - recorded} past its baseline of ${recorded}; split it if \`pnpm aif sizes\` ranks it a hotspot`);
+      if (lines > recorded && !(update && added.has(file))) {
+        over.push(`${file}: ${lines} lines, ${lines - recorded} past its baseline of ${recorded}; split it before growing further`);
+      }
     } else if (lines > LINE_LIMIT && !(update && added.has(file))) over.push(`${file}: ${lines} lines, the limit for a file not in scripts/aif-baseline.json is ${LINE_LIMIT}`);
   }
   if (update) {
     const next: Record<string, number> = {};
     for (const [file, allowed] of Object.entries(baseline.lines)) {
       const lines = sizes.get(file);
-      if (lines !== undefined && lines > LINE_LIMIT) next[file] = Math.min(allowed, lines);
+      if (lines !== undefined && lines > LINE_LIMIT) next[file] = added.has(file) ? lines : Math.min(allowed, lines);
     }
     for (const file of added) if ((sizes.get(file) ?? 0) > LINE_LIMIT) next[file] = sizes.get(file)!;
     const exempt = Object.keys(baseline.exempt).length ? { exempt: baseline.exempt } : {};
     writeFileSync(baselinePath, `${JSON.stringify({ lines: Object.fromEntries(Object.entries(next).sort()), ...exempt }, null, 2)}\n`);
   }
-  for (const message of grown) console.log(process.env.GITHUB_ACTIONS ? `::warning title=AIF::${message}` : `warning: ${message}`);
   problems.push(...over);
   if (problems.length) {
     console.error(`modules: ${problems.length} problem(s)`);

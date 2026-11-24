@@ -7,7 +7,7 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: zh-Hans\n"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "、"
 msgstr "、"
 
@@ -26,7 +26,7 @@ msgstr "{0} 个提交"
 #. placeholder {0}: stats.files
 #: src/app/session/Attempts.tsx
 #: src/app/session/SessionAside.tsx
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "{0} 个文件"
 msgstr "{0} 个文件"
 
@@ -60,11 +60,11 @@ msgstr "{0} 还在运行，先停止当前任务再交接。"
 msgid "{active} 运行"
 msgstr "{active} 运行"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "{agents} 个子 Agent 运行中"
 msgstr "{agents} 个子 Agent 运行中"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "{agents} 个子 Agent、{workflows} 个工作流运行中"
 msgstr "{agents} 个子 Agent、{workflows} 个工作流运行中"
 
@@ -92,7 +92,7 @@ msgstr "{language} 图表"
 msgid "{language} 预览"
 msgstr "{language} 预览"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "{lineCount} 行"
 msgstr "{lineCount} 行"
 
@@ -140,7 +140,7 @@ msgstr "{used} / {budget} token"
 msgid "{used} token"
 msgstr "{used} token"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "{workflows} 个工作流运行中"
 msgstr "{workflows} 个工作流运行中"
 
@@ -156,7 +156,7 @@ msgstr "「{title}」需要你在终端里操作"
 msgid "「{title}」需要你在网页中选择"
 msgstr "「{title}」需要你在网页中选择"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "Agent 附加的图片"
 msgstr "Agent 附加的图片"
 
@@ -169,7 +169,7 @@ msgid "CLI 已响应，但当前交互已变化。请同步状态或查看终端
 msgstr "CLI 已响应，但当前交互已变化。请同步状态或查看终端，不要重复提交。"
 
 #. placeholder {0}: item.sourceStatus
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "CLI 状态：{0}"
 msgstr "CLI 状态：{0}"
 
@@ -181,16 +181,17 @@ msgstr "Esc 拒绝"
 msgid "MCP"
 msgstr "MCP"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "MCP 与动态工具"
 msgstr "MCP 与动态工具"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
+#: src/app/session/ComposerPickers.tsx
 #: src/app/session/ToolsPicker.tsx
 msgid "Skills"
 msgstr "Skills"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/transcriptFind.tsx
 msgid "上一个"
 msgstr "上一个"
 
@@ -222,11 +223,11 @@ msgstr "上下文压缩已中止"
 msgid "上下文已压缩"
 msgstr "上下文已压缩"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "上下文用量"
 msgstr "上下文用量"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "上下文长度"
 msgstr "上下文长度"
 
@@ -235,8 +236,8 @@ msgstr "上下文长度"
 msgid "上传中"
 msgstr "上传中"
 
-#: src/app/session/Composer.tsx
 #: src/app/session/ComposerAttachments.tsx
+#: src/app/session/useComposerUploads.ts
 msgid "上传失败"
 msgstr "上传失败"
 
@@ -244,7 +245,7 @@ msgstr "上传失败"
 msgid "上次记录 · "
 msgstr "上次记录 · "
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/transcriptFind.tsx
 msgid "下一个"
 msgstr "下一个"
 
@@ -264,7 +265,7 @@ msgstr "下载"
 msgid "下载图片"
 msgstr "下载图片"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "下载文件"
 msgstr "下载文件"
 
@@ -280,7 +281,7 @@ msgstr "与服务器的连接中断"
 msgid "丢弃"
 msgstr "丢弃"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "中间部分已省略 · 展开全部"
 msgstr "中间部分已省略 · 展开全部"
 
@@ -343,12 +344,12 @@ msgid "从此处另开会话"
 msgstr "从此处另开会话"
 
 #. placeholder {0}: index + 1
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "任务 {0}"
 msgstr "任务 {0}"
 
 #. placeholder {0}: item.taskId
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "任务 ID：{0}"
 msgstr "任务 ID：{0}"
 
@@ -357,7 +358,7 @@ msgstr "任务 ID：{0}"
 msgid "任务失败"
 msgstr "任务失败"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "会话"
 msgstr "会话"
 
@@ -393,7 +394,7 @@ msgstr "估算 token 数"
 msgid "你的回答"
 msgstr "你的回答"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "你的消息"
 msgstr "你的消息"
 
@@ -450,7 +451,7 @@ msgstr "停止并发送"
 msgid "先停止当前任务再交接"
 msgstr "先停止当前任务再交接"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "先出方案，确认后再动手"
 msgstr "先出方案，确认后再动手"
 
@@ -479,11 +480,11 @@ msgstr "关闭"
 msgid "关闭侧边聊天"
 msgstr "关闭侧边聊天"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/transcriptFind.tsx
 msgid "关闭查找"
 msgstr "关闭查找"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "其他"
 msgstr "其他"
 
@@ -504,7 +505,7 @@ msgid "其余尝试"
 msgstr "其余尝试"
 
 #. placeholder {0}: compactTokens(breakdownTotal)
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "内容估算 · ~{0}"
 msgstr "内容估算 · ~{0}"
 
@@ -528,12 +529,12 @@ msgstr "最多 {limit} 个附件"
 msgid "最多 {limit} 个附件，当前这条已有 {existing} 个"
 msgstr "最多 {limit} 个附件，当前这条已有 {existing} 个"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/useComposerTrigger.ts
 msgid "最多引用 5 个会话"
 msgstr "最多引用 5 个会话"
 
 #. placeholder {0}: AGENT_CALL_BUDGET.mentions
-#: src/app/session/Composer.tsx
+#: src/app/session/useComposerTrigger.ts
 msgid "最多提到 {0} 个 Agent"
 msgstr "最多提到 {0} 个 Agent"
 
@@ -561,7 +562,7 @@ msgid "助手"
 msgstr "助手"
 
 #. placeholder {0}: job.matched
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "匹配 {0}"
 msgstr "匹配 {0}"
 
@@ -571,7 +572,7 @@ msgstr "匹配 {0}"
 msgid "单个附件最大 {0}：{1} 超了"
 msgstr "单个附件最大 {0}：{1} 超了"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "压缩上下文"
 msgstr "压缩上下文"
 
@@ -618,6 +619,7 @@ msgid "发送记录缺失，无法重试"
 msgstr "发送记录缺失，无法重试"
 
 #: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "发送设置"
 msgstr "发送设置"
 
@@ -653,7 +655,7 @@ msgstr "另一个 Agent"
 msgid "只能收藏位图图片"
 msgstr "只能收藏位图图片"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "只读问答，不修改文件"
 msgstr "只读问答，不修改文件"
 
@@ -691,7 +693,7 @@ msgstr "后台 Agent"
 
 #: src/app/session/SessionAside.tsx
 #: src/app/session/SessionWorkActions.tsx
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "后台任务"
 msgstr "后台任务"
 
@@ -703,16 +705,16 @@ msgstr "后台命令"
 msgid "后续任务"
 msgstr "后续任务"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/useTranscriptFocus.ts
 msgid "向前翻了 {SEEK_PAGES} 页仍未找到这条消息"
 msgstr "向前翻了 {SEEK_PAGES} 页仍未找到这条消息"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgctxt "session-commands-label"
 msgid "命令"
 msgstr "命令"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "命令与 Skills"
 msgstr "命令与 Skills"
 
@@ -724,11 +726,11 @@ msgstr "回到原文"
 msgid "回到底部"
 msgstr "回到底部"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "回复"
 msgstr "回复"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "回复输出"
 msgstr "回复输出"
 
@@ -746,12 +748,12 @@ msgctxt "session-image-name"
 msgid "图片"
 msgstr "图片"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "图片 · {label}"
 msgstr "图片 · {label}"
 
 #: src/app/session/Markdown.tsx
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "图片不可用"
 msgstr "图片不可用"
 
@@ -777,7 +779,7 @@ msgid "图片无法加载{0}"
 msgstr "图片无法加载{0}"
 
 #. placeholder {0}: parts.join(' · ')
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "图片未在此展示 · {0}"
 msgstr "图片未在此展示 · {0}"
 
@@ -789,11 +791,12 @@ msgstr "图片超过 10 MB，无法收藏"
 msgid "图表无法渲染，已保留源码"
 msgstr "图表无法渲染，已保留源码"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/transcriptFind.tsx
 msgid "在会话中查找"
 msgstr "在会话中查找"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "在右侧预览 {path}"
 msgstr "在右侧预览 {path}"
 
@@ -810,7 +813,7 @@ msgstr "在哪个目录新建？"
 msgid "在终端中"
 msgstr "在终端中"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "在编辑器中打开"
 msgstr "在编辑器中打开"
 
@@ -839,7 +842,8 @@ msgstr "复制回答"
 msgid "复制消息"
 msgstr "复制消息"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
+#: src/app/session/TimelineTools.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "复制路径"
 msgstr "复制路径"
@@ -847,7 +851,7 @@ msgstr "复制路径"
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "失败"
 msgstr "失败"
 
@@ -855,11 +859,11 @@ msgstr "失败"
 #: src/app/session/SessionWorkActions.tsx
 #: src/app/session/subagents.ts
 #: src/app/session/SubagentSession.tsx
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "子 Agent"
 msgstr "子 Agent"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "子 Agent 定义"
 msgstr "子 Agent 定义"
 
@@ -896,7 +900,7 @@ msgstr "实际生成时间，不含工具执行和等待"
 msgid "对比"
 msgstr "对比"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "对话"
 msgstr "对话"
 
@@ -908,7 +912,7 @@ msgstr "导出为图片"
 msgid "导出图片"
 msgstr "导出图片"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "将作为普通消息原样发送"
 msgstr "将作为普通消息原样发送"
 
@@ -932,11 +936,11 @@ msgstr "展开"
 msgid "工作流"
 msgstr "工作流"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "工具定义"
 msgstr "工具定义"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "工具结果"
 msgstr "工具结果"
 
@@ -944,11 +948,11 @@ msgstr "工具结果"
 msgid "工具调用"
 msgstr "工具调用"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "工具返回了一张图片，未在此展示"
 msgstr "工具返回了一张图片，未在此展示"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "工具返回的图片"
 msgstr "工具返回的图片"
 
@@ -984,7 +988,7 @@ msgstr "已停用"
 msgid "已关 {n}"
 msgstr "已关 {n}"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "已压缩的对话"
 msgstr "已压缩的对话"
 
@@ -1024,7 +1028,7 @@ msgstr "已完成 {0} 项"
 msgid "已完成里改动最小"
 msgstr "已完成里改动最小"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "已归档"
 msgstr "已归档"
 
@@ -1053,7 +1057,7 @@ msgstr "已结束"
 msgid "已超时，自动拒绝"
 msgstr "已超时，自动拒绝"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "已跳过"
 msgstr "已跳过"
 
@@ -1081,7 +1085,7 @@ msgstr "延长"
 msgid "开始"
 msgstr "开始"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "引用"
 msgstr "引用"
 
@@ -1099,7 +1103,7 @@ msgstr "引用于 {0}"
 msgid "引用会话"
 msgstr "引用会话"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "引用文件"
 msgstr "引用文件"
 
@@ -1136,7 +1140,7 @@ msgid "当前会话未关联项目，无法预览"
 msgstr "当前会话未关联项目，无法预览"
 
 #: src/app/session/ComposerDock.tsx
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "待办"
 msgstr "待办"
 
@@ -1145,7 +1149,7 @@ msgstr "待办"
 msgid "待处理"
 msgstr "待处理"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "思考输出"
 msgstr "思考输出"
 
@@ -1182,6 +1186,7 @@ msgid "打开终端"
 msgstr "打开终端"
 
 #: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 #: src/app/session/ToolsPicker.tsx
 msgid "技能与工具"
 msgstr "技能与工具"
@@ -1191,7 +1196,7 @@ msgstr "技能与工具"
 msgid "把 <0>{0}</0> 合并进原项目。"
 msgstr "把 <0>{0}</0> 合并进原项目。"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "指令"
 msgstr "指令"
 
@@ -1242,7 +1247,7 @@ msgstr "提问节选：{content}"
 msgid "搜索 {count} 次"
 msgstr "搜索 {count} 次"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "搜索中…"
 msgstr "搜索中…"
 
@@ -1293,7 +1298,7 @@ msgstr "放大聊天"
 msgid "放弃"
 msgstr "放弃"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "文件"
 msgstr "文件"
 
@@ -1307,7 +1312,7 @@ msgstr "文件"
 msgid "文件内容无法作为 HTML 读取"
 msgstr "文件内容无法作为 HTML 读取"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "文件变更"
 msgstr "文件变更"
 
@@ -1327,7 +1332,7 @@ msgstr "新建"
 msgid "新建 Worktree"
 msgstr "新建 Worktree"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "新文件"
 msgstr "新文件"
 
@@ -1367,7 +1372,7 @@ msgstr "无法停止并发送，排队消息已保留"
 msgid "无法加载交互预览，请重试"
 msgstr "无法加载交互预览，请重试"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/useTranscriptFocus.ts
 msgid "无法加载更早的历史，未能定位到这条消息"
 msgstr "无法加载更早的历史，未能定位到这条消息"
 
@@ -1375,7 +1380,7 @@ msgstr "无法加载更早的历史，未能定位到这条消息"
 msgid "无法加载模型列表"
 msgstr "无法加载模型列表"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/transcriptFind.tsx
 msgid "无法加载这处结果所在的历史"
 msgstr "无法加载这处结果所在的历史"
 
@@ -1464,7 +1469,7 @@ msgstr "无法读取设备"
 msgid "无法读取这个尝试的改动"
 msgstr "无法读取这个尝试的改动"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/useComposerUploads.ts
 msgid "无法读取附件"
 msgstr "无法读取附件"
 
@@ -1476,7 +1481,7 @@ msgstr "无法追加"
 msgid "无法重试"
 msgstr "无法重试"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/TranscriptRowView.tsx
 msgid "显示全部"
 msgstr "显示全部"
 
@@ -1488,7 +1493,7 @@ msgstr "显示更早话题"
 msgid "显示源码"
 msgstr "显示源码"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/useTranscriptFocus.ts
 msgid "暂时无法定位这条消息"
 msgstr "暂时无法定位这条消息"
 
@@ -1555,7 +1560,7 @@ msgstr "未开启"
 msgid "未提交改动不在起点内。"
 msgstr "未提交改动不在起点内。"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "未缓存输入"
 msgstr "未缓存输入"
 
@@ -1576,6 +1581,7 @@ msgid "本轮已结束"
 msgstr "本轮已结束"
 
 #: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "权限"
 msgstr "权限"
 
@@ -1604,11 +1610,11 @@ msgstr "查看"
 msgid "查看全文"
 msgstr "查看全文"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "查看子 Agent 对话"
 msgstr "查看子 Agent 对话"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "查看完整日志"
 msgstr "查看完整日志"
 
@@ -1634,7 +1640,7 @@ msgstr "检查状态"
 msgid "模型"
 msgstr "模型"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "模型与参数"
 msgstr "模型与参数"
 
@@ -1651,7 +1657,7 @@ msgstr "模型响应时间（含首字延迟）"
 msgid "模型输出速度 · 最近 {0} 秒内{tokens} ÷ {window}"
 msgstr "模型输出速度 · 最近 {0} 秒内{tokens} ÷ {window}"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "模式"
 msgstr "模式"
 
@@ -1675,7 +1681,7 @@ msgstr "正在加载全文…"
 msgid "正在压缩上下文"
 msgstr "正在压缩上下文"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "正在处理"
 msgstr "正在处理"
 
@@ -1699,15 +1705,15 @@ msgstr "正在读取 HTML 文件…"
 msgid "正在载入预览…"
 msgstr "正在载入预览…"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "没有匹配的会话"
 msgstr "没有匹配的会话"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "没有匹配的会话或文件"
 msgstr "没有匹配的会话或文件"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "没有匹配的文件"
 msgstr "没有匹配的文件"
 
@@ -1715,7 +1721,7 @@ msgstr "没有匹配的文件"
 msgid "没有可用模型"
 msgstr "没有可用模型"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/useTranscriptFocus.ts
 msgid "没有在会话中找到这条消息，它可能已被删除或改写"
 msgstr "没有在会话中找到这条消息，它可能已被删除或改写"
 
@@ -1727,7 +1733,7 @@ msgstr "没有找到麦克风"
 msgid "没有读到这个子 Agent 的执行记录。"
 msgstr "没有读到这个子 Agent 的执行记录。"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "没有输出"
 msgstr "没有输出"
 
@@ -1794,7 +1800,7 @@ msgstr "目标"
 
 #. placeholder {0}: formatNumber(clip.hiddenLines)
 #. placeholder {0}: formatNumber(hiddenLines)
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
 msgid "省略 {0} 行 · 展开全部"
 msgstr "省略 {0} 行 · 展开全部"
 
@@ -1863,7 +1869,7 @@ msgstr "等这个尝试完成后再采用"
 msgid "精确 token 数"
 msgstr "精确 token 数"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "系统提示词"
 msgstr "系统提示词"
 
@@ -1880,7 +1886,7 @@ msgid "终端任务"
 msgstr "终端任务"
 
 #. placeholder {0}: String(item.terminalId ?? '')
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "终端输出 · {0}"
 msgstr "终端输出 · {0}"
 
@@ -1905,15 +1911,15 @@ msgstr "继续对话"
 msgid "绿色"
 msgstr "绿色"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "缓存写入"
 msgstr "缓存写入"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "缓存读取"
 msgstr "缓存读取"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "缓存输入"
 msgstr "缓存输入"
 
@@ -1934,7 +1940,7 @@ msgstr "缩小"
 msgid "缩小 · {0}滚轮"
 msgstr "缩小 · {0}滚轮"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "自主读写文件、执行命令"
 msgstr "自主读写文件、执行命令"
 
@@ -1942,12 +1948,12 @@ msgstr "自主读写文件、执行命令"
 msgid "自动"
 msgstr "自动"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "自动压缩阈值"
 msgstr "自动压缩阈值"
 
 #. placeholder {0}: compactTokens(usage.size)
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "自动压缩阈值：{0} tokens；按最近一次模型响应计量"
 msgstr "自动压缩阈值：{0} tokens；按最近一次模型响应计量"
 
@@ -1962,6 +1968,7 @@ msgstr "自定义"
 #: src/app/session/Composer.tsx
 #: src/app/session/nativeRunCommands.ts
 #: src/app/session/SideDiscussion.tsx
+#: src/app/session/useComposerDraftSync.ts
 msgid "草稿无法保存到浏览器，刷新后会丢失"
 msgstr "草稿无法保存到浏览器，刷新后会丢失"
 
@@ -1990,7 +1997,7 @@ msgstr "补充未发送，输入已保留"
 msgid "观测到的模型响应时间（含首字延迟）"
 msgstr "观测到的模型响应时间（含首字延迟）"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "规则"
 msgstr "规则"
 
@@ -2006,7 +2013,7 @@ msgstr "访问 {count} 个页面"
 msgid "识别失败：{message}"
 msgstr "识别失败：{message}"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "诊断信息"
 msgstr "诊断信息"
 
@@ -2031,8 +2038,9 @@ msgstr "语音输入已关闭"
 msgid "请求未完成"
 msgstr "请求未完成"
 
-#: src/app/session/Composer.tsx
 #: src/app/session/ComposerAttachments.tsx
+#: src/app/session/composerDraft.ts
+#: src/app/session/useComposerDraftSync.ts
 msgid "请重新选择文件"
 msgstr "请重新选择文件"
 
@@ -2062,7 +2070,7 @@ msgstr "调用工具"
 
 #. placeholder {0}: usage.cost.currency
 #. placeholder {1}: usage.cost.amount.toFixed(2)
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "费用 {0} {1}"
 msgstr "费用 {0} {1}"
 
@@ -2083,7 +2091,7 @@ msgstr "跳过"
 msgid "跳过这组问题"
 msgstr "跳过这组问题"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "输入"
 msgstr "输入"
 
@@ -2100,7 +2108,7 @@ msgstr "输入消息"
 msgid "输入消息…"
 msgstr "输入消息…"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerPickers.tsx
 msgid "输出"
 msgstr "输出"
 
@@ -2108,7 +2116,7 @@ msgstr "输出"
 msgid "输出 token 数"
 msgstr "输出 token 数"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "输出过大，只显示末尾"
 msgstr "输出过大，只显示末尾"
 
@@ -2127,7 +2135,7 @@ msgstr "运行中"
 msgid "近期输出速度 · 最近 {0} 秒{tokens} ÷ {1} 秒 · 包含工具执行和等待时间"
 msgstr "近期输出速度 · 最近 {0} 秒{tokens} ÷ {1} 秒 · 包含工具执行和等待时间"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgid "返回"
 msgstr "返回"
 
@@ -2165,7 +2173,7 @@ msgstr "还有 {hiddenOpen} 项"
 msgid "还没有目录"
 msgstr "还没有目录"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "还没有输出…"
 msgstr "还没有输出…"
 
@@ -2207,7 +2215,7 @@ msgid "退出全屏编辑"
 msgstr "退出全屏编辑"
 
 #. placeholder {0}: item.jobResult.exitCode
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "退出码 {0}"
 msgstr "退出码 {0}"
 
@@ -2242,7 +2250,7 @@ msgid "选择模型"
 msgstr "选择模型"
 
 #. placeholder {0}: options.join(listSeparator)
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "选项：{0}"
 msgstr "选项：{0}"
 
@@ -2276,7 +2284,7 @@ msgstr "采用此方案"
 msgid "重叠"
 msgstr "重叠"
 
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/TranscriptRowView.tsx
 msgid "重新加载"
 msgstr "重新加载"
 
@@ -2356,12 +2364,13 @@ msgstr "需要选择"
 msgid "章节导航"
 msgstr "章节导航"
 
-#: src/app/session/Composer.tsx
+#: src/app/session/ComposerMenus.tsx
 msgctxt "mention-projects"
 msgid "项目"
 msgstr "项目"
 
-#: src/app/session/Timeline.tsx
+#: src/app/session/TimelineBlocks.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "项目目录之外，只读预览 {path}"
 msgstr "项目目录之外，只读预览 {path}"
 
