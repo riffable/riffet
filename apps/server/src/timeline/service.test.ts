@@ -737,25 +737,29 @@ describe('timeline service', () => {
     env.close();
   });
 
-  it('keeps a row within budget: long text as a preview with the whole row in a blob, tool output cut, images as blob URLs', async () => {
+  it('keeps a row within budget: long text as a preview with the whole row in a blob, tool output cut, images as blob URLs; the model output whole', async () => {
     const env = open();
     const long = 'x'.repeat(40 * 1024);
+    const output40 = (fill: string) => ({ content: [{ type: 'content', content: { type: 'text', text: fill.repeat(40 * 1024) } }] });
     env.writer.turnStarted('t1', stamp(++tick));
     commit(env,
-      user('u1', 't1', 'go'),
+      user('u1', 't1', long),
       answer('a1', 't1', long),
-      tool('k1', 't1', 'call-1', 'completed', { content: [{ type: 'content', content: { type: 'text', text: 'y'.repeat(40 * 1024) } }] }),
+      tool('k1', 't1', 'call-1', 'completed', output40('y')),
       ev('i1', 'agent_message_chunk', { content: { type: 'image', data: Buffer.from('png-bytes').toString('base64'), mimeType: 'image/png' } }, 't1'),
     );
     await env.ready();
     const rows = env.all();
-    for (const row of rows) expect(Buffer.byteLength(JSON.stringify(row))).toBeLessThanOrEqual(SYNC_BUDGET.rowBytes);
-    const text = rows.find(row => row.key === 'event:a1') as Extract<TimelineRow, { kind: 'assistant' }>;
+    // The model's answer is the turn's output: sent whole, past the row budget.
+    const answerRow = rows.find(row => row.key === 'event:a1') as Extract<TimelineRow, { kind: 'assistant' }>;
+    expect(answerRow.text).toBe(long);
+    expect(answerRow.truncated).toBeUndefined();
+    for (const row of rows) if (row.kind !== 'assistant') expect(Buffer.byteLength(JSON.stringify(row))).toBeLessThanOrEqual(SYNC_BUDGET.rowBytes);
+    const text = rows.find(row => row.kind === 'user') as Extract<TimelineRow, { kind: 'user' }>;
     expect(Buffer.byteLength(text.text)).toBe(SYNC_BUDGET.previewBytes);
     // Truncated journal-backed rows are expanded on demand without duplicating full row JSON into `blobs`.
     expect(env.journal.getBlob(text.truncated!.blobRef)).toBeUndefined();
-    const blob = env.journal.sessionBlob(S, text.truncated!.blobRef)!;
-    expect(JSON.parse(blob.bytes().toString('utf8')).text).toBe(long);
+    expect(JSON.parse(env.journal.sessionBlob(S, text.truncated!.blobRef)!.bytes().toString('utf8')).text).toBe(long);
     const output = rows.find(row => row.key === 'tool:call-1')!;
     expect(Buffer.byteLength(JSON.stringify(output.event.data))).toBeLessThan(SYNC_BUDGET.toolOutputBytes + 1024);
     expect(output.truncated).toBeDefined();
@@ -767,13 +771,13 @@ describe('timeline service', () => {
     expect(env.journal.sessionBlob(S, hash)?.bytes().toString()).toBe('png-bytes');
     expect(JSON.stringify(image.event.data)).not.toContain(Buffer.from('png-bytes').toString('base64'));
     // A cut row that changes invalidates its old truncated hash and expands to the new content, while images stay persisted.
-    commit(env, answer('a1', 't1', `${long}more`));
+    commit(env, tool('k1', 't1', 'call-1', 'completed', output40('z')));
     await env.ready();
-    const next = env.all().find(row => row.key === 'event:a1')!;
-    expect(next.truncated!.blobRef).not.toBe(text.truncated!.blobRef);
-    expect(env.journal.sessionBlob(S, text.truncated!.blobRef)).toBeUndefined();
-    expect(env.journal.getBlob(text.truncated!.blobRef)).toBeUndefined();
-    expect(JSON.parse(env.journal.sessionBlob(S, next.truncated!.blobRef)!.bytes().toString('utf8')).text).toBe(`${long}more`);
+    const next = env.all().find(row => row.key === 'tool:call-1')!;
+    expect(next.truncated!.blobRef).not.toBe(output.truncated!.blobRef);
+    expect(env.journal.sessionBlob(S, output.truncated!.blobRef)).toBeUndefined();
+    expect(env.journal.getBlob(output.truncated!.blobRef)).toBeUndefined();
+    expect(JSON.parse(env.journal.sessionBlob(S, next.truncated!.blobRef)!.bytes().toString('utf8')).event.data.content[0].content.text).toBe('z'.repeat(40 * 1024));
     expect(env.journal.sessionBlob(S, hash)?.bytes().toString()).toBe('png-bytes');
     env.close();
   });

@@ -81,8 +81,9 @@ export const SYNC_BUDGET = {
   snapshot: { bytes: 512 * KB, rows: 300, minBytes: 128 * KB, maxBytes: 2048 * KB, minRows: 50, maxRows: 1000 },
   page: { bytes: 256 * KB, rows: 100, maxBytes: 1024 * KB, maxRows: 500 },
   frameBytes: 256 * KB,
+  /** Every row but the model's output (assistant, thought), which is always sent whole. */
   rowBytes: 64 * KB,
-  /** Text over `textBytes` becomes a `previewBytes` preview plus `truncated.blobRef`. */
+  /** Text over `textBytes` becomes a `previewBytes` preview plus `truncated.blobRef`; the model's output is exempt. */
   textBytes: 32 * KB,
   previewBytes: 16 * KB,
   toolOutputBytes: 16 * KB,

@@ -21,7 +21,7 @@ co-change:
 - `service.ts#TimelineService`：折叠调度、读取（`changes`、`page`、`snapshot`、`outline`）和冷会话清理。
 - `fold.ts#LaneFold`：一条车道的折叠窗口，只持有未结束回合的尾部。
 - `tables.ts#TimelineTables`：`timeline_rows`、`timeline_heads`、`timeline_turns` 三张表的读写。
-- `budget.ts#fitRow`：单行预算的截断，截断行带 `truncated.blobRef`。
+- `budget.ts#fitRow`：单行预算的截断，截断行带 `truncated.blobRef`；assistant、thought 行不截断。
 - `find.ts#LaneFinder`：车道内查找，按 head 计数。
 
 ## 不变量
@@ -47,4 +47,5 @@ co-change:
 - 客户端反复收到快照、不走增量：比较 `timeline_heads` 的 `generation`、`epoch` 与 `fold_version`，常见原因是 `FOLD_VERSION` 变化、日志重建或冷清理。
 - 冷清理失败或磁盘不回收：`riffet logs --scope timeline`（`cold sweep failed`），`riffet doctor --compact` 在服务停止后整理数据库。
 - 大纲里多出重复的提示、刷新后消失：客户端没有按 `outline` 帧里 `rows: 0` 移除回合（`fold.ts` 删除回合时这样宣告）；服务端 `GET /api/v3/sessions/:id/outline` 是准的。
+- 长回答停在半句、下面出现「显示全部」：旧版本把超过 32KB 的 assistant 行也截成了 16KB 预览；现在模型输出整行下发（`budget.ts#MODEL_KINDS`），仍有截断说明折叠版本没更新，看 `timeline_heads.fold_version`。
 - 打开旧会话慢：首次折叠要读完整日志，看 `timeline_heads.folded_through` 与 `journal_seq` 的差距。

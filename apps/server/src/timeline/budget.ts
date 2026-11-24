@@ -6,6 +6,8 @@ import type { RowContent } from '../../../../packages/timeline/src/rows.js';
  * The row budget (docs/SYNC-V3.md, 预算): a row is at most 64KB. Text over 32KB is sent as a 16KB preview;
  * a tool's output and its diffs keep 16KB each; inline images become blob URLs. A row that was cut names
  * the blob holding all of it (`truncated`), so a client can fetch the rest when it is opened.
+ * The model's own output (answers and thinking) is exempt: it is what the turn produced, and the model's
+ * output limit already bounds it, so it is always sent whole.
  *
  * When `persistTruncated` is false (the default for rows reconstructible from the journal), the full row
  * JSON is NOT duplicated into the `blobs` table: its SHA-256 hash is returned in `truncated.blobRef` and
@@ -20,7 +22,9 @@ const SHORT = 512;
 const GUARD_STRING = 2048;
 const GUARD_ITEMS = 200;
 const GUARD_SOURCES = 64;
-const TEXT_KINDS = new Set(['user', 'assistant', 'thought', 'status']);
+const TEXT_KINDS = new Set(['user', 'status']);
+/** Rows the model wrote: never cut, whatever their size. */
+const MODEL_KINDS = new Set(['assistant', 'thought']);
 
 export const blobUrl = (sessionId: string, hash: string): string => `/api/sessions/${encodeURIComponent(sessionId)}/blobs/${hash}`;
 
@@ -142,8 +146,8 @@ export function fitRow(
   const full = materializeRowImages(row, sessionId, put) as RowContent & Record<string, unknown>;
   const fullJson = JSON.stringify(full);
   const fullBytes = Buffer.byteLength(fullJson);
-  // Most rows are small and have nothing long: they are sent as they are.
-  if (fullBytes <= SYNC_BUDGET.toolOutputBytes) return { row: full, json: fullJson, bytes: fullBytes, persistedTruncated: false };
+  // Most rows are small and have nothing long: they are sent as they are, as is all of the model's output.
+  if (fullBytes <= SYNC_BUDGET.toolOutputBytes || MODEL_KINDS.has(full.kind)) return { row: full, json: fullJson, bytes: fullBytes, persistedTruncated: false };
 
   // A text row's text is cut only past the text limit; anything else's long strings share the output and diff allowances.
   const text = TEXT_KINDS.has(full.kind);
