@@ -119,7 +119,7 @@ function readingEvent(source: WorkbenchEvent, run?: Run): NativeWorkbenchEvent {
   }
   if (source.data.replayId) data.replayId = source.data.replayId;
   if (kind === 'agent_message_chunk') data.phase = 'final_answer';
-  const attachments = messageAttachments(source, run?.native?.input.attachmentIds);
+  const attachments = messageAttachments(source, kind === 'user_message_chunk' ? run?.native?.input.attachmentIds : undefined);
   if (attachments.length) data.attachments = attachments;
   const native = source as Partial<NativeWorkbenchEvent>;
   return {

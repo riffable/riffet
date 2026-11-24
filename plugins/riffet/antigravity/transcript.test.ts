@@ -252,6 +252,8 @@ it('projects only user-facing notices and retires an already published system en
   s.steps.push(step({ status: 'CORTEX_STEP_STATUS_CANCELED', notifyUser: { notificationContent: 'Review withdrawn.' } }));
   s.steps.push(step({ errorMessage: { shouldShowModel: true, error: {} }, error: { userErrorMessage: internal } }));
   s.steps.push(step({ errorMessage: { shouldShowUser: true, error: { shortError: 'Diagnostics' } }, error: { userErrorMessage: 'Reconnect to continue.' } }));
+  s.steps.push(step({ error: { shortError: 'Rate limited.' } }));
+  s.steps.push(step({ error: { modelErrorMessage: 'Internal retry.' } }));
 
   const mapped = mapAgySnapshot(s);
   expect(mapped.events[0].data.content).toEqual({ type: 'text', text: internal });
@@ -260,6 +262,7 @@ it('projects only user-facing notices and retires an already published system en
     ['task_notification', 'Ready for feedback.', undefined, 'completed'],
     ['task_notification', 'Review withdrawn.', undefined, 'cancelled'],
     ['task_notification', 'Reconnect to continue.', undefined, 'failed'],
+    ['task_notification', 'Rate limited.', undefined, 'failed'],
   ]);
   expect(mapped.drafts.filter(d => d.event.type === 'task_notification').map(d => d.event.data.status)).toEqual(['running']);
   expect(mapped.warnings).toEqual(['Unmapped Antigravity step CORTEX_STEP_TYPE_NEW_INTERNAL_STEP.']);

@@ -73,7 +73,8 @@ function userError(step: AgyRecord): string | undefined {
   if (hiddenError(message)) return;
   const nested = record(message?.error), top = record(step.error);
   const user = text(nested.userErrorMessage) || text(top.userErrorMessage);
-  if (user || message?.shouldShowUser !== true) return user;
+  if (user) return user;
+  if (agyRecord(message) && message.shouldShowUser !== true) return undefined;
   return text(nested.shortError) || text(top.shortError) || text(nested.fullError) || text(top.fullError);
 }
 function resultText(step: AgyRecord): string {
@@ -637,8 +638,12 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
             ...p,
             ...s,
             metadata: md,
-            // A partial stream frame must not publish a message the stored copy explicitly hides.
-            ...(hiddenSystemMessage(p.systemMessage) ? { systemMessage: p.systemMessage } : {}),
+            // A partial stream frame must not publish a hidden message or drop persisted renderInfo.
+            ...(agyRecord(p.systemMessage) && agyRecord(s.systemMessage)
+              ? { systemMessage: hiddenSystemMessage(p.systemMessage) ? p.systemMessage : { ...p.systemMessage, ...s.systemMessage } }
+              : hiddenSystemMessage(p.systemMessage)
+              ? { systemMessage: p.systemMessage }
+              : {}),
             ...(hiddenError(p.errorMessage) ? { errorMessage: p.errorMessage } : {}),
             ...(agyRecord(s.plannerResponse) ? { plannerResponse: { ...record(p.plannerResponse), ...s.plannerResponse } } : {}),
           };
