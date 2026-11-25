@@ -149,7 +149,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const [highlight, setHighlight] = useState<string>();
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const spacerRef = useRef<HTMLDivElement>(null);
   const earlierProbe = useRef<HTMLDivElement>(null);
   const headKey = useRef<string | undefined>(undefined);
   /*
@@ -210,7 +209,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const positionChange = useRef<(synchronous: boolean) => void>(() => {});
   const onPositionChange = useCallback((synchronous: boolean) => positionChange.current(synchronous), []);
   const scroll = useTranscriptScroll({
-    scrollRef, contentRef, spacerRef, sessionId, resetVersion, loaded,
+    scrollRef, contentRef, sessionId, resetVersion, loaded,
     resources: Boolean(resources), hasMoreLater: Boolean(hasMoreLater), running,
     locate, modelAnchor, onPositionChange,
   });
@@ -833,7 +832,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
               A long list mounts only a window of them, with empty spacers standing in for the height of
               the rest; the spacers keep their keys, so the rows never remount when the mode changes.
               Dedicated `[data-transcript-rows]` isolates row bisection (`readingAnchor`, `TurnRail`)
-              from notices, probes, interaction cards, and trailing spacers. */}
+              from notices, probes, and interaction cards. */}
           <div data-transcript-rows className="flex min-w-0 flex-col">
             <TranscriptCatchUp.Provider value={catchUp}><RememberedValues.Provider value={remembered}>
             {layout ? (() => {
@@ -852,8 +851,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           {loaded && hasMoreLater && <PageProbe probeRef={laterProbe} failed={later.failed} loading={loadingLater} onRetry={later.retry} className="mt-5" />}
           {children}
           {progress && !heldFooter && <div className={standaloneProgressGap}>{progress}</div>}
-          {/* Temporary room below closing rows so collapsing near the end never clamps the reader; reclaimed as the reader scrolls or content grows. */}
-          <div ref={spacerRef} aria-hidden data-transcript-spacer className="shrink-0" />
         </div>
       </div>
 

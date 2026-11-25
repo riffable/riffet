@@ -31,6 +31,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On the web, folding a tool group or tool call near the end of a conversation no longer leaves blank space above the composer or blocks returning to follow the bottom.
 - Antigravity conversations now show user-facing notices and errors while keeping internal restart reminders out of the timeline.
 - Images uploaded to an Antigravity conversation keep their previews after sending and when reopening or sharing the conversation.
 - Selecting Sandbox for Antigravity enables its terminal sandbox. Commands that run inside it can proceed without a prompt, and explicit approval rules still apply.
