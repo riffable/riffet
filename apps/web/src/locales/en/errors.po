@@ -18,6 +18,11 @@ msgid "error.AUXILIARY_MODEL_FAILED"
 msgstr "{message}"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.CAPABILITY_REQUIRED"
+msgstr "This device isn't allowed to do this"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
 msgid "error.CLI_ALREADY_RUNNING"
 msgstr "The CLI is already running"
@@ -241,6 +246,11 @@ msgstr "{message}"
 #: ../../i18n/errors/git.json
 msgid "error.GIT_OPERATION_FAILED"
 msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.INSECURE_CONNECTION_READ_ONLY"
+msgstr "This connection isn't encrypted, so it can only read. Use the app, this computer's own page, or an HTTPS address"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json

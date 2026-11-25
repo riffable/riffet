@@ -1752,6 +1752,14 @@ msgstr ""
 msgid "允许对方操作这台电脑"
 msgstr ""
 
+#: src/app/settings/DevicesSection.tsx
+msgid "允许对话"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "允许未加密连接对话"
+msgstr ""
+
 #: src/app/settings/LinksSection.tsx
 msgid "允许远端操作发起命令的机器"
 msgstr ""
@@ -3000,6 +3008,10 @@ msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "同一个浮层，两个入口；列表高度在切换范围时不变。"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "同一网络上的人可以冒充这个浏览器，并借 Agent 执行命令。"
 msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx
@@ -5891,6 +5903,10 @@ msgstr ""
 msgid "无法保存编辑器设置"
 msgstr ""
 
+#: src/app/settings/DevicesSection.tsx
+msgid "无法保存设置"
+msgstr ""
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "无法保存语音输入设置"
 msgstr ""
@@ -6420,6 +6436,11 @@ msgstr ""
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "未关思考"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgctxt "settings-insecure-connections-group"
+msgid "未加密连接"
 msgstr ""
 
 #: src/app/settings/AuxiliaryModelsSection.tsx

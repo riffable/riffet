@@ -156,7 +156,7 @@ describe('the sample packages, installed through the HTTP API', () => {
     const { app, call, row, stateDir } = await boot();
     const pkg = join(examples, 'graphite-theme');
     const url = '/api/integrations/development';
-    const remoteHeaders: Record<string, string>[] = [{ 'x-forwarded-for': '203.0.113.9' }, { forwarded: 'for=203.0.113.9' }, { 'tailscale-user-login': 'remote@example.com' }];
+    const remoteHeaders: Record<string, string>[] = [{ 'x-forwarded-for': '203.0.113.9', 'x-forwarded-proto': 'https' }, { forwarded: 'for=203.0.113.9', 'x-forwarded-proto': 'https' }, { 'tailscale-user-login': 'remote@example.com' }];
     for (const headers of remoteHeaders) {
       expect((await call('POST', url, { path: pkg }, headers)).statusCode).toBe(403);
     }
@@ -170,7 +170,7 @@ describe('the sample packages, installed through the HTTP API', () => {
     expect((await app.inject({ method: 'DELETE', url: unlink, headers: { host: '127.0.0.1:4317' } })).statusCode).toBe(401);
     expect((await call('DELETE', unlink, undefined, { 'x-csrf-token': '' })).statusCode).toBe(403);
     expect((await call('DELETE', unlink, undefined, { 'x-forwarded-for': '203.0.113.9' })).statusCode).toBe(403);
-    expect((await call('DELETE', unlink, undefined, {}, '203.0.113.9')).statusCode).toBe(403);
+    expect((await call('DELETE', unlink, undefined, {}, '100.100.0.9')).statusCode).toBe(403);
     expect((await call('DELETE', unlink)).statusCode).toBe(200);
     expect(await row('example.graphite-theme')).toBeUndefined();
     expect(JSON.parse(await readFile(join(stateDir, 'plugins.json'), 'utf8')).development).toEqual({});
@@ -183,20 +183,20 @@ describe('the sample packages, installed through the HTTP API', () => {
     expect(selected).toMatchObject({ source: 'development', developmentPath: expect.any(String) });
     const url = '/api/integrations/example.graphite-theme?' + new URLSearchParams({ source: 'development', path: selected.developmentPath! });
     // A caller cannot label a development target as installed to bypass its local-only guard.
-    expect((await call('DELETE', '/api/integrations/example.graphite-theme?source=installed', undefined, {}, '203.0.113.9')).statusCode).toBe(404);
+    expect((await call('DELETE', '/api/integrations/example.graphite-theme?source=installed', undefined, {}, '100.100.0.9')).statusCode).toBe(404);
     expect((await call('DELETE', '/api/integrations/example.graphite-theme?source=development&path=/not-a-known-plugin')).statusCode).toBe(404);
     expect((await call('DELETE', '/api/integrations/example.graphite-theme?source=builtin')).statusCode).toBe(400);
     expect(await row('example.graphite-theme')).toMatchObject({ source: 'development' });
     const before = await readFile(join(pkg, 'riffet-plugin.json'), 'utf8');
     expect((await app.inject({ method: 'DELETE', url, headers: { host: '127.0.0.1:4317' } })).statusCode).toBe(401);
     expect((await call('DELETE', url, undefined, { 'x-csrf-token': '' })).statusCode).toBe(403);
-    const remoteHeaders: Record<string, string>[] = [{ 'x-forwarded-for': '203.0.113.9' }, { forwarded: 'for=203.0.113.9' }, { 'tailscale-user-login': 'remote@example.com' }];
+    const remoteHeaders: Record<string, string>[] = [{ 'x-forwarded-for': '203.0.113.9', 'x-forwarded-proto': 'https' }, { forwarded: 'for=203.0.113.9', 'x-forwarded-proto': 'https' }, { 'tailscale-user-login': 'remote@example.com' }];
     for (const headers of remoteHeaders) {
       const denied = await call('DELETE', url, undefined, headers);
       expect(denied.statusCode).toBe(403);
       expect(denied.json().error.code).toBe('PLUGIN_DEVELOPMENT_LOCAL_ONLY');
     }
-    const remote = await call('DELETE', url, undefined, {}, '203.0.113.9');
+    const remote = await call('DELETE', url, undefined, {}, '100.100.0.9');
     expect(remote.statusCode).toBe(403);
     expect(remote.json().error.code).toBe('PLUGIN_DEVELOPMENT_LOCAL_ONLY');
     expect(await row('example.graphite-theme')).toMatchObject({ source: 'development' });
@@ -429,7 +429,7 @@ describe('explicitly trusted local installations', () => {
     expect(isolated.status?.message).not.toBe(String(process.pid));
     expect(isolated.installed!.versions[0]!.trusted).toBeUndefined();
 
-    const proxied = await call('POST', '/api/integrations/install', { path: fixture.directory, grant: [], trusted: true }, { 'x-forwarded-for': '192.0.2.10' });
+    const proxied = await call('POST', '/api/integrations/install', { path: fixture.directory, grant: [], trusted: true }, { 'x-forwarded-for': '192.0.2.10', 'x-forwarded-proto': 'https' });
     expect(proxied.statusCode).toBe(403);
     expect(proxied.json().error.code).toBe('PLUGIN_PATH_INSTALL_LOCAL_ONLY');
     const conflict = await call('POST', '/api/integrations/install', { path: fixture.directory, grant: [], trusted: true });
@@ -437,7 +437,7 @@ describe('explicitly trusted local installations', () => {
     expect(conflict.json().error.code).toBe('PLUGIN_TRUST_CONFLICT');
     expect((await row('acme.trust-request')).installed!.versions[0]!.trusted).toBeUndefined();
     expect((await call('DELETE', '/api/integrations/acme.trust-request')).statusCode).toBe(200);
-    const remoteRequests: Array<{ remoteAddress?: string; headers?: Record<string, string> }> = [{ remoteAddress: '203.0.113.9' }, { headers: { 'x-forwarded-for': '203.0.113.9' } }, { headers: { forwarded: 'for=203.0.113.9' } }, { headers: { 'tailscale-user-login': 'remote@example.com' } }];
+    const remoteRequests: Array<{ remoteAddress?: string; headers?: Record<string, string> }> = [{ remoteAddress: '100.100.0.9' }, { headers: { 'x-forwarded-for': '203.0.113.9', 'x-forwarded-proto': 'https' } }, { headers: { forwarded: 'for=203.0.113.9', 'x-forwarded-proto': 'https' } }, { headers: { 'tailscale-user-login': 'remote@example.com' } }];
     for (const options of remoteRequests) {
       const rejected = await upload(fixture.archive, [], 'trust.tgz', { trusted: 'true' }, options);
       expect(rejected.statusCode).toBe(403);
@@ -460,7 +460,7 @@ describe('explicitly trusted local installations', () => {
       expect(pending.statusCode).toBe(409);
       expect(pending.json().error).toMatchObject({ code: 'PLUGIN_TRUST_REQUIRED', details: { id, capabilities: grant, trustedRequired: true, trustedAllowed: true } });
       expect(await row(id)).toBeUndefined();
-      const remote = await upload(fixture.archive, grant, 'plugin.tgz', {}, { remoteAddress: '203.0.113.9' });
+      const remote = await upload(fixture.archive, grant, 'plugin.tgz', {}, { remoteAddress: '100.100.0.9' });
       expect(remote.json().error.details.trustedAllowed).toBe(false);
       const installed = await upload(fixture.archive, grant, 'plugin.tgz', { trusted: 'true' });
       expect(installed.statusCode).toBe(200);

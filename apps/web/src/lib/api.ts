@@ -127,6 +127,7 @@ import type {
   WorktreeComparison,
   WorktreeInfo,
   ReleaseNotes,
+  ClientAccess,
 } from '@contracts';
 import { API, CLIENT_FEATURES_HEADER, PLUGIN_PAGE_KINDS_PARAM, TERMINAL_APPEARANCE_HEADER, TERMINAL_BINARY_PROTOCOL } from '@contracts';
 import { pageTerminalAppearance } from './terminal-theme';
@@ -183,6 +184,8 @@ export interface Bootstrap {
   settings: AppSettings;
   /** Absent from a server that predates personal info. */
   owner?: OwnerInfo;
+  /** Whether this browser's connection is encrypted and what it may do over it; absent from an older server. */
+  access?: ClientAccess;
   csrfToken: string;
   protocol?: { version: number; features: string[] };
   /** This server's id and the servers linked with it (`server-links-v1`); absent from a linked server's answer. */

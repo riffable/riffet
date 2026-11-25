@@ -1547,6 +1547,10 @@ msgstr "Update the server before trying again"
 msgid "未允许"
 msgstr "Not allowed"
 
+#: src/app/session/Composer.tsx
+msgid "未加密连接，只能查看"
+msgstr "Unencrypted connection: read only"
+
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 msgid "未完成"

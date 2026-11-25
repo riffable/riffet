@@ -80,7 +80,7 @@ async function boot(savedSettings?: Record<string, unknown>) {
   };
   const effectiveSettings = async (headers?: import('node:http').IncomingHttpHeaders) => ({ ...await effectiveSettingsForClient(headers, settings.getSettings(), nativeBackends), allowOutsideRead: true });
   const deps = {
-    stateDir, store, settings, nativeBackends, orchestration, effectiveSettings, workItems: new WorkItemService(store),
+    stateDir, store, settings, nativeBackends, orchestration, effectiveSettings, clientAccess: () => ({ secure: true, capabilities: ['read', 'chat', 'exec', 'admin'] }), workItems: new WorkItemService(store),
     titles: { backfill: async () => undefined },
     auth: { authenticate: () => ({ kind: 'device' }), csrf: () => '', onRevoke: () => () => undefined },
     terminal: { listSnapshot: () => [] },

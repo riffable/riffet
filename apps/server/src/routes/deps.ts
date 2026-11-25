@@ -1,7 +1,8 @@
 import type { ExternalSessions } from '../native/external-sessions.js';
 import type { TerminalHolds } from '../native/terminal-hold.js';
 import type { IncomingHttpHeaders, ServerResponse } from 'node:http';
-import type { AppSettings, NativeRunInput, Run, Session } from '../../../../packages/contracts/src/index.js';
+import type { FastifyRequest } from 'fastify';
+import type { AppSettings, ClientAccess, NativeRunInput, Run, Session } from '../../../../packages/contracts/src/index.js';
 import type { Auth } from '../auth.js';
 import type { AssistantDelegations } from '../assistant/delegations.js';
 import type { AssistantRuns } from '../assistant/runs.js';
@@ -95,6 +96,8 @@ export interface RouteDeps {
   /** [headers] are the request's: one relayed by a proxy came from another machine. */
   allowOutsideRead(headers?: IncomingHttpHeaders): boolean;
   effectiveSettings(headers?: IncomingHttpHeaders): Promise<AppSettings>;
+  /** The caller's own access: whether its connection is encrypted and what it may do over it (docs/TRANSPORT-SECURITY.md §6). */
+  clientAccess(request: FastifyRequest): ClientAccess;
   renameNative(session: Session): void;
   readNativeInput(body: NativeMessageBody, options?: { validateAttachments?: boolean }): Promise<NativeRunInput>;
   nativeRuns(id: string): Run[];

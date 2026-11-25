@@ -38,6 +38,12 @@ export interface NativeBackendDefaults {
 }
 export interface AppSettings {
   editorCommand?: string; defaultModel?: string; defaultMode?: string; notifications?: boolean; allowOutsideRead?: boolean; cursorCli?: CursorCliSettings;
+  /**
+   * Lets a browser on an unencrypted, non-loopback connection send messages and answer approvals, not only read
+   * (docs/TRANSPORT-SECURITY.md §4). Off unless set. Whoever is on that network can then act as the browser, and
+   * through its agents run commands.
+   */
+  allowInsecureChat?: boolean;
   /** Server-side root for new task workspaces. An empty value restores the platform default. */
   taskWorkspaceRoot?: string;
   defaultBackendId?: NativeBackendId;

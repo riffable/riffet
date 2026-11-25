@@ -1,6 +1,6 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { SYNC_BUDGET, type OwnerInfo, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
+import { SYNC_BUDGET, type ClientAccess, type OwnerInfo, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
 import { apiFor, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { entryListCache, type ListCache } from '@/lib/list-cache';
 import { emitPluginData } from '@/lib/plugin-data-events';
@@ -45,6 +45,8 @@ export interface ListsState {
   terminals: TerminalInfo[];
   /** The workbench owner's personal info (docs/OWNER.md); absent until a server that has one has answered. */
   owner: OwnerInfo | undefined;
+  /** This browser's access to the entry server (docs/TRANSPORT-SECURITY.md §4); absent until an answer that has one. */
+  access: ClientAccess | undefined;
   status: ListsStatus;
   savedAt: number;
   bootError: string;
@@ -95,6 +97,7 @@ export function createListsStore(deps: ListsDeps) {
     sessions: cached?.bootstrap.sessions ?? [],
     terminals: cached?.bootstrap.terminals ?? [],
     owner: cached?.bootstrap.owner,
+    access: linked ? undefined : cached?.bootstrap.access,
     status: cached ? 'syncing' : 'fresh',
     savedAt: cached?.savedAt ?? 0,
     bootError: '',
@@ -231,6 +234,7 @@ export function createListsStore(deps: ListsDeps) {
           terminals: reconcileById(current.terminals, data.terminals),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).
           ...(data.owner && !linked ? { owner: data.owner } : {}),
+          ...(!linked ? { access: data.access } : {}),
           status: 'fresh',
           savedAt: Date.now(),
           bootError: '',

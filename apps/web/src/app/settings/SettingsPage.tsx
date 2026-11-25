@@ -215,7 +215,7 @@ export function SettingsPage({
       {section === 'files' && <FilesSettingsSection settings={settings} onSaved={onSettingsChanged} onError={onError} onDirtyChange={setFilesDirty} onBusyChange={setSectionBusy} />}
       {section === 'connection' && <ConnectionSection onLogout={onLogout} onOpenShares={() => void onSelectSection('shares')} />}
       {section === 'shares' && <SharesSection />}
-      {section === 'devices' && <DevicesSection />}
+      {section === 'devices' && <DevicesSection settings={settings} onSaved={onSettingsChanged} />}
       {section === 'links' && <LinksSection />}
       {section === 'channels' && <ChannelsSection />}
       {section === 'service' && <div className="flex flex-col gap-6"><ReclaimSection settings={settings} onSaved={onSettingsChanged} onError={onError} /><Suspense fallback={sectionFallback}><ServiceStatusSection /></Suspense></div>}

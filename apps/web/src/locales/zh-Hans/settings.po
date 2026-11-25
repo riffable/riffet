@@ -1752,6 +1752,14 @@ msgstr "允许一次"
 msgid "允许对方操作这台电脑"
 msgstr "允许对方操作这台电脑"
 
+#: src/app/settings/DevicesSection.tsx
+msgid "允许对话"
+msgstr "允许对话"
+
+#: src/app/settings/DevicesSection.tsx
+msgid "允许未加密连接对话"
+msgstr "允许未加密连接对话"
+
 #: src/app/settings/LinksSection.tsx
 msgid "允许远端操作发起命令的机器"
 msgstr "允许远端操作发起命令的机器"
@@ -3001,6 +3009,10 @@ msgstr "同一个动作随能否备份在两条路径间切换，Git 面板的�
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "同一个浮层，两个入口；列表高度在切换范围时不变。"
 msgstr "同一个浮层，两个入口；列表高度在切换范围时不变。"
+
+#: src/app/settings/DevicesSection.tsx
+msgid "同一网络上的人可以冒充这个浏览器，并借 Agent 执行命令。"
+msgstr "同一网络上的人可以冒充这个浏览器，并借 Agent 执行命令。"
 
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "同一行只放一种选择控件；同一种选择在不同页面用同一种控件。"
@@ -5891,6 +5903,10 @@ msgstr "无法保存终端设置"
 msgid "无法保存编辑器设置"
 msgstr "无法保存编辑器设置"
 
+#: src/app/settings/DevicesSection.tsx
+msgid "无法保存设置"
+msgstr "无法保存设置"
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "无法保存语音输入设置"
 msgstr "无法保存语音输入设置"
@@ -6421,6 +6437,11 @@ msgstr "未保存的文件"
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "未关思考"
 msgstr "未关思考"
+
+#: src/app/settings/DevicesSection.tsx
+msgctxt "settings-insecure-connections-group"
+msgid "未加密连接"
+msgstr "未加密连接"
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "未单独设置的用途回退到此模型"

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { eventLoopBusy, startLoopHealth } from './loop-health.js';
 import { LAUNCHED_BY, SERVER_BUILD, SERVER_VERSION } from './version.js';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import { existsSync } from 'node:fs';
 import { mkdir, rm, utimes } from 'node:fs/promises';
@@ -148,8 +148,12 @@ import { registerPushRoutes } from './push/routes.js';
 import { readServerId } from './server-id.js';
 import { LinkService } from './links/service.js';
 import { linkPolicy } from './links/policy.js';
+import { RoutePatterns, routeAccess, type Capability } from './access/capabilities.js';
+import { grantsFor } from './access/grants.js';
+import { secureTransport, trustedNetworks } from './access/transport.js';
+import { peerPath } from './links/forward.js';
 import { linkOfRequest } from './links/socket.js';
-import { LINK_TUNNEL_ROUTE, registerLinkRoutes } from './routes/links.js';
+import { LINK_TUNNEL_ROUTE, SERVER_FORWARD_ROUTE, registerLinkRoutes } from './routes/links.js';
 import { ChannelService, channelProvider } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
 import { registerChannelRoutes } from './channels/routes.js';
@@ -161,6 +165,8 @@ import { AgentSeats, councilProject } from './council/seats.js';
 import { registerCouncilRoutes } from './routes/council.js';
 
 export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; token?:string; auth?:boolean; allowedHosts?:string[]; webRoot?:string; logger?:boolean; instanceId?:string;
+  /** Networks whose traffic is already encrypted (a WireGuard or corporate VPN subnet); browsers there count as on an encrypted connection (docs/TRANSPORT-SECURITY.md §4). */
+  trustedNetworks?:string[];
   /** Runtime memory profile: `full` (default hub) or `lite` (low-footprint peer node). */
   profile?:ServerProfile;
   /** The trusted launcher may provide the system Documents directory; saved settings win. */
@@ -380,7 +386,9 @@ export async function createApp(options: AppOptions = {}) {
   const app=Fastify({logger:options.logger??false,bodyLimit:36*1024*1024,requestTimeout:60_000});
   // Every route as registered, so `links/links.test.ts` can check that the link policy classifies each one.
   const registeredRoutes:Array<{method:string;url:string}>=[];
-  app.addHook('onRoute',route=>{for(const method of [route.method].flat())registeredRoutes.push({method:String(method),url:route.url});});
+  // The same routes by pattern, so a request forwarded to a linked server is judged by the route it reaches there.
+  const routePatterns=new RoutePatterns();
+  app.addHook('onRoute',route=>{for(const method of [route.method].flat()){registeredRoutes.push({method:String(method),url:route.url});routePatterns.add(String(method),route.url);}});
   let linksRef:LinkService|undefined;
   listening=()=>app.server.address();
   await app.register(websocket,{options:{maxPayload:256*1024}});
@@ -393,6 +401,30 @@ export async function createApp(options: AppOptions = {}) {
   const loopbackBinding=['127.0.0.1','localhost','::1'].includes((options.host??'127.0.0.1').replace(/^\[|\]$/g,'').toLowerCase());
   const allowOutsideRead=(headers?:import('node:http').IncomingHttpHeaders)=>settings.getSettings().allowOutsideRead??(loopbackBinding&&!proxiedRequest(headers));
   const effectiveSettings=async(headers?:import('node:http').IncomingHttpHeaders)=>({...await effectiveSettingsForClient(headers,settings.getSettings(),nativeBackends),allowOutsideRead:allowOutsideRead(headers)});
+  const trusted=trustedNetworks(options.trustedNetworks);
+  /** What the caller may do over the connection it came on (docs/TRANSPORT-SECURITY.md §4, §6). */
+  const accessOf=(request:FastifyRequest)=>{
+    const context=auth.authenticate(request);
+    // A linked server's tunnel is TLS with pinned certificates (docs/SERVER-LINKS.md §6).
+    const secure=context.kind==='link'||secureTransport(request,trusted);
+    return {secure,granted:grantsFor(context,secure,{allowInsecureChat:settings.getSettings().allowInsecureChat})};
+  };
+  /** A forwarded request needs what its target route needs on the linked server, which runs the same table. */
+  const requiredAccess=(request:FastifyRequest,route:string|undefined):Capability|'public'=>{
+    if(request.method==='OPTIONS')return 'read';
+    if(route!==SERVER_FORWARD_ROUTE)return routeAccess(request.method,route);
+    const serverId=(request.params as {serverId?:string}|undefined)?.serverId;
+    const path=serverId?peerPath(request.raw.url??'',serverId):undefined;
+    return routeAccess(request.method,path?routePatterns.match(request.method,path):undefined);
+  };
+  const requireAccess=(request:FastifyRequest,route:string|undefined)=>{
+    const required=requiredAccess(request,route);
+    if(required==='public')return;
+    const {secure,granted}=accessOf(request);
+    if(granted.has(required))return;
+    if(!secure)throw new AppError('INSECURE_CONNECTION_READ_ONLY','This connection is not encrypted; on it this browser can only read',403,undefined,{capability:required});
+    throw new AppError('CAPABILITY_REQUIRED','This device is not allowed to do this',403,undefined,{capability:required});
+  };
   const cacheRegistry=new ServerCacheRegistry();
   const monitor=new ServiceMonitor({store,terminal,streams,profile,agentProcesses:()=>reclaimerRef?.report(),caches:()=>cacheRegistry.report()});
   monitor.observe(app);
@@ -419,7 +451,10 @@ export async function createApp(options: AppOptions = {}) {
       if (auth.sharePreview(request)) return;
       // The token in the path is the credential; the route refuses a missing or stale one itself.
       if (route===FILE_SITE_ROUTE) return;
-      if (!route || !PUBLIC_API.has(route)) auth.require(request,!['GET','HEAD','OPTIONS'].includes(request.method));
+      if (!route || !PUBLIC_API.has(route)) {
+        auth.require(request,!['GET','HEAD','OPTIONS'].includes(request.method));
+        requireAccess(request,route);
+      }
     }
   });
   // What a linked server changed here, for this server's record of it (reads and streams it opened are not kept).
@@ -578,7 +613,7 @@ export async function createApp(options: AppOptions = {}) {
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
-  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,clientAccess:(request:FastifyRequest)=>{const {secure,granted}=accessOf(request);return {secure,capabilities:[...granted]};},renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.

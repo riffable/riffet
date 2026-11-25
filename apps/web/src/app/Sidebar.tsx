@@ -596,6 +596,11 @@ export function Sidebar(props: Props) {
   );
   // A network blip folds the banner away; it keeps its text until it has.
   const heldOfflineBanner = useHeld(offlineBanner);
+  // Over an unencrypted connection this browser's page and cookie can be read and replaced on the way (docs/TRANSPORT-SECURITY.md §4).
+  const insecure = useLists((state) => state.access?.secure === false ? (state.access.capabilities.includes('chat') ? 'chat' : 'read') : undefined);
+  const insecureBanner = insecure && (
+    <Notice tone="warning" className="mx-2 mb-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">{insecure === 'read' ? t`未加密连接，只能查看` : t`未加密连接`}</Notice>
+  );
 
   return (
     <nav className={cn('mobile-sidebar flex h-full min-h-0 w-full flex-col', mobile ? 'bg-canvas' : 'bg-transparent')} aria-label={t`工作区导航`}>
@@ -632,6 +637,7 @@ export function Sidebar(props: Props) {
       </div>
 
       <Collapse open={Boolean(offlineBanner)}>{heldOfflineBanner}</Collapse>
+      {insecureBanner}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         <div data-touch-row className={cn('group/section flex items-center px-2', mobile ? 'h-8 pt-1' : 'mt-3 h-7')}>

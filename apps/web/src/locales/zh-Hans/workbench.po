@@ -1797,6 +1797,14 @@ msgstr "未允许本机操作"
 msgid "未关联项目"
 msgstr "未关联项目"
 
+#: src/app/Sidebar.tsx
+msgid "未加密连接"
+msgstr "未加密连接"
+
+#: src/app/Sidebar.tsx
+msgid "未加密连接，只能查看"
+msgstr "未加密连接，只能查看"
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "未安装"
 msgstr "未安装"

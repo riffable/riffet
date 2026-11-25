@@ -15,7 +15,7 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { cn } from '@/lib/utils';
 import { formatWhen } from '../automations/automation';
 import { SendLaterMenu } from '../automations/SendLater';
-import { useSettings } from '../state/stores';
+import { useLists, useSettings } from '../state/stores';
 import { ComposerMentionLayer, droppedMentions, mentionAt, mentionRanges, referenceLabel } from './agentMentions';
 import { ComposerAttachments } from './ComposerAttachments';
 import { acknowledgeRecoveredCreationDraft, readDraft, readVoiceMode, unsavedDrafts, writeDraft, writeVoiceMode } from './composerDraft';
@@ -54,7 +54,10 @@ const NO_COMMANDS: SlashCommand[] = [];
  */
 export const Composer = memo(function Composer(props: ComposerProps) {
   const { t } = useLingui();
-  const { projectId, referenceProjectId = projectId, referencesEnabled = true, variant = 'dock', disabled, draftKey, references, onReferencesChange, persistReferences = true, running, commands = NO_COMMANDS, onError, fileMentions = true, sessionMentions = false } = props;
+  // A browser on an unencrypted connection may only read (docs/TRANSPORT-SECURITY.md §4).
+  const readOnly = useLists((state) => Boolean(state.access && !state.access.capabilities.includes('chat')));
+  const { projectId, referenceProjectId = projectId, referencesEnabled = true, variant = 'dock', draftKey, references, onReferencesChange, persistReferences = true, running, commands = NO_COMMANDS, onError, fileMentions = true, sessionMentions = false } = props;
+  const disabled = props.disabled || readOnly;
   const visibleReferences = referencesEnabled ? references : [];
   const storageKey = draftKey ? `riffet.draft.${draftKey}` : '';
   const draftWarningId = useId();
@@ -321,7 +324,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const heldFeedback = useHeld(props.feedback);
   const minimumHeight = variant === 'hero' ? 76 : compact ? 44 : 52;
   const maximumHeight = props.embedded ? 120 : variant === 'hero' ? 320 : 240;
-  const composerPlaceholder = props.placeholder ?? t`输入消息…`;
+  const composerPlaceholder = readOnly ? t`未加密连接，只能查看` : props.placeholder ?? t`输入消息…`;
   useComposerAutosize({
     textareaRef,
     text,

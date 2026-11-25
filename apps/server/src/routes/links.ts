@@ -13,6 +13,8 @@ import type { LinkService } from '../links/service.js';
  * a link (`links/policy.ts`), so a peer can neither manage this server's links nor relay onward.
  */
 export const LINK_TUNNEL_ROUTE = '/api/links/tunnel';
+/** Forwards to a linked server (docs/SERVER-LINKS.md §4); judged by the route it reaches there (`app.ts`). */
+export const SERVER_FORWARD_ROUTE = '/api/servers/:serverId/*';
 
 export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkService; auth: Auth; deviceName: (id: string) => string | undefined }) {
   const { links, auth } = deps;
@@ -116,7 +118,7 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
   void app.register(async scope => {
     scope.removeAllContentTypeParsers();
     scope.addContentTypeParser('*', (_request, payload, done) => done(null, payload));
-    const url = '/api/servers/:serverId/*';
+    const url = SERVER_FORWARD_ROUTE;
     scope.route<{ Params: { serverId: string } }>({
       method: ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], url,
       handler: (request, reply) => {

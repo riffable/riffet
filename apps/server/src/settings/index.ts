@@ -336,7 +336,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput', 'titleRules', 'terminal']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'allowInsecureChat', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput', 'titleRules', 'terminal']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -380,6 +380,10 @@ export class SettingsService {
     if (values.allowOutsideRead !== undefined) {
       if (typeof values.allowOutsideRead !== 'boolean') throw new AppError('INVALID_SETTINGS', 'allowOutsideRead must be a boolean');
       result.allowOutsideRead = values.allowOutsideRead;
+    }
+    if (values.allowInsecureChat !== undefined) {
+      if (typeof values.allowInsecureChat !== 'boolean') throw new AppError('INVALID_SETTINGS', 'allowInsecureChat must be a boolean');
+      result.allowInsecureChat = values.allowInsecureChat;
     }
     if (values.composerEnterBehavior !== undefined) {
       if (values.composerEnterBehavior !== 'newline' && values.composerEnterBehavior !== 'send') throw new AppError('INVALID_SETTINGS', 'composerEnterBehavior must be newline or send');

@@ -1547,6 +1547,10 @@ msgstr ""
 msgid "未允许"
 msgstr ""
 
+#: src/app/session/Composer.tsx
+msgid "未加密连接，只能查看"
+msgstr ""
+
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 msgid "未完成"

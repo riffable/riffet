@@ -6,6 +6,7 @@ internal object ErrorText {
     val zhHans: Map<String, String> = mapOf(
         "ARCHIVED_SESSION" to "会话已归档",
         "AUXILIARY_MODEL_FAILED" to "{message}",
+        "CAPABILITY_REQUIRED" to "这台设备没有权限做这项操作",
         "CLI_ALREADY_RUNNING" to "CLI 已就绪",
         "CLI_BUSY" to "CLI 正在处理上一条消息，请稍后重试",
         "CLI_INPUT_REJECTED" to "CLI 拒绝了 {method} 写入",
@@ -51,6 +52,7 @@ internal object ErrorText {
         "FILE_TOO_LARGE" to "文件超过了大小上限",
         "GH_OPERATION_FAILED" to "{message}",
         "GIT_OPERATION_FAILED" to "{message}",
+        "INSECURE_CONNECTION_READ_ONLY" to "连接未加密，只能查看。请用 App、本机网页或 HTTPS 地址操作",
         "INTERACTION_BUSY" to "交互请求过多，请稍后重试",
         "INTERACTION_REQUEST_REUSED" to "此请求已用于另一份答案，请同步后重新提交",
         "INVALID_EXTENSION_HASH" to "请先读取 Skill 当前内容后再操作",
@@ -232,6 +234,7 @@ internal object ErrorText {
     val en: Map<String, String> = mapOf(
         "ARCHIVED_SESSION" to "This conversation is archived",
         "AUXILIARY_MODEL_FAILED" to "{message}",
+        "CAPABILITY_REQUIRED" to "This device isn't allowed to do this",
         "CLI_ALREADY_RUNNING" to "The CLI is already running",
         "CLI_BUSY" to "The CLI is still busy; try again shortly",
         "CLI_INPUT_REJECTED" to "The CLI rejected the {method} write",
@@ -277,6 +280,7 @@ internal object ErrorText {
         "FILE_TOO_LARGE" to "The file is over the size limit",
         "GH_OPERATION_FAILED" to "{message}",
         "GIT_OPERATION_FAILED" to "{message}",
+        "INSECURE_CONNECTION_READ_ONLY" to "This connection isn't encrypted, so it can only read. Use the app, this computer's own page, or an HTTPS address",
         "INTERACTION_BUSY" to "Too many interaction requests; try again shortly",
         "INTERACTION_REQUEST_REUSED" to "This request was already used for a different answer; sync and submit again",
         "INVALID_EXTENSION_HASH" to "Read the skill's current content before managing it",

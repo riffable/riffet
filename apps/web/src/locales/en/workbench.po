@@ -1797,6 +1797,14 @@ msgstr "Not allowed to operate"
 msgid "未关联项目"
 msgstr "No project"
 
+#: src/app/Sidebar.tsx
+msgid "未加密连接"
+msgstr "Unencrypted connection"
+
+#: src/app/Sidebar.tsx
+msgid "未加密连接，只能查看"
+msgstr "Unencrypted connection: read only"
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "未安装"
 msgstr "Not installed"

@@ -1797,6 +1797,14 @@ msgstr ""
 msgid "未关联项目"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+msgid "未加密连接"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "未加密连接，只能查看"
+msgstr ""
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "未安装"
 msgstr ""

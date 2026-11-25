@@ -582,7 +582,8 @@ describe('app route surface after ACP removal', () => {
       expect(remoteSupport.json()).toEqual({ supported: false });
       const withoutCsrf = await app.inject({ method: 'POST', url, headers: { host: '127.0.0.1:4317', cookie }, payload: { path: 'artifact.json' } });
       expect(withoutCsrf.statusCode).toBe(403);
-      const proxied = await app.inject({ method: 'POST', url, headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, 'x-forwarded-for': '192.0.2.10' }, payload: { path: 'artifact.json' } });
+      // Served over HTTPS by a front door on this machine, so the transport allows it; the route still wants this machine.
+      const proxied = await app.inject({ method: 'POST', url, headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, 'x-forwarded-for': '192.0.2.10', 'x-forwarded-proto': 'https' }, payload: { path: 'artifact.json' } });
       expect(proxied.statusCode).toBe(403);
       expect(proxied.json().error.code).toBe('LOCAL_ACCESS_ONLY');
       const remote = await app.inject({ method: 'POST', url, remoteAddress: '192.0.2.10', headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf }, payload: { path: 'artifact.json' } });
@@ -2404,6 +2405,55 @@ describe('API authentication boundary', () => {
     expect(write.statusCode).toBe(401);
     // Public routes stay public whichever way they are spelled.
     expect((await app.inject({ method: 'GET', url: '/%61pi/auth/status', headers: host })).statusCode).toBe(200);
+  });
+
+  it('classifies every registered API route by the capability it requires', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-access-'));
+    const { app, registeredRoutes } = await createApp({ stateDir, token: 'x'.repeat(32), cliPath: '/nonexistent/cursor-agent' });
+    cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); });
+    await app.ready();
+    const { classifyRoute } = await import('./access/capabilities.js');
+    const missing = registeredRoutes.filter(route => route.url.startsWith('/api/') && !['HEAD', 'OPTIONS'].includes(route.method) && !classifyRoute(route.method, route.url));
+    expect([...new Set(missing.map(route => `${route.method} ${route.url}`))]).toEqual([]);
+  });
+
+  it('lets a browser on an unencrypted LAN connection only read, whatever headers it sends', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-access-'));
+    const token = 'z'.repeat(32);
+    const { app, auth, settings } = await createApp({ stateDir, host: '0.0.0.0', token, cliPath: '/nonexistent/cursor-agent', trustedNetworks: ['10.8.0.0/24'] });
+    cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); });
+    const as = async (remoteAddress: string, extra: Record<string, string> = {}) => {
+      const login = await app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress, headers: { host: '127.0.0.1', ...extra }, payload: { token } });
+      const cookie = String(login.headers['set-cookie']).split(';')[0]!;
+      const csrf = (login.json() as { csrfToken: string }).csrfToken;
+      return (method: string, url: string, payload?: unknown) => app.inject({ method: method as 'GET', url, remoteAddress, headers: { host: '127.0.0.1', cookie, 'x-csrf-token': csrf, ...extra }, ...(payload === undefined ? {} : { payload: payload as object }) });
+    };
+    const lan = await as('192.0.2.10');
+    expect((await lan('GET', '/api/sessions')).statusCode).toBe(200);
+    expect((await lan('GET', '/api/bootstrap')).json().access).toEqual({ secure: false, capabilities: ['read'] });
+    for (const [method, url, payload] of [['POST', '/api/projects', { cwd: tmpdir() }], ['POST', '/api/pairing/code', {}], ['POST', '/api/terminals', {}], ['POST', '/api/remote/exec', { command: 'true' }], ['PATCH', '/api/settings', { allowInsecureChat: true }], ['POST', '/api/servers/7f1c2f2e-0000-4000-8000-000000000000/remote/exec', { command: 'true' }]] as const) {
+      const response = await lan(method, url, payload);
+      expect(response.statusCode, `${method} ${url}`).toBe(403);
+      expect(response.json().error.code).toBe('INSECURE_CONNECTION_READ_ONLY');
+    }
+    // A client cannot claim the front door's HTTPS; only a loopback peer is believed.
+    const spoofed = await as('192.0.2.10', { 'x-forwarded-proto': 'https' });
+    expect((await spoofed('POST', '/api/projects', { cwd: tmpdir() })).statusCode).toBe(403);
+    // A front door on this machine that served HTTPS, Tailscale, and a network the operator trusts are encrypted.
+    const proxied = await as('127.0.0.1', { 'x-forwarded-proto': 'https', 'x-forwarded-for': '192.0.2.10' });
+    expect((await proxied('POST', '/api/projects', { cwd: tmpdir() })).statusCode).toBe(200);
+    const plainProxy = await as('127.0.0.1', { 'x-forwarded-for': '192.0.2.10' });
+    expect((await plainProxy('POST', '/api/projects', { cwd: tmpdir() })).statusCode).toBe(403);
+    expect((await (await as('100.101.102.103'))('POST', '/api/projects', { cwd: tmpdir() })).statusCode).toBe(200);
+    expect((await (await as('10.8.0.9'))('POST', '/api/projects', { cwd: tmpdir() })).statusCode).toBe(200);
+    // The owner may let such a browser talk to agents; running things directly stays closed.
+    settings.setSettings({ ...settings.getSettings(), allowInsecureChat: true });
+    expect((await lan('POST', '/api/projects', { cwd: tmpdir() })).statusCode).toBe(200);
+    expect((await lan('POST', '/api/terminals', {})).json().error.code).toBe('INSECURE_CONNECTION_READ_ONLY');
+    // A paired app's bearer token is not narrowed by the transport until apps speak TLS (docs/TRANSPORT-SECURITY.md §11).
+    const { token: deviceToken } = auth.issueDevice('Phone');
+    const device = await app.inject({ method: 'POST', url: '/api/projects', remoteAddress: '192.0.2.10', headers: { host: '127.0.0.1', authorization: `Bearer ${deviceToken}` }, payload: { cwd: tmpdir() } });
+    expect(device.statusCode).toBe(200);
   });
 
   it('rejects absolute-form request targets before any handler, including WebSocket upgrades', async () => {

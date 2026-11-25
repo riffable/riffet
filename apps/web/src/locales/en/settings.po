@@ -1752,6 +1752,14 @@ msgstr "Allow once"
 msgid "允许对方操作这台电脑"
 msgstr "Let the other server operate this computer"
 
+#: src/app/settings/DevicesSection.tsx
+msgid "允许对话"
+msgstr "Allow chat"
+
+#: src/app/settings/DevicesSection.tsx
+msgid "允许未加密连接对话"
+msgstr "Allow chat over unencrypted connections"
+
 #: src/app/settings/LinksSection.tsx
 msgid "允许远端操作发起命令的机器"
 msgstr "Let the remote server operate the machine running this command"
@@ -3001,6 +3009,10 @@ msgstr "The same action switches between two paths depending on whether it can b
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "同一个浮层，两个入口；列表高度在切换范围时不变。"
 msgstr "One overlay, two entries; the list height stays the same when the scope switches."
+
+#: src/app/settings/DevicesSection.tsx
+msgid "同一网络上的人可以冒充这个浏览器，并借 Agent 执行命令。"
+msgstr "Anyone on the same network can act as this browser and run commands through its agents."
 
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "同一行只放一种选择控件；同一种选择在不同页面用同一种控件。"
@@ -5891,6 +5903,10 @@ msgstr "Unable to save terminal settings"
 msgid "无法保存编辑器设置"
 msgstr "Couldn't save the editor setting"
 
+#: src/app/settings/DevicesSection.tsx
+msgid "无法保存设置"
+msgstr "Couldn't save the setting"
+
 #: src/app/settings/VoiceInputSection.tsx
 msgid "无法保存语音输入设置"
 msgstr "Couldn't save voice input settings"
@@ -6421,6 +6437,11 @@ msgstr "Unsaved files"
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "未关思考"
 msgstr "Thinking active"
+
+#: src/app/settings/DevicesSection.tsx
+msgctxt "settings-insecure-connections-group"
+msgid "未加密连接"
+msgstr "Unencrypted connections"
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "未单独设置的用途回退到此模型"

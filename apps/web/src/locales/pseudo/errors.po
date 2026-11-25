@@ -18,6 +18,11 @@ msgid "error.AUXILIARY_MODEL_FAILED"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.CAPABILITY_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
 msgid "error.CLI_ALREADY_RUNNING"
 msgstr ""
@@ -240,6 +245,11 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/git.json
 msgid "error.GIT_OPERATION_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.INSECURE_CONNECTION_READ_ONLY"
 msgstr ""
 
 #. js-lingui-explicit-id

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { DeviceInfo } from '@contracts';
+import type { AppSettings, DeviceInfo } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { IconChevronRight, IconCircleAlert, IconGlobe, IconLaptop, IconRefreshCw, IconSmartphone } from '@/components/icons';
-import { EmptyState, Spinner, StatusDot } from '@/components/ui/controls';
+import { EmptyState, Spinner, StatusDot, Switch } from '@/components/ui/controls';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -12,7 +12,7 @@ import { formatDate } from '@/lib/i18n/format';
 import { cn, errorMessage, timeAgo } from '@/lib/utils';
 import { useStores } from '../state/stores';
 import { PushKeySection } from './PushKeySection';
-import { SettingsGroup } from './SettingsLayout';
+import { SettingsGroup, SettingsRow } from './SettingsLayout';
 
 const isPhone = (device: DeviceInfo) => device.platform === 'android' || device.platform === 'ios';
 
@@ -23,7 +23,7 @@ const IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 const byPresence = (a: DeviceInfo, b: DeviceInfo) => Number(b.online) - Number(a.online) || (b.lastSeenAt ?? '').localeCompare(a.lastSeenAt ?? '');
 
 /** 设备管理: everything paired with this server, browsers included. */
-export function DevicesSection() {
+export function DevicesSection({ settings, onSaved }: { settings: AppSettings; onSaved: (settings: AppSettings, patch: Partial<AppSettings>) => void }) {
   const { t } = useLingui();
   const [devices, setDevices] = useState<DeviceInfo[]>();
   const [currentId, setCurrentId] = useState<string>();
@@ -41,6 +41,20 @@ export function DevicesSection() {
       .catch((reason) => { if (!controller.signal.aborted) setError(errorMessage(reason, t`无法读取设备`)); });
     return () => controller.abort();
   }, [revision]);
+
+  const insecureChat = async (enabled: boolean) => {
+    setBusy(true); setError('');
+    const patch = { allowInsecureChat: enabled };
+    try { onSaved(await api.updateSettings(patch), patch); }
+    catch (reason) { setError(errorMessage(reason, t`无法保存设置`)); }
+    finally { setBusy(false); }
+  };
+  // Browsers reaching this server over plain HTTP from another machine (docs/TRANSPORT-SECURITY.md §4).
+  const unencrypted = <SettingsGroup title={t({ message: '未加密连接', context: 'settings-insecure-connections-group' })}>
+    <SettingsRow title={t`允许对话`} description={t`同一网络上的人可以冒充这个浏览器，并借 Agent 执行命令。`}>
+      <Switch aria-label={t`允许未加密连接对话`} checked={settings.allowInsecureChat === true} disabled={busy} onCheckedChange={(value) => void insecureChat(value)} />
+    </SettingsRow>
+  </SettingsGroup>;
 
   const revoke = async (ids: readonly string[]) => {
     setBusy(true); setError('');
@@ -60,7 +74,7 @@ export function DevicesSection() {
     </EmptyState>
     : <div className="flex justify-center p-5"><Spinner /></div>;
 
-  if (!devices.length) return <div className="flex flex-col gap-6"><EmptyState icon={<IconSmartphone />} title={t`没有已配对的设备`} /><PushKeySection /></div>;
+  if (!devices.length) return <div className="flex flex-col gap-6"><EmptyState icon={<IconSmartphone />} title={t`没有已配对的设备`} />{unencrypted}<PushKeySection /></div>;
 
   const now = Date.now();
   const idle = (device: DeviceInfo) => device.id !== currentId && !device.online && now - Date.parse(device.lastSeenAt ?? device.createdAt) > IDLE_MS;
@@ -111,6 +125,7 @@ export function DevicesSection() {
       </div>
       <Collapse open={idleOpen}><SettingsGroup>{folded.map(row)}</SettingsGroup></Collapse>
     </section>}
+    {unencrypted}
     <PushKeySection />
   </div>;
 }

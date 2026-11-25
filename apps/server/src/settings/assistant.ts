@@ -7,7 +7,7 @@ import type { SettingsService } from './index.js';
 /** Adding a server setting requires deciding where an owner should manage it. */
 const locations = {
   editorCommand: 'files', defaultModel: 'backends', defaultMode: 'backends', notifications: 'notifications',
-  allowOutsideRead: 'files', cursorCli: 'backends', taskWorkspaceRoot: 'files', defaultBackendId: 'backends',
+  allowOutsideRead: 'files', allowInsecureChat: 'devices', cursorCli: 'backends', taskWorkspaceRoot: 'files', defaultBackendId: 'backends',
   nativeBackendDefaults: 'backends', composerEnterBehavior: 'interaction', composerRunningBehavior: 'interaction',
   composerSendLater: 'interaction', auxiliaryModels: 'auxiliary', pluginModels: 'auxiliary', idleReclaimMinutes: 'service',
   maxAgentMemoryMb: 'service', quickChat: 'quickchat', assistant: 'assistant', workItems: 'workitems',

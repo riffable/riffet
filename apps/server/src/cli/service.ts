@@ -44,6 +44,7 @@ export function serviceEnvironment(): Record<string, string> {
 function serviceArgs(options: LaunchOptions): string[] {
   const args = ['serve', '--state-dir', stateDir(options.stateDir), '--host', options.host, '--port', options.port, '--cli', options.cli];
   for (const host of options.allowHost ?? []) args.push('--allow-host', host);
+  for (const network of options.trustNetwork ?? []) args.push('--trust-network', network);
   args.push(options.auth === false ? '--no-auth' : '--auth');
   if (options.mdns === false) args.push('--no-mdns');
   return args;

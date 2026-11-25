@@ -1547,6 +1547,10 @@ msgstr "服务器版本过旧，请更新后重试"
 msgid "未允许"
 msgstr "未允许"
 
+#: src/app/session/Composer.tsx
+msgid "未加密连接，只能查看"
+msgstr "未加密连接，只能查看"
+
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 msgid "未完成"

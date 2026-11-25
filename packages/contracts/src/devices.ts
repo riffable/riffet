@@ -111,3 +111,8 @@ export interface RiffetDeviceAction {
   kind: 'act' | 'launch' | 'authorize'; package?: string; steps: RiffetDeviceActionStep[];
   category?: string; authorizedBy?: string; ok: boolean; code?: string;
 }
+
+/** What a caller may do on a server (docs/TRANSPORT-SECURITY.md §6). `chat` lets agents run commands, so it is not a boundary. */
+export type AccessCapability = 'read' | 'chat' | 'exec' | 'admin';
+/** The caller's own access, in bootstrap: whether its connection is encrypted, and what it may do over it. */
+export interface ClientAccess { secure: boolean; capabilities: AccessCapability[] }

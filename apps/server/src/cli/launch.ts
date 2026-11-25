@@ -22,7 +22,7 @@ import { CliError, MARK, UsageError, duration, err, hint, note, out, printLines,
 
 /** How a server is launched; `stateDir` comes from the global option, the rest from the command line or the saved launch. */
 export interface LaunchOptions {
-  stateDir: string; host: string; port: string; cli: string; allowHost?: string[];
+  stateDir: string; host: string; port: string; cli: string; allowHost?: string[]; trustNetwork?: string[];
   workspace?: string; auth?: boolean; mdns?: boolean; dev?: boolean;
   profile?: string; idleExit?: string;
 }
@@ -40,6 +40,7 @@ export function configure(command: Command): Command {
     .option('--auth', 'require the access token, also from this computer')
     .option('--no-auth', 'no token for this computer (loopback only)')
     .option('--allow-host <hostname>', 'also accept this hostname; repeatable', collect)
+    .option('--trust-network <cidr>', 'treat browsers on this network as encrypted (a VPN subnet); repeatable', collect)
     .option('--workspace <path>', 'add this directory as a project')
     .addOption(new Option('--profile <profile>', 'memory profile: full, lite, or auto').env('RIFFET_PROFILE').default('full'))
     .addOption(new Option('--idle-exit <duration>', 'stop after being idle for this duration (e.g. 30m, 2h, 0 to disable)').env('RIFFET_IDLE_EXIT'))
@@ -117,6 +118,7 @@ export function saveLaunchConfig(options: LaunchOptions, args: string[]): void {
 export function argsFor(options: LaunchOptions): string[] {
   const args = ['serve', '--state-dir', stateDir(options.stateDir), '--host', options.host, '--port', options.port, '--cli', options.cli];
   for (const host of options.allowHost ?? []) args.push('--allow-host', host);
+  for (const network of options.trustNetwork ?? []) args.push('--trust-network', network);
   if (options.workspace) args.push('--workspace', resolve(options.workspace));
   if (options.profile && options.profile !== 'full') args.push('--profile', options.profile);
   if (options.idleExit !== undefined) args.push('--idle-exit', options.idleExit);
@@ -160,7 +162,7 @@ export async function serve(options: LaunchOptions): Promise<void> {
   const path = join(dir, 'daemon.json');
   let record: DaemonRecord;
   try {
-    services = await createApp({ stateDir: dir, cliPath: options.cli, host: options.host, port, auth: options.auth !== false, allowedHosts: options.allowHost ?? [], webRoot, instanceId, profile, profileStalls: true });
+    services = await createApp({ stateDir: dir, cliPath: options.cli, host: options.host, port, auth: options.auth !== false, allowedHosts: options.allowHost ?? [], trustedNetworks: options.trustNetwork ?? [], webRoot, instanceId, profile, profileStalls: true });
     if (cwd) services.store.createProject(cwd, dirname(cwd) === cwd ? cwd : cwd.split('/').at(-1)!);
     await services.app.listen({ host: options.host, port });
     const address = services.app.server.address();

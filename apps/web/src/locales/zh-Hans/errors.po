@@ -18,6 +18,11 @@ msgid "error.AUXILIARY_MODEL_FAILED"
 msgstr "{message}"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.CAPABILITY_REQUIRED"
+msgstr "这台设备没有权限做这项操作"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
 msgid "error.CLI_ALREADY_RUNNING"
 msgstr "CLI 已就绪"
@@ -241,6 +246,11 @@ msgstr "{message}"
 #: ../../i18n/errors/git.json
 msgid "error.GIT_OPERATION_FAILED"
 msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.INSECURE_CONNECTION_READ_ONLY"
+msgstr "连接未加密，只能查看。请用 App、本机网页或 HTTPS 地址操作"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
