@@ -522,11 +522,9 @@ private struct NativeExtensionDocumentEditor: View {
             ToolbarItem(placement: .cancellationAction) { Button(current.editable ? "取消" : "关闭") { if dirty { confirmDiscard = true } else { dismiss() } }.disabled(busy) }
             ToolbarItem(placement: .topBarTrailing) {
                 if busy { ProgressView() } else {
-                    Menu {
-                        Button { if dirty { confirmReload = true } else { Task { await reload() } } } label: {
-                            Label("重新读取服务器版本", systemImage: "arrow.clockwise")
-                        }
-                    } label: { Image(systemName: "ellipsis") }
+                    Button { if dirty { confirmReload = true } else { Task { await reload() } } } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
                     .accessibilityLabel("重新读取服务器版本")
                 }
             }

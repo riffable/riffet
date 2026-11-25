@@ -32,6 +32,22 @@ enum NativeConfigurationSummary {
         draft.model = value
         return true
     }
+    /// A new task's model pick: into the draft, and remembered as the agent's default so the next
+    /// conversation starts on it (the server records it per provider). A pick the draft no longer
+    /// matches is refused with the draft's error.
+    @MainActor static func pickNewTaskModel(workbench: Workbench, draft: MessageDraft, backend: NativeBackendId, catalog: NativeBackendCatalogEntry,
+                                            projectID: String, profileID: String?, value: String, remember: Bool) {
+        guard chooseModel(catalog: catalog, projectID: projectID, profileID: profileID, value: value, draft: draft) else {
+            draft.error = String(localized: "项目或 Agent 配置已改变，请重新选择模型。", bundle: .riffet)
+            return
+        }
+        guard remember, let api = workbench.api else { return }
+        var defaults = workbench.settings?.nativeBackendDefaults ?? [:]
+        let old = defaults[backend]
+        if old?.model == value && old?.profileId == profileID { return }
+        defaults[backend] = NativeBackendDefaults(profileId: profileID, model: value, mode: old?.mode, approval: old?.approval, profileModels: nil)
+        Task { if let saved = try? await api.updateSettings(body: managementSettingsPatch(defaults: defaults)) { workbench.store.applySavedSettings(settings: saved) } }
+    }
     static func approval(status: NativeStatus?, backend: NativeBackendId, sessionApproval: String?) -> String? {
         if let sessionApproval, !sessionApproval.isEmpty { return sessionApproval }
         if let value = status?.approval, !value.isEmpty { return value }
@@ -46,11 +62,15 @@ enum NativeConfigurationSummary {
     }
 }
 
+/// Which part of a conversation's options a sheet shows: all of them (会话选项), or what the model panel
+/// leaves out (更多设置: context, mode, permissions, tools).
 enum SessionOptionFocus: String, Identifiable {
-    case all, model, mode, approval
+    case all, settings
     var id: String { rawValue }
 }
 
+/// What the new task's model panel leaves out (更多设置): mode, permissions, and skills and tools; the
+/// agent, model and parameters are picked in the panel itself.
 struct NewTaskOptions: View {
     let workbench: Workbench
     @Bindable var draft: MessageDraft
@@ -59,7 +79,6 @@ struct NewTaskOptions: View {
     var loading = false
     var error: String?
     var retry: (() -> Void)?
-    var focus: SessionOptionFocus = .all
     /// The phones the new task may control: the list read now and the remembered pick that is offered.
     var toolDevices: [PublicDevice]?
     var toolPlugins: [PluginDescriptor]? = nil
@@ -68,17 +87,8 @@ struct NewTaskOptions: View {
     @Environment(\.palette) private var palette
     /// The MCP and Skill switches of the new task; nil where the backend has none.
     var extensions: ExtensionsPick?
-    /// The assistant's composer, which offers only the agents that isolate it.
-    var assistant = false
-    private var agents: [NativeBackendCatalogEntry] { assistant ? workbench.backends.filter { AssistantKt.isAssistantBackend(id: $0.backendId) } : workbench.backends }
     @State private var reader = ExtensionsReader()
-    var body: some View {
-        Group {
-            if focus == .model, let catalog, let projectID = draft.projectID, !loading, error == nil {
-                modelPicker(catalog, projectID: projectID)
-            } else { optionsForm }
-        }.navigationTitle(focus == .model ? String(localized: "选择模型", bundle: .riffet) : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-    }
+    var body: some View { optionsForm }
     /// Whether the MCP and Skill lists have anything to switch; nil while they are unknown or failed to read.
     private func hasSwitches(_ pick: ExtensionsPick) -> Bool? {
         guard let loaded = reader.loaded ?? pick.cached() else { return nil }
@@ -87,42 +97,8 @@ struct NewTaskOptions: View {
         let skills = pick.toggles.skills ? kit.listed(loaded: loaded.skills.map(\.name), value: pick.off, prefix: kit.SKILL_PREFIX) : []
         return !(mcp.isEmpty && skills.isEmpty)
     }
-    private func modelPicker(_ catalog: NativeBackendCatalogEntry, projectID: String) -> some View {
-        NewTaskModelPicker(workbench: workbench, backend: backend, projectID: projectID, profiles: catalog.profiles,
-            selectedProfileID: draft.profileID, selection: draft.model ?? catalog.defaultModel) { selectedCatalog, profileID, value in
-            if !NativeConfigurationSummary.chooseModel(catalog: selectedCatalog, projectID: projectID, profileID: profileID, value: value, draft: draft) {
-                draft.error = String(localized: "项目或 Agent 配置已改变，请重新选择模型。", bundle: .riffet)
-            } else { rememberPick(profileID: profileID, value: value) }
-        }
-    }
-    /// Saves a pick as the agent's default, so the next conversation starts on it; the server records it per provider.
-    private func rememberPick(profileID: String?, value: String) {
-        guard !assistant, let api = workbench.api else { return }
-        var defaults = workbench.settings?.nativeBackendDefaults ?? [:]
-        let old = defaults[backend]
-        if old?.model == value && old?.profileId == profileID { return }
-        defaults[backend] = NativeBackendDefaults(profileId: profileID, model: value, mode: old?.mode, approval: old?.approval, profileModels: nil)
-        Task { if let saved = try? await api.updateSettings(body: managementSettingsPatch(defaults: defaults)) { workbench.store.applySavedSettings(settings: saved) } }
-    }
     private var optionsForm: some View {
         RiffetForm {
-            Section {
-                NavigationLink {
-                    RiffetList {
-                        ForEach(agents, id: \.backendId) { entry in
-                            Button {
-                                guard entry.available else { return }
-                                draft.backendName = entry.backendId.name
-                                draft.profileID = nil; draft.model = nil; draft.mode = nil; draft.approval = nil
-                            } label: {
-                                ConfigurationChoiceRow(title: entry.label, markBackend: entry.backendId.name, detail: entry.available ? nil : entry.reason ?? String(localized: "此 Mac 上不可用", bundle: .riffet), selected: entry.backendId == backend)
-                            }.disabled(!entry.available).foregroundStyle(palette.fg).accessibilityIdentifier("agentChoice.\(entry.backendId.name)")
-                        }
-                        if agents.isEmpty { Text(workbench.backendError ?? String(localized: "尚未读取到 Agent", bundle: .riffet)).foregroundStyle(palette.fg2) }
-                    }.navigationTitle(String(localized: "选择 Agent", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                } label: { SettingsRowLabel(title: String(localized: "Agent", bundle: .riffet), value: catalog?.label ?? workbench.backends.first { $0.backendId == backend }?.label ?? backend.name.capitalized) }
-            }
-
             if draft.projectID == nil {
                 Section { Label("请先选择项目，再读取该项目可用的模型。", systemImage: "folder").foregroundStyle(palette.fg2) }
             } else if loading {
@@ -131,19 +107,6 @@ struct NewTaskOptions: View {
                 RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet), action: { retry?() })
             } else if let catalog {
                 if !catalog.available { RiffetNotice.section(.warning, catalog.reason ?? String(localized: "此 Agent 当前不可用", bundle: .riffet)) }
-                if catalog.capabilities.supportsModelSelection {
-                    Section {
-                        NavigationLink {
-                            if let projectID = draft.projectID { modelPicker(catalog, projectID: projectID) }
-                        } label: {
-                            SettingsRowLabel(title: String(localized: "模型", bundle: .riffet), value: NativeConfigurationSummary.model(catalog: catalog, selection: draft.model))
-                        }.disabled(!catalog.available)
-                        if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: draft.profileID) {
-                            SettingsRowLabel(title: String(localized: "服务商配置", bundle: .riffet), value: profile)
-                        }
-                    }
-                    ModelParameterSection(catalog: catalog.models, selection: draft.model ?? catalog.defaultModel) { draft.model = $0 }
-                } else { Section { Text("此 Agent 使用它自己的默认模型。改变模型需要在 Mac 上的 Agent 中操作。").foregroundStyle(palette.fg2) } }
                 let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: workbench.settings)
                 if catalog.capabilities.supportsModeSelection {
                     Section("运行模式") {
@@ -163,7 +126,7 @@ struct NewTaskOptions: View {
                 }
             } else { RiffetNotice.section(.info, String(localized: "尚未读取到此项目的 Agent 配置。", bundle: .riffet), actionTitle: String(localized: "重新读取", bundle: .riffet), action: { retry?() }) }
             RiffetNotice.section(.error, workbench.backendError, actionTitle: String(localized: "重新读取 Agent", bundle: .riffet), action: { Task { await workbench.loadBackends() } })
-        }.navigationTitle(String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(String(localized: "更多设置", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .task(id: extensions?.key) { if let extensions { await reader.load(extensions, force: false) } }
     }
 }
@@ -179,27 +142,22 @@ struct NewTaskModelPicker: View {
     let choose: (NativeBackendCatalogEntry, String?, String) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
-    @State private var catalogs: [String: NativeBackendCatalogEntry] = [:]
-    @State private var failures: [String: String] = [:]
-    @State private var loading = true
-    @State private var retry = 0
-    @State private var usageRead: (scope: ModelUsageScope, values: [String: NativeBackendUsage])?
+    @State private var reader = ProfileCatalogs()
     @Environment(\.palette) private var palette
     private var effectiveProfile: String { selectedProfileID ?? profiles.first { $0.isDefault?.boolValue == true }?.id ?? "" }
     private var keys: [String] { profiles.isEmpty ? [""] : profiles.map(\.id) }
-    private var usageScope: ModelUsageScope { ModelUsageScope(server: ObjectIdentifier(workbench), backend: backend.name, project: projectID, profiles: keys, retry: retry) }
-    private var usages: [String: NativeBackendUsage] { usageRead?.scope == usageScope ? usageRead?.values ?? [:] : [:] }
+    private var usageScope: ModelUsageScope { ModelUsageScope(server: ObjectIdentifier(workbench), backend: backend.name, project: projectID, profiles: keys, retry: reader.retries) }
     var body: some View {
         RiffetList {
-            if loading { Section { ProgressView() } }
-            if let selected = catalogs[effectiveProfile] {
+            if reader.loading { Section { ProgressView() } }
+            if let selected = reader.catalogs[effectiveProfile] {
                 ModelParameterSection(catalog: selected.models, selection: selection ?? selected.defaultModel) { value in choose(selected, effectiveProfile.isEmpty ? nil : effectiveProfile, value) }
             }
             ForEach(keys, id: \.self) { key in
                 Section {
-                    ModelAccountUsageSummary(account: usages[key]?.account)
-                    if let error = failures[key] { RiffetNotice(kind: .error, message: error, actionTitle: String(localized: "重试", bundle: .riffet), action: { retry += 1 }) }
-                    if let catalog = catalogs[key] {
+                    ModelAccountUsageSummary(account: reader.usage(key)?.account)
+                    if let error = reader.failures[key] { RiffetNotice(kind: .error, message: error, actionTitle: String(localized: "重试", bundle: .riffet), action: { reader.retries += 1 }) }
+                    if let catalog = reader.catalogs[key] {
                         if !catalog.available { RiffetNotice(kind: .warning, message: catalog.reason ?? String(localized: "不可用", bundle: .riffet)) }
                         let models = catalog.models.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }
                         ForEach(models, id: \.value) { model in
@@ -207,7 +165,7 @@ struct NewTaskModelPicker: View {
                                 guard catalog.available else { return }
                                 choose(catalog, key.isEmpty ? nil : key, pickedSelection(catalog: catalog.models, model: model.value, currentSelection: selection, remembered: workbench.settings?.nativeBackendDefaults?[backend]?.profileModels?[key])); dismiss()
                             } label: {
-                                ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value, trailing: modelUsageLabel(usages[key]?.models[model.value]))
+                                ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value, trailing: modelUsageLabel(reader.usage(key)?.models[model.value]))
                             }.foregroundStyle(palette.fg).disabled(!catalog.available).accessibilityIdentifier("modelChoice.\(key).\(model.value)")
                         }
                         if models.isEmpty { Text(query.isEmpty ? String(localized: "没有可用的模型", bundle: .riffet) : String(localized: "没有匹配的模型", bundle: .riffet)).foregroundStyle(palette.fg2) }
@@ -217,42 +175,7 @@ struct NewTaskModelPicker: View {
         }.accessibilityIdentifier("newTaskModelList")
             .navigationTitle("模型").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "搜索模型")
-            .task(id: usageScope) { await load() }
-            .task(id: usageScope) { await loadUsage(usageScope) }
-    }
-    @MainActor private func loadUsage(_ scope: ModelUsageScope) async {
-        // The last read of each provider shows at once and is replaced by the fresh one; a failed read keeps it.
-        let store = ModelUsageStore(preferences: createAppPreferences())
-        func storeKey(_ key: String) -> String { "\(backend.name)|\(projectID)|\(key)" }
-        usageRead = (scope, Dictionary(uniqueKeysWithValues: keys.compactMap { key in store.load(scope: storeKey(key)).map { (key, $0) } }))
-        guard let api = workbench.api else { return }
-        // The selected provider answers first; other groups keep their own figures and failures.
-        for key in [effectiveProfile] + keys.filter({ $0 != effectiveProfile }) {
-            do {
-                let value = try await api.backendUsage(backendId: backend, projectId: projectID, profileId: key.isEmpty ? nil : key, sessionId: nil, global: false)
-                try Task.checkCancellation()
-                guard usageRead?.scope == scope else { return }
-                usageRead?.values[key] = value
-                store.save(scope: storeKey(key), usage: value)
-            } catch is CancellationError { return }
-            catch { if Task.isCancelled { return } }
-        }
-    }
-    @MainActor private func load() async {
-        loading = true; failures = [:]; catalogs = [:]
-        defer { if !Task.isCancelled { loading = false } }
-        guard let api = workbench.api else { for key in keys { failures[key] = String(localized: "未连接服务器", bundle: .riffet) }; return }
-        for key in keys {
-            do {
-                let entry = try await api.backendCatalog(backendId: backend, profileId: key.isEmpty ? nil : key, projectId: projectID, allModels: false, global: false)
-                try Task.checkCancellation()
-                catalogs[key] = entry
-            } catch is CancellationError { return }
-            catch {
-                if Task.isCancelled { return }
-                failures[key] = error.riffetMessage
-            }
-        }
+            .task(id: usageScope) { await reader.load(workbench: workbench, backend: backend, projectID: projectID, keys: keys, first: effectiveProfile, scope: usageScope) }
     }
 }
 
@@ -311,7 +234,7 @@ struct SessionOptionsView: View {
                             off: extensionsOff, onChange: setExtensionsOff)
     }
     private func toolsShown(_ catalog: NativeBackendCatalogEntry) -> Bool { phonesShown(catalog) || extensionsPick(catalog) != nil }
-    private var title: String { switch focus { case .all: String(localized: "会话选项", bundle: .riffet); case .model: String(localized: "模型与参数", bundle: .riffet); case .mode: String(localized: "运行模式", bundle: .riffet); case .approval: String(localized: "操作确认", bundle: .riffet) } }
+    private var title: String { switch focus { case .all: String(localized: "会话选项", bundle: .riffet); case .settings: String(localized: "更多设置", bundle: .riffet) } }
     var body: some View {
         RiffetForm {
             if focus == .all { Section("会话") {
@@ -320,7 +243,7 @@ struct SessionOptionsView: View {
                 if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: current.backendProfileId) { SettingsRowLabel(title: String(localized: "服务商配置", bundle: .riffet), value: profile) }
                 SettingsRowLabel(title: String(localized: "状态", bundle: .riffet), value: current.state.label)
             } }
-            if focus == .all || focus == .model { SessionContextUsageSection(context: context) }
+            SessionContextUsageSection(context: context)
             RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet), action: { Task { await load() } })
             if loading { Section { ProgressView() } }
             else if let catalog {
@@ -333,24 +256,29 @@ struct SessionOptionsView: View {
                         HStack { Label("恢复会话", systemImage: "arrow.uturn.backward"); if restoring { Spacer(); ProgressView() } }
                     }.disabled(restoring || pending)
                 }.onDisappear { restoring = false } }
-                if focus == .model { sendingOptions(catalog) }
-                if focus == .all || focus == .model {
+                if focus == .all {
                     if catalog.capabilities.supportsModelSelection {
-                        ModelOptions(catalog: catalog.models, selection: current.model ?? catalog.defaultModel, inlineList: focus == .model, providers: providers(catalog), usage: usage,
+                        ModelOptions(catalog: catalog.models, selection: current.model ?? catalog.defaultModel, providers: providers(catalog), usage: usage,
                                      switchTo: { profile, value in change { api in try await api.nativeSwitchProfile(id: session.id, backendProfileId: profile, model: value) } onDone: { Task { await load() } } }) { value in change { api in try await api.nativeSetModel(id: session.id, model: value) } }
                             .disabled(pending || current.archivedAt != nil)
                     } else { Section { Text("此 Agent 不支持在客户端切换模型。").foregroundStyle(palette.fg2) } }
                 }
-                if (focus == .all || focus == .mode) && catalog.capabilities.supportsModeSelection {
+                if catalog.capabilities.supportsModeSelection {
                     Section("运行模式") {
                         ConfigurationOptionPicker(title: String(localized: "模式", bundle: .riffet), options: catalog.capabilities.modes, selection: current.mode) { value in change { api in try await api.nativeSetMode(id: session.id, mode: value) } }
                     }.disabled(pending || current.archivedAt != nil)
                 }
-                if (focus == .all || focus == .approval) && catalog.capabilities.supportsPermissionSelection {
+                if catalog.capabilities.supportsPermissionSelection {
                     Section {
                         ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval, showPermissionIcons: true) { value in change { api in try await api.nativeSetApproval(id: session.id, approval: value) } }
                     } header: { Text("操作确认") } footer: { Text("只影响此会话；部分 Agent 会重启 CLI。") }
                     .disabled(pending || current.archivedAt != nil)
+                }
+                if focus == .settings && toolsShown(catalog) {
+                    Section {
+                        ToolsPickerLink(value: tools, devices: phonesShown(catalog) ? toolDevices.devices : nil, onChange: setTools, plugins: phonesShown(catalog) ? toolDevices.plugins : nil,
+                            extensions: extensionsPick(catalog), footnote: String(localized: "下次启动时生效", bundle: .riffet), error: toolsError)
+                    }.disabled(pending || current.archivedAt != nil)
                 }
                 if current.state.isActive { Section { Text("当前轮次继续执行。模型和运行模式的修改将在 Agent 下次空闲时应用。").riffetFont(.caption).foregroundStyle(palette.fg3) } }
             }
@@ -372,7 +300,7 @@ struct SessionOptionsView: View {
     }
     @MainActor private func loadUsage(_ scope: ModelUsageScope) async {
         usageRead = nil
-        guard focus == .all || focus == .model, let api = workbench.api else { return }
+        guard focus == .all, let api = workbench.api else { return }
         do {
             let value = try await api.backendUsage(backendId: current.backendId ?? .cursor, projectId: nil, profileId: nil, sessionId: current.id, global: false)
             try Task.checkCancellation()
@@ -380,50 +308,6 @@ struct SessionOptionsView: View {
             usageRead = (scope, value)
         } catch is CancellationError { return }
         catch { /* Unknown quota does not prevent choosing a model. */ }
-    }
-    @ViewBuilder private func sendingOptions(_ catalog: NativeBackendCatalogEntry) -> some View {
-        if catalog.capabilities.supportsModeSelection || catalog.capabilities.supportsPermissionSelection || toolsShown(catalog) {
-            Section("发送设置") {
-                if catalog.capabilities.supportsModeSelection {
-                    NavigationLink {
-                        RiffetForm {
-                            focusedSaveFeedback
-                            Section("运行模式") {
-                                ConfigurationOptionPicker(title: String(localized: "模式", bundle: .riffet), options: catalog.capabilities.modes, selection: current.mode) { value in
-                                    change { api in try await api.nativeSetMode(id: session.id, mode: value) }
-                                }
-                            }.disabled(pending || current.archivedAt != nil)
-                        }.navigationTitle(String(localized: "运行模式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                    } label: {
-                        SettingsRowLabel(title: String(localized: "模式", bundle: .riffet), value: catalog.capabilities.modes.first { $0.id == current.mode }?.label ?? (current.mode.isEmpty ? String(localized: "未报告", bundle: .riffet) : current.mode))
-                    }.accessibilityIdentifier("sessionModeOptions")
-                }
-                if catalog.capabilities.supportsPermissionSelection {
-                    NavigationLink {
-                        RiffetForm {
-                            focusedSaveFeedback
-                            Section {
-                                ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval, showPermissionIcons: true) { value in
-                                    change { api in try await api.nativeSetApproval(id: session.id, approval: value) }
-                                }
-                            } footer: { Text("只影响此会话；部分 Agent 会重启 CLI。") }
-                            .disabled(pending || current.archivedAt != nil)
-                        }.navigationTitle(String(localized: "操作确认", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                    } label: {
-                        SettingsRowLabel(title: String(localized: "操作确认", bundle: .riffet), value: catalog.capabilities.permissions.first { $0.id == effectiveApproval }?.label ?? effectiveApproval ?? String(localized: "未报告", bundle: .riffet))
-                    }.accessibilityIdentifier("sessionApprovalOptions")
-                }
-                if toolsShown(catalog) {
-                    ToolsPickerLink(value: tools, devices: phonesShown(catalog) ? toolDevices.devices : nil, onChange: setTools, plugins: phonesShown(catalog) ? toolDevices.plugins : nil,
-                        extensions: extensionsPick(catalog), footnote: String(localized: "下次启动时生效", bundle: .riffet), error: toolsError)
-                }
-            }.disabled(pending || current.archivedAt != nil)
-        }
-    }
-    @ViewBuilder private var focusedSaveFeedback: some View {
-        RiffetNotice.section(.error, error)
-        if pending { Section { ProgressView("正在保存配置…") } }
-        if current.state.isActive { Section { Text("当前轮次继续执行，修改将在 Agent 下次空闲时应用。").riffetFont(.caption).foregroundStyle(palette.fg3) } }
     }
     @MainActor private func load() async {
         guard !pending else { return }
@@ -583,6 +467,8 @@ struct ConfigurationChoiceRow: View {
     let selected: Bool
     /// A short figure before the check, such as how many tools an MCP server has.
     var trailing: String? = nil
+    /// One line in a list's standard row height (the model panel); otherwise room for a second line.
+    var compact = false
     @Environment(\.palette) private var palette
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -596,7 +482,7 @@ struct ConfigurationChoiceRow: View {
             if let trailing { Text(trailing).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).monospacedDigit() }
             if selected { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent).accessibilityLabel("已选择") }
             else if trailing != nil { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).hidden() }
-        }.padding(.vertical, 4).frame(minHeight: 36).contentShape(Rectangle())
+        }.padding(.vertical, compact ? 0 : 4).frame(minHeight: compact ? 0 : 36).contentShape(Rectangle())
     }
 }
 
@@ -647,7 +533,7 @@ private struct ModelProvider: Identifiable {
 }
 
 /// A suspended quota answer belongs to exactly one server, agent and provider selection.
-private struct ModelUsageScope: Hashable {
+struct ModelUsageScope: Hashable {
     let server: ObjectIdentifier
     let backend: String
     let project: String
@@ -656,7 +542,7 @@ private struct ModelUsageScope: Hashable {
     var retry = 0
 }
 
-private struct ModelAccountUsageSummary: View {
+struct ModelAccountUsageSummary: View {
     let account: AccountUsage?
     @Environment(\.palette) private var palette
     var body: some View {
@@ -674,7 +560,7 @@ private struct ModelAccountUsageSummary: View {
 }
 
 /// Exact model IDs and the shared wording are used on every phone; no provider is guessed here.
-private func modelUsageLabel(_ status: ModelStatus?) -> String? {
+func modelUsageLabel(_ status: ModelStatus?) -> String? {
     guard let status else { return nil }
     var parts: [String] = []
     if let quota = status.quota { parts.append(quotaLabel(quota: quota)) }
@@ -690,45 +576,25 @@ private func modelUsageLabel(_ status: ModelStatus?) -> String? {
 private struct ModelOptions: View {
     let catalog: [ModelInfo]
     let selection: String?
-    var inlineList = false
     /// Non-empty groups the models by provider; `catalog` belongs to the one marked current.
     var providers: [ModelProvider] = []
     var usage: NativeBackendUsage?
     var switchTo: (String, String) -> Void = { _, _ in }
     let choose: (String) -> Void
-    @State private var query = ""
     @Environment(\.palette) private var palette
     var body: some View {
-        if inlineList { ModelParameterSection(catalog: catalog, selection: selection, choose: choose) }
         Section("模型") {
             if providers.isEmpty { ModelAccountUsageSummary(account: usage?.account) }
-            if inlineList && providers.isEmpty {
-                TextField(String(localized: "搜索模型", bundle: .riffet), text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
-                ForEach(catalog.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
-                    Button { choose(pickedSelection(catalog: catalog, model: model.value, currentSelection: selection, remembered: nil)) } label: {
-                        ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: resolveModelSelection(catalog: catalog, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
-                    }.foregroundStyle(palette.fg).accessibilityIdentifier("sessionModelChoice.\(model.value)")
-                }
-            } else if inlineList {
-                TextField(String(localized: "搜索模型", bundle: .riffet), text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
-            } else { NavigationLink {
+            NavigationLink {
                 ModelSelectionList(catalog: catalog, selection: selection, providers: providers, usage: usage, switchTo: switchTo, choose: choose)
             } label: { Text(selection?.isEmpty == false ? modelSelectionSummary(catalog: catalog, selection: selection) : String(localized: "选择模型", bundle: .riffet)).fixedSize(horizontal: false, vertical: true) }
-            .disabled(catalog.isEmpty) }
+            .disabled(catalog.isEmpty)
             if catalog.isEmpty { Text(String(localized: "没有可用的模型", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3) }
             if let selection, !selection.isEmpty, !catalog.contains(where: { $0.value == resolveModelSelection(catalog: catalog, selection: selection).model }) {
                 Text(String(localized: "不在模型列表中：\(selection)", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3)
             }
         }
-        if inlineList && !providers.isEmpty {
-            ForEach(providers) { provider in
-                Section(provider.name) {
-                    if provider.isCurrent { ModelAccountUsageSummary(account: usage?.account) }
-                    ProviderModelRows(provider: provider, query: query, selection: selection, usage: provider.isCurrent ? usage : nil, switchTo: switchTo, choose: choose, dismisses: false)
-                }
-            }
-        }
-        if !inlineList { ModelParameterSection(catalog: catalog, selection: selection, choose: choose) }
+        ModelParameterSection(catalog: catalog, selection: selection, choose: choose)
     }
 }
 
@@ -748,7 +614,7 @@ private struct ModelSelectionList: View {
             ForEach(groups) { provider in
                 Section {
                     if provider.isCurrent { ModelAccountUsageSummary(account: usage?.account) }
-                    ProviderModelRows(provider: provider, query: query, selection: selection, usage: provider.isCurrent ? usage : nil, switchTo: switchTo, choose: choose, dismisses: true)
+                    ProviderModelRows(provider: provider, query: query, selection: selection, usage: provider.isCurrent ? usage : nil, switchTo: switchTo, choose: choose)
                 }
                 header: { if !providers.isEmpty { Text(provider.name) } }
             }
@@ -765,7 +631,6 @@ private struct ProviderModelRows: View {
     let usage: NativeBackendUsage?
     let switchTo: (String, String) -> Void
     let choose: (String) -> Void
-    let dismisses: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     var body: some View {
@@ -773,7 +638,7 @@ private struct ProviderModelRows: View {
             Button {
                 let value = pickedSelection(catalog: provider.models, model: model.value, currentSelection: selection, remembered: nil)
                 if provider.isCurrent { choose(value) } else { switchTo(provider.id, value) }
-                if dismisses { dismiss() }
+                dismiss()
             } label: {
                 ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: provider.isCurrent && resolveModelSelection(catalog: provider.models, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
             }.foregroundStyle(palette.fg).accessibilityIdentifier("sessionModelChoice.\(provider.id).\(model.value)")
@@ -810,7 +675,7 @@ struct ModelParameterSection: View {
                         if settingsControls {
                             settingsChoice(param, title: "Context", choices: contextChoices(param: param).map { .init(id: $0.value, title: $0.label) })
                         } else {
-                        Picker("Context" as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) { ForEach(contextChoices(param: param), id: \.value) { option in Text(verbatim: option.label).tag(option.value) } }.pickerStyle(.navigationLink)
+                        Picker("Context" as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) { ForEach(contextChoices(param: param), id: \.value) { option in Text(verbatim: option.label).tag(option.value) } }.pickerStyle(.menu)
                         }
                     }
                 } else if settingsControls {
@@ -818,7 +683,7 @@ struct ModelParameterSection: View {
                 } else {
                     Picker(parameterTitle(param) as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) {
                         ForEach(listValues(param: param), id: \.value) { option in Text(verbatim: optionLabel(param: param, value: option.value)).tag(option.value) }
-                    }.pickerStyle(.navigationLink).accessibilityIdentifier("modelParameter.\(param.id)")
+                    }.pickerStyle(.menu).accessibilityIdentifier("modelParameter.\(param.id)")
                 }
             }
         } }
@@ -835,13 +700,63 @@ struct ModelParameterSection: View {
         }
     }
     private func apply(_ param: ModelParam_, _ value: String) { choose(selectionWithParam(catalog: catalog, currentSelection: selection ?? resolved.model, paramId: param.id, value: value)) }
-    private func parameterTitle(_ param: ModelParam_) -> String {
-        switch paramKind(param: param) {
-        case .effort: "Effort"
-        case .fast: "Fast"
-        case .max: "Max"
-        case .toggle: param.id == "thinking" ? "Thinking" : paramTitle(param: param)
-        default: paramTitle(param: param)
+    private func parameterTitle(_ param: ModelParam_) -> String { modelParameterTitle(param) }
+}
+
+/// The parameter's name as every phone shows it: the CLI's own words for the common ones.
+func modelParameterTitle(_ param: ModelParam_) -> String {
+    switch paramKind(param: param) {
+    case .effort: "Effort"
+    case .fast: "Fast"
+    case .max: "Max"
+    case .toggle: param.id == "thinking" ? "Thinking" : paramTitle(param: param)
+    default: paramTitle(param: param)
+    }
+}
+
+/// The model's parameters as one row of chips in the model panel: a switch is a toggle chip, a choice a
+/// menu chip showing its value (Effort by its value alone, which already reads as an effort).
+struct ModelParameterChips: View {
+    let catalog: [ModelInfo]
+    let selection: String?
+    let choose: (String) -> Void
+    @State private var contextFallback: [String: String] = [:]
+    private var resolved: ParsedSelection { resolveModelSelection(catalog: catalog, selection: selection) }
+    private var params: [ModelParam_] { catalogParams(catalog: catalog, model: resolved.model, overrides: resolved.params) }
+    var body: some View {
+        if !params.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(params, id: \.id) { param in chips(param) }
+                }.padding(.horizontal, RiffetMetrics.pageInset)
+            }.scrollClipDisabled()
         }
     }
+    @ViewBuilder private func chips(_ param: ModelParam_) -> some View {
+        let kind = paramKind(param: param)
+        if kind == .toggle || kind == .fast || kind == .max {
+            RiffetToggleChip(title: modelParameterTitle(param), isOn: Binding(get: { isOn(param: param) }, set: { on in
+                if kind == .max && on && !isOn(param: param) { contextFallback[resolved.model] = param.value }
+                apply(param, toggledValue(param: param, on: on, fallback: contextFallback[resolved.model]))
+            })).accessibilityIdentifier("modelParameter.\(param.id)")
+            let choices = contextChoices(param: param)
+            if kind == .max && !isOn(param: param) && choices.count > 1 {
+                RiffetMenuChip(title: choices.first { $0.value == param.value }?.label ?? param.value, leading: { EmptyView() }) {
+                    Picker("Context" as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) {
+                        ForEach(choices, id: \.value) { option in Text(verbatim: option.label).tag(option.value) }
+                    }.pickerStyle(.inline)
+                }.accessibilityLabel("Context")
+            }
+        } else {
+            let value = optionLabel(param: param, value: param.value)
+            RiffetMenuChip(title: kind == .effort ? value : "\(modelParameterTitle(param)) \(value)", leading: { EmptyView() }) {
+                Picker(modelParameterTitle(param) as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) {
+                    ForEach(listValues(param: param), id: \.value) { option in Text(verbatim: optionLabel(param: param, value: option.value)).tag(option.value) }
+                }.pickerStyle(.inline)
+            }
+            .accessibilityLabel(modelParameterTitle(param)).accessibilityValue(value)
+            .accessibilityIdentifier("modelParameter.\(param.id)")
+        }
+    }
+    private func apply(_ param: ModelParam_, _ value: String) { choose(selectionWithParam(catalog: catalog, currentSelection: selection ?? resolved.model, paramId: param.id, value: value)) }
 }

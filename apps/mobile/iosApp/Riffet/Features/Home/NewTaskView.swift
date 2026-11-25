@@ -14,12 +14,12 @@ struct NewTaskView: View {
     @State private var directories = false
     /// 跳过 on the setup card's project step: the composer returns without a project.
     @State private var setupSkipped = false
-    @State private var options: SessionOptionFocus?
+    /// The model chip's picker panel.
+    @State private var modelPanel = false
     @State private var files = false
     @State private var photos = false
-    @State private var references = false
-    @State private var sessionReferences = false
-    @State private var commands = false
+    /// The `/` or `@` token being typed: its menu docks above the card, as in a conversation.
+    @State private var menu: ComposerMenuToken?
     @State private var importing = false
     @State private var loadedCatalog: NativeBackendCatalogEntry?
     @State private var loadingCatalog = false
@@ -95,6 +95,7 @@ struct NewTaskView: View {
                             .allowsHitTesting(!markHidden)
                         VStack(alignment: .leading, spacing: 0) {
                             slot.riffetTypeBoundary()
+                            menuDock.riffetTypeBoundary()
                             cardSlot.riffetTypeBoundary()
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)
@@ -135,35 +136,17 @@ struct NewTaskView: View {
         }
         .sheet(isPresented: $directories) { ProjectPicker(workbench: workbench, selection: $draft.projectID) }
         .sheet(isPresented: $importing) { ExternalSessionPicker(workbench: workbench, projectID: draft.projectID, open: onOpenSession) }
-        .sheet(item: $options) { focus in
-            NavigationStack { NewTaskOptions(workbench: workbench, draft: draft, catalog: catalog, backend: backend,
-                loading: loadingCatalog, error: catalogError, retry: { Task { await loadCatalog(reload: true) } }, focus: focus,
-                toolDevices: toolDevices.devices, toolPlugins: toolDevices.plugins, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions,
-                assistant: assistant != nil).toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { options = nil } }
-            } }
+        .riffetPanelSheet(isPresented: $modelPanel) {
+            NewTaskModelPanel(workbench: workbench, draft: draft, catalog: catalog, backend: backend, loading: loadingCatalog, error: catalogError,
+                              retry: { Task { await loadCatalog(reload: true) } }, assistant: assistant != nil,
+                              more: { AnyView(NewTaskOptions(workbench: workbench, draft: draft, catalog: catalog, backend: backend,
+                                  loading: loadingCatalog, error: catalogError, retry: { Task { await loadCatalog(reload: true) } },
+                                  toolDevices: toolDevices.devices, toolPlugins: toolDevices.plugins, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions)) },
+                              close: { modelPanel = false })
         }
         .sheet(isPresented: $files) { DocumentAttachmentPicker { picked($0); files = false } }
         .sheet(isPresented: $photos) { PhotoAttachmentPicker { picked($0); photos = false } }
         .attachmentDrop(enabled: project != nil && !sending && !draft.uploading && draft.pendingCreationID == nil, picked)
-        .sheet(isPresented: $references) { if let project { ConversationReferencePicker(workbench: workbench, projectID: project.id) { entry in
-            if !draft.references.contains(where: { $0.path == entry.path }) { draft.references.append(PromptContextReference(path: entry.path, line: nil, kind: nil, sessionId: nil, fromRunId: nil, title: nil)) }
-            references = false
-        } } }
-        .sheet(isPresented: $sessionReferences) {
-            ConversationSessionReferencePicker(workbench: workbench, currentSessionID: nil, projectID: draft.projectID) { selected in
-                guard draft.references.filter({ $0.kind == "session" }).count < 5 else { draft.error = String(localized: "最多引用 5 个会话", bundle: .riffet); return }
-                if !draft.references.contains(where: { $0.sessionId == selected.id }) { draft.references.append(sessionReference(session: selected)) }
-                if let range = draft.text.range(of: #"(?:^|\s)@[^\s@]*$"#, options: .regularExpression) {
-                    let leading = draft.text[range].prefix { $0 != "@" }
-                    draft.text.replaceSubrange(range, with: String(leading))
-                }
-                sessionReferences = false
-            }
-        }
-        .sheet(isPresented: $commands) { NewTaskSlashPicker(workbench: workbench, backend: backend, projectID: draft.projectID, profileID: draft.profileID) { item in
-            draft.text = "/\(item.name) " + draft.text; commands = false
-        } }
         .confirmationDialog("停止跟踪这次提交？", isPresented: $discardPending, titleVisibility: .visible) {
             Button("停止跟踪", role: .destructive) {
                 do { if let id = draft.pendingCreationID { try workbench.store.discardPreparedCreation(id: id) }; draft.pendingCreationID = nil }
@@ -203,15 +186,15 @@ struct NewTaskView: View {
     private var canStart: Bool {
         !sending && (draft.pendingCreationID != nil || (draft.canSend && project != nil && !loadingCatalog && catalog?.available == true))
     }
-    private func openOptions(_ focus: SessionOptionFocus) {
+    private func openModelPanel() {
         guard !sending, draft.pendingCreationID == nil else { return }
         writing = false
-        // Publish the TextEditor focus teardown before requesting another UIKit
-        // presentation, without inserting a wall-clock delay into the interaction.
+        // Publish the text field's focus teardown before requesting another UIKit presentation,
+        // without inserting a wall-clock delay into the interaction.
         Task { @MainActor in
             await Task.yield()
             guard !sending, draft.pendingCreationID == nil else { return }
-            options = focus
+            modelPanel = true
         }
     }
 
@@ -243,10 +226,7 @@ struct NewTaskView: View {
                 .frame(minHeight: compact ? 44 : 112, alignment: .topLeading)
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 6)
                 .accessibilityLabel("任务内容").accessibilityIdentifier("newTaskText").disabled(locked || voice.dictating)
-                .onChange(of: draft.text) { _, value in
-                    if catalog?.capabilities.supportsSessionReferences == true,
-                       value.range(of: #"(?:^|\s)@[^\s@]*$"#, options: .regularExpression) != nil { sessionReferences = true }
-                }
+                .onChange(of: draft.text) { _, value in updateMenu(value) }
             }
             if hasAttachments { attachmentChips.padding(.bottom, 4) }
             HStack(spacing: 0) {
@@ -264,7 +244,7 @@ struct NewTaskView: View {
                 } else {
                 // The settings follow the attach button, as on Android; the send button keeps the far edge.
                 RiffetModelLabel(title: NativeConfigurationSummary.shortModel(catalog: catalog, selection: draft.model),
-                                 icon: .agent(backend.name), loading: loadingCatalog, failed: catalogError != nil) { openOptions(.all) }
+                                 icon: .agent(backend.name), loading: loadingCatalog, failed: catalogError != nil) { openModelPanel() }
                     .disabled(locked).accessibilityIdentifier("newTaskModel")
                     .accessibilityLabel(String(localized: "模型：\(NativeConfigurationSummary.configuration(catalog: catalog, profileID: draft.profileID, selection: draft.model))", bundle: .riffet))
                     .accessibilityValue(catalogStatus)
@@ -315,15 +295,44 @@ struct NewTaskView: View {
             Spacer(minLength: 8)
         }.buttonStyle(RiffetDimPressStyle())
     }
+    private var citesFiles: Bool { assistant == nil && backend != .chat }
+    private var citesSessions: Bool { catalog?.capabilities.supportsSessionReferences == true }
+    /// A quick chat has no project files to cite and no commands or skills; it can still cite sessions.
+    private func updateMenu(_ value: String) {
+        guard draft.projectID != nil, let token = ComposerMenuToken.detect(in: value),
+              token.kind == .slash ? backend != .chat : (citesFiles || citesSessions) else {
+            if menu != nil { menu = nil }
+            return
+        }
+        if menu != token { menu = token }
+    }
+    /// The plus menu's entries put the sigil in the draft, which opens the docked menu.
+    private func insertTrigger(_ sigil: String) {
+        if let last = draft.text.last, !last.isWhitespace { draft.text += " " }
+        draft.text += sigil
+        writing = true
+    }
+    @ViewBuilder private var menuDock: some View {
+        if let menu, let projectID = draft.projectID, !setupShown {
+            let backend = backend, profileID = draft.profileID
+            ComposerMenuDock(workbench: workbench,
+                             source: ComposerMenuSource(key: "\(backend.name)|\(projectID)|\(profileID ?? "")", projectID: projectID) {
+                                 guard let api = workbench.api else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
+                                 return try await api.slashCatalog(backendId: backend, projectId: projectID, profileId: profileID, sessionId: nil, global: false).items
+                             },
+                             draft: draft, token: menu, allowsFiles: citesFiles, allowsSessions: citesSessions, picked: { writing = true })
+                .padding(.bottom, 8).transition(.opacity)
+        }
+    }
     private var plusMenu: some View {
         Menu {
             Button("照片", systemImage: "photo") { photos = true }
             Button("文件", systemImage: "doc") { files = true }
-            if assistant == nil { Button("引用项目文件", systemImage: "at") { references = true } }
-            if catalog?.capabilities.supportsSessionReferences == true {
-                Button("引用会话", systemImage: "text.bubble") { sessionReferences = true }
+            if citesFiles { Button("引用项目文件", systemImage: "at") { insertTrigger("@") } }
+            if citesSessions {
+                Button("引用会话", systemImage: "text.bubble") { insertTrigger("@") }
             }
-            Button("命令与技能", systemImage: "slash.circle") { commands = true }
+            if backend != .chat { Button("命令与技能", systemImage: "slash.circle") { insertTrigger("/") } }
         } label: {
             Image(systemName: "plus").riffetFont(.barTitle, weight: .regular).foregroundStyle(palette.fg)
                 .frame(width: Self.toolWidth, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
@@ -503,30 +512,6 @@ struct NewTaskView: View {
     }
 }
 
-private struct NewTaskSlashPicker: View {
-    let workbench: Workbench
-    let backend: NativeBackendId
-    let projectID: String?, profileID: String?
-    let choose: (NativeSlashItem) -> Void
-    @State private var items: [NativeSlashItem] = []
-    @State private var error: String?
-    @State private var loading = true
-    @Environment(\.palette) private var palette
-    var body: some View {
-        NavigationStack {
-            List {
-                if loading { ProgressView() }
-                RiffetNotice.section(.error, error)
-                ForEach(items, id: \.name) { item in Button { choose(item) } label: { VStack(alignment: .leading) { Text("/\(item.name)").riffetFont(.body).foregroundStyle(palette.fg); if let text = item.description_ { Text(text).riffetFont(.caption).foregroundStyle(palette.fg3) } } } }
-            }.navigationTitle(String(localized: "命令与技能", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-            .task {
-                defer { loading = false }
-                do { items = try await workbench.api?.slashCatalog(backendId: backend, projectId: projectID, profileId: profileID, sessionId: nil, global: false).items ?? [] }
-                catch { self.error = error.riffetMessage }
-            }
-        }
-    }
-}
 
 /// The mark, the line with the card, and what hangs below, in a page at least one viewport tall. The
 /// line and the card are centred on their own, so what is below them never moves them; the room

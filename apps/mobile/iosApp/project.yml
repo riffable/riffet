@@ -17,7 +17,7 @@ settings:
 packages:
   SwiftTerm:
     url: https://github.com/migueldeicaza/SwiftTerm
-    exactVersion: 1.99.0
+    exactVersion: 1.99.3
   Markdown:
     url: https://github.com/apple/swift-markdown
     exactVersion: 0.9.0

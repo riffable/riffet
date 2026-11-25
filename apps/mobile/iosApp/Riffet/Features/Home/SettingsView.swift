@@ -7,6 +7,8 @@ private struct SettingsEntry: Identifiable {
     enum Kind {
         case link(() -> AnyView)
         case action(() -> Void)
+        /// A choice among a few values: a menu picker in the row, the current value trailing.
+        case choice(() -> AnyView)
         case plain
     }
     let title: String
@@ -41,6 +43,7 @@ struct SettingsView: View {
     @State private var query = ""
     /// Read here so the row shows the tab just chosen on its page.
     @AppStorage(RootTab.launchKey) private var launchRaw = RootTab.assistant.rawValue
+    @State private var language = AppLanguage.current
     @State private var deviceCount: Int?
     @State private var exporting = false
     @State private var exportError: String?
@@ -109,6 +112,8 @@ struct SettingsView: View {
             NavigationLink { destination().background(TabBarVisibility(hidden: pushHidesTabs)) } label: {
                 SettingsRowLabel(title: entry.title, symbol: entry.icon, value: entry.value)
             }.accessibilityIdentifier(entry.identifier)
+        case .choice(let picker):
+            picker()
         case .action(let action):
             Button(action: action) {
                 HStack(spacing: 8) {
@@ -121,6 +126,16 @@ struct SettingsView: View {
         case .plain:
             SettingsRowLabel(title: entry.title, symbol: entry.icon, value: entry.value)
         }
+    }
+
+    /// A row that picks one of a few values in a menu; the picker shows the current one at the trailing edge.
+    private func choiceRow<Value: Hashable>(_ title: String, _ icon: String, selection: Binding<Value>, options: [(Value, String)]) -> AnyView {
+        AnyView(
+            Picker(selection: selection) {
+                ForEach(options, id: \.0) { Text($0.1).tag($0.0) }
+            } label: { SettingsRowLabel(title: title, symbol: icon) }
+                .pickerStyle(.menu).tint(palette.fg3)
+        )
     }
 
     private var visibleGroups: [SettingsGroup] {
@@ -143,7 +158,16 @@ struct SettingsView: View {
         }
         var appearance = [
             SettingsEntry(title: String(localized: "主题", bundle: .riffet), icon: "paintpalette", value: themeStore.entry.name, kind: .link { AnyView(ThemeSettingsView()) }),
-            SettingsEntry(title: String(localized: "显示模式", bundle: .riffet), icon: "circle.lefthalf.filled", value: displayModeName, kind: .link { AnyView(DisplayModeSettingsView()) }),
+            SettingsEntry(title: String(localized: "显示模式", bundle: .riffet), icon: "circle.lefthalf.filled", kind: .choice {
+                choiceRow(String(localized: "显示模式", bundle: .riffet), "circle.lefthalf.filled", selection: Binding(
+                    get: { appearanceMode },
+                    set: { mode in withAnimation(RiffetMotion.effects) { appearanceMode = mode } }
+                ), options: [
+                    ("system", String(localized: "跟随系统", bundle: .riffet)),
+                    ("light", String(localized: "浅色", bundle: .riffet)),
+                    ("dark", String(localized: "深色", bundle: .riffet)),
+                ])
+            }),
             SettingsEntry(title: String(localized: "代码高亮", bundle: .riffet), icon: "chevron.left.forwardslash.chevron.right", value: codeThemeName, kind: .link { AnyView(CodeThemeSettingsView()) }),
         ]
         if UIApplication.shared.supportsAlternateIcons {
@@ -151,8 +175,16 @@ struct SettingsView: View {
         }
         return [
             SettingsGroup(title: "", entries: [
-                SettingsEntry(title: String(localized: "语言", bundle: .riffet), icon: "globe", value: AppLanguage.current.name, kind: .link { AnyView(LanguageSettingsView()) }),
-                SettingsEntry(title: String(localized: "启动时打开", bundle: .riffet), icon: "rectangle.on.rectangle", value: (RootTab(rawValue: launchRaw) ?? .assistant).title, kind: .link { AnyView(LaunchTabSettingsView()) }),
+                SettingsEntry(title: String(localized: "语言", bundle: .riffet), icon: "globe", kind: .choice {
+                    choiceRow(String(localized: "语言", bundle: .riffet), "globe", selection: Binding(
+                        get: { language },
+                        set: { language = $0; AppLocalization.shared.apply($0) }
+                    ), options: AppLanguage.allCases.map { ($0, $0.name) })
+                }),
+                SettingsEntry(title: String(localized: "启动时打开", bundle: .riffet), icon: "rectangle.on.rectangle", kind: .choice {
+                    choiceRow(String(localized: "启动时打开", bundle: .riffet), "rectangle.on.rectangle", selection: $launchRaw,
+                              options: RootTab.allCases.map { ($0.rawValue, $0.title) })
+                }),
                 server(String(localized: "扩展管理", bundle: .riffet), "puzzlepiece.extension") { AnyView(NativeExtensionsView(workbench: $0)) },
             ]),
             SettingsGroup(title: String(localized: "外观", bundle: .riffet), entries: appearance),
@@ -187,14 +219,6 @@ struct SettingsView: View {
     }
 
     @AppStorage(ThemeStore.modeKey) private var appearanceMode = "system"
-    private var displayModeName: String {
-        switch appearanceMode {
-        case "light": String(localized: "浅色", bundle: .riffet)
-        case "dark": String(localized: "深色", bundle: .riffet)
-        default: String(localized: "跟随系统", bundle: .riffet)
-        }
-    }
-
     private var codeThemeName: String {
         if themeStore.codeThemeId == "auto" {
             return String(localized: "跟随界面主题", bundle: .riffet)
@@ -248,67 +272,6 @@ private func redactedLog(_ text: String) -> String {
     }
 }
 
-/// An edit page with one text field and no label: the page title names it, the keyboard's done saves.
-/// `save` returns the reason it failed, or nil once saved.
-private struct SettingsTextEditPage: View {
-    let title: String
-    let initial: String
-    var prompt = ""
-    var mono = false
-    var limit: Int?
-    var footer: String?
-    var valid: (String) -> Bool = { _ in true }
-    var invalidMessage: String?
-    let save: (String) async -> String?
-    @Environment(\.dismiss) private var dismiss
-    @State private var value: String
-    @State private var error: String?
-    @State private var submitting = false
-
-    init(title: String, initial: String, prompt: String = "", mono: Bool = false, limit: Int? = nil, footer: String? = nil,
-         valid: @escaping (String) -> Bool = { _ in true }, invalidMessage: String? = nil,
-         save: @escaping (String) async -> String?) {
-        self.title = title; self.initial = initial; self.prompt = prompt; self.mono = mono; self.limit = limit
-        self.footer = footer; self.valid = valid; self.invalidMessage = invalidMessage; self.save = save
-        _value = State(initialValue: initial)
-    }
-
-    private var trimmed: String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var dirty: Bool { trimmed != initial.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var isValid: Bool { valid(trimmed) }
-
-    var body: some View {
-        RiffetEditPage(title: title, dirty: dirty, canSave: isValid, save: commit) {
-            Section {
-                RiffetField(prompt: prompt, text: $value, mono: mono)
-                    .textInputAutocapitalization(mono ? .never : nil).autocorrectionDisabled(mono)
-                    .submitLabel(.done)
-                    .onSubmit {
-                        guard dirty, isValid, !submitting else { return }
-                        submitting = true
-                        Task {
-                            if await commit() { dismiss() }
-                            submitting = false
-                        }
-                    }
-            } footer: {
-                if let footer, isValid { Text(footer) }
-            }
-            RiffetNotice.section(.error, isValid ? nil : invalidMessage)
-            RiffetNotice.section(.error, error)
-        }
-        .onChange(of: value) { _, text in
-            guard let limit, text.unicodeScalars.count > limit else { return }
-            value = String(String.UnicodeScalarView(text.unicodeScalars.prefix(limit)))
-        }
-    }
-
-    private func commit() async -> Bool {
-        error = await save(trimmed)
-        return error == nil
-    }
-}
-
 /// The owner's name and avatar, shared by every device paired with this server.
 private struct OwnerProfileView: View {
     let workbench: Workbench
@@ -320,6 +283,7 @@ private struct OwnerProfileView: View {
     @State private var styles: [OwnerAvatarStyle] = []
     @State private var randomizing = false
     @State private var editingName = false
+    @State private var nameDraft = ""
 
     private var name: String { workbench.owner?.name ?? "" }
 
@@ -353,9 +317,13 @@ private struct OwnerProfileView: View {
                 await run { try await workbench.generateOwnerAvatar(style: style, seed: seed, ink: ink, paper: paper) }
             }
         }
-        .sheet(isPresented: $editingName) {
-            SettingsTextEditPage(title: String(localized: "名称", bundle: .riffet), initial: name, limit: 32 /* OWNER_NAME_MAX */) { value in
-                do { try await workbench.updateOwnerName(value); return nil } catch { return error.riffetMessage }
+        .alert(String(localized: "名称", bundle: .riffet), isPresented: $editingName) {
+            TextField(String(localized: "名称", bundle: .riffet), text: $nameDraft)
+            Button("取消", role: .cancel) {}
+            Button("保存") {
+                let value = String(String.UnicodeScalarView(nameDraft.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.prefix(32 /* OWNER_NAME_MAX */)))
+                guard value != name else { return }
+                Task { await run { try await workbench.updateOwnerName(value) } }
             }
         }
         .onChange(of: picked) { _, item in
@@ -391,7 +359,7 @@ private struct OwnerProfileView: View {
             }
             .buttonStyle(.plain).disabled(busy)
             .accessibilityLabel("更换头像")
-            Button { editingName = true } label: {
+            Button { nameDraft = name; editingName = true } label: {
                 Text(name.isEmpty ? String(localized: "名称", bundle: .riffet) : name)
                     .riffetFont(.barTitle).foregroundStyle(name.isEmpty ? palette.fg3 : palette.fg).lineLimit(1)
                     .frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
@@ -502,6 +470,7 @@ private struct FilesSettingsView: View {
     @Environment(\.palette) private var palette
     @State private var saving = false
     @State private var editingEditor = false
+    @State private var editorDraft = ""
     @State private var error: String?
     private var savedEditor: String { workbench.settings?.editorCommand ?? "" }
     var body: some View {
@@ -514,7 +483,7 @@ private struct FilesSettingsView: View {
             } header: { RiffetSectionTitle(String(localized: "文件访问", bundle: .riffet)) } footer: { Text("只读打开项目外路径；文件树与搜索仍限项目内。") }
 
             Section {
-                Button { editingEditor = true } label: {
+                Button { editorDraft = savedEditor; editingEditor = true } label: {
                     SettingsRowLabel(title: String(localized: "编辑器命令", bundle: .riffet), value: savedEditor.isEmpty ? nil : savedEditor)
                         .contentShape(Rectangle())
                 }.buttonStyle(.plain)
@@ -523,9 +492,14 @@ private struct FilesSettingsView: View {
             RiffetNotice.section(.error, error)
         }
         .navigationTitle(String(localized: "文件与编辑器", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $editingEditor) {
-            SettingsTextEditPage(title: String(localized: "编辑器命令", bundle: .riffet), initial: savedEditor, prompt: "cursor", mono: true) { value in
-                await save(managementSettingsPatch(editorCommand: value))
+        .alert(String(localized: "编辑器命令", bundle: .riffet), isPresented: $editingEditor) {
+            TextField("cursor", text: $editorDraft)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("取消", role: .cancel) {}
+            Button("保存") {
+                let value = editorDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard value != savedEditor.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+                Task { error = await save(managementSettingsPatch(editorCommand: value)) }
             }
         }
     }
@@ -539,20 +513,6 @@ private struct FilesSettingsView: View {
             workbench.store.applySavedSettings(settings: saved)
             return nil
         } catch { return error.riffetMessage }
-    }
-}
-
-private struct LaunchTabSettingsView: View {
-    @AppStorage(RootTab.launchKey) private var launchRaw = RootTab.assistant.rawValue
-    var body: some View {
-        RiffetForm {
-            Section {
-                ForEach(RootTab.allCases, id: \.rawValue) { tab in
-                    SettingsCheckRow(title: tab.title, selected: launchRaw == tab.rawValue) { launchRaw = tab.rawValue }
-                }
-            } footer: { Text("仅保存在这台设备") }
-        }
-        .navigationTitle(String(localized: "启动时打开", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -625,20 +585,33 @@ private extension View {
     }
 
     func renameServerSheet(_ model: AppModel, target: Binding<PairedServer?>) -> some View {
-        sheet(isPresented: Binding(get: { target.wrappedValue != nil }, set: { if !$0 { target.wrappedValue = nil } })) {
-            if let server = target.wrappedValue {
-                SettingsTextEditPage(
-                    title: String(localized: "重命名服务器", bundle: .riffet), initial: server.name ?? "",
-                    prompt: String(localized: "名称", bundle: .riffet),
-                    footer: String(localized: "仅保存在这台设备，留空显示地址", bundle: .riffet),
-                    valid: { model.host.isValidServerName(name: $0) },
-                    invalidMessage: String(localized: "名称需为单行，最多 64 个字符", bundle: .riffet)
-                ) { name in
-                    if await model.renameServer(server, name: name) { return nil }
-                    return model.error ?? String(localized: "操作未完成", bundle: .riffet)
-                }
+        modifier(RenameServerAlert(model: model, target: target))
+    }
+}
+
+/// One text field for a paired server's name; empty shows its address.
+private struct RenameServerAlert: ViewModifier {
+    let model: AppModel
+    @Binding var target: PairedServer?
+    @State private var draft = ""
+
+    private var trimmed: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isValid: Bool { model.host.isValidServerName(name: trimmed) }
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: target?.origin, initial: true) { _, _ in draft = target?.name ?? "" }
+            .alert(String(localized: "重命名服务器", bundle: .riffet),
+                   isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } })) {
+                TextField(String(localized: "名称", bundle: .riffet), text: $draft)
+                Button("取消", role: .cancel) {}
+                Button("保存") {
+                    guard let server = target, trimmed != (server.name ?? "") else { return }
+                    Task { _ = await model.renameServer(server, name: trimmed) }
+                }.disabled(!isValid)
+            } message: {
+                Text(isValid ? String(localized: "仅保存在这台设备，留空显示地址", bundle: .riffet) : String(localized: "名称需为单行，最多 64 个字符", bundle: .riffet))
             }
-        }
     }
 }
 
@@ -811,9 +784,8 @@ private struct DevicesView: View {
         .toolbar {
             if !older.isEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("移除较早的设备", systemImage: "trash", role: .destructive) { removingOlder = true }.disabled(busy)
-                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel("更多")
+                    Button { removingOlder = true } label: { Image(systemName: "trash") }
+                        .disabled(busy).accessibilityLabel("移除较早的设备")
                 }
             }
         }

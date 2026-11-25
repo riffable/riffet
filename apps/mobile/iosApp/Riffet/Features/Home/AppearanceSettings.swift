@@ -1,6 +1,6 @@
 import SwiftUI
 
-// 外观 (theme, display mode) and 语言: settings that only concern this phone.
+// 外观 (theme, code theme) and 语言: settings that only concern this phone.
 
 /// The palettes, each drawn as a small page in its own colours.
 struct ThemeSettingsView: View {
@@ -25,33 +25,6 @@ struct ThemeSettingsView: View {
             } footer: { Text("仅保存在这台设备") }
         }
         .navigationTitle(String(localized: "主题", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-/// Light, dark or the system's, shown in the current theme.
-struct DisplayModeSettingsView: View {
-    @Environment(ThemeStore.self) private var themeStore
-    @AppStorage(ThemeStore.modeKey) private var appearance = "system"
-    private static let modes: [(id: String, title: LocalizedStringKey)] = [("system", "跟随系统"), ("light", "浅色"), ("dark", "深色")]
-
-    var body: some View {
-        RiffetForm {
-            Section {
-                HStack(spacing: 14) {
-                    ForEach(Self.modes, id: \.id) { mode in
-                        PreviewChoice(title: Text(mode.title), selected: appearance == mode.id) {
-                            withAnimation(RiffetMotion.effects) { appearance = mode.id }
-                        } preview: {
-                            ModePreview(theme: themeStore.palette, mode: mode.id)
-                        }
-                    }
-                }
-                .padding(.vertical, 4)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
-            } footer: { Text("仅保存在这台设备") }
-        }
-        .navigationTitle(String(localized: "显示模式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -113,27 +86,6 @@ private struct PageSketch: View {
             }
             .padding(9)
         }
-    }
-}
-
-/// 跟随系统 shows both halves side by side, split down the middle.
-private struct ModePreview: View {
-    let theme: Palette
-    let mode: String
-    var body: some View {
-        Group {
-            switch mode {
-            case "light": PageSketch(theme: theme, dark: false)
-            case "dark": PageSketch(theme: theme, dark: true)
-            default:
-                PageSketch(theme: theme, dark: false)
-                    .overlay {
-                        PageSketch(theme: theme, dark: true)
-                            .mask(HStack(spacing: 0) { Color.clear; Color.black })
-                    }
-            }
-        }
-        .frame(height: 112)
     }
 }
 
@@ -249,22 +201,5 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     static func save(_ language: AppLanguage) {
         if language == .system { UserDefaults.standard.removeObject(forKey: key) }
         else { UserDefaults.standard.set([language.rawValue], forKey: key) }
-    }
-}
-
-struct LanguageSettingsView: View {
-    @State private var selection = AppLanguage.current
-    var body: some View {
-        RiffetForm {
-            Section {
-                ForEach(AppLanguage.allCases) { language in
-                    SettingsCheckRow(title: language.name, selected: selection == language) {
-                        selection = language
-                        AppLocalization.shared.apply(language)
-                    }
-                }
-            }
-        }
-        .navigationTitle(String(localized: "语言", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
 }

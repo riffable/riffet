@@ -40,7 +40,7 @@ struct ConversationDock: View {
     var body: some View {
         VStack(spacing: 8) {
             if let menu {
-                ComposerMenuDock(workbench: workbench, session: session, draft: draft, token: menu,
+                ComposerMenuDock(workbench: workbench, source: .session(session, workbench: workbench), draft: draft, token: menu,
                                  allowsFiles: session.backendId != .chat, allowsSessions: supportsSessionReferences, picked: onMenuPicked)
                     .transition(.opacity)
             }

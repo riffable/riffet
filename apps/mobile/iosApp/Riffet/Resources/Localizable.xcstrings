@@ -4165,16 +4165,6 @@
         }
       }
     },
-    "尚未读取到 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Agents loaded yet"
-          }
-        }
-      }
-    },
     "尚未读取到此项目的 Agent 配置。" : {
       "localizations" : {
         "en" : {
@@ -5129,16 +5119,6 @@
         }
       }
     },
-    "当前轮次继续执行，修改将在 Agent 下次空闲时应用。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The current turn keeps running; changes apply the next time the Agent is idle."
-          }
-        }
-      }
-    },
     "待处理" : {
       "localizations" : {
         "en" : {
@@ -5835,16 +5815,6 @@
         }
       }
     },
-    "搜索项目中的文件" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search project files"
-          }
-        }
-      }
-    },
     "搜索项目文件" : {
       "localizations" : {
         "en" : {
@@ -6141,16 +6111,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "File name"
-          }
-        }
-      }
-    },
-    "文件名或路径" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "File name or path"
           }
         }
       }
@@ -7691,16 +7651,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This Agent provides no command catalog."
-          }
-        }
-      }
-    },
-    "此 Mac 上不可用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not available on this Mac"
           }
         }
       }
@@ -9817,16 +9767,6 @@
         }
       }
     },
-    "选择 Agent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose Agent"
-          }
-        }
-      }
-    },
     "选择 Mac 上的其他目录" : {
       "localizations" : {
         "en" : {
@@ -11090,6 +11030,16 @@
     "更多" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "More" } }
+      }
+    },
+    "更多设置" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "More Settings" } }
+      }
+    },
+    "修改将在 Agent 下次空闲时应用。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Changes apply when the agent is next idle." } }
       }
     },
     "搜索设置" : {

@@ -499,17 +499,21 @@ struct SessionHomeView: View {
     @ToolbarContentBuilder private var homeToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                Picker("分组方式", selection: $grouping) { ForEach(HomeGrouping.allCases, id: \.self) { Text($0.title).tag($0) } }
-                if let project = workbench.project(scope) {
-                    Menu(project.name, systemImage: "ellipsis.circle") { projectLinks(project) }
+                Section {
+                    Picker("分组方式", selection: $grouping) { ForEach(HomeGrouping.allCases, id: \.self) { Text($0.title).tag($0) } }
+                    Menu("按标签筛选", systemImage: "tag") {
+                        Button("所有标签") { tag = nil }
+                        ForEach(availableTags, id: \.self) { value in Button { tag = value } label: { if tag == value { Label(value, systemImage: "checkmark") } else { Text(value) } } }
+                    }.disabled(availableTags.isEmpty)
+                    if scope != nil || tag != nil || filter != .all { Button("清除筛选") { scope = nil; tag = nil; filter = .all } }
                 }
-                Menu("按标签筛选", systemImage: "tag") {
-                    Button("所有标签") { tag = nil }
-                    ForEach(availableTags, id: \.self) { value in Button { tag = value } label: { if tag == value { Label(value, systemImage: "checkmark") } else { Text(value) } } }
-                }.disabled(availableTags.isEmpty)
-                if scope != nil || tag != nil || filter != .all { Button("清除筛选") { scope = nil; tag = nil; filter = .all } }
-                Button(String(localized: "全部标为已读", bundle: .riffet), systemImage: "checkmark.circle") { Task { await workbench.markAllSeen() } }
-            } label: { Image(systemName: "ellipsis") }.accessibilityLabel("筛选与分组")
+                if let project = workbench.project(scope) {
+                    Section(project.name) { projectLinks(project) }
+                }
+                Section {
+                    Button(String(localized: "全部标为已读", bundle: .riffet), systemImage: "checkmark.circle") { Task { await workbench.markAllSeen() } }
+                }
+            } label: { Image(systemName: "ellipsis") }.accessibilityLabel("更多")
         }
     }
     /// The list's rows in order: what needs the reader, then what is still working, lead; a pinned

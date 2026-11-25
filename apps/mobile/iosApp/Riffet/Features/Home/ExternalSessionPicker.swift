@@ -44,11 +44,9 @@ struct ExternalSessionPicker: View {
                 ExternalSessionList(workbench: workbench, scope: .directory, projectID: nil, cwd: cwd, filter: $filter, importing: importing, pick: pick)
                     .safeAreaInset(edge: .top, spacing: 0) { ExternalAgentChips(filter: $filter) }
                     .navigationTitle(cwd.split(separator: "/").last.map(String.init) ?? cwd).navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .topBarTrailing) { ExternalFilterMenu(filter: $filter) } }
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) { ExternalFilterMenu(filter: $filter) }
             }
         }
         .riffetToastHost()
@@ -84,24 +82,17 @@ struct ExternalFilter: Equatable {
     var nonInteractive = false
 }
 
-/// 全部 and the agents whose sessions can be imported, above the list.
+/// 全部 and the agents whose sessions can be imported, then the switch for 含非交互, above the list.
 private struct ExternalAgentChips: View {
     @Binding var filter: ExternalFilter
     var body: some View {
-        RiffetChipBar(items: [.init(value: nil, title: String(localized: "全部", bundle: .riffet)),
-                              .init(value: "claude", title: "Claude"), .init(value: "codex", title: "Codex")],
-                      selection: $filter.backend)
-    }
-}
-
-private struct ExternalFilterMenu: View {
-    @Binding var filter: ExternalFilter
-    var body: some View {
-        Menu {
-            Toggle("含非交互", isOn: $filter.nonInteractive)
-        } label: {
-            Image(systemName: filter.nonInteractive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-        }.accessibilityLabel("筛选")
+        HStack(spacing: 0) {
+            RiffetChipBar(items: [.init(value: nil, title: String(localized: "全部", bundle: .riffet)),
+                                  .init(value: "claude", title: "Claude"), .init(value: "codex", title: "Codex")],
+                          selection: $filter.backend)
+            RiffetToggleChip(title: String(localized: "含非交互", bundle: .riffet), isOn: $filter.nonInteractive)
+                .padding(.trailing, RiffetMetrics.pageInset)
+        }
     }
 }
 

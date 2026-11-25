@@ -111,6 +111,15 @@ enum RiffetMetrics {
     /// Between something floating (a toast) and the edge or control it clears.
     static let floatingGap: CGFloat = 8
     static let hitTarget: CGFloat = 44
+    /// The terminal grid's distance from the screen's sides (Android's terminal uses the same).
+    static let terminalInset: CGFloat = 6
+    /// How far a viewed pane wider than the screen is scaled down: 8pt text from 12.5pt, as on Android.
+    static let terminalMinScale: CGFloat = 8 / 12.5
+    /// Added to the terminal's size so its own column count never rounds down.
+    static let terminalSlack: CGFloat = 0.5
+    /// Between group cards laid out outside a list (a fitted sheet), and from a card to its footnote.
+    static let groupGap: CGFloat = 12
+    static let footnoteGap: CGFloat = 8
     /// The conversation column on a wide window (iPad, an unfolded iPhone Duo); narrower windows use their full width.
     static let readingWidth: CGFloat = 760
     /// A code block's body in a reply, and a tool's command or output: capped, and scrolled inside the
@@ -129,6 +138,30 @@ enum RiffetMotion {
     static let release = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.28)
     static let chevron = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.18)
     // END GENERATED motion
+    /// How long a size holds still before it counts as settled (`onSettledSize`).
+    static let settle = Duration.milliseconds(120)
+}
+
+extension View {
+    /// Runs `action` once the view's size has held still: after a sheet that grows into place has finished
+    /// growing, since a scroll position set on the way is measured against a size the view no longer has.
+    func onSettledSize(_ action: @escaping () -> Void) -> ModifiedContent<Self, SettledSize> {
+        modifier(SettledSize(action: action))
+    }
+}
+
+struct SettledSize: ViewModifier {
+    let action: () -> Void
+    @State private var size: CGSize?
+    func body(content: Content) -> some View {
+        content
+            .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
+            .task(id: size) {
+                guard size != nil else { return }
+                try? await Task.sleep(for: RiffetMotion.settle)
+                if !Task.isCancelled { action() }
+            }
+    }
 }
 
 // MARK: - Glass
@@ -235,15 +268,23 @@ struct RiffetChipBar<Value: Hashable>: View {
     struct Item: Identifiable {
         let value: Value
         let title: String
+        /// An agent's mark before the title (the agents of a new task); nil for plain chips.
+        var mark: String? = nil
+        var enabled = true
         var id: Value { value }
     }
     let items: [Item]
+    /// From the bar's ends to the first and last chip: the page's inset, or a panel's.
+    var inset: CGFloat = RiffetMetrics.pageInset
     @Binding var selection: Value
     @Namespace private var indicator
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// The person has scrolled the bar; it no longer re-centres on the selection when its width changes.
+    @State private var scrolled = false
     var body: some View {
+        ScrollViewReader { proxy in
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(items) { item in
@@ -251,9 +292,12 @@ struct RiffetChipBar<Value: Hashable>: View {
                     Button {
                         withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { selection = item.value }
                     } label: {
-                        Text(item.title)
+                        HStack(spacing: 6) {
+                            if let mark = item.mark { AgentMarkView(backend: mark, size: 14, color: item.enabled ? agentMarkColor(mark, palette) : palette.fg3) }
+                            Text(item.title)
+                        }
                             .riffetFont(.label)
-                            .foregroundStyle(selected ? palette.fg : palette.fg2)
+                            .foregroundStyle(selected ? palette.fg : item.enabled ? palette.fg2 : palette.fg3)
                             .padding(.horizontal, RiffetMetrics.chipInset)
                             .frame(minHeight: RiffetMetrics.chipHeight)
                             .background {
@@ -265,12 +309,29 @@ struct RiffetChipBar<Value: Hashable>: View {
                             .frame(minHeight: RiffetMetrics.hitTarget)
                     }
                     .buttonStyle(RiffetDimPressStyle())
+                    .disabled(!item.enabled)
                     .accessibilityAddTraits(selected ? .isSelected : [])
+                    .id(item.value)
                 }
             }
-            .padding(.horizontal, RiffetMetrics.pageInset)
+            .padding(.horizontal, inset)
         }
         .scrollClipDisabled()
+        // The selected chip is always in view: where the bar appears, again once it has its size (a sheet
+        // grows into place), and when the selection changes. Until the person scrolls the bar themselves.
+        // In place, not animated: a bar that slides after it appears reads as the panel moving.
+        .onAppear { proxy.scrollTo(selection, anchor: .center) }
+        .onSettledSize { if !scrolled { proxy.scrollTo(selection, anchor: .center) } }
+        .onScrollPhaseChange { _, phase in if phase == .interacting { scrolled = true } }
+        // A tapped chip is already where the finger is: the bar moves only as far as it takes to show a
+        // chip that is cut off at an edge, instead of sliding the tapped one to the middle.
+        .onChange(of: selection) { _, value in
+            withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { proxy.scrollTo(value) }
+        }
+        // Other chips are another bar: it starts from the beginning instead of keeping the last one's offset.
+        .id(items.map(\.value))
+        .onChange(of: items.map(\.value)) { _, _ in scrolled = false }
+        }
     }
 }
 

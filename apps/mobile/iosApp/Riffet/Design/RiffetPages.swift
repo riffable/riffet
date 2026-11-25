@@ -112,24 +112,147 @@ struct RiffetPickerSheet<ID: Hashable>: View {
     }
 }
 
-/// A settings row for a value chosen in a picker sheet: the title, the current value at the end, and
-/// the sheet on tap (mobile.md §2.4, 选择行).
+/// A settings row for a value chosen from several (mobile.md §2.4, 选择行): the title and the current
+/// value at the end. Up to eight values with no second line open the system menu on the row; more, or
+/// values that need their second line, open the picker sheet (ios.md §4.1).
 struct RiffetPickerRow<ID: Hashable>: View {
     let title: String
     var symbol: String? = nil
     let options: [RiffetPickerOption<ID>]
     @Binding var selection: ID
     @State private var open = false
+    @Environment(\.palette) private var palette
+
+    static func fitsMenu(_ options: [RiffetPickerOption<ID>]) -> Bool {
+        options.count <= RiffetMenuLimit.values && options.allSatisfy { $0.subtitle == nil }
+    }
 
     var body: some View {
-        Button { open = true } label: {
-            SettingsRowLabel(title: title, symbol: symbol, value: options.first { $0.id == selection }?.title)
-                .contentShape(Rectangle())
+        if Self.fitsMenu(options) {
+            Picker(selection: $selection) {
+                ForEach(options) { option in Text(verbatim: option.title).tag(option.id) }
+            } label: {
+                HStack(spacing: 12) {
+                    if let symbol { SettingsIcon(symbol: symbol) }
+                    Text(title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(palette.fg3)
+        } else {
+            Button { open = true } label: {
+                SettingsRowLabel(title: title, symbol: symbol, value: options.first { $0.id == selection }?.title)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $open) { RiffetPickerSheet(title: title, options: options, selection: $selection) }
+            .accessibilityValue(options.first { $0.id == selection }?.title ?? "")
         }
-        .buttonStyle(.plain)
-        .sheet(isPresented: $open) { RiffetPickerSheet(title: title, options: options, selection: $selection) }
-        .accessibilityValue(options.first { $0.id == selection }?.title ?? "")
     }
+}
+
+/// How much a system menu holds before something heavier takes over (ios.md §4.3).
+enum RiffetMenuLimit {
+    /// Values chosen in place: more than this open the picker sheet, which also searches.
+    static let values = 8
+    /// Rows on a menu's first level; past it the less frequent ones go into a submenu.
+    static let rows = 8
+}
+
+// MARK: - Picker panel
+
+/// A picker with fixed parts (ios.md §4.3), the composer's model chip: a sheet from the bottom at
+/// `RiffetPanelMetrics.fraction` of the screen, draggable to full height, with its own navigation stack
+/// so one row can lead a level in (更多设置) and back. Scope rows stay on top and actions at the bottom
+/// (`RiffetPanelBar`); only the list between them scrolls, and scrolling it never resizes the sheet.
+/// No drag indicator and no title: the scope rows are the panel's top edge, and it still drags.
+struct RiffetPanelSheet<Panel: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    var onDismiss: (() -> Void)?
+    @ViewBuilder let panel: () -> Panel
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    func body(content: Content) -> some View {
+        let large = typeSize.isAccessibilitySize
+        return content.sheet(isPresented: $isPresented, onDismiss: onDismiss) {
+            NavigationStack { panel() }
+                .presentationDetents(large ? [.large] : [.fraction(RiffetPanelMetrics.fraction), .large])
+                .presentationDragIndicator(.hidden)
+                .presentationContentInteraction(.scrolls)
+        }
+    }
+}
+
+extension View {
+    func riffetPanelSheet<Panel: View>(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, @ViewBuilder panel: @escaping () -> Panel) -> ModifiedContent<Self, RiffetPanelSheet<Panel>> {
+        modifier(RiffetPanelSheet(isPresented: isPresented, onDismiss: onDismiss, panel: panel))
+    }
+}
+
+enum RiffetPanelMetrics {
+    /// The panel's first height: the scope rows, about six rows of the list and the action bar.
+    static let fraction: CGFloat = 0.62
+    /// Above and below the rows of a bar.
+    static let gap: CGFloat = 6
+    /// Rows a list shows while its values load, so the panel keeps its layout (ios.md §4.4, 骨架).
+    static let placeholderRows = 6
+}
+
+/// A fixed bar of a picker panel, above (`.top`: scope rows) or below (`.bottom`: parameters, the way on
+/// to more) the list in a `VStack`, so the list scrolls between them and never under them. On iOS 26 it
+/// has no fill, the sheet's glass shows through; earlier systems give it the page colour and a hairline
+/// towards the list.
+struct RiffetPanelBar<Content: View>: View {
+    let edge: VerticalEdge
+    @ViewBuilder let content: () -> Content
+    @Environment(\.palette) private var palette
+    @Environment(\.displayScale) private var scale
+
+    var body: some View {
+        let rows = VStack(alignment: .leading, spacing: 0) { content() }
+            .padding(.vertical, RiffetPanelMetrics.gap)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        if #available(iOS 26.0, *) {
+            rows
+        } else {
+            VStack(spacing: 0) {
+                if edge == .bottom { hairline }
+                rows
+                if edge == .top { hairline }
+            }
+            .background(palette.bg)
+        }
+    }
+
+    private var hairline: some View { Rectangle().fill(palette.line).frame(height: 1 / scale) }
+}
+
+// MARK: - Fitted sheet
+
+/// A sheet with a few lines of content (ios.md §4.3): as tall as its content, still draggable to full
+/// height. The content is laid out in a scroll view; put a `NavigationStack` around this, not inside.
+struct RiffetFittedSheet<Body: View>: View {
+    @ViewBuilder let content: () -> Body
+    @State private var height: CGFloat = 0
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, RiffetMetrics.pageInset)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height = $0 }
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background(palette.bg)
+        .presentationDetents(typeSize.isAccessibilitySize || height <= 0 ? [.large] : [.height(height + Self.chrome), .large])
+        .presentationDragIndicator(.visible)
+        .riffetTypeBoundary()
+    }
+
+    /// The navigation bar and the bottom safe area around the content.
+    private static var chrome: CGFloat { 56 + 34 }
 }
 
 // MARK: - Panel parts

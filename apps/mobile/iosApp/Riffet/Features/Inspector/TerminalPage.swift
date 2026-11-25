@@ -38,6 +38,8 @@ struct TerminalPage: View {
             }
             if let id = selectedID {
                 IOSTerminalSurface(controller: controller, terminalID: id).id(id)
+                    // The terminal's own background runs on under the home indicator, so no band of the page shows.
+                    .background { if let background = controller.background { Color(uiColor: background).ignoresSafeArea(edges: .bottom) } }
             } else if busy { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             else {
                 ContentUnavailableView {
@@ -49,6 +51,14 @@ struct TerminalPage: View {
         }
         .navigationTitle(selected?.title.isEmpty == false ? selected!.title : String(localized: "终端", bundle: .riffet))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarTitleMenu {
+            // Switching is only a choice with a second terminal to switch to.
+            if terminals.count > 1 {
+                Picker("终端", selection: $selectedID) {
+                    ForEach(terminals, id: \.id) { terminal in Text(terminal.title.isEmpty ? (terminal.kind == .shell ? "Shell" : String(localized: "Agent 终端", bundle: .riffet)) : terminal.title).tag(Optional(terminal.id)) }
+                }
+            }
+        }
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -59,21 +69,17 @@ struct TerminalPage: View {
                     Button("键盘", systemImage: "keyboard") { controller.toggleKeyboard() }.disabled(!controller.live)
                 }
                 Menu {
-                    if !terminals.isEmpty {
-                        Picker("终端", selection: $selectedID) {
-                            ForEach(terminals, id: \.id) { terminal in Text(terminal.title.isEmpty ? (terminal.kind == .shell ? "Shell" : String(localized: "Agent 终端", bundle: .riffet)) : terminal.title).tag(Optional(terminal.id)) }
-                        }
+                    Section {
+                        Button("新建 Shell", systemImage: "plus") { Task { await create() } }.disabled(busy)
+                        Button("刷新终端列表", systemImage: "arrow.clockwise") { Task { await load() } }
                     }
-                    Button("新建 Shell", systemImage: "plus") { Task { await create() } }.disabled(busy)
-                    Button("刷新终端列表", systemImage: "arrow.clockwise") { Task { await load() } }
                     if selectedID != nil {
-                        Divider()
-                        if !controller.live, !controller.exited {
-                            Button("重新连接", systemImage: "arrow.triangle.2.circlepath") { reconnect() }
+                        Section {
+                            if !controller.live, !controller.exited { Button("重新连接", systemImage: "arrow.triangle.2.circlepath") { reconnect() } }
+                            if controller.live { Button("中断当前命令 (Ctrl+C)", systemImage: "stop.circle") { Task { await sendInterrupt() } } }
                         }
-                        if controller.live { Button("中断当前命令 (Ctrl+C)", systemImage: "stop.circle") { Task { await sendInterrupt() } } }
                         if selected?.kind == .shell && selected?.state != .exited {
-                            Button("结束这个 Shell", systemImage: "xmark.circle", role: .destructive) { terminate = true }
+                            Section { Button("结束这个 Shell", systemImage: "xmark.circle", role: .destructive) { terminate = true } }
                         }
                     }
                 } label: { Label("终端操作", systemImage: "ellipsis.circle") }
@@ -218,7 +224,7 @@ final class IOSTerminalController {
         return false
     }
     private(set) var live = false
-    private(set) var hasControl = false
+    private(set) var hasControl = false { didSet { container?.fitsToWidth = !hasControl } }
     private(set) var exited = false
     /// No link is trying on its own: paused, or the service was unreachable.
     private(set) var reconnectable = false
@@ -232,6 +238,8 @@ final class IOSTerminalController {
     @ObservationIgnored private var appearanceKey = ""
     @ObservationIgnored private var appearanceConfiguration: (theme: ThemeEntry, dark: Bool)?
     @ObservationIgnored private var launchAppearance: TerminalAppearance?
+    /// What the terminal paints behind its text, for the page around it.
+    private(set) var background: UIColor?
     @ObservationIgnored private let subscriptions = FlowSubscriptions()
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var pending: [(String, Bool, Int, Int)] = []
@@ -286,6 +294,7 @@ final class IOSTerminalController {
 
     func attach(_ container: RemoteTerminalContainer, terminalID: String) {
         self.container = container
+        container.fitsToWidth = !hasControl
         appearanceKey = ""
         let view = container.terminal
         self.view = view
@@ -408,7 +417,12 @@ final class IOSTerminalController {
     }
 
     func applyAppearance(theme: ThemeEntry, dark appDark: Bool) {
+        let changed = appearanceConfiguration.map { $0.theme.id != theme.id || $0.dark != appDark } ?? false
         appearanceConfiguration = (theme, appDark)
+        // The app's theme changed under an open terminal: ask the server to recolour the pane now, as
+        // Android does, instead of waiting for the next state frame. On the next turn, once the app has
+        // put the new colours on the API (`TerminalLaunchAppearance`).
+        if changed { DispatchQueue.main.async { [weak self] in self?.connection?.followAppearance() } }
         guard let view else { return }
         // Without a recorded appearance the pane keeps tmux's default colours, painted with this theme.
         let page = appDark ? theme.values.dark : theme.values.light
@@ -417,6 +431,7 @@ final class IOSTerminalController {
         guard key != appearanceKey else { return }
         appearanceKey = key
         tint = IOSTerminalColors.apply(view, theme: theme, appearance: appearance)
+        background = view.nativeBackgroundColor
         if let originalOutput {
             view.replay(tint?.transform(data: originalOutput) ?? originalOutput)
         } else {
@@ -492,28 +507,42 @@ final class RemoteTerminalContainer: UIScrollView {
         alwaysBounceHorizontal = false
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    /// Only viewing a pane another client sized: a wider grid is scaled down to the screen's width, to
+    /// a floor, and scrolls sideways beyond it. Holding control, the pane is sized to fit instead.
+    var fitsToWidth = false { didSet { if fitsToWidth != oldValue { setNeedsLayout() } } }
     func setGrid(cols: Int, rows: Int) {
         guard cols > 0, rows > 0 else { return }
         grid = (cols, rows)
         if terminal.terminalDimensions.cols != cols || terminal.terminalDimensions.rows != rows { terminal.resize(cols: cols, rows: rows) }
-        terminal.frame = terminal.getOptimalFrameSize()
-        contentSize = terminal.frame.size
         setNeedsLayout()
     }
     override func layoutSubviews() {
         super.layoutSubviews()
+        let inset = RiffetMetrics.terminalInset
         let dimensions = terminal.terminalDimensions
         let optimal = terminal.getOptimalFrameSize().size
-        let width = optimal.width / CGFloat(max(1, dimensions.cols))
-        let height = optimal.height / CGFloat(max(1, dimensions.rows))
+        let cell = CGSize(width: max(1, optimal.width / CGFloat(max(1, dimensions.cols))), height: max(1, optimal.height / CGFloat(max(1, dimensions.rows))))
+        let available = CGSize(width: max(0, bounds.width - 2 * inset), height: bounds.height)
         if bounds.size != proposed, bounds.width > 0, bounds.height > 0 {
             proposed = bounds.size
-            onViewportSize?(max(20, Int(bounds.width / max(1, width))), max(5, Int(bounds.height / max(1, height))))
+            onViewportSize?(max(20, Int(available.width / cell.width)), max(5, Int(available.height / cell.height)))
         }
-        if let grid {
-            terminal.frame = CGRect(origin: .zero, size: CGSize(width: CGFloat(grid.cols) * width, height: CGFloat(grid.rows) * height))
-            contentSize = terminal.frame.size
-        }
+        guard let grid else { return }
+        // A hair over the grid: SwiftTerm divides its own size by the cell again, and a quotient of
+        // 52.9999 would drop a column and reflow the screen.
+        let size = CGSize(width: CGFloat(grid.cols) * cell.width + RiffetMetrics.terminalSlack,
+                          height: CGFloat(grid.rows) * cell.height + RiffetMetrics.terminalSlack)
+        let scale = fitsToWidth && size.width > available.width ? max(RiffetMetrics.terminalMinScale, available.width / size.width) : 1
+        // Scaled rather than set in a smaller font: a font change makes SwiftTerm resize the grid to its frame.
+        if terminal.bounds.size != size { terminal.bounds.size = size }
+        if terminal.transform.a != scale { terminal.transform = CGAffineTransform(scaleX: scale, y: scale) }
+        let contentsScale = traitCollection.displayScale / scale
+        if terminal.layer.contentsScale != contentsScale { terminal.layer.contentsScale = contentsScale; terminal.setNeedsDisplay() }
+        let shown = CGSize(width: size.width * scale, height: size.height * scale)
+        // Centred when narrower than the screen, so what is left over is split between the two sides.
+        let x = max(inset, (bounds.width - shown.width) / 2)
+        terminal.center = CGPoint(x: x + shown.width / 2, y: shown.height / 2)
+        contentSize = CGSize(width: max(bounds.width, shown.width + 2 * inset), height: shown.height)
     }
 }
 

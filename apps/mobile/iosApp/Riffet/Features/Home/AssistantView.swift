@@ -286,11 +286,9 @@ struct AssistantRulesView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if busy { ProgressView() } else {
-                    Menu {
-                        Button(String(localized: "恢复默认", bundle: .riffet), systemImage: "arrow.uturn.backward") { Task { await write(nil) } }
-                            .disabled(setup.instructions?.custom != true)
-                    } label: { Image(systemName: "ellipsis") }
-                    .accessibilityLabel(String(localized: "恢复默认", bundle: .riffet))
+                    Button { Task { await write(nil) } } label: { Image(systemName: "arrow.uturn.backward") }
+                        .disabled(setup.instructions?.custom != true)
+                        .accessibilityLabel(String(localized: "恢复默认", bundle: .riffet))
                 }
             }
             ToolbarItem(placement: .confirmationAction) {

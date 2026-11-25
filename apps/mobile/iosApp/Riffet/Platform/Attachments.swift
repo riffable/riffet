@@ -137,14 +137,15 @@ struct DocumentAttachmentPicker: UIViewControllerRepresentable {
     }
 }
 
-/// PHPicker exposes only the selected photos and does not request full photo-library access.
+/// PHPicker exposes only the selected photos and videos and does not request full photo-library access.
+/// Photos are downsampled like any image; videos (screen recordings) go up as files, under the same limit.
 struct PhotoAttachmentPicker: UIViewControllerRepresentable {
     var onPicked: @MainActor (Result<[ImportedAttachment], Error>) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onPicked: onPicked) }
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var configuration = PHPickerConfiguration()
-        configuration.filter = .images
+        configuration.filter = .any(of: [.images, .videos])
         configuration.selectionLimit = 10
         let controller = PHPickerViewController(configuration: configuration)
         controller.delegate = context.coordinator
@@ -162,13 +163,18 @@ struct PhotoAttachmentPicker: UIViewControllerRepresentable {
                 do {
                     for result in results {
                         let provider = result.itemProvider
-                        guard let identifier = provider.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .image) == true }) else { throw AttachmentImportError.unavailable }
+                        let types = provider.registeredTypeIdentifiers
+                        guard let identifier = types.first(where: { UTType($0)?.conforms(to: .image) == true })
+                                ?? types.first(where: { UTType($0)?.conforms(to: .movie) == true }) else { throw AttachmentImportError.unavailable }
+                        let suggested = provider.suggestedName
                         let attachment: ImportedAttachment = try await withCheckedThrowingContinuation { continuation in
                             provider.loadFileRepresentation(forTypeIdentifier: identifier) { url, error in
                                 if let error { continuation.resume(throwing: error); return }
                                 guard let url else { continuation.resume(throwing: AttachmentImportError.unavailable); return }
+                                // The library's name without the temporary file's; the extension comes from the file.
+                                let name = suggested.map { URL(fileURLWithPath: $0).pathExtension.isEmpty && !url.pathExtension.isEmpty ? $0 + "." + url.pathExtension : $0 }
                                 // The provider URL is valid only during this callback. Import before returning.
-                                do { continuation.resume(returning: try AttachmentImporter.importFile(url)) }
+                                do { continuation.resume(returning: try AttachmentImporter.importFile(url, preferredName: name)) }
                                 catch { continuation.resume(throwing: error) }
                             }
                         }

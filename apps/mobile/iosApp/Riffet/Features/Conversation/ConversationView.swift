@@ -234,6 +234,11 @@ struct ConversationView: View {
                                     action: action.map { action in { Task { await workbench.runRuntimeAction(action, sessionID: sessionID) } } }))
             }
         }
+        // New provider settings wait for a restart; the notice carries it (Android's bar under the composer).
+        if workbench.status?.profilePending?.boolValue == true, let current = session, current.archivedAt == nil, let binding = current.nativeRuntime, !resuming {
+            result.append(.init(id: "profile", severity: 50, kind: .info, message: String(localized: "新配置将在后端重启后生效", bundle: .riffet),
+                                actionTitle: String(localized: "重启并应用", bundle: .riffet), action: { restartBinding = binding }))
+        }
         if workbench.historyError != nil {
             result.append(.init(id: "olderHistory", severity: 30, kind: .warning, message: String(localized: "更早的消息加载失败", bundle: .riffet),
                                 actionTitle: retryTitle, action: { workbench.store.retryHistory() }))
@@ -701,57 +706,60 @@ struct ConversationView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                // Fifteen items: behind a type boundary so the page type stays shallow (riffetTypeBoundary).
+                // Behind a type boundary so the page type stays shallow (riffetTypeBoundary). The first level stays
+                // within RiffetMenuLimit.rows: the frequent places are one row of icons (as in the details panel),
+                // the less frequent ones a submenu, and a state's fix is the page's notice, not an item here.
                 Group {
-                Button(String(localized: "查找", bundle: .riffet), systemImage: "magnifyingglass") { workbench.store.find.open(readingPos: nil) }.accessibilityIdentifier("conversationFind")
-                Button("会话目录", systemImage: "list.bullet") { outline = true }.disabled(workbench.presentation?.turns.isEmpty != false).accessibilityIdentifier("conversationOutline")
-                Divider()
-                if connectionStatus?.connectionNotice == .failed || connectionStatus?.connectionNotice == .conflict {
-                    Button("重试连接", systemImage: "arrow.clockwise") { workbench.store.retry() }
-                }
-                // The notice's one action is 打开终端 then; syncing again stays one tap away here.
-                if supportsTerminal, workbench.interaction == nil, workbench.status?.phase == .attention {
-                    Button(String(localized: "重新同步", bundle: .riffet), systemImage: "arrow.triangle.2.circlepath") { Task { await workbench.perform { _ = try await workbench.store.syncInteraction() } } }
-                }
-                if needsResume, catalog?.capabilities.supportsResume == true {
-                    Button("恢复会话", systemImage: "arrow.clockwise") { Task { await resume() } }
-                }
-                if workbench.status?.profilePending?.boolValue == true, session.archivedAt == nil, let binding = session.nativeRuntime {
-                    Button("重启并应用", systemImage: "arrow.clockwise") { restartBinding = binding }.disabled(resuming)
-                }
-                NavigationLink { SessionOptionsView(workbench: workbench, session: session) } label: { Label("会话选项", systemImage: "slider.horizontal.3") }
-                if let actions = workbench.runtimeControl?.actions, !actions.isEmpty {
-                    ForEach(actions, id: \.id) { action in
-                        Button { Task { await workbench.runRuntimeAction(action, sessionID: sessionID) } } label: {
-                            // A menu shows a label's second text as the item's subtitle.
-                            Label {
-                                Text(localizedText(action.label, fallback: action.id))
-                                if let hint = action.hint { Text(localizedText(hint, fallback: "")) }
-                            } icon: { Image(systemName: "puzzlepiece.extension") }
-                        }.disabled(action.disabled?.boolValue == true || workbench.runtimeActionPending)
-                    }
-                }
                 // The assistant's directory is not code: no files, changes, rename or pin. Its agent's terminal stays.
                 let codeless = inAssistant(session)
-                if supportsTerminal { Button("终端", systemImage: "terminal") { terminal = true } }
-                if session.backendId != .chat, !codeless, session.archivedAt == nil, session.nativeSessionId != nil, session.terminalHold == nil {
-                    Button("在终端恢复…", systemImage: "apple.terminal") { terminalResume = true }
+                ControlGroup {
+                    Button(String(localized: "查找", bundle: .riffet), systemImage: "magnifyingglass") { workbench.store.find.open(readingPos: nil) }.accessibilityIdentifier("conversationFind")
+                    Button("会话目录", systemImage: "list.bullet") { outline = true }.disabled(workbench.presentation?.turns.isEmpty != false).accessibilityIdentifier("conversationOutline")
+                    if supportsTerminal { Button("终端", systemImage: "terminal") { terminal = true } }
                 }
                 // A quick chat's project is the server's own empty directory, not something to browse.
                 if session.backendId != .chat, !codeless, let project = workbench.project(session.projectId) {
                     NavigationLink { ProjectFilesView(workbench: workbench, project: project) } label: { Label("项目文件", systemImage: "folder") }
                     NavigationLink { ProjectChangesView(workbench: workbench, project: project) } label: { Label("项目变更", systemImage: "point.3.connected.trianglepath.dotted") }
                 }
+                if let actions = workbench.runtimeControl?.actions, !actions.isEmpty {
+                    if actions.count > 2 {
+                        Menu("插件", systemImage: "puzzlepiece.extension") { runtimeActions(actions) }
+                    } else { runtimeActions(actions) }
+                }
+                Divider()
                 if !codeless {
                     Button("重命名", systemImage: "pencil") { renameTitle = session.title; renaming = true }
                     Button(session.pinnedAt != nil ? "取消置顶" : "置顶会话", systemImage: session.pinnedAt != nil ? "pin.slash" : "pin") { Task { await workbench.update(session, pinned: session.pinnedAt == nil) } }
                 }
+                Menu("更多", systemImage: "ellipsis.circle") {
+                    NavigationLink { SessionOptionsView(workbench: workbench, session: session) } label: { Label("会话选项", systemImage: "slider.horizontal.3") }
+                    if session.backendId != .chat, !codeless, session.archivedAt == nil, session.nativeSessionId != nil, session.terminalHold == nil {
+                        Button("在终端恢复…", systemImage: "apple.terminal") { terminalResume = true }
+                    }
+                    // The notice's one action is 打开终端 then; syncing again stays reachable here.
+                    if supportsTerminal, workbench.interaction == nil, workbench.status?.phase == .attention {
+                        Button(String(localized: "重新同步", bundle: .riffet), systemImage: "arrow.triangle.2.circlepath") { Task { await workbench.perform { _ = try await workbench.store.syncInteraction() } } }
+                    }
+                }
+                Divider()
                 Button(session.archivedAt == nil ? "归档会话" : "恢复会话", systemImage: session.archivedAt == nil ? "archivebox" : "arrow.uturn.backward") { Task { await workbench.update(session, archived: session.archivedAt == nil) } }
                 if workbench.list.canDeleteSessions {
                     Button("删除…", systemImage: "trash", role: .destructive) { Task { await workbench.requestDeletion(session) } }.disabled(workbench.deletionLoading != nil)
                 }
             }.riffetTypeBoundary()
             } label: { Image(systemName: "ellipsis") }.accessibilityLabel("会话菜单")
+        }
+    }
+    /// The runtime plugin's actions for this conversation, each with its hint as the item's subtitle.
+    @ViewBuilder private func runtimeActions(_ actions: [NativeRuntimeAction]) -> some View {
+        ForEach(actions, id: \.id) { action in
+            Button { Task { await workbench.runRuntimeAction(action, sessionID: sessionID) } } label: {
+                Label {
+                    Text(localizedText(action.label, fallback: action.id))
+                    if let hint = action.hint { Text(localizedText(hint, fallback: "")) }
+                } icon: { Image(systemName: "puzzlepiece.extension") }
+            }.disabled(action.disabled?.boolValue == true || workbench.runtimeActionPending)
         }
     }
     /// A picker sheet of the conversation's prompts (mobile.md §2.5): one line each with its time; a choice

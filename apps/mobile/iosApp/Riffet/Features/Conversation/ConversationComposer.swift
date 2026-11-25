@@ -9,7 +9,7 @@ struct ConversationComposer: View {
     var catalog: NativeBackendCatalogEntry? = nil
     var catalogLoading = false
     var catalogError: String? = nil
-    /// The model sheet closed; it may have read the catalog the page could not.
+    /// The model panel or the options sheet closed; either may have read the catalog the page could not.
     var onOptionsClosed: () -> Void = {}
     /// Incremented by the page to put the cursor in the input (after quoting a message).
     var focusRequest = 0
@@ -20,7 +20,8 @@ struct ConversationComposer: View {
     @State private var photos = false
     /// The token Escape closed; it stays closed as that token is typed on.
     @State private var dismissedMenu: ComposerMenuToken.Key?
-    @State private var configuration: SessionOptionFocus?
+    /// The model chip's picker panel.
+    @State private var modelPanel = false
     @State private var expandedEditor = false
     @FocusState private var focused: Bool
     @State private var voice = ComposerVoice()
@@ -84,11 +85,9 @@ struct ConversationComposer: View {
         .sheet(isPresented: $files) { DocumentAttachmentPicker { picked($0); files = false } }
         .sheet(isPresented: $photos) { PhotoAttachmentPicker { picked($0); photos = false } }
         .attachmentDrop(enabled: !archived && !draft.uploading, picked)
-        .sheet(item: $configuration, onDismiss: onOptionsClosed) { focus in
-            NavigationStack {
-                SessionOptionsView(workbench: workbench, session: session, focus: focus)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { configuration = nil } } }
-            }.presentationDragIndicator(.visible)
+        .riffetPanelSheet(isPresented: $modelPanel, onDismiss: onOptionsClosed) {
+            SessionModelPanel(workbench: workbench, session: session, catalog: catalog,
+                              more: { AnyView(SessionOptionsView(workbench: workbench, session: session, focus: .settings)) }, close: { modelPanel = false })
         }
         .sheet(isPresented: $expandedEditor) {
             NavigationStack {
@@ -204,7 +203,7 @@ struct ConversationComposer: View {
             plusMenu
             if voiceInput { voiceToggle }
             if holdInFooter { holdBar(height: RiffetMetrics.sendButton).padding(.horizontal, RiffetMetrics.floatingGap) } else { Spacer(minLength: 8) }
-            if !holdInFooter { RiffetModelLabel(title: modelName, context: contextRatio, loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
+            if !holdInFooter { RiffetModelLabel(title: modelName, context: contextRatio, loading: catalogLoading, failed: catalogError != nil) { modelPanel = true }
                 .accessibilityLabel(String(localized: "模型：\(modelName)", bundle: .riffet))
                 .accessibilityValue(catalogLoading ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? contextRatio.map { String(localized: "上下文已用 \($0.formatted(.percent.precision(.fractionLength(0))))", bundle: .riffet) } ?? "")
                 .accessibilityHint("查看模型、参数、模式与权限").accessibilityIdentifier("modelPicker")

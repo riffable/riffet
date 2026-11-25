@@ -32,17 +32,33 @@ struct ComposerMenuToken: Equatable {
     }
 }
 
+/// Where a docked menu reads its rows: a conversation's, or a new task's agent and project.
+struct ComposerMenuSource {
+    /// Changes when the commands would differ (another conversation, agent or provider).
+    let key: String
+    let projectID: String
+    /// The conversation the draft belongs to, left out of the sessions it can cite.
+    var sessionID: String?
+    let commands: @MainActor () async throws -> [NativeSlashItem]
+
+    @MainActor static func session(_ session: Session, workbench: Workbench) -> ComposerMenuSource {
+        ComposerMenuSource(key: session.id, projectID: session.projectId, sessionID: session.id) {
+            try await workbench.store.slashCatalog(session: session).items
+        }
+    }
+}
+
 /// The docked list for `/` (commands and skills) and `@` (sessions, project files): at most five rows
 /// show and it scrolls. Its data is read the way the sheets read it.
 struct ComposerMenuDock: View {
     let workbench: Workbench
-    let session: Session
+    let source: ComposerMenuSource
     @Bindable var draft: MessageDraft
     let token: ComposerMenuToken
     let allowsFiles: Bool
     let allowsSessions: Bool
     let picked: () -> Void
-    @State private var slash: NativeSlashCatalog?
+    @State private var slash: [NativeSlashItem]?
     @State private var files: [FileEntry] = []
     @State private var loading = true
     @State private var error: String?
@@ -62,12 +78,12 @@ struct ComposerMenuDock: View {
     private var rows: [Row] {
         switch token.kind {
         case .slash:
-            return rankSlashItems(items: slash?.items ?? [], query: token.query, limit: 200).map(Row.command)
+            return rankSlashItems(items: slash ?? [], query: token.query, limit: 200).map(Row.command)
         case .mention:
             var result: [Row] = []
             if allowsSessions {
                 result += rankedSessionReferences(sessions: workbench.list.sessions, projects: workbench.list.projects, query: token.query,
-                                                  currentSessionId: session.id, projectId: session.projectId).prefix(3).map(Row.session)
+                                                  currentSessionId: source.sessionID, projectId: source.projectID).prefix(3).map(Row.session)
             }
             if allowsFiles { result += files.filter { $0.kind == .file }.map(Row.file) }
             return result
@@ -94,24 +110,25 @@ struct ComposerMenuDock: View {
                 }.dockSurface()
             }
         }
-        .task(id: "\(session.id)|\(token.kind == .slash)|\(retry)") {
+        .task(id: "\(source.key)|\(token.kind == .slash)|\(retry)") {
             guard token.kind == .slash else { return }
             loading = true; error = nil; slash = nil
             do {
-                let loaded = try await workbench.store.slashCatalog(session: session)
+                let loaded = try await source.commands()
                 try Task.checkCancellation(); slash = loaded
             } catch is CancellationError { return }
             catch { self.error = error.riffetMessage }
             loading = false
         }
-        .task(id: "\(session.projectId)|\(token.kind == .mention)|\(allowsFiles)|\(token.kind == .mention ? token.query : "")|\(retry)") {
+        .task(id: "\(source.projectID)|\(token.kind == .mention)|\(allowsFiles)|\(token.kind == .mention ? token.query : "")|\(retry)") {
             guard token.kind == .mention else { return }
-            guard allowsFiles else { loading = false; return }
+            // A bare @ lists sessions only; files are searched once there is something to search for.
+            guard allowsFiles, !token.query.isEmpty else { files = []; error = nil; loading = false; return }
             loading = true; error = nil // the last results stay while the next query answers
             do {
                 try await Task.sleep(for: .milliseconds(200))
                 guard let api = workbench.api else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
-                let result = try await api.find(projectId: session.projectId, query: token.query)
+                let result = try await api.find(projectId: source.projectID, query: token.query)
                 try Task.checkCancellation()
                 files = result
             } catch is CancellationError {} catch { self.error = error.riffetMessage; files = [] }
@@ -171,71 +188,3 @@ struct ComposerMenuDock: View {
     }
 }
 
-struct ConversationReferencePicker: View {
-    let workbench: Workbench
-    let projectID: String
-    let picked: (FileEntry) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
-    @State private var files: [FileEntry] = []
-    @State private var error: String?
-    @State private var loading = false
-    @State private var retry = 0
-    @Environment(\.palette) private var palette
-    var body: some View {
-        NavigationStack {
-            List {
-                RiffetNotice.section(.error, error, actionTitle: String(localized: "重试", bundle: .riffet)) { retry += 1 }
-                if loading, files.isEmpty { ProgressView().frame(maxWidth: .infinity) }
-                ForEach(files.filter { $0.kind == .file }, id: \.path) { file in Button { picked(file) } label: { Label(file.path, systemImage: "doc.text").foregroundStyle(palette.fg).frame(minHeight: 36) } }
-                if !loading && files.isEmpty && error == nil {
-                    if query.isEmpty { ContentUnavailableView("搜索项目中的文件", systemImage: "doc.text.magnifyingglass") }
-                    else { ContentUnavailableView.search(text: query) }
-                }
-            }.searchable(text: $query, prompt: String(localized: "文件名或路径", bundle: .riffet)).navigationTitle(String(localized: "引用项目文件", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-                .task(id: "\(projectID)|\(query)|\(retry)") {
-                    loading = true; error = nil // the last results stay while the next query answers
-                    do {
-                        try await Task.sleep(for: .milliseconds(200))
-                        guard let api = workbench.api else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
-                        let result = try await api.find(projectId: projectID, query: query)
-                        try Task.checkCancellation()
-                        files = result
-                    } catch is CancellationError {} catch { self.error = error.riffetMessage; files = [] }
-                    if !Task.isCancelled { loading = false }
-                }
-        }
-    }
-}
-
-struct ConversationSessionReferencePicker: View {
-    let workbench: Workbench
-    let currentSessionID: String?
-    let projectID: String?
-    let picked: (Session) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
-    @Environment(\.palette) private var palette
-    private var candidates: [Session] {
-        rankedSessionReferences(sessions: workbench.list.sessions, projects: workbench.list.projects, query: query,
-            currentSessionId: currentSessionID, projectId: projectID)
-    }
-    var body: some View {
-        NavigationStack {
-            List(candidates, id: \.id) { session in
-                Button { picked(session) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(session.shownTitle).foregroundStyle(palette.fg)
-                        Text([workbench.list.projects.first(where: { $0.id == session.projectId })?.name, session.agent]
-                            .compactMap { $0 }.joined(separator: " · "))
-                            .riffetFont(.caption).foregroundStyle(palette.fg3)
-                    }
-                }
-            }
-            .searchable(text: $query)
-            .navigationTitle(String(localized: "引用会话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
-    }
-}

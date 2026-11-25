@@ -18,13 +18,16 @@ struct TerminalResumeSheet: View {
     private enum Field { case id, command }
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.displayScale) private var scale
 
     var body: some View {
         NavigationStack {
-            RiffetForm {
+            // Two values and a note: a sheet as tall as they are (ios.md §4.3).
+            RiffetFittedSheet {
                 if let resume {
-                    Section {
+                    RiffetGroupCard {
                         row("会话 ID", value: resume.nativeSessionId) { RiffetCopyButton(text: resume.nativeSessionId, label: String(localized: "复制会话 ID", bundle: .riffet)) }
+                        Rectangle().fill(palette.line).frame(height: 1 / scale)
                         // The command releases Riffet's process first, so it keeps its own copy step.
                         row("命令", value: resume.command) {
                             Button { Task { await copyCommand(resume.command) } } label: {
@@ -34,16 +37,17 @@ struct TerminalResumeSheet: View {
                             }.buttonStyle(RiffetDimPressStyle()).foregroundStyle(palette.fg3).disabled(releasing)
                                 .accessibilityLabel(String(localized: "复制命令", bundle: .riffet))
                         }
-                    } footer: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。")
-                            if resume.credentialsOmitted { Text("终端不会带上 Riffet 中配置的模型接口和密钥。") }
-                        }
                     }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。")
+                        if resume.credentialsOmitted { Text("终端不会带上 Riffet 中配置的模型接口和密钥。") }
+                    }
+                    .riffetFont(.caption).foregroundStyle(palette.fg3)
+                    .padding(.horizontal, RiffetMetrics.pageInset + RiffetMetrics.groupInset).padding(.top, RiffetMetrics.footnoteGap)
                 } else if loading {
-                    Section { HStack { Spacer(); ProgressView(); Spacer() } }
+                    ProgressView().frame(maxWidth: .infinity, minHeight: RiffetMetrics.settingsRowHeight)
                 }
-                RiffetNotice.section(.error, error)
+                if let error { RiffetNotice(kind: .error, message: error, boxed: true).padding(.top, RiffetMetrics.groupGap) }
             }
             .navigationTitle(String(localized: "在终端恢复", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }

@@ -142,7 +142,7 @@ SwiftUI 在主线程上解析页面的视图类型、计算 body。iOS 的主线
 | 详情页 | `RiffetForm`。头部是第一个 Section，`listRowBackground(.clear)`：图标、名称、类型 · 范围 | 进行中时顶栏放 `ProgressView()`，页面禁用 |
 | 编辑页、新建页 | `RiffetEditPage`（`Design/RiffetPages.swift`）放在 sheet 里：自带 `NavigationStack`、`RiffetForm`、两侧按钮和未保存保护；字段用 `RiffetField`（§6） | `.cancellationAction` 是「取消」，`.confirmationAction` 是保存的动词（「保存」「创建」「安装」），没有改动时不可用；保存中按钮换成转圈，宽度不变 |
 | 设置分类页 | `RiffetForm`，行只有四种（§3.3） | — |
-| 选择面板 | `RiffetPickerSheet`：sheet，`.medium` / `.large`，当前值行尾 `accent` 勾，选了就关，超过 8 项加搜索；设置里打开它的行是 `RiffetPickerRow`，范围条里是 `RiffetChipButton` | 不放「完成」 |
+| 选择面板 | `RiffetPickerSheet`：sheet，`.medium` / `.large`，当前值行尾 `accent` 勾，选了就关，超过 8 项加搜索；设置里打开它的行是 `RiffetPickerRow`（8 项以内且没有说明行时它自己画成 `Picker(.menu)`），范围条里是 `RiffetChipButton` | 不放「完成」 |
 | 弹窗 | `.confirmationDialog` 或 `.alert`（§4.2） | — |
 | 面板 | 会话详情的 sheet（§3.1）：`RiffetPaneActionBar`（二到四格，图标在上、一个词在下）、`RiffetSectionTitle(_:figure:)`（标题右侧写数量）、`RiffetValueRow`（事实，等宽的截断开头，长按复制） | 中间是 `RiffetBarTitle(title:status:)`，标题下一行状态 |
 
@@ -163,7 +163,7 @@ SwiftUI 在主线程上解析页面的视图类型、计算 body。iOS 的主线
 |---|---|
 | 导航行 | `NavigationLink(value:)` 加 `SettingsRowLabel(title:symbol:value:)`，箭头由系统画，不手画 `chevron.right` |
 | 开关行 | `Toggle` |
-| 选择行 | 2–4 个就近的选项用 `Picker` 的 `.menu` 样式，行尾是当前值；5 个以上是导航行，打开选择面板 |
+| 选择行 | 8 个以内、不需要搜索和说明行：`Picker` 的 `.menu` 样式，行尾是当前值；更多、或选项要说明行：打开选择面板。`RiffetPickerRow` 按这条自己选，调用处不判断 |
 | 操作行 | `RiffetActionRow`，标题是 `accent` 色的动词，进行中行尾转圈；删除类 `destructive: true`，单独一个 Section 放在最底下 |
 
 - 详情页和面板里的只读事实用 `LabeledContent`：标签在左，值在右（`fg3`）；路径、分支用等宽并截断开头，长按可复制。
@@ -179,7 +179,8 @@ SwiftUI 在主线程上解析页面的视图类型、计算 body。iOS 的主线
 |---|---|
 | 只有图标的按钮的名称 | `Button(_:systemImage:)` 配 `.labelStyle(.iconOnly)`，或 `accessibilityLabel`；不画提示气泡 |
 | 对一项内容执行操作 | 长按 `contextMenu`，或 ⋯ `Menu` |
-| 在一组值里选一个 | 选择面板；2–4 个且就在触发处时用 `Menu` / `Picker(.menu)` |
+| 在一组值里选一个 | 8 个以内、不需要搜索和说明行：`Menu` / `Picker(.menu)`；更多、要搜索或预览：选择面板 |
+| 在一处连选几个相关的值（模型和它的参数、新会话的 Agent） | 带固定栏的选择面板 `riffetPanelSheet`（§4.3） |
 | 集中处理、有提交和取消的任务 | 编辑页（§3.2） |
 | 确认一次操作 | `.confirmationDialog`；要一两个字段，或不是由某个按钮直接引起时用 `.alert`（§4.2） |
 | 报告一次操作的结果 | `RiffetToastCenter`（§4.4） |
@@ -198,8 +199,18 @@ SwiftUI 在主线程上解析页面的视图类型、计算 body。iOS 的主线
 
 ### 4.3 菜单与 sheet
 
-- 菜单只用系统 `Menu`。当前值用 `Picker` 放进 `Menu`，由系统画勾；危险项 `role: .destructive`，放在最后，前面用 `Divider` 隔开。胶囊打开的菜单用 `RiffetMenuChip`。
-- sheet：选择面板 `.medium` / `.large`，编辑页 `.large`；辅助功能字号下只给 `.large`。sheet 需要标题栏就套 `NavigationStack`，不手画标题行。
+选值和操作按轻重分三档，从最轻的选起（[设计决定](../DECISIONS.md) 2026-11-24）：
+
+| 档 | 用于 | 写法 |
+|---|---|---|
+| 原地菜单 | 操作；8 个以内、不需要搜索和说明行的值 | 系统 `Menu`、`Picker(.menu)`、`RiffetMenuChip` |
+| sheet | 要搜索的长列表、要预览的值、几个相关的值一起选、几行的说明 | `RiffetPickerSheet`；带固定栏的 `riffetPanelSheet`；几行内容用 `RiffetFittedSheet` |
+| 整页 | 多字段的表单、往下钻的对象 | 编辑页（§3.2）、压栈 |
+
+- **菜单**只用系统 `Menu`。当前值用 `Picker` 放进 `Menu`，由系统画勾；危险项 `role: .destructive`，放在最后，前面用 `Divider` 隔开。胶囊打开的菜单用 `RiffetMenuChip`。只有一项的菜单改成那一项的按钮。
+- **菜单的第一层不超过 8 行**（`RiffetMenuLimit.rows`）。最常用的两三个去处放在最上面的 `ControlGroup`（一排图标，图标在上、一个词在下，和面板的操作条同一节奏）；低频的收进末尾的「更多」子菜单；插件项超过两个时收进「插件」子菜单。状态的补救（重试连接、重启并应用）是页面提示条的操作，不进菜单，菜单不随状态变长。会话页 ⋯ 是范例：查找 · 会话目录 · 终端一排，文件、变更、插件，重命名、置顶、更多，归档、删除。
+- **带固定栏的选择面板**（`riffetPanelSheet`，`Design/RiffetPages.swift`）：几个相关的值一起选。从底部升起，默认占屏幕 62%（`RiffetPanelMetrics.fraction`），可拉到全高，滚动列表不改变面板高度；辅助功能字号下只给全高。面板自带 `NavigationStack`，根页用行内标题（新会话的模型面板能换 Agent，写「Agent 与模型」；会话里只换模型，写「模型」），和压栈进去的下一级共用同一条导航栏，进出时标题原地换字、不跳；不显示拖动条，面板照样能拖。面板底是系统的玻璃 sheet，不铺页面色：列表的分组卡片之间、上下两条固定栏都透出玻璃；栏和列表在一个 `VStack` 里上下排开，列表只在两栏之间滚动、不滚进栏下（透明的栏下面滚过列表行，文字叠在胶囊后面，真机上被否；系统的柔和滚动边缘盖不住）；iOS 18 没有玻璃 sheet，栏用页面色加 1px 线。按下时玻璃整块泛亮是系统行为，不去掉。决定列表内容的范围（Agent、提供商）是顶部固定的 `RiffetPanelBar(edge: .top)`，每个范围一排 `RiffetChipBar`，选中的胶囊居中可见，换了一组胶囊从头排起；动作是底部固定的 `RiffetPanelBar(edge: .bottom)`：参数胶囊在左、放不下时横向滚动，进下一级的「更多设置」是行尾的图标按钮，前面一条 1px 竖线隔开，不被胶囊挤走；中间的 `RiffetList` 只列当前范围的值，行高取点按目标（`RiffetList(rowHeight: RiffetMetrics.hitTarget)`），打开时停在当前值。面板是从小长到全尺寸的，途中设的滚动位置按旧尺寸算，所以「停在当前值」和「选中的胶囊居中」都等尺寸稳定后再做（`onSettledSize`），用户自己滚过就不再动；值还在读取时放 6 行骨架占住位置，不换成转圈，也不先显示上一个范围的值。换范围、骨架换成列表、额度行出现都原地替换，不加布局动画，滚到当前值和选中胶囊也不带动画：换 Agent 时这几步接连发生，每步都弹一下，整块面板看起来在抖（真机上被否）；稳定靠三件事：新会话面板里只有一个提供商的 Agent 也留出提供商那一排的高度，换 Agent 列表不上下移；读过的模型列表和额度存在本机（`ModelCatalogStore`、`ModelUsageStore`，上限 `MODEL_PICKER_BUDGET`），换到读过的 Agent 或提供商时同一帧画出、后台再刷新，只有从没读过的才放骨架；勾选的模型和输入框胶囊同一套解析（草稿、记住的选择、目录默认值依次取），不按缓存里的目录默认值先勾一个再跳。选一个值就关；开关类的参数就地改、不关。放不下的设置在面板里压栈打开，返回回到列表，不关掉面板再开第二个 sheet。不放「完成」。范例是输入框的模型胶囊（`Features/Home/ModelPanel.swift`）。不用锚在控件上的 popover：输入框在屏幕下方，内容一长就顶到屏幕上缘，键盘收起时控件还会移位。
+- **sheet**：选择面板 `.medium` / `.large`，编辑页 `.large`；只有几行内容的（在终端恢复）用 `RiffetFittedSheet`，高度等于内容，仍可拉到全高；辅助功能字号下只给 `.large`。sheet 需要标题栏就套 `NavigationStack`，不手画标题行。只有一个字段的修改用带输入框的 `.alert`（§4.2），不开编辑页。
 - 同一时刻只开一个 sheet；sheet 上最多再叠一层（编辑页上的选择面板）。
 
 
@@ -229,7 +240,7 @@ iOS 没有系统的 Snackbar 和提示条，这两个在 `Design/` 里画；空�
 |---|---|---|
 | `Segmented` | `Picker` 加 `.pickerStyle(.segmented)` | 二到三个短选项：一个值（浅色、深色、跟随系统）、一个筛选（当前分支 / 全部），或两个视图（预览 / 源码，[移动端页面](mobile.md) §9.3） |
 | `UnderlineTabs` | `RiffetViewTabs` | 四个以上的视图，或标签放不下（Git 的变更、历史、检查点、工作树）：顶栏下一行可横滚的文字页签，选中是 `fg` 加滑动的指示条，其余 `fg2`，标签永远完整 |
-| `Select` | 选择面板；2–4 个就近的选项用 `Picker(.menu)` / `Menu` | 当前值行尾 `accent` 勾 |
+| `Select` | 选择面板；8 个以内、不需要搜索和说明行用 `Picker(.menu)` / `Menu` | 当前值行尾 `accent` 勾 |
 | `Switch` | `Toggle`，`tint` 为 `accent` | |
 | `RadioGroup` | 行尾的勾（`SettingsCheckRow`） | 不画单选圆点 |
 | `Checkbox` | 多选列表：行首的 `checkmark.circle.fill` / `circle`，与系统编辑模式的多选一致；表单里的单个布尔值用 `Toggle` | iOS 没有方框勾选，不画 |

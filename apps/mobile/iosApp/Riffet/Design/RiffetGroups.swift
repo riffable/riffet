@@ -17,19 +17,41 @@ struct RiffetForm: View {
     }
 }
 
+/// One group card outside a list (a fitted sheet's content): the list's card colour, corner and insets,
+/// rows separated by the list's spacing. Inside `RiffetForm` and `RiffetList` use a `Section`.
+struct RiffetGroupCard<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    @Environment(\.palette) private var palette
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) { content() }
+            .padding(RiffetMetrics.groupInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.groupRadius, style: .continuous))
+            .padding(.horizontal, RiffetMetrics.pageInset)
+    }
+}
+
 /// `RiffetForm`'s counterpart for pages built as a list.
 struct RiffetList: View {
     private let content: AnyView
+    /// A settings row by default; a picker of one-line values (the model panel) uses the hit target.
+    private let rowHeight: CGFloat
+    /// In a panel sheet: no page colour, the sheet's glass shows between the groups (iOS 26).
+    private let inSheet: Bool
     @Environment(\.palette) private var palette
-    init<Content: View>(@ViewBuilder content: () -> Content) { self.content = AnyView(content()) }
+    init<Content: View>(rowHeight: CGFloat = RiffetMetrics.settingsRowHeight, inSheet: Bool = false, @ViewBuilder content: () -> Content) {
+        self.rowHeight = rowHeight; self.inSheet = inSheet; self.content = AnyView(content())
+    }
     var body: some View {
         List { Group { content }.listRowBackground(palette.bgSubtle) }
             .listStyle(.insetGrouped)
             .listSectionSpacing(.compact)
             .contentMargins(.top, 4, for: .scrollContent)
-            .scrollContentBackground(.hidden).background(palette.bg)
-            .environment(\.defaultMinListRowHeight, RiffetMetrics.settingsRowHeight)
+            .scrollContentBackground(.hidden)
+            .background { if !inSheet || !glassSheets { palette.bg } }
+            .environment(\.defaultMinListRowHeight, rowHeight)
     }
+    private var glassSheets: Bool { if #available(iOS 26.0, *) { true } else { false } }
 }
 
 // MARK: - Settings parts
