@@ -46,11 +46,13 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -425,6 +427,8 @@ internal fun PickerPage(
     onBack: (() -> Unit)? = null,
     /** A page whose body uses `weight(1f)` (a searchable list) needs the full height; others wrap. */
     fullHeight: Boolean = false,
+    /** Icon buttons in the title bar, ahead of close: a page's low-use ways on. */
+    actions: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val host = LocalPickerHost.current
@@ -436,7 +440,7 @@ internal fun PickerPage(
         onDispose { host?.let { if (it.back === step) it.back = null } }
     }
     Column(modifier = Modifier.fillMaxWidth().then(if (fullHeight) Modifier.fillMaxHeight() else Modifier)) {
-        SheetHeader(title = title, subtitle = subtitle, onDismiss = { host?.dismiss?.invoke() }, onBack = onBack)
+        SheetHeader(title = title, subtitle = subtitle, onDismiss = { host?.dismiss?.invoke() }, onBack = onBack, actions = actions)
         Column(modifier = Modifier.fillMaxWidth().weight(1f, fill = fullHeight)) { content() }
     }
 }
@@ -532,7 +536,7 @@ internal fun PickerOverlay(
 
 
 @Composable
-private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit, onBack: (() -> Unit)?) {
+private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit, onBack: (() -> Unit)?, actions: (@Composable RowScope.() -> Unit)? = null) {
     val style = LocalInterfaceStyle.current
     val metrics = style.metrics
     val colors = LocalRiffetColors.current
@@ -561,6 +565,7 @@ private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit,
                 color = colors.fg, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = if (style.components.sheets.centeredTitle) TextAlign.Center else TextAlign.Start,
                 modifier = Modifier.weight(1f).padding(vertical = metrics.controlInset / 2))
+            actions?.invoke(this)
             RiffetIconButton(onClick = onDismiss, modifier = Modifier.size(metrics.controlHeight)) {
                 Icon(RiffetIcons.Close, stringResource(Res.string.pickers_close), Modifier.size(metrics.iconSize), tint = colors.fg3)
             }
@@ -657,6 +662,8 @@ internal fun OptionRow(
     disabledReason: String? = null,
     /** Short figures between the label and the check, such as a model's quota and load. */
     trailing: (@Composable () -> Unit)? = null,
+    /** Short figures right after the label, read with it (a model's quota beside its name). */
+    annotation: (@Composable () -> Unit)? = null,
     /** One of several choices that can all be on: a check box instead of a radio. */
     multiple: Boolean = false,
 ) {
@@ -707,10 +714,15 @@ internal fun OptionRow(
             Spacer(Modifier.width(metrics.rowPadding))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = label, style = SheetRowText, color = if (action && enabled && tone == null) colors.accent else labelColor,
+            if (annotation == null) Text(text = label, style = SheetRowText, color = if (action && enabled && tone == null) colors.accent else labelColor,
                 textAlign = if (action) TextAlign.Center else TextAlign.Start,
                 modifier = if (action) Modifier.fillMaxWidth() else Modifier,
                 maxLines = 2, overflow = TextOverflow.Ellipsis)
+            else Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.controlInset)) {
+                Text(text = label, style = SheetRowText, color = labelColor, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false))
+                CompositionLocalProvider(LocalContentColor provides (if (!enabled) surfaces.disabledContent else colors.fg3)) { annotation() }
+            }
             val detail = disabledReason ?: description
             if (!detail.isNullOrBlank()) {
                 Text(

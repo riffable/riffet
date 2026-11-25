@@ -71,6 +71,8 @@ internal fun SendSettingsPage(
     /** The session's context occupancy, shown under the model it belongs to; null shows nothing. */
     context: NativeContext? = null,
     onOpenContext: () -> Unit = {},
+    /** Back to the model panel that opened this page. */
+    onBack: (() -> Unit)? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
@@ -79,7 +81,7 @@ internal fun SendSettingsPage(
     // No subtitle: the owner read "选择这条任务使用的模式、模型和权限" as noise above rows that already
     // say 模式 / 模型 / 权限. The web's dialog still carries the same sentence (Composer.tsx), so it is
     // an intentional divergence, not a drift — the sheet's own title says everything the rows do not.
-    PickerPage(title = stringResource(Res.string.pickers_send_settings)) {
+    PickerPage(title = stringResource(Res.string.pmodel_more), onBack = onBack) {
         notice?.let { SheetNotice(it, noticeKind, noticeAction?.first, noticeAction?.second) }
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = metrics.controlInset)) {
             rows.forEach { row ->

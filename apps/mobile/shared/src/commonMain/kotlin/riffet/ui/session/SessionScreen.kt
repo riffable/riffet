@@ -57,6 +57,8 @@ import riffet.ui.pickers.toolsSummary
 import riffet.ui.pickers.modelSelectionSummary
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -780,7 +782,8 @@ fun SessionScreen(
                                 icon = null,
                                 context = context.takeUnless { quickChat },
                                 enabled = controller != null,
-                                onOpen = { sheet = SessionSheet.Settings },
+                                // The model panel, once the conversation's detail is there to fill it.
+                                onOpen = { sheet = if (detail != null) SessionSheet.Model else SessionSheet.Settings },
                                 loading = detail?.catalogLoading == true,
                                 switching = detail?.switching == true,
                                 error = detail?.catalogError != null,
@@ -876,7 +879,19 @@ fun SessionScreen(
                                 modifier = Modifier.fillMaxSize().padding(chromePadding),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                CircularProgressIndicator(color = colors.accent)
+                                // The stored transcript usually lands within a few frames: a spinner shown at once only
+                                // flashes, or sits still while the page settles. It fades in if the load is still going.
+                                // Counted from when the page is on screen: a tab kept composed behind another would have
+                                // used up the wait and show the spinner on the switch's first frame.
+                                val onScreen = riffet.ui.app.LocalPageActive.current || riffet.ui.app.LocalPageInView.current
+                                var slow by remember { mutableStateOf(false) }
+                                LaunchedEffect(onScreen) {
+                                    slow = false
+                                    if (onScreen) { delay(SLOW_TRANSCRIPT_MILLIS); slow = true }
+                                }
+                                AnimatedVisibility(visible = slow, enter = fadeIn(riffet.ui.theme.LocalRiffetMotion.current.effects())) {
+                                    CircularProgressIndicator(color = colors.accent)
+                                }
                             }
 
                         TranscriptBody.EMPTY ->
@@ -957,7 +972,8 @@ fun SessionScreen(
     // pages: settings is the root and mode, permission and model are one step deeper. A pick applies
     // its choice and the sheet then leaves on its own, so nothing below closes it by hand.
     sheet?.let { page ->
-        PickerSheet(page = page, onDismiss = { sheet = null }, depth = { if (it == SessionSheet.Settings) 0 else 1 }) { shown ->
+        // The model panel is the root; 更多设置 opens the rest a level down, and each of those a level further.
+        PickerSheet(page = page, onDismiss = { sheet = null }, depth = { it.ordinal }) { shown ->
             when (shown) {
                 SessionSheet.Settings -> {
                     // One notice, the most actionable first: a failed restore, why writes are blocked, then a
@@ -988,6 +1004,7 @@ fun SessionScreen(
                         context = context.takeUnless { quickChat },
                         // The breakdown is a sheet of its own (it has no page form), so this one steps aside for it.
                         onOpenContext = { sheet = null; contextOpen = true },
+                        onBack = if (detail != null) ({ sheet = SessionSheet.Model }) else null,
                         rows = buildList {
                             // A quick chat can switch between 对话 and its presets; only a backend with a single
                             // mode has nothing to offer.
@@ -1005,16 +1022,6 @@ fun SessionScreen(
                                     )
                                 }
                             }
-                            add(
-                                SendSettingRow(
-                                    label = stringResource(Res.string.session_model),
-                                    value = currentModelSummary.ifEmpty { stringResource(Res.string.session_not_set) },
-                                    enabled = writeBlocked == null && !writeBusy,
-                                    loading = detail?.catalogLoading == true,
-                                    switching = detail?.switching == true,
-                                    error = detail?.catalogError != null,
-                                ) { sheet = SessionSheet.Model },
-                            )
                             if (toolsShown) {
                                 add(
                                     SendSettingRow(
@@ -1037,16 +1044,15 @@ fun SessionScreen(
                         // The newest pick, not the session: a parameter changed while the last write is still in
                         // flight must build on it, or the earlier change is overwritten.
                         selection = intended.model ?: "",
-                        switching = detail.switching,
                         disabledReason = writeBlocked ?: "".takeIf { writeBusy },
                         onSelect = { controller.setModel(it) },
                         // Fast / Max / the thinking level keep the sheet open, as the web's `onParamChange` does.
                         onParamChange = { controller.setModel(it) },
-                        onBack = { sheet = SessionSheet.Settings },
+                        // A quick chat leaves out only its mode, and only when it has more than one.
+                        onMore = if (!quickChat || (capabilities?.modes?.size ?: 0) > 1) ({ sheet = SessionSheet.Settings }) else null,
                         onRetryCatalog = { controller.retryCatalog(current.backendId ?: riffet.contracts.NativeBackendId.CURSOR, current.backendProfileId, current.projectId) },
                         loadUsage = { controller.usage(current.backendId ?: riffet.contracts.NativeBackendId.CURSOR) },
                         usageScopeKey = "${current.backendId}|${current.id}|${current.backendProfileId ?: ""}",
-                        showSubtitle = !quickChat,
                         groups = providerGroups,
                         activeProfileId = current.backendProfileId,
                         onSelectChoice = { profileId, selection ->
@@ -1098,8 +1104,11 @@ fun SessionScreen(
     }
 }
 
-/** The pages of the session's one send-settings sheet: Settings is the root, the rest are one step deeper. */
-private enum class SessionSheet { Settings, Mode, Approval, Model, Tools }
+/** How long a transcript may take to load before the page shows that it is loading. */
+private const val SLOW_TRANSCRIPT_MILLIS = 400L
+
+/** The pages of the composer's one sheet, by depth: the model panel, its 更多设置, and what those rows open. */
+private enum class SessionSheet { Model, Settings, Mode, Approval, Tools }
 
 /**
  * The last frame's transcript projection, which the next frame is diffed against.

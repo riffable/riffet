@@ -251,8 +251,11 @@ private fun HoldOverlay(session: HoldSession, state: DictationState, active: Boo
             // The scrim and the bubble fade; nothing moves on the way in, since a phone that drops a rise's first frames shows
             // it as a jump.
             Box(Modifier.matchParentSize().graphicsLayer { alpha = progress() }.background(scrim))
-            val start = with(density) { session.anchor.left.toDp() }
-            val end = (maxWidth - with(density) { session.anchor.right.toDp() }).coerceAtLeast(0.dp)
+            // Centred on the screen, as the dome under it: the composer's narrower margin on both sides. A composer beside the
+            // tab bar's dock is off centre, and a bubble following its left edge leans right over a centred dome.
+            val inset = minOf(with(density) { session.anchor.left.toDp() }, maxWidth - with(density) { session.anchor.right.toDp() }).coerceAtLeast(0.dp)
+            val start = inset
+            val end = inset
             val top = with(density) { session.anchor.top.toDp() }
             // Docked, the dome covers the composer whole, its sides level with the composer's top edge, so the composer can
             // stay where it is underneath. In the page, the dome is its own strip at the bottom.
@@ -326,7 +329,8 @@ private fun Bubble(state: DictationState, cancelling: Boolean) {
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             else -> {}
         }
-        if (!failed) Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Alone in the bubble, the meter is its centre; under words it sits at their end.
+        if (!failed) Row(Modifier.align(if (text.isEmpty()) Alignment.CenterHorizontally else Alignment.End), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (state.phase == DictationPhase.Finishing) RiffetProgressIndicator(Modifier.size(16.dp), strokeWidth = 1.5.dp, color = colors.fg3)
             else Levels(state.levels, if (cancelling) colors.danger else colors.fg3)
             Text(dictationClock(state.elapsedMs), style = typography.caption,

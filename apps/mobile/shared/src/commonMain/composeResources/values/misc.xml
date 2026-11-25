@@ -232,7 +232,6 @@
     <string name="pickers_context_usage">已用 %1$s · %2$s / %3$s tokens</string>
     <string name="pickers_context_measured">自动压缩阈值 %1$s tokens，按最近一次模型响应计量</string>
     <string name="pickers_context_estimated">内容估算 · ~%1$s</string>
-    <string name="pickers_send_settings">发送设置</string>
 
     <!-- Downloads -->
     <string name="downloads_title">下载</string>

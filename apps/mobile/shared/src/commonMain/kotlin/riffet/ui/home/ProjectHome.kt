@@ -9,6 +9,8 @@ import riffet.ui.design.LocalInterfaceStyle
 import androidx.compose.foundation.border
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import kotlinx.coroutines.delay
 import riffet.ui.theme.LocalRiffetMotion
 import riffet.ui.theme.LocalRiffetPageMotion
 import androidx.compose.runtime.Stable
@@ -119,12 +121,11 @@ import riffet.ui.composer.rememberAttachmentPicker
 import riffet.ui.icons.AgentMarks
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.pickers.ApprovalPickerPage
-import riffet.ui.pickers.LocalPickerHost
 import riffet.ui.pickers.ModePickerPage
 import riffet.ui.pickers.ModelPickerGroup
 import riffet.ui.pickers.ModelPickerPages
-import riffet.ui.pickers.OptionRow
-import riffet.ui.pickers.PickerPage
+import riffet.ui.pickers.ModelPanelAgents
+import riffet.ui.design.ChipItem
 import riffet.ui.pickers.PickerSheet
 import riffet.ui.pickers.SendSettingRow
 import riffet.ui.pickers.ToolsPickerPage
@@ -305,16 +306,33 @@ fun ProjectHome(
                 // The empty state and the composer replace each other in place (loading, then the
                 // first project, then the composer); the composer's sheets overflow this box over the
                 // system bars, so no size transform and no clip.
+                // Which of the three is shown is the transition's state, not read inside it: the page leaving
+                // must keep drawing what it was. Read inside, the loading page that fades out as the first
+                // project arrives would turn into the setup steps on its way out, a flash on every launch.
+                val shown = when {
+                    project != null -> HomeShown.Composer
+                    !list.loaded -> HomeShown.Loading
+                    list.error != null -> HomeShown.Failed
+                    else -> HomeShown.Setup
+                }
                 AnimatedContent(
-                    targetState = project == null,
+                    targetState = shown,
                     transitionSpec = { pageMotion.transition() using null },
                     label = "homeContent",
-                ) { empty ->
-                    if (empty) {
+                ) { state ->
+                    if (state != HomeShown.Composer) {
                         // Reading the projects (or failing to) keeps its own state; once they are known the
                         // steps still missing sit in the composer's place.
-                        if (!list.loaded || list.error != null) HomeEmptyState(
-                            loaded = list.loaded,
+                        if (state == HomeShown.Loading) {
+                            // The device copy usually lands within a few frames: a loading page shown at once only
+                            // flashes before the composer. It fades in if the read is still going after a moment.
+                            var slow by remember { mutableStateOf(false) }
+                            LaunchedEffect(Unit) { delay(SLOW_LOAD_MILLIS); slow = true }
+                            AnimatedVisibility(visible = slow, enter = fadeIn(LocalRiffetMotion.current.effects())) {
+                                HomeEmptyState(loaded = false, error = null, canAdd = false, onAdd = {}, onRefresh = {}, contentPadding = contentInsets)
+                            }
+                        } else if (state == HomeShown.Failed) HomeEmptyState(
+                            loaded = true,
                             error = list.error,
                             canAdd = api != null,
                             onAdd = {
@@ -679,30 +697,31 @@ private fun HomeContent(
     val modelSummary = modelSelectionSummary(config.catalog, config.model).ifEmpty { config.model.ifEmpty { stringResource(Res.string.session_default_model) } }
     val referenceLimitText = stringResource(Res.string.session_reference_limit)
     val providerGroups = config.providerGroups()
-    val providerName = providerGroups.firstOrNull { it.profileId == config.profileId }?.name
-    val modelText = if (providerName.isNullOrBlank()) modelSummary else "$providerName · $modelSummary"
     val caps = config.capabilities
     val controlsEnabled = api != null && !creating
-    // What the composer's model chip opens.
+    // What the model panel's 更多设置 opens: the settings the panel leaves out.
     val rows = buildList {
-        if (config.backends.size > 1) {
-            val mark = config.backendId.name.lowercase()
-            add(SendSettingRow(label = "Agent", value = backendName(config.backendId), icon = AgentMarks.vector(mark),
-                iconTint = colors.agentMarkTint(mark)) { sheet = HomeSheet.Agent })
-        }
         caps?.modes?.takeIf { it.size > 1 }?.let { modes ->
             add(SendSettingRow(label = stringResource(Res.string.session_mode), value = optionLabelOf(modes, config.mode, stringResource(Res.string.session_mode))) { sheet = HomeSheet.Mode })
         }
         caps?.permissions?.takeIf { it.isNotEmpty() }?.let { permissions ->
             add(SendSettingRow(label = stringResource(Res.string.session_permission), value = optionLabelOf(permissions, config.approval, stringResource(Res.string.pickers_approval_title))) { sheet = HomeSheet.Approval })
         }
-        add(SendSettingRow(label = stringResource(Res.string.session_model), value = modelText, loading = config.catalogLoading, error = config.catalogError != null) { sheet = HomeSheet.Model })
         if (toolsShown) {
             add(SendSettingRow(label = stringResource(Res.string.pickers_tools_title), value = toolsSummary(pickedTools, if (extensions != null) extensionsOff else emptyList(), switches = extensions != null), icon = RiffetIcons.Puzzle) { sheet = HomeSheet.Tools })
         }
     }
-    // With the model as the only row, the chip goes straight to the model list.
-    val rooted = rows.size > 1
+    val agents = ModelPanelAgents(
+        items = config.backends.map { entry ->
+            val mark = entry.backendId.name.lowercase()
+            ChipItem(entry.backendId.name, entry.label.ifBlank { backendName(entry.backendId) }, icon = AgentMarks.vector(mark),
+                iconTint = colors.agentMarkTint(mark), enabled = entry.available)
+        },
+        selected = config.backendId.name,
+        onSelect = { name ->
+            config.backends.firstOrNull { it.backendId.name == name && it.available }?.let { config.selectBackend(it.backendId, target.id, list.settings) }
+        },
+    )
     val agentMark = config.backendId.name.lowercase()
 
     // The viewport's height, written by the layout above the scroll and read only while the bands
@@ -767,7 +786,7 @@ private fun HomeContent(
                             icon = AgentMarks.vector(agentMark) ?: RiffetIcons.Bot,
                             iconTint = colors.agentMarkTint(agentMark),
                             enabled = controlsEnabled,
-                            onOpen = { sheet = if (rooted) HomeSheet.Settings else HomeSheet.Model },
+                            onOpen = { sheet = HomeSheet.Model },
                             loading = config.catalogLoading,
                             error = config.catalogError != null,
                         ),
@@ -801,43 +820,22 @@ private fun HomeContent(
     sheet?.let { page ->
         // A pick applies its choice first and the sheet then slides away on its own
         // (`PickerHost.dismiss`), so nothing below closes the sheet by hand.
-        PickerSheet(page = page, onDismiss = { sheet = null }, depth = { if (it == HomeSheet.Settings) 0 else 1 }) { shown ->
-            // A page reached from the settings list steps back to it; one opened straight from the composer closes.
-            val back: (() -> Unit)? = if (rooted) ({ sheet = HomeSheet.Settings }) else null
+        // The model panel is the root; 更多设置 opens the rest a level down, and each of those a level further.
+        PickerSheet(page = page, onDismiss = { sheet = null }, depth = { it.ordinal }) { shown ->
+            val back = { sheet = HomeSheet.Settings }
             when (shown) {
                 HomeSheet.Settings -> SendSettingsPage(
                     notice = config.catalogError?.let { stringResource(Res.string.pickers_catalog_failed, it) },
                     noticeKind = SettingsNoticeKind.ERROR,
                     noticeAction = stringResource(Res.string.pickers_retry) to { config.load(target.id, list.settings, force = true) },
                     rows = rows,
+                    onBack = { sheet = HomeSheet.Model },
                 )
-                HomeSheet.Agent -> {
-                    val host = LocalPickerHost.current
-                    PickerPage(title = "Agent", onBack = back) {
-                        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 16.dp)) {
-                            config.backends.forEach { entry ->
-                                OptionRow(
-                                    label = entry.label.ifBlank { backendName(entry.backendId) },
-                                    icon = AgentMarks.vector(entry.backendId.name.lowercase()),
-                                    iconTint = colors.agentMarkTint(entry.backendId.name),
-                                    description = entry.reason?.takeIf { !entry.available },
-                                    selected = entry.backendId == config.backendId,
-                                    onClick = {
-                                        config.selectBackend(entry.backendId, target.id, list.settings)
-                                        host?.dismiss?.invoke()
-                                    },
-                                    disabledReason = if (entry.available) null else (entry.reason ?: stringResource(Res.string.session_provider_unavailable)),
-                                )
-                            }
-                        }
-                    }
-                }
                 HomeSheet.Model -> ModelPickerPages(
                     catalog = config.catalog,
                     catalogLoading = config.catalogLoading,
                     catalogError = config.catalogError,
                     selection = config.model,
-                    switching = false,
                     disabledReason = null,
                     onSelect = { config.model = it; config.rememberPick(store::applySavedSettings) },
                     onParamChange = { config.model = it; config.rememberPick(store::applySavedSettings) },
@@ -849,7 +847,8 @@ private fun HomeContent(
                     usageScopeKey = "${config.backendId}|${target.id}|${config.profileId ?: ""}",
                     onSelectChoice = { profileId, selection -> config.selectProviderModel(profileId, selection); config.rememberPick(store::applySavedSettings) },
                     onRetryGroup = { profileId -> config.retryProviderCatalog(target.id, profileId) },
-                    onBack = back,
+                    agents = agents,
+                    onMore = if (rows.isNotEmpty()) ({ sheet = HomeSheet.Settings }) else null,
                 )
                 HomeSheet.Mode -> caps?.let {
                     ModePickerPage(
@@ -877,6 +876,7 @@ private fun HomeContent(
                         currentLabel = optionLabelOf(it.permissions, config.approval, stringResource(Res.string.pickers_approval_title)),
                         disabledReason = null,
                         onSelect = { approval -> config.approval = approval },
+                        onBack = back,
                     )
                 }
             }
@@ -884,8 +884,14 @@ private fun HomeContent(
     }
 }
 
-/** The pages of the composer's one settings sheet; Settings is the root, the rest are one step deeper. */
-private enum class HomeSheet { Settings, Agent, Model, Mode, Approval, Tools }
+/** How long the projects may take to read before the page says it is loading them. */
+private const val SLOW_LOAD_MILLIS = 400L
+
+/** What the new-session page shows: the projects being read, failing to be, the setup steps, or the composer. */
+private enum class HomeShown { Loading, Failed, Setup, Composer }
+
+/** The pages of the composer's one sheet, by depth: the model panel, its 更多设置, and what those rows open. */
+private enum class HomeSheet { Model, Settings, Mode, Approval, Tools }
 
 /** What the assistant's page adds to the home composer: the setup cards under it, and what to do once the first message is sent. */
 internal class AssistantHomeParts(
@@ -1245,9 +1251,12 @@ internal class HomeConfig(
         val cached = loadedConfigs[cacheKey(key)]
         if (cached != null) apply(cached, settings)
         else if (loadedBackend != requestedBackend) {
-            // Another agent's providers are not this one's; within one agent they stay until the new answer.
+            // Another agent's providers and models are not this one's; within one agent they stay until the new answer.
+            // The model panel holds placeholder rows meanwhile rather than the last agent's list.
             knownProfiles = emptyList()
             providerCatalogs = emptyList()
+            catalog = emptyList()
+            catalogLoading = true
         }
         scope.launch {
             if (version != requestVersion) return@launch

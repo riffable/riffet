@@ -281,8 +281,11 @@ internal class SessionLists(
         if (unauthenticated.value) return
         // A cache (or an unsuccessful refresh) is loaded UI state, not a network bootstrap.
         // Until projects and defaults have arrived, retry that full read at the poll's cadence.
-        // Plain session-only callers that never requested bootstrap keep their existing behavior.
-        if (!bootstrapSucceeded && refreshJob != null) {
+        // A store with a device copy bootstraps on its first poll too: a session-only read landing first would mark
+        // the list loaded with no projects and keep the copy from being restored, and the new-session page would
+        // show its setup steps until the bootstrap answered (a flash on every launch).
+        // Plain session-only callers without a copy that never requested bootstrap keep their existing behavior.
+        if (!bootstrapSucceeded && (refreshJob != null || cache != null)) {
             startRefresh().join()
             return
         }

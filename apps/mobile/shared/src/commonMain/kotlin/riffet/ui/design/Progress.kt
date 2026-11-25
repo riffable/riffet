@@ -39,8 +39,10 @@ internal fun RiffetProgressIndicator(
     if (LocalInterfaceStyle.current.components.progress == ComponentBackend.MATERIAL) {
         if (animated) CircularProgressIndicator(modifier = visibleModifier, color = color, strokeWidth = strokeWidth)
         else Box(visibleModifier.progressSemantics()) {
-            // Keep Material's geometry without reporting a completed operation or running a loop.
-            CircularProgressIndicator(progress = { 1f }, modifier = Modifier.clearAndSetSemantics {}, color = color, strokeWidth = strokeWidth)
+            // Keep Material's geometry without reporting a completed operation or running a loop. A spinner at rest is
+            // an open arc: a closed ring read as finished, or as a frozen screen, while the page was not yet active.
+            CircularProgressIndicator(progress = { 0.75f }, modifier = Modifier.clearAndSetSemantics {}, color = color, strokeWidth = strokeWidth,
+                trackColor = Color.Transparent, strokeCap = StrokeCap.Round)
         }
         return
     }

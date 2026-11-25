@@ -232,7 +232,6 @@
     <string name="pickers_context_usage">Used %1$s · %2$s / %3$s tokens</string>
     <string name="pickers_context_measured">Automatic compaction threshold: %1$s tokens, measured from the latest model response</string>
     <string name="pickers_context_estimated">Estimated content · ~%1$s</string>
-    <string name="pickers_send_settings">Send settings</string>
 
     <!-- Downloads -->
     <string name="downloads_title">Downloads</string>

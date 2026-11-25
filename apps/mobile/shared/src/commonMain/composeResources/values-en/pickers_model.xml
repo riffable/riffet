@@ -1,16 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Model picker sheet -->
-    <string name="pmodel_title">Select model</string>
-    <string name="pmodel_loading">Loading…</string>
-    <string name="pmodel_switching">Switching…</string>
+    <string name="pmodel_title">Model</string>
+    <string name="pmodel_title_agent">Agent and model</string>
+    <string name="pmodel_more">More settings</string>
     <string name="pmodel_retry">Retry</string>
     <string name="pmodel_none">No models available</string>
     <string name="pmodel_unavailable">Unavailable</string>
     <string name="pmodel_load_failed">Couldn\'t load models: %1$s</string>
     <string name="pmodel_limit_reached">Usage limit reached</string>
-    <string name="pmodel_fast">Fast</string>
-    <string name="pmodel_max">MAX</string>
     <string name="pmodel_context">Context</string>
     <string name="pmodel_param_chip">%1$s · %2$s</string>
 </resources>

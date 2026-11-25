@@ -188,7 +188,7 @@ internal fun AssistantSettingsSection(api: RiffetApi, controller: SettingsContro
     }
     if (modelOpen) ModelPickerSheet(
         catalog = catalog, catalogLoading = reads[activeProfile.orEmpty()]?.loading == true, catalogError = reads[activeProfile.orEmpty()]?.error,
-        selection = choice?.model.orEmpty(), switching = false, disabledReason = null,
+        selection = choice?.model.orEmpty(), disabledReason = null,
         onDismiss = { modelOpen = false },
         onSelect = { selection -> pickModel(activeProfile, selection) },
         onRetryCatalog = { load(activeProfile) },
@@ -196,7 +196,6 @@ internal fun AssistantSettingsSection(api: RiffetApi, controller: SettingsContro
         usageScopeKey = "assistant|$backendId|${activeProfile.orEmpty()}",
         onSelectChoice = { profileId, selection -> pickModel(profileId, selection) },
         onRetryGroup = { profileId -> load(profileId) },
-        showSubtitle = false,
     )
 }
 

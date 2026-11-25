@@ -133,6 +133,7 @@ final class RiffetVoiceHold {
     /// move the bubble or the dome while they fade.
     private(set) var anchor: CGRect = .zero
     fileprivate var screenHeight: CGFloat = 0
+    fileprivate var screenWidth: CGFloat = 0
     fileprivate var bottomInset: CGFloat = 0
     /// The overlay is up: only while the finger is down or the dictation failed.
     fileprivate var visible = false
@@ -151,6 +152,7 @@ final class RiffetVoiceHold {
         haptic.prepare(); haptic.impactOccurred()
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }) else { return }
         screenHeight = scene.coordinateSpace.bounds.height
+        screenWidth = scene.coordinateSpace.bounds.width
         bottomInset = scene.windows.first?.safeAreaInsets.bottom ?? 0
         anchor = composerFrame
         docked = screenHeight - anchor.minY <= screenHeight * 0.4
@@ -233,10 +235,12 @@ struct RiffetVoiceHoldOverlay: View {
         // Docked, the dome covers the composer whole, its sides level with the composer's top edge, so the composer can stay
         // where it is underneath. In the page, the dome is its own strip at the bottom.
         let arc = docked ? max(zoneHeight + hold.bottomInset, hold.screenHeight - anchor.minY + RiffetVoiceArc.bow) : zoneHeight + hold.bottomInset
+        // Centred on the screen, as the dome under it: the composer's narrower margin on both sides, so a composer
+        // beside something else does not pull the bubble off the dome's middle.
+        let inset = max(0, min(anchor.minX, hold.screenWidth - anchor.maxX))
         let bubble = self.bubble(palette: palette, state: state, failed: failed, cancelling: cancelling)
-            .frame(width: anchor.width)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, anchor.minX)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, inset)
             // Fades in place: nothing moves on the way in, since a phone that drops a rise's first frames shows it as a jump.
             .opacity(hold.visible ? 1 : 0)
         ZStack(alignment: .bottom) {
@@ -281,6 +285,8 @@ struct RiffetVoiceHoldOverlay: View {
                         else { RiffetLevelBars(levels: (state?.levels ?? []).map { $0.floatValue }, color: cancelling ? palette.danger : palette.fg3) }
                         Text(dictationClock(elapsedMs: state?.elapsedMs ?? 0)).riffetFont(.caption).monospacedDigit()
                             .foregroundStyle(cancelling ? palette.danger : warn ? palette.warning : palette.fg3)
+                        // Alone in the bubble, the meter is its centre; under words it sits at their end.
+                        if text.isEmpty { Spacer(minLength: 0) }
                     }
                 }
             }

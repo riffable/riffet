@@ -268,8 +268,17 @@ internal fun SegmentedControl(
     }
 }
 
-/** One filter in a [ChipRow]. */
-internal class ChipItem(val key: String, val label: String, val count: Int? = null)
+/**
+ * One option of a [ChipRow] or a scope menu. [icon] and [enabled] are read by the menu; [iconTint] `Color.Unspecified` keeps a vector's own colours (an agent mark).
+ */
+internal class ChipItem(
+    val key: String,
+    val label: String,
+    val count: Int? = null,
+    val icon: ImageVector? = null,
+    val iconTint: Color? = null,
+    val enabled: Boolean = true,
+)
 
 /**
  * A row of filter chips sharing one selection indicator that slides (and resizes) to the chosen
@@ -392,8 +401,10 @@ internal fun ChipButton(
     trailingIcon: ImageVector? = RiffetIcons.ChevronDown,
     /** A second gesture on the chip (the custom-drawn chip only). */
     onLongClick: (() -> Unit)? = null,
+    /** The leading icon's own colour (an agent mark); `Color.Unspecified` keeps the vector's. Null follows the label. */
+    iconTint: Color? = null,
 ) = ChipFrame(label, selected = active, enabled = enabled, role = Role.Button, onClick = onClick,
-    leadingIcon = icon, trailingIcon = trailingIcon, onLongClick = onLongClick)
+    leadingIcon = icon, trailingIcon = trailingIcon, onLongClick = onLongClick, leadingTint = iconTint)
 
 /**
  * An on/off option as a chip (Fast, Max): the selected fill while [selected], nothing else — one
@@ -415,6 +426,7 @@ private fun ChipFrame(
     leadingIcon: ImageVector?,
     trailingIcon: ImageVector?,
     onLongClick: (() -> Unit)? = null,
+    leadingTint: Color? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -422,7 +434,7 @@ private fun ChipFrame(
     if (LocalInterfaceStyle.current.components.controls.chips == ComponentBackend.MATERIAL) {
         FilterChip(selected = selected, onClick = onClick, enabled = enabled,
             label = { Text(label, style = LocalRiffetTypography.current.buttonSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp)) },
-            leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(glyph)) } },
+            leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null, tint = if (enabled) leadingTint ?: LocalContentColor.current else LocalContentColor.current, modifier = Modifier.size(glyph)) } },
             trailingIcon = trailingIcon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(glyph)) } },
             shape = RoundedCornerShape(metrics.controlRadius))
         return
@@ -447,7 +459,7 @@ private fun ChipFrame(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 3),
     ) {
-        leadingIcon?.let { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(glyph)) }
+        leadingIcon?.let { Icon(it, contentDescription = null, tint = if (enabled) leadingTint ?: tint else tint, modifier = Modifier.size(glyph)) }
         Text(label, color = tint, style = LocalRiffetTypography.current.buttonSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
         trailingIcon?.let { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(glyph)) }
     }
