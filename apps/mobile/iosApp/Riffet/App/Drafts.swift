@@ -153,6 +153,13 @@ final class MessageDraft {
     var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !uploading && pendingFiles.isEmpty }
     /// Nothing waits to be written or uploaded.
     var settled: Bool { scheduledSave == nil && !uploading }
+    /// A text field hands the draft pinyin still being composed, syllables split by U+2006. When the keyboard
+    /// goes away or the page closes mid-composition, the field drops it but the draft keeps its last value:
+    /// a blank the reader cannot see or delete, which kept the composer open and hid its placeholder.
+    /// Called when a field loses focus and when it appears.
+    func dropBlankText() {
+        if !text.isEmpty && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { text = "" }
+    }
     var hasContent: Bool { !text.isEmpty || !attachments.isEmpty || !pendingFiles.isEmpty || !references.isEmpty }
     static func savedHasContent(key: String) -> Bool {
         guard let data = AppStateDefaults.data(forKey: key),

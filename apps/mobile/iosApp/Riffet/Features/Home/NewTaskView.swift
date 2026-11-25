@@ -166,10 +166,13 @@ struct NewTaskView: View {
             // Project and model are choices the user makes before opening the keyboard.
         }
         .task(id: contextKey) { await loadCatalog() }
-        .onAppear { prewarm.hold(api: workbench.api, body: prewarmBody) }
+        .onAppear { prewarm.hold(api: workbench.api, body: prewarmBody); draft.dropBlankText() }
         .onChange(of: prewarmBody) { _, body in prewarm.hold(api: workbench.api, body: body) }
         .onDisappear { prewarm.close(); voice.teardown() }
-        .onChange(of: writing) { _, now in if now, voice.mode { voice.setMode(false) } }
+        .onChange(of: writing) { _, now in
+            if now, voice.mode { voice.setMode(false) }
+            if !now { draft.dropBlankText() }
+        }
         .onChange(of: voice.mode) { _, on in if on { writing = false } }
         .onChange(of: scenePhase) { _, phase in voice.scenePhaseChanged(phase) }
         .onChange(of: project?.id, initial: true) { _, id in

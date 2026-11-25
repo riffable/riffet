@@ -101,6 +101,8 @@ struct ConversationComposer: View {
             }.presentationDetents([.large])
         }
         .onChange(of: draft.text) { _, value in updateMenu(value) }
+        .onChange(of: focused) { _, now in if !now { draft.dropBlankText() } }
+        .onAppear { draft.dropBlankText() }
         .onChange(of: focused) { _, now in if now, voice.mode { voice.setMode(false) }
         }
         .onChange(of: voice.mode) { _, on in if on { focused = false } }
@@ -315,7 +317,7 @@ struct ConversationComposer: View {
 struct ComposerFieldLayout: Layout {
     /// What else the field's height depends on (text, type size, line limits). The composer is laid out
     /// again on every transcript update, and measuring a long draft each time costs milliseconds. Nil
-    /// while editing: marked text from an input method is not in the binding yet but changes the height.
+    /// while editing: every keystroke changes the text, an input method's marked text included.
     var key: AnyHashable?
     struct Cache { var width: CGFloat?; var height: CGFloat?; var key: AnyHashable? }
     func makeCache(subviews: Subviews) -> Cache { Cache() }
