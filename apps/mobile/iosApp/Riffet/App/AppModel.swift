@@ -5,7 +5,11 @@ import RiffetKit
 @MainActor @Observable
 final class AppModel {
     static let shared = AppModel()
-    let host = IOSHost()
+    let host: IOSHost = {
+        // Before any connection: the device certificate answers the server's request for one (docs/TRANSPORT-SECURITY.md §2).
+        DeviceCredentials.shared.provider = DeviceIdentity.shared
+        return IOSHost()
+    }()
     let themeStore = ThemeStore()
     var workbench: Workbench?
     var starting = true

@@ -9,6 +9,7 @@ import kotlinx.cinterop.usePinned
 import platform.CoreFoundation.CFDataGetBytePtr
 import platform.CoreFoundation.CFDataGetLength
 import platform.CoreFoundation.CFRelease
+import platform.Foundation.NSURLAuthenticationMethodClientCertificate
 import platform.Foundation.NSURLAuthenticationMethodServerTrust
 import platform.Foundation.NSURLCredential
 import platform.Foundation.NSURLSessionAuthChallengePerformDefaultHandling
@@ -19,9 +20,21 @@ import platform.Security.SecCertificateCopyData
 import platform.Security.SecTrustGetCertificateAtIndex
 import platform.Security.SecTrustRef
 import platform.posix.memcpy
+import kotlin.concurrent.Volatile
 
-/** Not yet: an Apple device certificate needs a Secure Enclave identity (docs/TRANSPORT-SECURITY.md §2). */
-internal actual val presentsDeviceCertificate: Boolean = false
+/** The app's own device identity (docs/TRANSPORT-SECURITY.md §2): Swift builds the `SecIdentity` the Security framework needs. */
+interface DeviceCredentialProvider {
+    /** The credential answering a server's client-certificate request; null when the identity cannot be made. */
+    fun credential(): NSURLCredential?
+}
+
+/** Set once by the app at launch. The Mac app sets none, and so presents no certificate. */
+object DeviceCredentials {
+    @Volatile
+    var provider: DeviceCredentialProvider? = null
+}
+
+internal actual val presentsDeviceCertificate: Boolean get() = DeviceCredentials.provider != null
 
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun platformHttpClient(block: HttpClientConfig<*>.() -> Unit): HttpClient = HttpClient(Darwin) {
@@ -29,8 +42,11 @@ internal actual fun platformHttpClient(block: HttpClientConfig<*>.() -> Unit): H
         handleChallenge { _, _, challenge, completionHandler ->
             val space = challenge.protectionSpace
             val trust = space.serverTrust
+            val device = if (space.authenticationMethod == NSURLAuthenticationMethodClientCertificate) DeviceCredentials.provider?.credential() else null
             if (space.authenticationMethod == NSURLAuthenticationMethodServerTrust && trust != null && pinned(trust)) {
                 completionHandler(NSURLSessionAuthChallengeUseCredential, NSURLCredential.credentialForTrust(trust))
+            } else if (device != null) {
+                completionHandler(NSURLSessionAuthChallengeUseCredential, device)
             } else {
                 // Anything else, a CA-signed front door included, is judged by the system as before.
                 completionHandler(NSURLSessionAuthChallengePerformDefaultHandling, null)

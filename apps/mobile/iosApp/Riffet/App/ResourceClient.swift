@@ -112,6 +112,10 @@ private final class ResourceNoRedirect: NSObject, URLSessionTaskDelegate {
 
 /// A paired server's own certificate is accepted by its pin (docs/TRANSPORT-SECURITY.md §3); anything else as the system decides.
 func pairedServerTrust(_ challenge: URLAuthenticationChallenge) -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+    // The server asks every TLS client for a certificate; this device's is what its token is bound to.
+    if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodClientCertificate, let device = DeviceIdentity.shared.credential() {
+        return (.useCredential, device)
+    }
     guard TransportTrustKt.trustsPairedServer(space: challenge.protectionSpace), let trust = challenge.protectionSpace.serverTrust else {
         return (.performDefaultHandling, nil)
     }

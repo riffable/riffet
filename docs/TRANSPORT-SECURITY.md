@@ -199,7 +199,7 @@
 - **服务器**：升级后自动生成 P-256 密钥和证书；现有互联不受影响。
 - **原生客户端**：已配对的 App 不用重新扫码。它向 `/api/devices/prove` 要一个随机数的证明，回答里带服务器的 TLS 证书指纹，以及用这台设备的记录作密钥、对随机数和指纹算的 HMAC；只有持有这台设备记录的服务器算得出。App 核对后固定这个指纹，确认服务器经 TLS 答复后存下，之后同一地址和端口上的请求都走 TLS（凭据和缓存仍按原来的 `http://` 来源记，`ServerRouting` 在发出时换成 `https`/`wss`）。扫描带 `fp` 的二维码则从配对起就走 TLS。剩余风险：令牌以前在明文上被人截获过的，截获者能伪造这个证明；介意的用户重新扫码配对。之前的 bearer 令牌在宽限期内只保留 `read` 和 `chat`、过后作废，这一条要等 App 普遍带客户端证书后再启用。旧版 App 仍可经明文 HTTP 连接，按 §4 限权。
 - 设备证书：经 TLS 配对时出示的证书当场绑定；之前配对的设备改走 TLS 后，经 `PUT /api/devices/me/certificate` 出示并绑定一次，之后不能换（换证书要重新配对）。
-- 现状（P1 进行中）：iPhone 和 Android 已经固定指纹并改走 TLS（共享客户端的全部请求、iPhone 原生的资源读取）；Android 出示 Keystore（有 StrongBox 时在 StrongBox）里生成的设备证书，iPhone 还没有。Mac App、两端预览网页用的 WebView 仍走明文（网页预览的地址里只带有效期 12 小时、限一个目录的令牌）。
+- 现状（P1 进行中）：iPhone 和 Android 已经固定指纹并改走 TLS（共享客户端的全部请求、iPhone 原生的资源读取）；Android 出示 Keystore（有 StrongBox 时在 StrongBox）里生成的设备证书；iPhone 出示 Secure Enclave 密钥和自签名证书组成的 `SecIdentity`（`DeviceIdentity.swift`，模拟器上没有 Secure Enclave，退回钥匙串密钥；模拟器已验证，真机上的 Secure Enclave 路径还没在真机上跑过）。Mac App、两端预览网页用的 WebView 仍走明文（网页预览的地址里只带有效期 12 小时、限一个目录的令牌）。
 - **能力**：已有设备迁移时按现在的实际权限（全部能力）保留，在设备列表里提示收窄；新配对的设备按 §6 的默认值。
 - **协议**：新能力用 `ProtocolInfo` 的特性位声明（例如 `transport-tls-v1`、`webrtc-direct-v1`），客户端按特性位决定是否走新路径。
 
