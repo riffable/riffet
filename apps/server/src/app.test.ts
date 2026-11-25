@@ -2515,6 +2515,15 @@ describe('API authentication boundary', () => {
     const { createHmac } = await import('node:crypto');
     const key = createHash('sha256').update(token).digest('base64url');
     expect(proved.json().tls).toEqual({ fingerprint: hex, proof: createHmac('sha256', key).update(`riffet-tls\n${nonce}\n${hex}`).digest('base64url') });
+    // A device paired over plain HTTP binds the certificate it later presents over TLS, once; its token then needs it.
+    const second = (await app.inject({ method: 'POST', url: '/api/pairing/code', headers: { host: '127.0.0.1', cookie, 'x-csrf-token': local.json().csrfToken }, payload: {} })).json() as { code: string };
+    const older = (await app.inject({ method: 'POST', url: '/api/devices/pair', headers: { host: '127.0.0.1' }, payload: { code: second.code, name: 'Tablet' } })).json() as { token: string };
+    expect((await call('/api/devices/me/certificate', { method: 'PUT', bearer: older.token })).json.error.code).toBe('CLIENT_CERTIFICATE_REQUIRED');
+    const tablet = createIdentity('tablet', 'p256');
+    phone.key = tablet.key; phone.cert = tablet.cert;
+    expect((await call('/api/devices/me/certificate', { method: 'PUT', bearer: older.token, cert: true })).status).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/sessions', headers: { host: '127.0.0.1', authorization: `Bearer ${older.token}` } })).json().error.code).toBe('DEVICE_CERTIFICATE_REQUIRED');
+    expect((await call('/api/sessions', { bearer: older.token, cert: true })).status).toBe(200);
   });
 
   it('rejects absolute-form request targets before any handler, including WebSocket upgrades', async () => {

@@ -76,7 +76,7 @@ class RiffetConnection(
     suspend fun restore(): RiffetApi? = pairingChanges.withLock {
         val state = tokens.pairings()
         state.applyRoutes()
-        if (state.servers.any { it.tlsFingerprint == null }) background.launch { securePairings() }
+        if (state.servers.any { it.tlsFingerprint == null || (presentsDeviceCertificate && !it.certificateBound) }) background.launch { securePairings() }
         state.servers.firstOrNull { it.origin == state.activeOrigin }?.let { connect(it.baseUrl) }
     }
 
@@ -89,6 +89,7 @@ class RiffetConnection(
     @Throws(Exception::class)
     suspend fun securePairings() {
         val pending = pairingChanges.withLock { tokens.pairings().servers.filter { it.tlsFingerprint == null && !it.baseUrl.startsWith("https") } }
+        if (pending.isEmpty()) return bindCertificates()
         for (credential in pending) {
             val fingerprint = http.proveDevice(credential.route ?: credential.baseUrl, credential.token)?.tlsFingerprint ?: continue
             TransportPins.put(credential.origin, fingerprint)
@@ -105,6 +106,33 @@ class RiffetConnection(
                     tokens.savePairings(next.encoded())
                     next.applyRoutes()
                 }
+            }
+        }
+        bindCertificates()
+    }
+
+    /**
+     * Binds each server reached over TLS to this device's certificate (docs/TRANSPORT-SECURITY.md §11): the server
+     * records the certificate the device presents, and from then on the token counts only with it.
+     */
+    private suspend fun bindCertificates() {
+        if (!presentsDeviceCertificate) return
+        val pending = pairingChanges.withLock { tokens.pairings().servers.filter { it.tlsFingerprint != null && !it.certificateBound } }
+        for (credential in pending) {
+            val bound = try {
+                authenticated(credential.baseUrl).bindDeviceCertificate()
+                true
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                false
+            }
+            if (!bound) continue
+            pairingChanges.withLock {
+                val state = tokens.pairings()
+                if (state.servers.none { it.origin == credential.origin && it.token == credential.token }) return@withLock
+                val next = state.copy(servers = state.servers.map { if (it.origin == credential.origin && it.token == credential.token) it.copy(certificateBound = true) else it })
+                withContext(NonCancellable) { tokens.savePairings(next.encoded()) }
             }
         }
     }
@@ -291,6 +319,8 @@ class RiffetConnection(
                 alternates = alternates.map { it.trim().trimEnd('/') }.filter { serverOrigin(it) != origin }.distinct()
                     .ifEmpty { previous?.alternates.orEmpty() },
                 tlsFingerprint = tlsFingerprint,
+                // Paired over TLS, the device presented its certificate and the server bound it then.
+                certificateBound = tlsFingerprint != null && presentsDeviceCertificate,
             )
             withContext(NonCancellable) {
                 val next = state.copy(activeOrigin = origin, servers = state.servers.filterNot { it.origin == origin } + saved)

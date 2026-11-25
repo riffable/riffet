@@ -308,6 +308,21 @@ export class Auth {
     const normal=fingerprint.replace(/[^0-9a-f]/gi,'').toUpperCase();
     return device&&createHmac('sha256',device.hash).update(`riffet-tls\n${nonce}\n${normal}`).digest('base64url');
   }
+  /**
+   * Binds a device paired before TLS to the client certificate it now presents over TLS (docs/TRANSPORT-SECURITY.md §11).
+   * Once bound it stays bound: another certificate needs a new pairing.
+   */
+  bindDeviceCertificate(id: string, fingerprint: string): 'bound' | 'unchanged' {
+    const device=this.devices.find(candidate=>candidate.id===id);
+    if (!device) throw new AppError('DEVICE_NOT_FOUND','No such paired device',404);
+    if (device.certFingerprint) {
+      if (sameFingerprint(device.certFingerprint,fingerprint)) return 'unchanged';
+      throw new AppError('DEVICE_CERTIFICATE_BOUND','This device is bound to another certificate; pair it again',409);
+    }
+    device.certFingerprint=fingerprint;
+    this.flushDevices(true);
+    return 'bound';
+  }
   /** The APNs registration a device reported; it stays server-side (the push service only). */
   devicePush(id: string): DevicePushRegistration | undefined { return this.devices.find(candidate=>candidate.id===id)?.push??undefined; }
   /**

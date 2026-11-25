@@ -20,6 +20,9 @@ import platform.Security.SecTrustGetCertificateAtIndex
 import platform.Security.SecTrustRef
 import platform.posix.memcpy
 
+/** Not yet: an Apple device certificate needs a Secure Enclave identity (docs/TRANSPORT-SECURITY.md §2). */
+internal actual val presentsDeviceCertificate: Boolean = false
+
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun platformHttpClient(block: HttpClientConfig<*>.() -> Unit): HttpClient = HttpClient(Darwin) {
     engine {

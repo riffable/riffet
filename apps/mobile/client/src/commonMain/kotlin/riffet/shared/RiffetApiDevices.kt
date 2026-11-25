@@ -22,6 +22,15 @@ import kotlinx.serialization.json.jsonObject
 suspend fun RiffetApi.reportDevice(report: DeviceReport): PublicDevice =
     put("/api/devices/me", wireBody(report)).decode()
 
+/**
+ * `PUT /api/devices/me/certificate`: binds this device's token to the certificate it presents on this TLS connection
+ * (docs/TRANSPORT-SECURITY.md §11). Fails over plain HTTP or without a certificate.
+ */
+@Throws(Exception::class)
+internal suspend fun RiffetApi.bindDeviceCertificate() {
+    put("/api/devices/me/certificate").discard()
+}
+
 /** [reportDevice] that also removes the saved push registration: `push` is an explicit `null`. */
 @Throws(Exception::class)
 suspend fun RiffetApi.reportDeviceClearingPush(report: DeviceReport): PublicDevice =

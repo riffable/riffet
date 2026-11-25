@@ -45,6 +45,8 @@ internal data class PairedCredential(
     val alternates: List<String> = emptyList(),
     /** The server's TLS certificate SHA-256 once pinned; its requests then go over TLS ([TransportPins]). */
     val tlsFingerprint: String? = null,
+    /** The server has bound this device's token to the device certificate; it is then useless without the key. */
+    val certificateBound: Boolean = false,
 ) {
     fun server() = PairedServer(origin, baseUrl, name, lastUsedAt)
 }

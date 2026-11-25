@@ -237,6 +237,10 @@ msgid "{sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。
 msgstr "{sendKey} sends; physical keyboards only, phone keyboards always insert a newline."
 
 #: src/app/settings/SecurityLog.tsx
+msgid "{subject} 登记了设备证书"
+msgstr "{subject} registered its device certificate"
+
+#: src/app/settings/SecurityLog.tsx
 msgid "{subject} 的证书与配对时不同"
 msgstr "{subject} presented a different certificate than at pairing"
 

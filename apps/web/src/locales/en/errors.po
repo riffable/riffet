@@ -53,6 +53,11 @@ msgid "error.CLI_NEEDS_ATTENTION"
 msgstr "The CLI needs you to handle something in the terminal"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.CLIENT_CERTIFICATE_REQUIRED"
+msgstr "Present the device certificate over an encrypted connection"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.COMMAND_ARGS_INVALID"
 msgstr "Invalid command arguments: {message}"
@@ -111,6 +116,11 @@ msgstr "{action, select, steer {The model is switching; add your follow-up after
 #: ../../i18n/errors/files.json
 msgid "error.DELETE_UNRECOVERABLE"
 msgstr "It is too large to keep for undo"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.DEVICE_CERTIFICATE_BOUND"
+msgstr "This device is bound to another certificate. Pair it again"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/access.json

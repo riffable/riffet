@@ -53,6 +53,11 @@ msgid "error.CLI_NEEDS_ATTENTION"
 msgstr "CLI 需要你先在终端中处理当前操作"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.CLIENT_CERTIFICATE_REQUIRED"
+msgstr "需要经加密连接出示设备证书"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.COMMAND_ARGS_INVALID"
 msgstr "命令参数无效：{message}"
@@ -111,6 +116,11 @@ msgstr "{action, select, steer {模型正在切换，请稍后补充} other {模
 #: ../../i18n/errors/files.json
 msgid "error.DELETE_UNRECOVERABLE"
 msgstr "它太大，删除后无法撤销"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.DEVICE_CERTIFICATE_BOUND"
+msgstr "这台设备已登记了另一张证书，请重新配对"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/access.json

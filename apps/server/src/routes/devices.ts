@@ -3,6 +3,7 @@ import { CLIENT_FEATURES_HEADER } from '../../../../packages/contracts/src/index
 import { AppError } from '../errors.js';
 import { RIFFET_PACKAGES } from '../riffet-mcp/adb.js';
 import type { RouteDeps } from './deps.js';
+import { peerCertificateFingerprint } from '../access/tls.js';
 
 /**
  * A paired device's own side of the device channel (docs/DEVICES.md §3). Every `/api/devices/me` route
@@ -20,6 +21,15 @@ export function registerDeviceRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const header = request.headers[CLIENT_FEATURES_HEADER];
     const features = [...new Set((Array.isArray(header) ? header.join(',') : header ?? '').split(',').map(item => item.trim()).filter(item => item && item.length <= 64))].slice(0, 64);
     return devices.report(me(request), request.body, features);
+  });
+  // A device paired before TLS binds the certificate it now presents (docs/TRANSPORT-SECURITY.md §11); its token then needs it.
+  app.put('/api/devices/me/certificate', async request => {
+    const deviceId = me(request);
+    const fingerprint = peerCertificateFingerprint(request.raw.socket);
+    if (!fingerprint) throw new AppError('CLIENT_CERTIFICATE_REQUIRED', 'Present the device certificate over TLS', 400);
+    const outcome = auth.bindDeviceCertificate(deviceId, fingerprint);
+    if (outcome === 'bound') deps.recordSecurity(request, 'device-certificate-bound', { subject: auth.device(deviceId)?.name ?? deviceId, subjectId: deviceId });
+    return { bound: true };
   });
   const packageName = (value: unknown) => {
     if (typeof value !== 'string' || !RIFFET_PACKAGES.has(value)) throw new AppError('INVALID_PACKAGE_NAME', 'packageName must name the Riffet app', 400);

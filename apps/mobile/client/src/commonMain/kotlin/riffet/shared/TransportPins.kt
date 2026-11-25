@@ -40,6 +40,9 @@ fun normalFingerprint(value: String): String = value.filter { it in '0'..'9' || 
 
 internal fun hex(bytes: ByteArray): String = bytes.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }.uppercase()
 
+/** Whether this platform's engine presents a device certificate of its own on TLS (docs/TRANSPORT-SECURITY.md §2). */
+internal expect val presentsDeviceCertificate: Boolean
+
 /** The platform's client with [TransportPins] in its TLS trust decision: OkHttp on Android, Darwin on Apple. */
 internal expect fun platformHttpClient(block: HttpClientConfig<*>.() -> Unit): HttpClient
 

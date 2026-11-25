@@ -53,6 +53,11 @@ msgid "error.CLI_NEEDS_ATTENTION"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.CLIENT_CERTIFICATE_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
 msgid "error.COMMAND_ARGS_INVALID"
 msgstr ""
@@ -110,6 +115,11 @@ msgstr ""
 #. js-lingui-explicit-id
 #: ../../i18n/errors/files.json
 msgid "error.DELETE_UNRECOVERABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.DEVICE_CERTIFICATE_BOUND"
 msgstr ""
 
 #. js-lingui-explicit-id

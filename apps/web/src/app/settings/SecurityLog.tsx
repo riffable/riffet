@@ -26,6 +26,7 @@ export function SecurityLog() {
     switch (event.kind) {
       case 'device-paired': return t`配对了 ${subject}`;
       case 'device-revoked': return t`移除了 ${subject}`;
+      case 'device-certificate-bound': return t`${subject} 登记了设备证书`;
       case 'pairing-failed': return t`配对码错误`;
       case 'login-failed': return t`访问令牌错误`;
       case 'sessions-revoked': return t`退出了所有浏览器`;

@@ -5,6 +5,7 @@
 export type SecurityEventKind =
   | 'device-paired'
   | 'device-revoked'
+  | 'device-certificate-bound'
   | 'pairing-failed'
   | 'login-failed'
   | 'sessions-revoked'
