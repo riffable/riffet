@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconCheck, IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconLaptop, IconLink, IconServer, IconSquareTerminal, IconTerminal } from '@/components/icons';
-import { AGENT_CALL_TOOL_GROUP, PREWARM_BUDGET, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
+import { AGENT_CALL_TOOL_GROUP, PREWARM_BUDGET, type AgentMember, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
 import { RunnerGame } from '@/components/runner/RunnerGame';
@@ -32,11 +32,14 @@ import type { Choice } from './session/model';
 import { useSlashCatalog } from './session/useSlashCatalog';
 import { useLingering, WAIT_GRACE_MS } from './session/sessionLayout';
 import { useGitStatus } from './state/gitStatusStore';
-import { useStores } from './state/stores';
+import { useLists, useStores } from './state/stores';
 import { QuickChatHistory } from './QuickChatHistory';
 import type { SessionAction } from './Sidebar';
 import { QuickAction } from './QuickAction';
 import { AssistantSetup } from './work-items/AssistantSetup';
+import { isDefaultMember } from './work-items/assistant';
+import { MemberAvatar } from './team/MemberAvatar';
+import { MemberSessionsList } from './team/MemberSessionsList';
 import { formatServerPlatform, type HomeServerOption } from './useServerLabel';
 
 export interface ProfileCatalog extends Pick<NativeBackendCatalogEntry, 'models' | 'available' | 'reason'> { profile: NativeBackendProfile }
@@ -76,6 +79,9 @@ function splitOther(id: string): { backendId: NativeBackendId; profileId?: strin
 /** What starting a new conversation takes: its directory, agent, model and first message. */
 export interface NewSessionComposerProps {
   project?: ProjectRecord;
+  /** Standing team member whose home composer is open (docs/TEAM.md). */
+  member?: AgentMember;
+  onOpenMemberConfig?: () => void;
   referenceProjectId?: string;
   recentModel?: string;
   /** Every project, so the composer can offer the others as new-session directories. */
@@ -122,7 +128,7 @@ export interface NewSessionComposerProps {
   referenceSessions?: Session[];
   onOpenReferenceSession?: (id: string) => void;
   onReferencesChange: (references: PromptContextReference[]) => void;
-  onCreate: (input: { projectId?: string; projectless?: boolean; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null }) => Promise<boolean>;
+  onCreate: (input: { projectId?: string; projectless?: boolean; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; agentMemberId?: string }) => Promise<boolean>;
   onError: (message: string) => void;
   /** Called when the user picks a model here, so the choice can be remembered globally. */
   onRememberModel?: (model: string) => void;
@@ -146,11 +152,12 @@ interface Props extends NewSessionComposerProps {
 /**
  * The directory, agent, model and first message of a new conversation: the project page's hero.
  */
-export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onAgentPickerOpen, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
+export function NewSessionComposer({ project, member, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onAgentPickerOpen, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
   const { t } = useLingui();
   const quickChat = backendId === 'chat';
-  // The 助理 works in a directory of its own: there is nothing to pick and no file to mention.
-  const assistant = isAssistantProject(project);
+  // A standing member or 助理 has its directory fixed by its scope, and keeps its own model selection.
+  const assistant = Boolean(member) || isAssistantProject(project);
+  const memberScopePrefix = member ? `member:${member.id}${CHOICE_SEPARATOR}` : assistant ? `assistant${CHOICE_SEPARATOR}` : '';
   const label = useBackendLabel();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const capabilities = backend?.capabilities;
@@ -184,15 +191,19 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const callsOffered = !quickChat && offersRiffetTools(capabilities);
   const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id) || linkedServerTools.available.includes(id) || (callsOffered && id === AGENT_CALL_TOOL_GROUP));
   const toolsOffered = callsOffered || (!quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0 || linkedServerTools.offered));
-  const agentMentions = useMemo<AgentMentionSource | undefined>(() => callsOffered ? { projectId: project?.id ?? '', backends } : undefined, [callsOffered, project?.id, backends]);
+  const teamMembers = useLists((state) => state.teamMembers);
+  const agentMentions = useMemo<AgentMentionSource | undefined>(
+    () => callsOffered ? { projectId: project?.id ?? '', backends, members: teamMembers, ...(member ? { currentMemberId: member.id } : {}) } : undefined,
+    [callsOffered, project?.id, backends, teamMembers, member],
+  );
   const [selection, setSelection] = useState(defaultModel);
   const [selectionEdited, setSelectionEdited] = useState(false);
   /*
    * The composer survives tab/provider switches. Each target keeps its own model and approval;
    * returning to it restores explicit picks while untouched controls follow their saved defaults.
    */
-  // The 助理 keeps a choice of its own (docs/TASK-BOARD.md §5), apart from the same agent's elsewhere.
-  const choiceScope = `${activeServerId ? `${activeServerId}${CHOICE_SEPARATOR}` : ''}${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${backendId}${CHOICE_SEPARATOR}${profileId ?? ''}`;
+  // The 助理 or team member keeps a choice of its own, apart from the same agent's elsewhere.
+  const choiceScope = `${activeServerId ? `${activeServerId}${CHOICE_SEPARATOR}` : ''}${memberScopePrefix}${backendId}${CHOICE_SEPARATOR}${profileId ?? ''}`;
   const [selectionScope, setSelectionScope] = useState(choiceScope);
   const choices = useRef(new Map<string, { selection: string; approval: string; edited: boolean }>());
   if (selectionScope !== choiceScope) {
@@ -543,7 +554,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         commands={(!quickChat ? slash.catalog?.items : undefined) ?? capabilities?.slashCommands ?? []}
         inlineSkills={!quickChat && (slash.catalog?.inlineSkills ?? capabilities?.inlineSkills)}
         onSlashMenuOpen={quickChat ? undefined : slash.refresh}
-        fileMentions={!quickChat && !assistant && Boolean(project)}
+        fileMentions={!quickChat && Boolean(project) && !isAssistantProject(project)}
         sessionMentions={!quickChat && sessionReferences && capabilities?.supportsSessionReferences === true}
         agentMentions={agentMentions}
         referenceSessions={referenceSessions}
@@ -632,7 +643,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         </div>)}</div> : undefined}
         restoreDraft={creationRestore && creationRestore.projectId === project?.id ? creationRestore.draft : undefined}
         onSubmitPersisted={onCreationPersisted}
-        onSubmit={(prompt, attachments, context) => submit({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(submitSelection ? { model: submitSelection } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}) })}
+        onSubmit={(prompt, attachments, context) => submit({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(submitSelection ? { model: submitSelection } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}), ...(member ? { agentMemberId: member.id } : {}) })}
         onError={onError}
       />
       <FeedbackNotices scope={`${project?.id ?? 'global'}:${backendId}:${activeProfileId ?? ''}`} messages={creationNotices}
@@ -661,7 +672,7 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
   const activeProfileId = composer.profileId ?? backend?.profiles.find((entry) => entry.isDefault)?.id ?? backend?.profiles[0]?.id;
   const slash = useSlashCatalog(quickChat || backend?.available === false ? undefined : backendId, { ...(project?.id ? { projectId: project.id } : { scope: 'global' as const }), ...(activeProfileId ? { profileId: activeProfileId } : {}) });
   // Only the phone's home lists recent conversations; a desktop has them in the sidebar.
-  const recent = useMemo(() => mobile ? sortSessionsByActivity(sessions.filter((session) => !session.archivedAt)).slice(0, 5) : [], [mobile, sessions]);
+  const recent = useMemo(() => mobile ? sortSessionsByActivity(sessions.filter((session) => !session.archivedAt && !session.agentMemberId)).slice(0, 5) : [], [mobile, sessions]);
   const runnerOpen = useRunnerOpen();
   const [composerFullscreen, setComposerFullscreen] = useState(false);
   const behind = composerFullscreen || undefined;
@@ -672,19 +683,31 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
       <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]">
         <div className="mx-auto flex w-full max-w-[720px] flex-col px-4 pb-6 pt-6 md:px-8 md:pb-16 md:pt-[max(48px,14vh)]">
           <div className="mb-4 flex flex-col items-center gap-2 text-center md:mb-6" inert={behind} aria-hidden={behind}>
-            <LiveBrandMark className="mb-1 size-12 text-fg md:mb-2 md:size-16" />
+            {composer.member && (!isDefaultMember(composer.member) || composer.member.avatar)
+              ? <MemberAvatar member={composer.member} size={mobile ? 56 : 64} className="mb-1 ring-1 ring-line md:mb-2" />
+              : <LiveBrandMark className="mb-1 size-12 text-fg md:mb-2 md:size-16" />}
             {/* Reserve the heading's own line height so switching 新建任务 / 快速对话 never shifts the composer. */}
-            <div className="flex min-h-(--text-xl--line-height) w-full items-center justify-center md:min-h-(--text-2xl--line-height)">
-              {!quickChat && project && !isAssistantProject(project) && <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{t`要在 ${project.name} 做什么？`}</h1>}
+            <div className="flex min-h-(--text-xl--line-height) w-full items-center justify-center gap-2 md:min-h-(--text-2xl--line-height)">
+              {composer.member
+                ? <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{composer.member.name}</h1>
+                : !quickChat && project && !isAssistantProject(project) && <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{t`要在 ${project.name} 做什么？`}</h1>}
             </div>
+            {composer.member?.scope.kind === 'project' && project && (
+              <p className="text-xs text-fg-3">{project.name}</p>
+            )}
           </div>
 
           <NewSessionComposer {...composer} onCreateWorktree={noRepository ? undefined : composer.onCreateWorktree} fullscreen={composerFullscreen} onFullscreenChange={setComposerFullscreen} />
 
-          <div key={quickChat ? 'chat' : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]" inert={behind} aria-hidden={behind}>
+          <div key={quickChat ? 'chat' : composer.member ? `member:${composer.member.id}` : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]" inert={behind} aria-hidden={behind}>
             {quickChat && project ? <QuickChatHistory project={project} sessions={sessions} onSelectSession={onSelectSession} onSessionAction={onSessionAction} /> : <>
-              {project && isAssistantProject(project) && <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} />}
-              {project && !isAssistantProject(project) && <><details open={!mobile} className="group/tools mt-4 md:mt-8"><summary className="flex cursor-pointer list-none select-none items-center gap-1.5 py-3 text-sm text-fg-3 md:hidden [&::-webkit-details-marker]:hidden"><IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)] group-open/tools:rotate-90" /><Trans>CLI 与终端工具</Trans></summary><div className="grid gap-2 sm:grid-cols-3">
+              {project && (composer.member || isAssistantProject(project)) && (
+                <>
+                  <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} member={composer.member} onOpenConfig={composer.onOpenMemberConfig} />
+                  {composer.member && <MemberSessionsList member={composer.member} sessions={sessions} onSelectSession={onSelectSession} />}
+                </>
+              )}
+              {project && !composer.member && !isAssistantProject(project) && <><details open={!mobile} className="group/tools mt-4 md:mt-8"><summary className="flex cursor-pointer list-none select-none items-center gap-1.5 py-3 text-sm text-fg-3 md:hidden [&::-webkit-details-marker]:hidden"><IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)] group-open/tools:rotate-90" /><Trans>CLI 与终端工具</Trans></summary><div className="grid gap-2 sm:grid-cols-3">
                 <QuickAction icon={<IconTerminal />} title={t`Shell 终端`} onClick={onOpenShell} />
                 <QuickAction icon={<IconColumns2 />} title={t`并行尝试`} note={t`各自在独立 Worktree`} disabled={busy || Boolean(project.system)} onClick={() => setAttemptsOpen(true)} />
                 <QuickAction icon={<IconHistory />} title={t`继续终端会话`} disabled={Boolean(project.system)} onClick={() => ui.openImportSession(project.id)} />
@@ -698,7 +721,7 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
 
               <AttemptsHistory projectId={project.id} onOpenGroup={onOpenAttemptGroup} /></>}
 
-              {recent.length > 0 && !isAssistantProject(project) && (
+              {recent.length > 0 && !composer.member && !isAssistantProject(project) && (
                 <section className="mt-6 md:mt-10">
                   <h2 className="mb-1 px-2 text-xs font-medium text-fg-3"><Trans>最近会话</Trans></h2>
                   <div className="flex flex-col">

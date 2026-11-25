@@ -11,7 +11,7 @@ import type { LaneFind, NativeRunRecovery, DiscussionSource, Run, RunMetrics, Tu
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import type { TimelineItem } from './model';
-import type { TurnAction } from './Timeline';
+import type { CallSenderInfo, TurnAction } from './Timeline';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
 import { showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp } from './TurnProcess';
@@ -76,6 +76,10 @@ interface Props {
   completedProcessesOpen?: boolean;
   /** Renders settled `/new` commands as topic dividers and collapses earlier topics by default. */
   newTopicDivider?: boolean;
+  /** Caller identity when this conversation was opened via `agent_call`. */
+  callSender?: CallSenderInfo;
+  /** Owner profile for owner bubbles in multi-party/called conversations. */
+  owner?: { name?: string; avatar?: { url: string } };
   historyContextIncomplete?: boolean;
   historyStale?: boolean;
   loadingEarlier?: boolean;
@@ -124,7 +128,7 @@ interface Props {
   progress?: ReactNode;
 }
 
-export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, newTopicDivider = false, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, turnStatusByTurn, focus, outlineTarget, progress: suppliedProgress }: Props) {
+export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, newTopicDivider = false, callSender, owner, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, turnStatusByTurn, focus, outlineTarget, progress: suppliedProgress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const [confirmationOffscreen, setConfirmationOffscreen] = useState(false);
@@ -735,6 +739,8 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const rowContext = useMemo<RowContext>(() => ({
     sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming,
     newTopicDivider, latestTopicKey, canCollapseEarlier, earlierTopicsCollapsed, onToggleEarlierTopics: toggleEarlierTopics,
+    ...(callSender ? { callSender } : {}),
+    ...(owner ? { owner } : {}),
     measure: rowObserver.measure,
     ...(onOpenPath ? { onOpenPath: stable.openPath } : {}),
     ...(onOpenInEditor ? { onOpenInEditor: stable.openInEditor } : {}),
@@ -747,7 +753,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     ...(onRestoreNativeRun ? { onRestoreNativeRun: stable.restore } : {}),
     ...(onTurnAction ? { onTurnAction: stable.turnAction } : {}),
     ...(onExpandRow ? { onExpandRow: stable.expand } : {}),
-  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming, newTopicDivider, latestTopicKey, canCollapseEarlier, earlierTopicsCollapsed, toggleEarlierTopics, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
+  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, foldTiming, newTopicDivider, latestTopicKey, canCollapseEarlier, earlierTopicsCollapsed, toggleEarlierTopics, callSender, owner, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);

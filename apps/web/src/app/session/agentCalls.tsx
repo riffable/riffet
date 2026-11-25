@@ -8,6 +8,8 @@ import { backendLabel } from '@/lib/backends';
 import { cachedCatalog } from '@/lib/catalog-cache';
 import { cleanLabel, isRecord, str } from '@/lib/utils';
 import { RowOutcome } from './Activities';
+import { useLists } from '../state/stores';
+import { MemberAvatar } from '../team/MemberAvatar';
 import type { TimelineItem } from './model';
 import { selectionTags } from './ModelPicker';
 import { Disclosure } from './Timeline';
@@ -118,11 +120,17 @@ export const AgentCallRow = memo(function AgentCallRow({ item, stale }: { item: 
   const rowActive = activeToolStates.has(view.status) && !stale;
   const state = call?.state ?? (rowActive ? 'working' : str(output?.state) as AgentCall['state'] | undefined ?? (view.status === 'failed' ? 'failed' : 'completed'));
   const running = state === 'working';
-  const backend = call?.backendId ?? (str(input?.agent)?.split('/')[0] as NativeBackendId | undefined);
+  const teamMembers = useLists((state) => state.teamMembers);
+  const rawAgent = str(input?.agent);
+  const rawMemberId = rawAgent?.startsWith('member/') ? rawAgent.slice('member/'.length) : undefined;
+  const memberId = call?.memberId ?? rawMemberId;
+  const member = memberId ? teamMembers.find(item => item.id === memberId) : undefined;
+  const backend = call?.backendId ?? (!rawMemberId ? (rawAgent?.split('/')[0] as NativeBackendId | undefined) : undefined);
   // A follow-up names what it asked this time; the call's own title is its first request.
   const title = str(input?.prompt)?.split('\n').map(line => line.trim()).find(Boolean) ?? call?.title ?? t`调用 Agent`;
   const runsOn = call && source ? modelLine(call, source.projectId) : undefined;
-  const name = [backend ? backendLabel(backend) : 'Agent', runsOn].filter(Boolean).join(' · ');
+  const actorName = member?.name ?? call?.memberName ?? (backend ? backendLabel(backend) : 'Agent');
+  const name = [actorName, runsOn].filter(Boolean).join(' · ');
   const latest = running && call?.latest ? call.latest : undefined;
   return (
     <div className="flex min-w-0 flex-col">
@@ -130,7 +138,7 @@ export const AgentCallRow = memo(function AgentCallRow({ item, stale }: { item: 
         touchCompact
         opensPage={Boolean(call && source)}
         expandable={false}
-        icon={running ? <Spinner className="size-3.5" /> : backend ? <AgentLogo backend={backend} size={14} /> : <Spinner className="size-3.5" />}
+        icon={running ? <Spinner className="size-3.5" /> : member ? <MemberAvatar member={member} size={16} /> : backend ? <AgentLogo backend={backend} size={14} /> : <Spinner className="size-3.5" />}
         title={title}
         detail={name}
         inline={state === 'failed' ? <RowOutcome failed /> : undefined}

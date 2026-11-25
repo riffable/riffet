@@ -1,8 +1,8 @@
 import { Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLingui } from '@lingui/react/macro';
-import { IconArchive, IconArchiveRestore, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconServer, IconTag, IconTrash2 } from '@/components/icons';
-import type { Session } from '@contracts';
+import { IconArchive, IconArchiveRestore, IconBot, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconMessagesSquare, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconServer, IconSettings2, IconTag, IconTrash2 } from '@/components/icons';
+import { DEFAULT_AGENT_MEMBER_ID, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { AgentLogo } from '@/components/AgentLogo';
 import { ActionBarButton } from '@/components/ui/action-bar';
@@ -20,7 +20,7 @@ import { cleanLabel, closesOverlay, cn, tildePath } from '@/lib/utils';
 import { useGitStatus, watchGitStatus } from './state/gitStatusStore';
 import { SessionInfo } from './SessionInfo';
 import { AssistantInstructions, useAssistantSetup } from './work-items/AssistantSetup';
-import { useCatalog } from './state/stores';
+import { useCatalog, useLists, useNav } from './state/stores';
 import type { ContextUsage } from './session/model';
 import { TabChromeContext } from './tabs/chrome';
 import { useShortcutHint } from './shortcuts';
@@ -84,6 +84,9 @@ export interface HeaderProps extends HeaderSlots {
   onRename?: () => void;
   onEditTags?: () => void;
   onTogglePin?: () => void;
+  onExtractMember?: () => void;
+  onOpenMemberConfig?: (memberId: string) => void;
+  memberSessionsToggle?: { open: boolean; count: number; onToggle: () => void };
   onToggleArchive?: () => void;
   onDelete?: () => void;
   deleteDisabled?: boolean;
@@ -105,7 +108,7 @@ function ActionMenuItem({ action, onSelect }: { action: HeaderAction; onSelect: 
   );
 }
 
-export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, alertsKey, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
+export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onExtractMember, onOpenMemberConfig, memberSessionsToggle, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, alertsKey, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
   const { t } = useLingui();
   const infoHint = useShortcutHint('sessionInfo');
   const label = useBackendLabel();
@@ -118,14 +121,37 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     failed: { label: t`出错`, tone: 'danger' },
   };
   const state = session ? stateMeta[session.state] : undefined;
-  // The 助理's main conversation carries its setup in 会话信息, in place of its page's cards.
-  const isAssistantMain = Boolean(project && session && mainSessionIdOf(project) === session.id);
-  // The 助理 page is the main conversation, or its empty state: a title row of its own, even under tabs (docs/ASSISTANT.md).
-  const assistantPage = isAssistantProject(project) && (!session || isAssistantMain);
-  // Its page has one name; the stored title only matters where the conversation is listed among others.
-  const title = isAssistantMain ? t`个人助理` : session?.title ?? '';
+  const teamMembers = useLists((state) => state.teamMembers);
+  const selectedMemberId = useNav((state) => state.memberId);
+  const member = session?.agentMemberId
+    ? teamMembers.find((item) => item.id === session.agentMemberId)
+    : selectedMemberId
+      ? teamMembers.find((item) => item.id === selectedMemberId)
+      : project?.agentMemberId
+        ? teamMembers.find((item) => item.id === project.agentMemberId)
+        : isAssistantProject(project)
+          ? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID)
+          : undefined;
+  // A continuous member's main conversation (or legacy 助理's) carries its setup in 会话信息.
+  const isAssistantMain = Boolean(
+    (project && session && mainSessionIdOf(project) === session.id)
+    || (member && member.sessionMode === 'continuous' && session && member.mainSessionId === session.id),
+  );
+  const hasMemberSetup = Boolean(isAssistantMain || member);
+  // The member/助理 standing page: a title row of its own, even under tabs (docs/ASSISTANT.md).
+  const assistantPage = Boolean((member || isAssistantProject(project)) && (!session || isAssistantMain || Boolean(session.agentMemberId)));
+  // Continuous main conversation uses the member's name; fresh runs show their own title.
+  const title = isAssistantMain ? (member?.name ?? t`个人助理`) : session?.title ?? '';
   const backends = useCatalog((state) => state.backends);
-  const assistantSetup = useAssistantSetup({ projectId: project?.id ?? '', backendId: session ? sessionBackend(session) : 'chat', profileId: session?.backendProfileId, enabled: isAssistantMain });
+  const assistantSetup = useAssistantSetup({
+    projectId: project?.id ?? '',
+    backendId: session ? sessionBackend(session) : 'chat',
+    profileId: session?.backendProfileId,
+    memberId: member?.id,
+    memberName: member?.name,
+    onOpenConfig: member && onOpenMemberConfig ? () => onOpenMemberConfig(member.id) : undefined,
+    enabled: Boolean(session && hasMemberSetup),
+  });
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const [detailsOpen, setDetailsOpen] = useState(false);
   // While session tabs are on (desktop only) the tab bar owns the top row and hosts this header's actions.
@@ -149,6 +175,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   const sessionActions: HeaderAction[] = session ? [
     ...(onRename ? [{ id: 'rename', icon: <IconPencilLine />, label: t`重命名`, onSelect: onRename }] : []),
     ...(onEditTags ? [{ id: 'tags', icon: <IconTag />, label: t`编辑标签`, onSelect: onEditTags }] : []),
+    ...(onExtractMember && !quickChat && !session.archivedAt && !isAssistantMain ? [{ id: 'extract-member', icon: <IconBot />, label: t`提炼为成员`, onSelect: onExtractMember }] : []),
     ...(onTogglePin ? [{ id: 'pin', icon: session.pinnedAt ? <IconPinOff /> : <IconPin />, label: session.pinnedAt ? t`取消置顶` : t`置顶会话`, onSelect: onTogglePin }] : []),
   ] : [];
   const archiveAction: HeaderAction | undefined = session && onToggleArchive
@@ -163,7 +190,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   const modelLabel = cleanLabel(selection.model);
   // Switches (fast=true) are the composer's icons, not words; only valued parameters such as effort read here.
   const modelDetail = Object.values(selection.params).filter((value) => value !== 'true' && value !== 'false').join(' · ');
-  const projectName = managedWorkspace ? t`未关联项目` : ownDirectory ? t`个人助理` : originProject?.name ?? project?.name;
+  const projectName = managedWorkspace ? t`未关联项目` : ownDirectory ? (member?.name ?? t`个人助理`) : originProject?.name ?? project?.name;
   const worktreeBadge = project?.worktree && (
     <Badge className="min-w-0 max-w-32 shrink rounded-full md:max-w-48">
       <IconGitBranch className="shrink-0" aria-hidden="true" />
@@ -190,7 +217,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       onTogglePanel={onTogglePanel}
       onToggleTerminal={onToggleTerminal}
       onNavigate={onNavigate}
-      {...(isAssistantMain ? { assistant: assistantSetup } : {})}
+      {...(hasMemberSetup ? { assistant: assistantSetup } : {})}
       head={!sheet}
       barEnd={barEnd}
     >
@@ -203,6 +230,13 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       {/* Alerts arrive with the session's data; each fades in where it lands instead of popping into the row. */}
       {views && <>{views}<span aria-hidden className="mx-1.5 h-4 w-px shrink-0 bg-line-strong" /></>}
       {alerts && <HeaderAlerts key={alertsKey}>{alerts}</HeaderAlerts>}
+      {member && onOpenMemberConfig && (
+        <Tip label={t`成员设置`}>
+          <Button size="icon-sm" variant="quiet" aria-label={t`成员设置`} className="size-7" onClick={() => onOpenMemberConfig(member.id)}>
+            <IconSettings2 />
+          </Button>
+        </Tip>
+      )}
       {session && (
         <Popover open={infoOpen} onOpenChange={onInfoOpenChange}>
           <Tip label={t`会话信息`} kbd={infoHint} disabled={infoOpen}>
@@ -258,10 +292,18 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
         {sidebarCollapsed && !tabbed && (
           <ExpandSidebarButton onClick={onExpandSidebar} />
         )}
+        {member && !mobile && memberSessionsToggle && !memberSessionsToggle.open && (
+          <Tip label={t`会话列表`}>
+            <Button size="icon-sm" variant="quiet" aria-label={t`会话列表`} className="relative size-7 shrink-0" onClick={memberSessionsToggle.onToggle}>
+              <IconMessagesSquare />
+              {memberSessionsToggle.count > 1 && <span aria-hidden className="absolute right-1 top-1 size-1.5 rounded-full bg-accent ring-2 ring-bg" />}
+            </Button>
+          </Tip>
+        )}
 
         {/* On a phone the title starts right after the menu button's own padding (mobile.md §10.2). */}
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm md:pl-1">
-          {project && !session && !(center && mobile) && <><span className="min-w-0 truncate font-medium text-fg">{assistantPage ? t`个人助理` : projectName}</span>{worktreeBadge}</>}
+          {project && !session && !(center && mobile) && <><span className="min-w-0 truncate font-medium text-fg">{assistantPage ? (member?.name ?? t`个人助理`) : projectName}</span>{worktreeBadge}</>}
           {project && session && !mobile && !isAssistantMain && (
             <>
               {sessionServer && (
@@ -315,6 +357,17 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       </div>
 
       {center && <div className="flex h-full min-h-12 min-w-0 items-center justify-center">{center}</div>}
+      {member && memberSessionsToggle && mobile && (
+        <Button size="icon-sm" variant="quiet" aria-label={t`会话列表`} onClick={memberSessionsToggle.onToggle} className="relative size-11 shrink-0">
+          <IconMessagesSquare />
+          {memberSessionsToggle.count > 1 && <span aria-hidden className="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-accent ring-2 ring-bg" />}
+        </Button>
+      )}
+      {member && onOpenMemberConfig && mobile && (
+        <Button size="icon-sm" variant="quiet" aria-label={t`成员设置`} onClick={() => onOpenMemberConfig(member.id)} className="size-11 shrink-0">
+          <IconSettings2 />
+        </Button>
+      )}
       {session && mobile && (
         <Button size="icon-sm" variant="quiet" aria-label={t`会话信息`} aria-haspopup="dialog" onClick={() => setDetailsOpen(true)} className="relative size-11 shrink-0">
           <IconInfoOutline />
@@ -322,7 +375,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
         </Button>
       )}
       {tabbed ? chrome?.actions && createPortal(actions, chrome.actions) : actions}
-      {isAssistantMain && <AssistantInstructions setup={assistantSetup} />}
+      {hasMemberSetup && <AssistantInstructions setup={assistantSetup} />}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent mobileSheet>
           {/* The phone's session sheet (mobile.md §10.4): title and status, places and 更多, what runs, facts. */}

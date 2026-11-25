@@ -24,15 +24,22 @@ function themeInk(): { ink?: string; paper?: string } {
   return { ink: colorToHex([...composite(ink, [...canvas, 1]), 1]), paper: colorToHex([...canvas, 1]) };
 }
 
-function previewUrl(style: string, seed: string, colors: { ink?: string; paper?: string }): string {
+export function avatarStylePreviewUrl(style: string, seed: string, colors: { ink?: string; paper?: string }, previewName?: string): string {
   const query = new URLSearchParams({ seed });
   if (colors.ink) query.set('ink', colors.ink);
   if (colors.paper) query.set('paper', colors.paper);
+  if (previewName?.trim()) query.set('name', previewName.trim());
   return `/api/owner/avatar-styles/${style.split('/').map(encodeURIComponent).join('/')}/preview?${query}`;
 }
 
 /** 随机头像: a dice button that opens the generated styles, each drawn for its own seed (docs/OWNER.md). Absent without styles. */
-export function AvatarStylePicker({ name, disabled, onPick }: { name: string | undefined; disabled: boolean; onPick: (request: OwnerAvatarGenerateRequest) => void }) {
+export function AvatarStylePicker({ name, previewName, disabled, onPick }: {
+  name: string | undefined;
+  /** Optional subject name passed to the preview endpoint (for non-owner avatars such as team members). */
+  previewName?: string;
+  disabled: boolean;
+  onPick: (request: OwnerAvatarGenerateRequest) => void;
+}) {
   const { t, i18n } = useLingui();
   const [styles, setStyles] = useState<OwnerAvatarStyle[]>([]);
   const [open, setOpen] = useState(false);
@@ -59,7 +66,7 @@ export function AvatarStylePicker({ name, disabled, onPick }: { name: string | u
               onClick={() => { setOpen(false); onPick({ style: style.id, seed: seed!, ...colors }); }}
               className="grid size-14 place-items-center overflow-hidden rounded-full bg-active outline-none transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-focus"
             >
-              {seed && <img src={previewUrl(style.id, seed, colors)} alt="" width={OWNER_AVATAR_PREVIEW_SIDE} height={OWNER_AVATAR_PREVIEW_SIDE} loading="lazy" draggable={false} className="size-full object-cover" />}
+              {seed && <img src={avatarStylePreviewUrl(style.id, seed, colors, previewName)} alt="" width={OWNER_AVATAR_PREVIEW_SIDE} height={OWNER_AVATAR_PREVIEW_SIDE} loading="lazy" draggable={false} className="size-full object-cover" />}
             </button>
           </Tip>;
         })}

@@ -79,6 +79,10 @@ export type ProviderSettingsTarget =
 export interface UiState {
   sidebarCollapsed: boolean;
   mobileSidebar: boolean;
+  /** Explicit desktop override for the member page's in-page conversation list (`undefined` = auto). */
+  memberSessionsOpen?: boolean;
+  /** Mobile sheet for switching a member's conversations (main chat + incoming `@member` calls). */
+  mobileMemberSessions: boolean;
   panelOpen: boolean;
   /** The context panel spans everything right of the sidebar, over the conversation. */
   panelFullscreen: boolean;
@@ -124,6 +128,7 @@ export function createUiStore() {
   const store = createStore<UiState>({
     sidebarCollapsed: readStored(STORAGE_KEYS.sidebar) === '1',
     mobileSidebar: false,
+    mobileMemberSessions: false,
     panelOpen: false,
     panelFullscreen: false,
     ...storedFloat(),

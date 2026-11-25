@@ -691,6 +691,10 @@ msgid "要做什么"
 msgstr "要做什么"
 
 #: src/app/work-items/AssistantSetup.tsx
+msgid "要增加或更正，直接告诉「{memberName}」"
+msgstr "要增加或更正，直接告诉「{memberName}」"
+
+#: src/app/work-items/AssistantSetup.tsx
 msgid "要增加或更正，直接告诉个人助理"
 msgstr "要增加或更正，直接告诉个人助理"
 
@@ -739,6 +743,10 @@ msgstr "记录在等什么，或要观测的指标…"
 #: src/app/work-items/AssistantSetup.tsx
 msgid "记忆"
 msgstr "记忆"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "设置"
+msgstr "设置"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "评论"

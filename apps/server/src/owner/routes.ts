@@ -24,9 +24,9 @@ export function registerOwnerRoutes(app: FastifyInstance, deps: { owner: OwnerSe
   });
   // Generated avatars (docs/OWNER.md「随机头像」): the styles are the enabled plugins', the pictures are drawn here.
   app.get('/api/owner/avatar-styles', async () => ({ styles: owner.avatarStyles() }));
-  app.get<{ Params: { pluginId: string; name: string }; Querystring: { seed?: string; ink?: string; paper?: string } }>('/api/owner/avatar-styles/:pluginId/:name/preview', async (request, reply) => {
+  app.get<{ Params: { pluginId: string; name: string }; Querystring: { seed?: string; ink?: string; paper?: string; name?: string } }>('/api/owner/avatar-styles/:pluginId/:name/preview', async (request, reply) => {
     const style = `${request.params.pluginId}/${request.params.name}`;
-    const png = await owner.previewAvatar(style, request.query);
+    const png = await owner.previewAvatar(style, request.query, request.query.name);
     // Revalidated rather than cached for good: the same address draws another picture after a rename (a style that
     // draws the name) or after the plugin that draws it is updated.
     const etag = `"${createHash('sha256').update(png).digest('hex').slice(0, 32)}"`;

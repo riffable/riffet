@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AgentMention, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, Run, Session } from '../../../../packages/contracts/src/index.js';
+import type { AgentMember, AgentMention, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, Run, Session } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { Store } from '../store.js';
 import { AgentCallService } from './service.js';
@@ -18,13 +18,14 @@ const MODELS: ModelInfo[] = [{
 const text = (value: string) => ({ text: value, attachmentIds: [], context: [] });
 
 /** A server's worth of calls over an in-memory store; turns end when the test says so, with the answer it gives. */
-function harness() {
+function harness(members: AgentMember[] = []) {
   const store = new Store(':memory:');
   const project = store.createProject('/tmp/agent-calls', 'Example');
   const answers = new Map<string, string>();
   const messages: Array<{ sessionId: string; text: string; commandId: string }> = [];
   const service = new AgentCallService({
     store,
+    team: () => ({ list: () => members, find: id => members.find(item => item.id === id) }),
     timeline: {
       ready: async () => ({ generation: 'g', headSeq: 0 }),
       outline: sessionId => ({ generation: 'g', turnCount: 0, turns: store.listRuns(sessionId).map(run => ({ turn: run.id, turnId: run.id, startPos: 0, status: 'completed' as const, at: run.createdAt, rows: 0, runId: run.id })) }),
@@ -35,6 +36,7 @@ function harness() {
       async start(body, first, origin, ids) {
         return store.createNativeSubmission(ids.sessionId, {
           projectId: body.projectId!, title: body.title, backendId: body.backendId as 'codex', origin,
+          ...(body.agentMemberId ? { agentMemberId: body.agentMemberId } : {}),
           ...(body.backendProfileId ? { backendProfileId: body.backendProfileId } : {}), ...(body.model ? { model: body.model } : {}), ...(body.approval ? { approval: body.approval } : {}),
         }, ids.commandId, text(first)).session;
       },
@@ -53,14 +55,14 @@ function harness() {
     label: backendId => backendId === 'codex' ? 'Codex' : backendId,
   });
   /** A conversation of the owner's whose first message mentions `agents`; its turn has ended. */
-  const caller = (agents?: AgentMention[]): Session => {
-    const { session, run } = store.createNativeSubmission(crypto.randomUUID(), { projectId: project.id, title: 'Caller', backendId: 'claude' }, crypto.randomUUID(), { ...text('look at this'), ...(agents ? { agents } : {}) });
+  const caller = (agents?: AgentMention[], agentMemberId?: string): Session => {
+    const { session, run } = store.createNativeSubmission(crypto.randomUUID(), { projectId: project.id, title: 'Caller', backendId: 'claude', ...(agentMemberId ? { agentMemberId } : {}) }, crypto.randomUUID(), { ...text('look at this'), ...(agents ? { agents } : {}) });
     store.updateRun(run.id, { state: 'completed' });
     return store.updateSession(session.id, { state: 'idle' });
   };
   const finish = (run: Pick<Run, 'id'>, answer: string) => { answers.set(run.id, answer); store.updateRun(run.id, { state: 'completed' }); };
   const settle = () => new Promise(resolve => setTimeout(resolve, 20));
-  return { store, service, caller, finish, settle, messages };
+  return { store, project, service, caller, finish, settle, messages };
 }
 
 let open: ReturnType<typeof harness> | undefined;
@@ -169,5 +171,47 @@ describe('AgentCallService', () => {
     h.store.updateSession(caller.id, { state: 'idle' });
     await h.settle();
     expect(h.messages.filter(item => item.sessionId === caller.id)).toHaveLength(0);
+  });
+
+  it('calls team members with explicit @mention even without memberCalls, routes project scope, blocks self-call and enforces autonomous memberCalls', async () => {
+    const members: AgentMember[] = [];
+    const h = open = harness(members);
+    const releaseProject = h.store.createProject('/tmp/arch-agent', 'ArchAgent');
+    const now = new Date().toISOString();
+    const baseCaps = { workspace: true, taskBoard: false, delegations: false, memberCalls: false, externalTools: false, workbenchAdmin: false };
+    members.push(
+      { id: 'default', name: '个人助理', scope: { kind: 'global' }, sessionMode: 'continuous', projectId: h.project.id, capabilities: { ...baseCaps, memberCalls: true }, memory: { consolidation: true }, budget: { dailyRuns: 24 }, createdAt: now, updatedAt: now },
+      { id: 'release', name: 'ArchAgent 发版', description: '负责发版与打包', scope: { kind: 'project', projectIds: [releaseProject.id] }, sessionMode: 'fresh', projectId: releaseProject.id, target: { backendId: 'codex', profileId: 'work', model: 'gpt-5.5[effort=high]' }, capabilities: { ...baseCaps, workspace: false }, memory: { consolidation: true }, budget: { dailyRuns: 24 }, createdAt: now, updatedAt: now },
+      { id: 'finance', name: '投资理财', scope: { kind: 'personal' }, sessionMode: 'continuous', projectId: h.project.id, capabilities: { ...baseCaps, memberCalls: false }, memory: { consolidation: true }, budget: { dailyRuns: 24 }, createdAt: now, updatedAt: now },
+    );
+
+    // Autonomous member without `memberCalls` cannot call another member without explicit `@`.
+    const financeNoMention = h.caller(undefined, 'finance');
+    await expect(h.service.agentCall(financeNoMention, { agent: 'member/release', prompt: 'status', wait: 0 })).rejects.toMatchObject({ code: 'AGENT_NOT_ALLOWED' });
+
+    // Explicit user `@member` authorizes the call even when caller member has `memberCalls: false`.
+    const financeMentioned = h.caller([{ backendId: 'codex', memberId: 'release', label: 'ArchAgent 发版' }], 'finance');
+    const call = await h.service.agentCall(financeMentioned, { agent: 'member/release', prompt: '发版状态如何', wait: 0 });
+    expect(call).toMatchObject({ agent: 'ArchAgent 发版', state: 'working' });
+    const calledSession = h.store.getSession(call.call);
+    expect(calledSession).toMatchObject({
+      projectId: releaseProject.id,
+      agentMemberId: 'release',
+      backendProfileId: 'work',
+      model: 'gpt-5.5[effort=high]',
+      origin: { kind: 'call', sessionId: financeMentioned.id },
+    });
+    expect(h.service.list(financeMentioned.id)[0]).toMatchObject({ memberId: 'release', memberName: 'ArchAgent 发版' });
+    // Project member without `workspace` capability rejects `work` mode.
+    await expect(h.service.agentCall(financeMentioned, { agent: 'member/release', prompt: '改文件', mode: 'work', wait: 0 })).rejects.toMatchObject({ code: 'WORKSPACE_DISABLED' });
+
+    // Member with `memberCalls: true` lists peers (excluding itself) and can call autonomously, but never itself.
+    const chief = h.caller(undefined, 'default');
+    const listed = await h.service.agentList(chief);
+    const listedAgents = (listed.agents as Array<{ agent: string }>).map(item => item.agent);
+    expect(listedAgents).toContain('member/release');
+    expect(listedAgents).toContain('member/finance');
+    expect(listedAgents).not.toContain('member/default');
+    await expect(h.service.agentCall(chief, { agent: 'member/default', prompt: 'self', wait: 0 })).rejects.toMatchObject({ code: 'AGENT_NOT_ALLOWED' });
   });
 });

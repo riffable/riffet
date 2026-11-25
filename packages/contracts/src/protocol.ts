@@ -29,9 +29,9 @@
  * - `transport-tls-v1`: the server also speaks TLS on its port, with the certificate whose fingerprint the pairing code
  *   carries as `fp`; a device paired over TLS with a client certificate is bound to it (docs/TRANSPORT-SECURITY.md §2–§5).
  */
-export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta' | 'list-stream-ws' | 'file-write-v1' | 'server-links-v1' | 'transport-tls-v1';
+export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta' | 'list-stream-ws' | 'file-write-v1' | 'server-links-v1' | 'team-members' | 'transport-tls-v1';
 export interface ProtocolInfo { version: number; features: ProtocolFeature[]; }
-export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta', 'list-stream-ws', 'file-write-v1', 'server-links-v1', 'transport-tls-v1'] };
+export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta', 'list-stream-ws', 'file-write-v1', 'server-links-v1', 'team-members', 'transport-tls-v1'] };
 /** Request header naming the features a client understands, comma-separated. */
 export const CLIENT_FEATURES_HEADER = 'x-riffet-features';
 // Shared HTTP contract. JSON request/response fields are kept stable across workers.

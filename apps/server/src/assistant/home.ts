@@ -54,8 +54,81 @@ export interface AssistantHome {
   skillsDir: string;
 }
 
-/** The files a conversation of the 助理 starts with; each is written only when missing. */
-export function ensureAssistantHome(stateDir: string, cwd: string): AssistantHome {
+export interface MemberHomeOptions {
+  /** Path to the shared read-only owner profile (`<stateDir>/team/USER.md`). */
+  globalUserFile?: string;
+  /** Whether this member works inside a bound code project (`scope.kind === 'project'`). */
+  projectScoped?: boolean;
+  /** Whether each invocation starts a fresh isolated conversation (`sessionMode === 'fresh'`). */
+  freshMode?: boolean;
+  /** Member display name for contextual system prompt guidance. */
+  memberName?: string;
+}
+
+/** Path to the cross-member read-only owner profile (docs/TEAM.md §3.1). */
+export function globalUserProfilePath(stateDir: string): string {
+  return join(stateDir, 'team', USER_FILE);
+}
+
+/** Ensures `<stateDir>/team/USER.md` exists, seeding from the legacy assistant `USER.md` when present. */
+export function ensureGlobalUserProfile(stateDir: string, legacyAssistantDir?: string): string {
+  const teamDir = join(stateDir, 'team');
+  mkdirSync(teamDir, { recursive: true, mode: 0o700 });
+  const target = join(teamDir, USER_FILE);
+  if (!existsSync(target)) {
+    const legacy = legacyAssistantDir ? read(join(legacyAssistantDir, USER_FILE)) : undefined;
+    writeFileSync(target, legacy && legacy.trim() ? legacy : USER_SEED, { mode: 0o600 });
+  }
+  return target;
+}
+
+/** Reads the shared global owner profile and its mtime. */
+export function readGlobalUserProfile(stateDir: string): { text: string; updatedAt?: string } {
+  const path = globalUserProfilePath(stateDir);
+  try {
+    const stat = lstatSync(path);
+    if (!stat.isFile()) return { text: '' };
+    return { text: readFileSync(path, 'utf8'), updatedAt: stat.mtime.toISOString() };
+  } catch {
+    return { text: '' };
+  }
+}
+
+/** Writes the shared global owner profile (owner-only; members cannot write it). */
+export function writeGlobalUserProfile(stateDir: string, text: string): { text: string; updatedAt: string } {
+  const teamDir = join(stateDir, 'team');
+  mkdirSync(teamDir, { recursive: true, mode: 0o700 });
+  const path = join(teamDir, USER_FILE);
+  const normalized = text.trim() ? `${text.trimEnd()}\n` : USER_SEED;
+  writeFileSync(path, normalized, { mode: 0o600 });
+  const stat = lstatSync(path);
+  return { text: normalized, updatedAt: stat.mtime.toISOString() };
+}
+
+function memberSystemPrompt(options: MemberHomeOptions): string {
+  const parts = [assistantSystemPrompt()];
+  if (options.projectScoped) {
+    parts.push(
+      '## Project-Scoped Member Rules',
+      '- You are a dedicated team member working inside a bound code project directory.',
+      '- Follow the repository\'s `AGENTS.md` / `CLAUDE.md` for code conventions, architecture, and build/test commands.',
+      '- Follow your own member `AGENTS.md` for your role mandate, review/release standards, permission red lines, and output format; where role boundaries conflict with general coding defaults, your member mandate takes precedence.',
+      '- Store durable project operational facts, environment quirks, verified baselines (e.g., last verified commit or release version), and recurring pitfalls inside your own memory directory — do not modify the shared global `USER.md`.',
+    );
+  }
+  if (options.freshMode) {
+    parts.push(
+      '## Fresh-Run Memory Handover',
+      '- Each invocation of your role starts in a fresh conversation without prior chat history.',
+      '- Before delivering your final answer, update your memory files (`MEMORY.md` and topic files in your memory directory) with any newly discovered environment facts, workarounds, or updated baselines so the next run does not repeat exploration.',
+    );
+  }
+  parts.push('- The shared global `USER.md` is read-only owner context; never edit or overwrite it directly.');
+  return `${parts.join('\n\n')}\n`;
+}
+
+/** The files a conversation of a team member starts with; each is written only when missing. */
+export function ensureMemberHome(stateDir: string, cwd: string, options: MemberHomeOptions = {}): AssistantHome {
   const memoryDir = join(cwd, MEMORY_DIR);
   mkdirSync(memoryDir, { recursive: true, mode: 0o700 });
   seed(join(cwd, USER_FILE), USER_SEED);
@@ -63,16 +136,30 @@ export function ensureAssistantHome(stateDir: string, cwd: string): AssistantHom
   seed(join(cwd, '.gitignore'), IGNORED);
   const runtimeDir = join(stateDir, 'assistant-runtime');
   mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
-  const systemPromptFile = join(runtimeDir, 'system-prompt.md');
-  const text = `${assistantSystemPrompt()}\n`;
+  const variant = `${options.projectScoped ? 'project' : 'standing'}-${options.freshMode ? 'fresh' : 'continuous'}`;
+  const systemPromptFile = join(runtimeDir, options.projectScoped || options.freshMode ? `system-prompt-${variant}.md` : 'system-prompt.md');
+  const text = options.projectScoped || options.freshMode || options.globalUserFile
+    ? memberSystemPrompt(options)
+    : `${assistantSystemPrompt()}\n`;
   if (read(systemPromptFile) !== text) writeFileSync(systemPromptFile, text, { mode: 0o600 });
   const pluginDir = join(runtimeDir, 'riffet');
   writeSkillPlugin(pluginDir);
   const mcp = join(cwd, '.mcp.json');
+  const globalUserFile = options.globalUserFile && existsSync(options.globalUserFile) ? options.globalUserFile : undefined;
+  const userFile = globalUserFile ?? join(cwd, USER_FILE);
+  const protectedFiles = [
+    ...PROTECTED.map(file => join(cwd, file)),
+    ...(globalUserFile ? [globalUserFile] : []),
+  ];
   return {
-    systemPromptFile, memoryDir, pluginDir, packDirs: () => packs(cwd, memoryDir), mcpConfigFiles: () => existsSync(mcp) ? [mcp] : [], protectedFiles: PROTECTED.map(file => join(cwd, file)),
-    instructionFiles: [join(cwd, 'AGENTS.md'), join(cwd, USER_FILE), join(memoryDir, MEMORY_INDEX)], skillsDir: join(cwd, SKILLS_DIR),
+    systemPromptFile, memoryDir, pluginDir, packDirs: () => packs(cwd, memoryDir), mcpConfigFiles: () => existsSync(mcp) ? [mcp] : [], protectedFiles,
+    instructionFiles: [join(cwd, 'AGENTS.md'), userFile, join(memoryDir, MEMORY_INDEX)], skillsDir: join(cwd, SKILLS_DIR),
   };
+}
+
+/** The files a conversation of the 助理 starts with; each is written only when missing. */
+export function ensureAssistantHome(stateDir: string, cwd: string): AssistantHome {
+  return ensureMemberHome(stateDir, cwd);
 }
 
 /** The pack folders that are plugins; each one's memory seed is written once, beside the index, as `<pack>.md`. */
@@ -117,7 +204,7 @@ const MEMORY_SCANNED = 2000;
  * index. A link the 助理 left there (a file, or the memory directory itself) is not followed, so this never
  * reads outside its memory; a file is read up to its cap, and only the newest files are read at all.
  */
-export function readAssistantMemory(cwd: string): AssistantMemory {
+export function readAssistantMemory(cwd: string, globalUserFile?: string): AssistantMemory {
   let updatedAt = '';
   const stamp = (path: string): string | undefined => {
     try { const stat = lstatSync(path); return stat.isFile() ? stat.mtime.toISOString() : undefined; } catch { return undefined; }
@@ -143,7 +230,8 @@ export function readAssistantMemory(cwd: string): AssistantMemory {
   const entries = names.flatMap(name => { const modifiedAt = stamp(join(dir, name)); return modifiedAt ? [{ name, modifiedAt }] : []; })
     .sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt)).slice(0, MEMORY_FILES)
     .flatMap(({ name, modifiedAt }) => { const read = file(join(dir, name), modifiedAt); return read ? [{ name, ...read }] : []; });
-  return { profile: file(join(cwd, USER_FILE))?.text ?? '', index: own ? file(join(dir, MEMORY_INDEX))?.text ?? '' : '', entries, ...(updatedAt ? { updatedAt } : {}) };
+  const profilePath = globalUserFile && existsSync(globalUserFile) ? globalUserFile : join(cwd, USER_FILE);
+  return { profile: file(profilePath)?.text ?? '', index: own ? file(join(dir, MEMORY_INDEX))?.text ?? '' : '', entries, ...(updatedAt ? { updatedAt } : {}) };
 }
 /**
  * The owner removes one topic file of the 助理's memory. Only a regular Markdown file beside the index, named as

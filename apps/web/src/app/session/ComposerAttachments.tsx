@@ -120,6 +120,8 @@ function UploadingTile({ name }: { name: string }) {
 export interface ComposerAttachmentsProps {
   attachments: Attachment[];
   references: PromptContextReference[];
+  /** Bitmask matching `references`: `'1'` marks a reference already rendered inline in the textarea, so it is omitted from the chip rail. */
+  hiddenMask?: string;
   /** Quotes taken from answers, after the references (quotes.ts). */
   quotes: readonly string[];
   /** Each drawn where its attachment will appear, in its shape, so finishing an upload moves nothing. */
@@ -143,7 +145,7 @@ export interface ComposerAttachmentsProps {
 }
 
 /** Memoized: the host re-renders on every keystroke of the draft, and the rail does not depend on it. */
-export const ComposerAttachments = memo(function ComposerAttachments({ attachments, references, quotes, pending, disabled, variant = 'rail', onRemoveAttachment, onRemoveReference, onRemoveQuote, onOpenReferenceSession, onRetryUpload, onRemoveUpload, onError }: ComposerAttachmentsProps): ReactNode {
+export const ComposerAttachments = memo(function ComposerAttachments({ attachments, references, hiddenMask, quotes, pending, disabled, variant = 'rail', onRemoveAttachment, onRemoveReference, onRemoveQuote, onOpenReferenceSession, onRetryUpload, onRemoveUpload, onError }: ComposerAttachmentsProps): ReactNode {
   const { t } = useLingui();
   const railRef = useRef<HTMLDivElement>(null);
   const pendingFocusRef = useRef<{ index?: number; attachmentId?: string; reference?: PromptContextReference; quotes?: readonly string[] } | undefined>(undefined);
@@ -169,11 +171,12 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
     railRef.current?.querySelectorAll<HTMLElement>(TILE_SELECTOR)[pending.index]?.focus();
   }, [attachments, references, quotes]);
 
-  // Tiles per reference: a session one opens and removes, an Agent mention has none (it is in the text).
-  const tilesOf = (item: PromptContextReference) => isAgentReference(item) ? 0 : isSessionReference(item) && onOpenReferenceSession ? 2 : 1;
-  const referencePositions = references.map((_, index) => references.slice(0, index).reduce((count, item) => count + tilesOf(item), 0));
-  const referenceTargets = references.reduce((count, item) => count + tilesOf(item), 0);
-  const chips = references.filter(item => !isAgentReference(item));
+  // Tiles per reference: a session one opens and removes; inline references have none (they live in the text).
+  const isInline = (index: number, item: PromptContextReference) => isAgentReference(item) || hiddenMask?.[index] === '1';
+  const tilesOf = (item: PromptContextReference, index: number) => isInline(index, item) ? 0 : isSessionReference(item) && onOpenReferenceSession ? 2 : 1;
+  const referencePositions = references.map((_, index) => references.slice(0, index).reduce((count, item, itemIndex) => count + tilesOf(item, itemIndex), 0));
+  const referenceTargets = references.reduce((count, item, index) => count + tilesOf(item, index), 0);
+  const chips = references.filter((item, index) => !isInline(index, item));
   const total = referenceTargets + quotes.length + attachments.length;
   const removeQuote = (index: number) => {
     pendingFocusRef.current = { index: focusIndexAfterRemoval(referenceTargets + index, total), quotes };
@@ -215,8 +218,8 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
       {(chips.length > 0 || quotes.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {references.map((reference, index) => {
-            // An Agent mention is written in the text and marked there (agentMentions.tsx), not drawn as a chip.
-            if (isAgentReference(reference)) return null;
+            // Inline mentions (`@member`, `@Agent`, `@file`, `@session`) are marked in the text, not drawn as chips.
+            if (isAgentReference(reference) || hiddenMask?.[index] === '1') return null;
             const session = isSessionReference(reference);
             const name = session ? reference.title ?? reference.sessionId : `${basename(reference.path)}${reference.line ? `:${reference.line}` : ''}`;
             return <Chip key={`${session ? reference.sessionId : reference.path}:${index}`} icon={session ? <AgentLogo backend={reference.backendId ?? 'cursor'} size={12} /> : <IconFileText />} title={session ? reference.title ?? reference.sessionId : reference.path} removeLabel={session ? t`移除会话引用` : t`移除 ${name}`} disabled={disabled} onRemove={() => removeReference(index)} onOpen={session && onOpenReferenceSession ? () => onOpenReferenceSession(reference.sessionId) : undefined}>

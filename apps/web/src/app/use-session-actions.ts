@@ -21,7 +21,7 @@ import type { UiState, UiStore } from './state/uiStore';
 
 function nativeCreatePayloadKey(input: NativeSessionCreateInput): string {
   const { commandId: _commandId, ...initialMessage } = input.initialMessage;
-  return JSON.stringify({ projectId: input.projectId, projectless: input.projectless === true, backendId: input.backendId ?? LEGACY_DEFAULT_BACKEND_ID, backendProfileId: input.backendProfileId ?? 'default', title: input.title, model: input.model, mode: input.mode, approval: input.approval, toolGroups: input.toolGroups, extensionsOff: input.extensionsOff, initialMessage });
+  return JSON.stringify({ projectId: input.projectId, projectless: input.projectless === true, backendId: input.backendId ?? LEGACY_DEFAULT_BACKEND_ID, backendProfileId: input.backendProfileId ?? 'default', title: input.title, model: input.model, mode: input.mode, approval: input.approval, toolGroups: input.toolGroups, extensionsOff: input.extensionsOff, agentMemberId: input.agentMemberId, initialMessage });
 }
 
 function creationWasRejected(error: unknown, body: NativeSessionCreateInput): boolean {
@@ -45,7 +45,7 @@ export function clearContext(ui: UiStore): void {
  * follows creation: replaying unconfirmed create requests, adopting the PTY, and keeping the
  * first-run seed available until the session view no longer needs it.
  */
-export function useSessionActions({ loaded, project, session, sessions, terminals, homeBackendId, homeProfileId, loadBootstrap }: {
+export function useSessionActions({ loaded, project, session, sessions, terminals, homeBackendId, homeProfileId, loadBootstrap, onExtractMember }: {
   loaded: boolean;
   project: ProjectRecord | undefined;
   session: Session | undefined;
@@ -55,6 +55,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   homeBackendId: NativeBackendId;
   homeProfileId: string | undefined;
   loadBootstrap: () => Promise<Bootstrap>;
+  onExtractMember?: (session: Session) => void;
 }) {
   const { t } = useLingui();
   const { lists, nav, ui, handlers, settings: settingsStore, workItems } = useStores();
@@ -81,7 +82,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         : selected?.system === 'assistant' ? taskProjectId
         : selected?.system !== 'quick-chat' && projectlessTasks ? current.taskProjectId ?? '' : current.projectId;
       if (projectId !== current.projectId) clearContext(ui);
-      nav.set({ projectId, sessionId: '', ...NO_PAGE });
+      nav.set({ projectId, memberId: '', sessionId: '', ...NO_PAGE });
       ui.setMobileSidebar(false);
     });
   }, [nav, ui, lists]);
@@ -152,7 +153,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
     return nav.navigate(() => {
       if (next.id !== nav.get().projectId) clearContext(ui);
       nav.rememberTaskProject(next.system === 'task-workspace' ? null : next.id);
-      nav.set({ projectId: next.id, sessionId: '', ...NO_PAGE });
+      nav.set({ projectId: next.id, memberId: '', sessionId: '', ...NO_PAGE });
       ui.setMobileSidebar(false);
     });
   }, [nav, ui]);
@@ -160,14 +161,14 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
     void nav.navigate(() => {
       clearContext(ui);
       nav.rememberTaskProject(null);
-      nav.set({ projectId: '', sessionId: '', ...NO_PAGE });
+      nav.set({ projectId: '', memberId: '', sessionId: '', ...NO_PAGE });
       ui.setMobileSidebar(false);
     });
   }, [nav, ui]);
   const selectSession = useCallback((next: Session) => {
     void nav.navigate(() => {
       if (next.id !== nav.get().sessionId) { clearContext(ui); nav.set({ focusMessage: undefined, sessionView: undefined }); }
-      nav.set({ projectId: next.projectId, sessionId: next.id, ...NO_PAGE });
+      nav.set({ projectId: next.projectId, memberId: next.agentMemberId ?? '', sessionId: next.id, ...NO_PAGE });
       ui.setMobileSidebar(false);
     });
   }, [nav, ui]);
@@ -260,7 +261,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
    * `mode` absent takes the backend's saved default. `workItemId` starts that 任务; `follow: false`
    * keeps the reader where they are (the board) instead of opening the new conversation.
    */
-  const createNative = async ({ projectId, projectless, title, prompt, attachments, context, mode, model, approval, toolGroups, extensionsOff, backendId, backendProfileId, workItemId, follow = true }: { projectId?: string; projectless?: boolean; title?: string; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode?: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; workItemId?: string; follow?: boolean }) => {
+  const createNative = async ({ projectId, projectless, title, prompt, attachments, context, mode, model, approval, toolGroups, extensionsOff, backendId, backendProfileId, workItemId, agentMemberId, follow = true }: { projectId?: string; projectless?: boolean; title?: string; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode?: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; workItemId?: string; agentMemberId?: string; follow?: boolean }) => {
     const targetProjectId = projectless ? undefined : projectId ?? project?.id;
     if (!targetProjectId && !projectless) return false;
     const targetBackendId = backendId ?? homeBackendId;
@@ -280,6 +281,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         ...(toolGroups ? { toolGroups } : {}),
         ...(extensionsOff ? { extensionsOff } : {}),
         ...(workItemId ? { workItemId } : {}),
+        ...(agentMemberId ? { agentMemberId } : {}),
         initialMessage: {
           commandId: newId(),
           text: prompt.trim(),
@@ -303,8 +305,16 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         acceptedCreation.current = body;
         if (result.project) lists.upsertProject(result.project);
         // Persist the full accepted selector, including effort, even when the first turn used a catalog default.
-        // A 助理 conversation's choice is the 助理's (docs/ASSISTANT.md), not the composer's everywhere else.
-        if (!matching && targetBackendId !== 'chat' && body.model && isAssistantProject(lists.get().projects.find((item) => item.id === targetProjectId))) settingsStore.rememberAssistant({ backendId: targetBackendId, profileId: result.session.backendProfileId ?? targetProfileId ?? null, model: result.session.model ?? body.model });
+        // A team member's or 助理's choice belongs to that member, not the composer's global defaults.
+        if (!matching && targetBackendId !== 'chat' && body.model && (agentMemberId || isAssistantProject(lists.get().projects.find((item) => item.id === targetProjectId)))) {
+          if (agentMemberId) {
+            void api.updateTeamMember(agentMemberId, {
+              target: { backendId: targetBackendId, profileId: result.session.backendProfileId ?? targetProfileId ?? null, model: result.session.model ?? body.model },
+            }).then((member) => lists.upsertTeamMember(member), () => undefined);
+          } else {
+            settingsStore.rememberAssistant({ backendId: targetBackendId, profileId: result.session.backendProfileId ?? targetProfileId ?? null, model: result.session.model ?? body.model });
+          }
+        }
         // A 任务's own model (and a linked server's own agent/provider) must not overwrite this server's composer defaults.
         else if (!matching && !workItemId && !serverOfObject(targetProjectId) && targetBackendId !== 'chat' && body.model && settingsStore.revision() === defaultsRevision) settingsStore.remember(targetBackendId, { model: result.session.model ?? body.model, profileId: result.session.backendProfileId ?? targetProfileId });
         upsertSession(result.session);
@@ -418,6 +428,8 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         upsertSession(await api.updateSession(target.id, { tags: parseTags(value) }));
       } else if (action === 'delete') {
         await requestSessionDeletion(target);
+      } else if (action === 'extract-member') {
+        onExtractMember?.(target);
       } else if (action === 'work-item') {
         const result = await api.setSessionWorkItem(target.id, { workItemId: 'new' });
         upsertSession(result.session);
@@ -433,15 +445,16 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         upsertSession(updated);
         // Only if the reader is still on it: switching away while the request ran is not overruled.
         if (archiving && wasSelected && nav.get().sessionId === target.id) {
-          // Any of the 助理's conversations leaves you on its page: they are not listed, so none is a
-          // neighbour, and a new session would leave the page (docs/ASSISTANT.md).
-          if (isAssistantProject(lists.get().projects.find((item) => item.id === target.projectId))) { clearContext(ui); nav.set({ projectId: target.projectId, sessionId: '', ...NO_PAGE }); }
-          else {
-          // Land on the neighbouring conversation, as the sidebar lists it, rather than an empty composer.
-          const siblings = sortSessionsByActivity(lists.get().sessions.filter((item) => item.projectId === target.projectId && (item.id === target.id || !item.archivedAt)));
-          const at = siblings.findIndex((item) => item.id === target.id);
-          const neighbour = siblings[at + 1] ?? siblings[at - 1];
-          if (neighbour) selectSession(neighbour); else newSession();
+          // Any of the 助理's or a team member's conversations leaves you on its page: they are not listed.
+          if (target.agentMemberId || isAssistantProject(lists.get().projects.find((item) => item.id === target.projectId))) {
+            clearContext(ui);
+            nav.set({ projectId: target.projectId, memberId: target.agentMemberId ?? nav.get().memberId, sessionId: '', ...NO_PAGE });
+          } else {
+            // Land on the neighbouring conversation, as the sidebar lists it, rather than an empty composer.
+            const siblings = sortSessionsByActivity(lists.get().sessions.filter((item) => item.projectId === target.projectId && !item.agentMemberId && (item.id === target.id || !item.archivedAt)));
+            const at = siblings.findIndex((item) => item.id === target.id);
+            const neighbour = siblings[at + 1] ?? siblings[at - 1];
+            if (neighbour) selectSession(neighbour); else newSession();
           }
         }
         const undo = async () => {

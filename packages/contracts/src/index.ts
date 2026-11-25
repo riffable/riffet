@@ -27,6 +27,7 @@ export { NATIVE_BACKEND_IDS, compareAgentOrder, PLUGIN_AGENT_ID, PLUGIN_AGENT_ID
 export type { BuiltinBackendId, NativeBackendId, PluginAgentId } from './agent-ids.js';
 export { isDoneUnseen, isRunningSession, isUnread, needsYou } from './session-attention.js';
 export { ASSISTANT_BACKENDS, assistantChoice, isAssistantBackend, workItemAgentChoice, type AssistantChoice } from './assistant-choice.js';
+export * from './team.js';
 
 export * from './protocol.js';
 export * from './devices.js';

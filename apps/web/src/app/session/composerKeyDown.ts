@@ -1,6 +1,6 @@
 import type { Dispatch, KeyboardEvent as ReactKeyboardEvent, MutableRefObject, SetStateAction } from 'react';
 import { isAgentReference, type PromptContextReference } from '@/lib/api';
-import { mentionAt, mentionRanges, referenceLabel, type AgentMentionSource } from './agentMentions';
+import { atomicDeleteRange, inlineMentionRanges, stepAtomicArrow, type AgentMentionSource } from './agentMentions';
 import { classifyEnterGesture, isComposingKey, resolveEnter, resolveEscapeLayer, type EnterKeyBehavior } from './composerKeyboard';
 import type { Trigger } from './useComposerTrigger';
 
@@ -24,6 +24,7 @@ export function handleComposerKeyDown(
     choose: (index: number) => void;
     agentMentions?: AgentMentionSource;
     referencesRef: MutableRefObject<PromptContextReference[]>;
+    setSelectionBias: (bias: 'left' | 'right' | undefined) => void;
     updateText: (next: string) => void;
     dropUnwrittenMentions: (value: string) => void;
     setMentionMenu: Dispatch<SetStateAction<number | undefined>>;
@@ -54,13 +55,32 @@ export function handleComposerKeyDown(
   if (context.projectRowsCount && event.key === 'ArrowRight' && context.highlight >= context.filesCount + context.agentRowsCount + context.sessionFilesCount && context.highlight < context.menuLength) {
     event.preventDefault(); context.choose(context.highlight); return;
   }
-  // A written mention is deleted whole: a broken `@Claude Co` would read as text that names nothing.
-  if ((event.key === 'Backspace' || event.key === 'Delete') && context.agentMentions && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
+  // Written inline `@` references behave as atomic units: ← / → jumps cleanly across them without entering inside.
+  if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.metaKey) {
     const element = event.currentTarget;
-    const probe = event.key === 'Backspace' ? element.selectionStart - 1 : element.selectionStart;
-    const at = probe >= 0 ? mentionAt(element.value, context.referencesRef.current, probe) : undefined;
-    const reference = at === undefined ? undefined : context.referencesRef.current[at];
-    const range = reference && isAgentReference(reference) ? mentionRanges(element.value, [referenceLabel(reference)]).find(item => probe >= item.start && probe < item.end) : undefined;
+    const bias = event.key === 'ArrowLeft' ? 'left' : 'right';
+    context.setSelectionBias(bias);
+    if (!event.altKey && !event.ctrlKey) {
+      const next = stepAtomicArrow(element.value, context.referencesRef.current, element.selectionStart, element.selectionEnd, element.selectionDirection, event.key, event.shiftKey);
+      if (next) {
+        event.preventDefault();
+        element.setSelectionRange(next.start, next.end, next.direction);
+        return;
+      }
+    } else if (element.selectionStart === element.selectionEnd && !event.shiftKey) {
+      // Word-jump (Option/Ctrl + Arrow) starting right at a mention boundary also skips the whole mention.
+      const next = stepAtomicArrow(element.value, context.referencesRef.current, element.selectionStart, element.selectionEnd, element.selectionDirection, event.key, false);
+      if (next) {
+        event.preventDefault();
+        element.setSelectionRange(next.start, next.end);
+        return;
+      }
+    }
+  }
+  // Any written inline `@` reference is deleted whole: a broken `@ArchAgent 发` or `@src/foo.t` would read as text that names nothing.
+  if ((event.key === 'Backspace' || event.key === 'Delete') && !event.metaKey) {
+    const element = event.currentTarget;
+    const range = atomicDeleteRange(element.value, context.referencesRef.current, element.selectionStart, element.selectionEnd, event.key);
     if (range) {
       event.preventDefault();
       // Through the browser's own edit, so ⌘Z brings it back.
@@ -73,10 +93,13 @@ export function handleComposerKeyDown(
       return;
     }
   }
-  // ↓ with the caret in a written mention opens its model menu, as a click on it does.
+  // ↓ with the caret touching a written raw Agent mention opens its model menu, as a click on it does.
   if (!context.menuOpen && event.key === 'ArrowDown' && context.agentMentions && event.currentTarget.selectionStart === event.currentTarget.selectionEnd) {
-    const at = mentionAt(event.currentTarget.value, context.referencesRef.current, event.currentTarget.selectionStart);
-    if (at !== undefined) { event.preventDefault(); context.setMentionMenu(at); return; }
+    const pos = event.currentTarget.selectionStart;
+    const hit = inlineMentionRanges(event.currentTarget.value, context.referencesRef.current)
+      .find(range => pos >= range.start && pos <= range.end);
+    const ref = hit ? context.referencesRef.current[hit.index] : undefined;
+    if (hit && ref && isAgentReference(ref) && !ref.memberId) { event.preventDefault(); context.setMentionMenu(hit.index); return; }
   }
   if (context.menuOpen && context.menuLength) {
     if (event.key === 'ArrowDown') { event.preventDefault(); context.setHighlight((value) => (value + 1) % context.menuLength); return; }

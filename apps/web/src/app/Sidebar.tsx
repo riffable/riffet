@@ -3,8 +3,8 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
-import { isDoneUnseen, WORK_ITEM_STATUSES, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
+import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconBot, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { isDoneUnseen, WORK_ITEM_STATUSES, type AgentMember, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner, StatusDot } from '@/components/ui/controls';
@@ -40,9 +40,11 @@ import type { SettingsSection } from './settings/settingsSections';
 import { SidebarUpdateButton } from './SidebarUpdateButton';
 import { SidebarSettingsButton, SidebarUserMenu } from './SidebarUserMenu';
 import { StatusIcon, useStatusLabel } from './work-items/parts';
+import { isDefaultMember, sortTeamMembers } from './work-items/assistant';
+import { MemberAvatar } from './team/MemberAvatar';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
-export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item';
+export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item' | 'extract-member';
 
 interface Props {
   projects: ProjectRecord[];
@@ -76,6 +78,15 @@ interface Props {
   assistantActive?: boolean;
   /** Its main conversation, whose state the row shows: the sidebar's lists do not hold it. */
   assistantSession?: Session;
+  /** Standing team members on this server (docs/TEAM.md). */
+  teamMembers?: AgentMember[];
+  activeMemberId?: string;
+  onSelectMember?: (member: AgentMember) => void;
+  onNewMemberSession?: (member: AgentMember) => void;
+  onCreateMember?: () => void;
+  onEditMember?: (member: AgentMember) => void;
+  onTogglePinMember?: (member: AgentMember) => void;
+  onDeleteMember?: (member: AgentMember) => void;
   onOpenAutomations: () => void;
   onOpenCouncil?: () => void;
   councilActive?: boolean;
@@ -108,6 +119,7 @@ interface Props {
 }
 
 const COLLAPSED_KEY = 'riffet.collapsedProjects';
+const TEAM_COLLAPSED_KEY = 'riffet.teamCollapsed';
 const LAYOUT_KEY = 'riffet.sidebarLayout';
 const SORT_KEY = 'riffet.sidebarSort';
 const PROJECT_SESSION_LIMIT = 5;
@@ -299,6 +311,9 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
           {!hideTags && (session.workItemId
             ? <TaskStatusSub workItemId={session.workItemId} />
             : <DropdownMenuItem onSelect={() => onAction(session, 'work-item')}><IconSquareKanban /><Trans>转为任务</Trans></DropdownMenuItem>)}
+          {!hideTags && !session.archivedAt && (
+            <DropdownMenuItem onSelect={() => onAction(session, 'extract-member')}><IconBot /><Trans>提炼为成员</Trans></DropdownMenuItem>
+          )}
           <DropdownMenuItem onSelect={() => onAction(session, 'pin')}>{session.pinnedAt ? <><IconPinOff /><Trans>取消置顶</Trans></> : <><IconPin /><Trans>置顶会话</Trans></>}</DropdownMenuItem>
           {tabsOn && !mobile && !session.archivedAt && (kept
             ? <DropdownMenuItem onSelect={() => tabs.close(session.id)}><IconX /><Trans>移出标签栏</Trans></DropdownMenuItem>
@@ -354,7 +369,36 @@ export function Sidebar(props: Props) {
   const sort: SidebarSort = tabStyle === 'off' ? 'activity' : storedSort;
   const pinnedOrder = sort === 'tabs' ? 'rank' : 'time';
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(readStored(COLLAPSED_KEY).split(',').filter(Boolean)));
+  const [teamCollapsed, setTeamCollapsed] = useState(() => readStored(TEAM_COLLAPSED_KEY) === '1');
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
+
+  const toggleTeam = () => setTeamCollapsed((current) => {
+    const next = !current;
+    writeStored(TEAM_COLLAPSED_KEY, next ? '1' : undefined);
+    return next;
+  });
+
+  const orderedTeam = useMemo(() => sortTeamMembers(props.teamMembers ?? []), [props.teamMembers]);
+  const memberSessionById = useMemo(() => {
+    const map = new Map<string, Session>();
+    for (const member of orderedTeam) {
+      const owned = sessions.filter((item) => !item.archivedAt && (
+        item.agentMemberId === member.id
+        || (isDefaultMember(member) && item.projectId === member.projectId && !item.agentMemberId)
+      ));
+      const waiting = owned.find((item) => item.state === 'waiting');
+      if (waiting) { map.set(member.id, waiting); continue; }
+      const running = owned.find((item) => item.state === 'running' || item.state === 'starting');
+      if (running) { map.set(member.id, running); continue; }
+      const unread = owned.find((item) => isDoneUnseen(item));
+      if (unread) { map.set(member.id, unread); continue; }
+      const main = member.mainSessionId ? owned.find((item) => item.id === member.mainSessionId) : undefined;
+      if (main) { map.set(member.id, main); continue; }
+      const latest = sortSessionsByActivity(owned)[0];
+      if (latest) map.set(member.id, latest);
+    }
+    return map;
+  }, [orderedTeam, sessions]);
 
   const toggleProject = (id: string) => setCollapsed((current) => {
     const next = new Set(current);
@@ -560,7 +604,7 @@ export function Sidebar(props: Props) {
   const mainViews = props.mainViews ?? [];
   const mainViewMap = useMemo(() => new Map(mainViews.map((view) => [view.id, view])), [mainViews]);
   const destinations: Partial<Record<WebSidebarDestination, { open: () => void; active?: boolean | undefined; trailing?: ReactNode }>> = {
-    ...(props.onOpenAssistant ? { assistant: {
+    ...(props.onOpenAssistant && !orderedTeam.length ? { assistant: {
       open: props.onOpenAssistant, active: props.assistantActive,
       trailing: props.assistantSession && <span className="ml-auto inline-flex"><SessionIndicator session={props.assistantSession} mobile={mobile} selected={Boolean(props.assistantActive)} /></span>,
     } } : {}),
@@ -640,6 +684,75 @@ export function Sidebar(props: Props) {
       {insecureBanner}
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+        {orderedTeam.length > 0 && props.onSelectMember && (
+          <div className="mb-1">
+            <div data-touch-row className={cn('group/team flex items-center px-2', mobile ? 'h-8 pt-1' : 'mt-1 h-7')}>
+              <button
+                type="button"
+                aria-expanded={!teamCollapsed}
+                onClick={toggleTeam}
+                className={cn('flex items-center gap-1 font-medium transition-colors hover:text-fg-2', mobile ? 'text-xs text-fg-3' : 'text-2xs text-fg-4')}
+              >
+                <span><Trans>团队</Trans></span>
+                <IconChevronRight className={cn('size-3 shrink-0 transition-transform duration-[var(--duration-fast)]', !teamCollapsed && 'rotate-90')} />
+              </button>
+              {props.onCreateMember && (
+                <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/team:opacity-100 focus-within:opacity-100 no-hover:opacity-100">
+                  <Tip label={t`新建成员`}>
+                    <button type="button" aria-label={t`新建成员`} onClick={props.onCreateMember} className="grid size-6 place-items-center rounded-md text-fg-3 hover:bg-hover hover:text-fg">
+                      <IconPlus className="size-3.5" />
+                    </button>
+                  </Tip>
+                </div>
+              )}
+            </div>
+            <Collapse open={!teamCollapsed}>
+              <div className="flex flex-col gap-px">
+                {orderedTeam.map((member) => {
+                  const selected = props.activeMemberId === member.id;
+                  const memberSession = memberSessionById.get(member.id);
+                  return (
+                    <ListRow
+                      key={member.id}
+                      selected={selected}
+                      aria-current={selected ? 'page' : undefined}
+                      onClick={() => props.onSelectMember?.(member)}
+                      leading={<MemberAvatar member={member} size={18} className={cn('-translate-x-0.5', selected && 'text-fg')} />}
+                      className={cn('cursor-default', mobile ? 'text-fg hover:text-fg' : 'px-2')}
+                      trailing={memberSession ? <span className="inline-flex shrink-0"><SessionIndicator session={memberSession} mobile={mobile} selected={selected} /></span> : undefined}
+                      actions={
+                        <span className={cn('flex shrink-0', rowReveal)}>
+                          <RowMenu label={t`成员操作`}>
+                            {props.onNewMemberSession && (
+                              <DropdownMenuItem onSelect={() => props.onNewMemberSession?.(member)}><IconSquarePen /><Trans>新对话</Trans></DropdownMenuItem>
+                            )}
+                            {props.onEditMember && (
+                              <DropdownMenuItem onSelect={() => props.onEditMember?.(member)}><IconSettings2 /><Trans>配置…</Trans></DropdownMenuItem>
+                            )}
+                            {props.onTogglePinMember && (
+                              <DropdownMenuItem onSelect={() => props.onTogglePinMember?.(member)}>
+                                {member.pinned ? <><IconPinOff /><Trans>取消置顶</Trans></> : <><IconPin /><Trans>置顶</Trans></>}
+                              </DropdownMenuItem>
+                            )}
+                            {!isDefaultMember(member) && props.onDeleteMember && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem variant="danger" onSelect={() => props.onDeleteMember?.(member)}><IconTrash2 /><Trans>删除…</Trans></DropdownMenuItem>
+                              </>
+                            )}
+                          </RowMenu>
+                        </span>
+                      }
+                    >
+                      {member.name}
+                    </ListRow>
+                  );
+                })}
+              </div>
+            </Collapse>
+          </div>
+        )}
+
         <div data-touch-row className={cn('group/section flex items-center px-2', mobile ? 'h-8 pt-1' : 'mt-3 h-7')}>
           <span className={cn('font-medium', mobile ? 'text-xs text-fg-3' : 'text-2xs text-fg-4')}>{layout === 'time' ? timeline[0]?.label ?? t({ message: '会话', context: 'workbench-session-noun' }) : t`项目`}</span>
           <div className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover/section:opacity-100 has-[[data-state=open]]:opacity-100 focus-within:opacity-100 no-hover:opacity-100">

@@ -154,8 +154,14 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
 
   const sessionMap = () => new Map(lists.get().sessions.map((session) => [session.id, session]));
   const sessionOf = (id: string) => lists.get().sessions.find((session) => session.id === id);
-  /** The 助理's main conversation is its own page, never a tab (docs/ASSISTANT.md). */
-  const isMain = (id: string) => lists.get().projects.some((project) => project.mainSessionId === id);
+  /** The 助理's and team members' conversations are their own pages, never tabs (docs/ASSISTANT.md, docs/TEAM.md). */
+  const isMain = (id: string) => {
+    const state = lists.get();
+    if (state.projects.some((project) => project.mainSessionId === id)) return true;
+    const session = state.sessions.find((item) => item.id === id);
+    if (!session) return false;
+    return Boolean(session.agentMemberId) || state.projects.some((project) => project.id === session.projectId && project.system === 'assistant');
+  };
   const ofAssistant = (projectId: string) => lists.get().projects.some((project) => project.id === projectId && project.system === 'assistant');
   const zonesNow = () => tabZones(store.get().tabs, sessionMap());
   const orderedIds = () => { const zones = zonesNow(); return [...zones.pinned, ...zones.normal].map((entry) => entry.sessionId); };
@@ -355,10 +361,10 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       const hit = gone.has(selectedId);
       const selected = hit ? sessionOf(selectedId) : undefined;
       const projectId = selected?.projectId ?? nav.get().projectId;
-      const siblings = sortSessionsByActivity(lists.get().sessions.filter((item) => item.projectId === projectId && (item.id === selectedId || (!item.archivedAt && !gone.has(item.id)))));
+      const siblings = sortSessionsByActivity(lists.get().sessions.filter((item) => item.projectId === projectId && !item.agentMemberId && (item.id === selectedId || (!item.archivedAt && !gone.has(item.id)))));
       const at = siblings.findIndex((item) => item.id === selectedId);
-      // Any of the 助理's conversations leaves you on its page, not on one that no list shows.
-      const next = hit && !ofAssistant(projectId) ? siblings[at + 1] ?? siblings[at - 1] : undefined;
+      // Any of the 助理's or a team member's conversations leaves you on its page, not on one that no list shows.
+      const next = hit && !selected?.agentMemberId && !ofAssistant(projectId) ? siblings[at + 1] ?? siblings[at - 1] : undefined;
       for (let index = closedStack.length - 1; index >= 0; index -= 1) if (gone.has(closedStack[index]!.sessionId)) closedStack.splice(index, 1);
       remove(gone);
       if (hit) leave({ projectId }, next);

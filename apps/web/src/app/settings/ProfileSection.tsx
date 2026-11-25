@@ -1,49 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { OWNER_AVATAR_HISTORY_MAX, OWNER_AVATAR_MAX_BYTES, OWNER_AVATAR_SIDE, OWNER_AVATAR_TYPES, OWNER_NAME_MAX, type OwnerAvatarType } from '@contracts';
+import { OWNER_AVATAR_HISTORY_MAX, OWNER_AVATAR_TYPES, OWNER_NAME_MAX } from '@contracts';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { IconTrash2 } from '@/components/icons';
 import { Input } from '@/components/ui/controls';
 import { api } from '@/lib/api';
+import { squareAvatar } from '@/lib/avatar-upload';
 import { errorMessage } from '@/lib/utils';
 import { AvatarStylePicker } from './AvatarStylePicker';
-import { readBase64 } from '../session/image-upload';
 import { useLists, useStores } from '../state/stores';
 import { SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
-
-/** The picture cropped to its centered square and scaled to the avatar side, as webp where the browser can encode it. */
-async function squareAvatar(file: File): Promise<{ type: OwnerAvatarType; data: string }> {
-  const bitmap = await createImageBitmap(file);
-  try {
-    const side = Math.min(bitmap.width, bitmap.height);
-    if (!side) throw new Error('empty image');
-    const target = Math.min(side, OWNER_AVATAR_SIDE);
-    const canvas = document.createElement('canvas');
-    canvas.width = target;
-    canvas.height = target;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('no canvas');
-    context.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, target, target);
-    const encode = (type: OwnerAvatarType, quality?: number) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
-    // A browser that cannot encode webp answers with png instead, which a photo can push past the limit; jpeg then
-    // steps its quality down, over white so a transparent corner does not turn black.
-    let blob = await encode('image/webp', 0.9) ?? await encode('image/png');
-    if (blob && blob.size > OWNER_AVATAR_MAX_BYTES) {
-      context.globalCompositeOperation = 'destination-over';
-      context.fillStyle = '#fff';
-      context.fillRect(0, 0, target, target);
-      for (const quality of [0.9, 0.8, 0.7, 0.6]) {
-        blob = await encode('image/jpeg', quality);
-        if (!blob || blob.size <= OWNER_AVATAR_MAX_BYTES) break;
-      }
-    }
-    if (!blob) throw new Error('encode failed');
-    const type: OwnerAvatarType = blob.type === 'image/webp' ? 'image/webp' : blob.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
-    return { type, data: await readBase64(blob, 'avatar') };
-  } finally { bitmap.close(); }
-}
 
 /** 个人资料: the owner's name and avatar, one per server (docs/OWNER.md). */
 export function ProfileSection({ onError }: { onError: (message: string) => void }) {

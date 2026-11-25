@@ -1,5 +1,5 @@
 import type { IncomingHttpHeaders } from 'node:http';
-import { isAssistantBackend, type NativeBackendId, type NativeSessionInput, type Project } from '../../../../packages/contracts/src/index.js';
+import { isAssistantBackend, type AgentMember, type NativeBackendId, type NativeSessionInput, type Project } from '../../../../packages/contracts/src/index.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import type { NativeBackendService } from '../backends/service.js';
 import { AppError, requireString } from '../errors.js';
@@ -19,6 +19,8 @@ export function requireSessionModel(value: unknown, discussion = false): string 
 export interface NativeSessionRequest extends RequestedNativeSession {
   projectId?: string; projectless?: boolean; title?: string; backendId?: string; backendProfileId?: string;
   model?: string; mode?: string; approval?: string; resumePicker?: boolean;
+  /** Team member id launching this conversation (docs/TEAM.md). `null` opts out of project-level member fallback. */
+  agentMemberId?: string | null;
   /** The composer's pick; absent or empty means none. */
   toolGroups?: unknown;
   /** `mcp:<name>` / `skill:<name>` switched off for this conversation (docs/EXTENSIONS.md). */
@@ -31,24 +33,37 @@ export interface NativeSessionRequest extends RequestedNativeSession {
  * path that opens a conversation on someone's behalf — an attempt, a handoff, a schedule — so all of
  * them start a backend the way a person picking it in the composer would.
  */
-export async function resolveNativeSessionInput(deps: { store: Store; settings: SettingsService; nativeBackends: NativeBackendService; auth?: { device(id: string): unknown } }, body: NativeSessionRequest, headers?: IncomingHttpHeaders, reservedProject?: Project, purpose?: 'discussion'): Promise<NativeSessionInput & { backendId: NativeBackendId; backendProfileId: string; mode: string }> {
+export async function resolveNativeSessionInput(deps: { store: Store; settings: SettingsService; nativeBackends: NativeBackendService; auth?: { device(id: string): unknown }; team?: () => { get(id: string): AgentMember; resolveFor(project: Project): AgentMember | undefined } | undefined }, body: NativeSessionRequest, headers?: IncomingHttpHeaders, reservedProject?: Project, purpose?: 'discussion'): Promise<NativeSessionInput & { backendId: NativeBackendId; backendProfileId: string; mode: string }> {
   const {store,settings,nativeBackends}=deps;
   const savedSettings=settings.getSettings();
-  const project=reservedProject??store.getProject(requireString(body.projectId,'projectId',100));
+  const team=deps.team?.();
+  const optOutMember=body.agentMemberId===null;
+  const requestedMember=body.agentMemberId!==undefined&&body.agentMemberId!==null&&body.agentMemberId!==''?team?.get(requireString(body.agentMemberId,'agentMemberId',100)):undefined;
+  if(requestedMember?.archivedAt)throw new AppError('TEAM_MEMBER_ARCHIVED','Restore this team member before opening a conversation',409);
+  const project=reservedProject??store.getProject(
+    requestedMember
+      ?(requestedMember.scope.kind==='project'
+        ?(body.projectId?(()=>{const pid=requireString(body.projectId,'projectId',100);const allowed=requestedMember.scope.projectIds?.includes(pid)||store.originChain(pid).some(id=>requestedMember.scope.projectIds?.includes(id));if(!allowed)throw new AppError('INVALID_PROJECT','Project is outside this team member\'s scope',409);return pid;})():requestedMember.projectId)
+        :requestedMember.projectId)
+      :requireString(body.projectId,'projectId',100),
+  );
   if(project.archivedAt)throw new AppError('ARCHIVED_PROJECT','Restore this project before opening a conversation',409);
+  const member=optOutMember?undefined:(requestedMember??team?.resolveFor(project));
+  if(member?.archivedAt)throw new AppError('TEAM_MEMBER_ARCHIVED','Restore this team member before opening a conversation',409);
   // Quick chats and their project belong to each other: nothing else runs there, and they run nowhere else.
   const quickChat=project.system==='quick-chat';
   if(headers!==undefined&&body.backendId!==undefined)requireBackendVisibleToClient(headers,body.backendId);
   // An older client reads the saved default through its own enum. A default it cannot decode, or whose
   // plugin is off, falls back here, before the profile and defaults of that backend are read. No headers
   // means an internal caller, which sees every backend.
-  const defaultBackendId=quickChat?'chat':await defaultBackendForClient(headers,savedSettings.defaultBackendId,nativeBackends);
+  const defaultBackendId=quickChat?'chat':await defaultBackendForClient(headers,member?.target?.backendId??savedSettings.defaultBackendId,nativeBackends);
   const backendId:NativeBackendId=body.backendId===undefined?defaultBackendId as NativeBackendId:isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
   if(quickChat!==(backendId==='chat'))throw new AppError('INVALID_BACKEND',quickChat?'Only a quick chat runs here':'A quick chat has no project');
-  // The 助理 runs only where it is isolated (docs/ASSISTANT.md §4); on another agent it would have the owner's configuration.
-  if(project.system==='assistant'&&!isAssistantBackend(backendId))throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED','The personal assistant runs on Claude Code, Codex, or Cursor');
+  // Standing members run only where isolated (docs/TEAM.md §4.2); on another agent they would inherit the owner's configuration.
+  if((member||(!optOutMember&&project.system==='assistant'))&&!isAssistantBackend(backendId))throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED','Team members run on Claude Code, Codex, or Cursor');
+  const memberUsesBackend=Boolean(member?.target?.backendId&&member.target.backendId===backendId);
   const defaults=savedSettings.nativeBackendDefaults?.[backendId];
-  const requestedProfileId=body.backendProfileId===undefined?defaults?.profileId:requireString(body.backendProfileId,'backendProfileId',200);
+  const requestedProfileId=body.backendProfileId===undefined?(memberUsesBackend&&member?.target?.profileId?member.target.profileId:defaults?.profileId):requireString(body.backendProfileId,'backendProfileId',200);
   const selectedProfile=nativeBackends.catalog.validateProfile(backendId,requestedProfileId);
   const applyBackendDefaults=defaults?.profileId?defaults.profileId===selectedProfile.id:(!body.backendProfileId||selectedProfile.isDefault===true);
   const capabilities=await nativeBackends.catalog.capabilitiesFor(backendId,selectedProfile.id);
@@ -57,7 +72,7 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   const nativeSessionId=nativeSessionIdValue===undefined?undefined:requireString(nativeSessionIdValue,'nativeSessionId',200);
   if(nativeSessionId!==undefined&&/[\0\r\n]/.test(nativeSessionId))throw new AppError('INVALID_NATIVE_SESSION_ID','Native session id contains invalid characters');
   if(nativeSessionId!==undefined)nativeBackends.catalog.validateNativeSessionId(backendId,nativeSessionId);
-  const requestedModel=body.model===undefined?((applyBackendDefaults?defaults?.model:undefined)||profileModel||legacyDefaults(backendId,savedSettings).model||undefined):requireSessionModel(body.model,purpose==='discussion');
+  const requestedModel=body.model===undefined?((memberUsesBackend?member?.target?.model:undefined)||(applyBackendDefaults?defaults?.model:undefined)||profileModel||legacyDefaults(backendId,savedSettings).model||undefined):requireSessionModel(body.model,purpose==='discussion');
   const model=requestedModel===undefined?undefined:nativeBackends.catalog.normalizeModel(backendId,selectedProfile.id,requestedModel);
   // A backend whose modes do not include `agent` (TRAE CLI calls it `default`) starts in its first one.
   const fallbackMode=capabilities.supportsModeSelection&&!capabilities.modes.some(item=>item.id==='agent')?capabilities.modes[0]?.id??'agent':'agent';
@@ -74,7 +89,9 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   if(capabilities.supportsModeSelection){
     if(!capabilities.modes.some(item=>item.id===mode))throw new AppError('INVALID_MODE','Choose a mode supported by this backend');
   }else if(mode!=='agent')throw new AppError('NATIVE_MODE_UNSUPPORTED','This backend does not support the requested mode');
-  const approval=body.approval===undefined?(applyBackendDefaults?defaults?.approval:undefined):requireString(body.approval,'approval',100);
+  const memberApproval=member?.target?.permissionMode;
+  const fallbackApproval=memberApproval&&capabilities.supportsPermissionSelection&&capabilities.permissions.some(item=>item.id===memberApproval)?memberApproval:undefined;
+  const approval=body.approval===undefined?(fallbackApproval??(applyBackendDefaults?defaults?.approval:undefined)):requireString(body.approval,'approval',100);
   if(approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===approval)))throw new AppError('INVALID_APPROVAL_MODE','Choose a permission setting supported by this backend');
   return {
     projectId:project.id,title:body.title?.slice(0,200),backendId,
@@ -87,6 +104,7 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
     resumePicker:Boolean(body.resumePicker),
     ...(toolGroups.length&&!quickChat?{toolGroups}:{}),
     ...(extensionsOff.length?{extensionsOff}:{}),
+    ...(member?{agentMemberId:member.id}:{}),
     // Opened from a linked server's workbench (docs/SERVER-LINKS.md §4): the lists mark it.
     ...(linkedFrom(headers)?{origin:{kind:'link' as const,serverId:linkedFrom(headers)!}}:{}),
   };

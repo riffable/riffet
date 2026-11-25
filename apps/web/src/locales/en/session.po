@@ -734,6 +734,10 @@ msgstr "Answer actions"
 msgid "回退代码到本轮开始前"
 msgstr "Revert code to before this turn"
 
+#: src/app/session/ComposerMenus.tsx
+msgid "团队成员"
+msgstr "Team members"
+
 #: src/app/session/image-upload.ts
 #: src/app/session/Markdown.tsx
 msgctxt "session-image-name"
@@ -911,10 +915,6 @@ msgstr "Will be sent as-is as a regular message"
 #: src/app/session/Activities.tsx
 msgid "将停止全部后台任务：这个会话不能单独停止其中一个。"
 msgstr "This will stop all background tasks: this session can't stop just one."
-
-#: src/app/session/Composer.tsx
-msgid "将调用"
-msgstr "Will call"
 
 #: src/app/session/Attempts.tsx
 msgid "尝试"
@@ -1822,11 +1822,6 @@ msgstr "Remove {0}"
 #: src/app/session/ComposerAttachments.tsx
 msgid "移除 {name}"
 msgstr "Remove {name}"
-
-#. placeholder {0}: item.name
-#: src/app/session/Composer.tsx
-msgid "移除 /{0}"
-msgstr "Remove /{0}"
 
 #: src/app/session/ComposerAttachments.tsx
 msgid "移除会话引用"

@@ -30,6 +30,8 @@ export type PluginDetailTab = 'overview' | 'page' | 'management';
 
 export interface NavState {
   projectId: string;
+  /** Standing team member currently open (`''` when viewing regular projects/sessions). */
+  memberId: string;
   /** Undefined until restored, null is an explicit projectless task. Scoped by the server origin. */
   taskProjectId: string | null | undefined;
   /** Recent directory visits in this browser; quick chats do not replace the last task directory. */
@@ -141,6 +143,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   const opened = startingSelection(link, cachedLists, stored);
   const store = createStore<NavState>({
     ...opened,
+    memberId: '',
     taskProjectId: (() => {
       try { const value: unknown = JSON.parse(readStored(STORAGE_KEYS.taskProject)); return value === null || typeof value === 'string' ? value : undefined; }
       catch { return undefined; }
@@ -186,7 +189,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   // intent before it awaits an editor. Both invalidate an older automatic navigation receipt.
   store.subscribe(() => {
     const current = store.get();
-    if (current.projectId !== previousDestination.projectId || current.sessionId !== previousDestination.sessionId
+    if (current.projectId !== previousDestination.projectId || current.memberId !== previousDestination.memberId || current.sessionId !== previousDestination.sessionId
       || current.statsOpen !== previousDestination.statsOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen || current.councilOpen !== previousDestination.councilOpen
       || current.councilDiscussionId !== previousDestination.councilDiscussionId
       || current.extensionsOpen !== previousDestination.extensionsOpen || current.marksOpen !== previousDestination.marksOpen

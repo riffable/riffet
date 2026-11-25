@@ -180,8 +180,10 @@ export function createServerLists(deps: ListsDeps) {
     adoptTerminal(found: TerminalInfo, sessionId: string) { holder(undefined, sessionId)?.adoptTerminal(found, sessionId); },
     removeSessions(ids: readonly string[]) { for (const target of every()) target.removeSessions(ids); },
     refreshCache() { for (const target of every()) target.refreshCache(); },
-    // The entry's own: personal info, 收藏, tasks, plugins, devices, channels and approvals are not merged.
+    // The entry's own: personal info, team members, 收藏, tasks, plugins, devices, channels and approvals are not merged.
     setOwner: entry.setOwner,
+    upsertTeamMember: entry.upsertTeamMember,
+    removeTeamMember: entry.removeTeamMember,
     fail: entry.fail,
     onChanged: entry.onChanged,
     onTask: entry.onTask,

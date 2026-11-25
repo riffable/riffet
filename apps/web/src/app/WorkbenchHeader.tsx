@@ -1,4 +1,5 @@
 import { useLingui } from '@lingui/react/macro';
+import { DEFAULT_AGENT_MEMBER_ID } from '@contracts';
 import { IconFolderPlus, IconSquareTerminal } from '@/components/icons';
 import { api } from '@/lib/api';
 import { promptDialog } from '@/lib/dialogs';
@@ -38,8 +39,8 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
   const originProject = useLists((state) => state.projects.find((item) => item.id === project?.worktree?.originProjectId));
   const session = useLists((state) => sessionId ? state.sessions.find((item) => item.id === sessionId) : undefined);
   // Resumed in a terminal it would start without the 助理's own prompt and isolation (docs/ASSISTANT.md §4).
-  // None of the 个人助理's conversations is listed, tabbed or resumed outside its launch (docs/ASSISTANT.md §3.1).
-  const assistantOwned = project?.system === 'assistant';
+  // None of the 个人助理's or team members' conversations is listed, tabbed or resumed outside its launch.
+  const assistantOwned = project?.system === 'assistant' || Boolean(session?.agentMemberId);
   const deletable = useLists((state) => state.sessionDelete);
   const deleting = useDeletionLoading(sessionId ?? '');
   const sidebarCollapsed = useUi((state) => state.sidebarCollapsed);
@@ -49,6 +50,25 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
   const shownTab = shownView(sidebarViews, panelTab)?.id;
   const dockOpen = useUi((state) => state.dockOpen);
   const infoOpen = useUi((state) => state.sessionInfoOpen);
+  const memberSessionsPref = useUi((state) => state.memberSessionsOpen);
+  const selectedMemberId = useNav((state) => state.memberId);
+  const teamMembers = useLists((state) => state.teamMembers);
+  const sessions = useLists((state) => state.sessions);
+  const activeMember = session?.agentMemberId
+    ? teamMembers.find((item) => item.id === session.agentMemberId)
+    : selectedMemberId
+      ? teamMembers.find((item) => item.id === selectedMemberId)
+      : project?.agentMemberId
+        ? teamMembers.find((item) => item.id === project.agentMemberId)
+        : project?.system === 'assistant'
+          ? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID)
+          : undefined;
+  const memberSessionCount = activeMember
+    ? sessions.filter((item) => !item.archivedAt && (item.agentMemberId === activeMember.id || (activeMember.scope.kind !== 'project' && item.projectId === activeMember.projectId))).length
+    : 0;
+  const memberSessionsOpen = activeMember
+    ? (desktop ? (memberSessionsPref ?? (activeMember.sessionMode === 'fresh' || memberSessionCount > 1)) : false)
+    : false;
   // The popover describes one session; it does not follow the reader to the next, and closes before the next one paints.
   useLayoutEffect(() => { ui.set({ sessionInfoOpen: false }); }, [ui, sessionId]);
   const [resumeOpen, setResumeOpen] = useState(false);
@@ -70,12 +90,24 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
       infoOpen={infoOpen}
       onInfoOpenChange={(open) => ui.set({ sessionInfoOpen: open })}
       onToggleTerminal={() => ui.setDockOpen((value) => !value)}
+      onOpenMemberConfig={(memberId) => handlers.openMemberConfig(memberId)}
+      {...(activeMember ? {
+        memberSessionsToggle: {
+          open: memberSessionsOpen,
+          count: memberSessionCount,
+          onToggle: () => {
+            if (desktop) ui.set({ memberSessionsOpen: !memberSessionsOpen });
+            else ui.set({ mobileMemberSessions: true });
+          },
+        },
+      } : {})}
       {...(session ? {
         // A name, tags and a pin place a conversation in the lists; the 助理's is a page, in none of them.
         ...(assistantOwned ? {} : {
           onRename: () => handlers.sessionAction(session, 'rename'),
           onEditTags: () => handlers.sessionAction(session, 'tags'),
           onTogglePin: () => handlers.sessionAction(session, 'pin'),
+          onExtractMember: () => handlers.sessionAction(session, 'extract-member'),
         }),
         onToggleArchive: () => handlers.sessionAction(session, 'archive'),
         ...(deletable ? { onDelete: () => handlers.sessionAction(session, 'delete'), deleteDisabled: deleting } : {}),

@@ -1,4 +1,4 @@
-import { WORK_ITEM_STATUSES, type WorkItemSummary } from '@contracts';
+import { WORK_ITEM_STATUSES, type AgentMember, type WorkItemSummary } from '@contracts';
 import type { Bootstrap } from './api';
 import { isSessionDeleted } from './session-deletion';
 import { isActiveSession, sessionActivityAt } from './session-order';
@@ -33,12 +33,16 @@ export function parseCachedLists(raw: string): CachedLists | undefined {
   if (!raw) return undefined;
   try {
     const parsed = JSON.parse(raw) as { bootstrap?: Partial<Bootstrap>; savedAt?: unknown };
-    const { projects, sessions, terminals, settings, protocol, owner, workItemSummaries, serverId, servers } = parsed?.bootstrap ?? {};
+    const { projects, sessions, terminals, settings, protocol, owner, workItemSummaries, teamMembers, serverId, servers } = parsed?.bootstrap ?? {};
     if (!Array.isArray(projects) || !Array.isArray(sessions) || !Array.isArray(terminals)) return undefined;
     if (!settings || typeof settings !== 'object') return undefined;
     const validSummaries = Array.isArray(workItemSummaries)
       ? workItemSummaries.filter((item): item is WorkItemSummary =>
         Boolean(item) && typeof item === 'object' && typeof item.id === 'string' && typeof item.number === 'number' && WORK_ITEM_STATUSES.includes(item.status))
+      : undefined;
+    const validTeamMembers = Array.isArray(teamMembers)
+      ? teamMembers.filter((item): item is AgentMember =>
+        Boolean(item) && typeof item === 'object' && typeof item.id === 'string' && typeof item.name === 'string' && typeof item.projectId === 'string' && Boolean(item.scope) && typeof item.scope === 'object')
       : undefined;
     return {
       bootstrap: {
@@ -46,6 +50,7 @@ export function parseCachedLists(raw: string): CachedLists | undefined {
         ...(owner && typeof owner === 'object' && typeof owner.revision === 'number' ? { owner } : {}),
         ...(protocol && Array.isArray(protocol.features) ? { protocol } : {}),
         ...(validSummaries ? { workItemSummaries: validSummaries } : {}),
+        ...(validTeamMembers ? { teamMembers: validTeamMembers } : {}),
         // The linked servers, so their cached lists are painted before the bootstrap answers.
         ...(typeof serverId === 'string' ? { serverId } : {}),
         ...(Array.isArray(servers) ? { servers: servers.filter((item) => Boolean(item) && typeof item.id === 'string' && typeof item.name === 'string') } : {}),

@@ -9,12 +9,12 @@ import { backendLabel } from '@/lib/backends';
 import { errorMessage, formatDateTime } from '@/lib/utils';
 import { Markdown } from './Markdown';
 
-/** The Agents a sent message @-mentioned (docs/AGENT-CALLS.md); the calls they led to are rows of their own. */
+/** The Agents or team members a sent message @-mentioned (docs/AGENT-CALLS.md, docs/TEAM.md); the calls they led to are rows of their own. */
 export function MentionedAgents({ agents }: { agents?: readonly AgentMention[] }) {
   if (!agents?.length) return null;
   return <div className="flex max-w-[82%] flex-wrap justify-end gap-1.5">
-    {agents.map(agent => <span key={`${agent.backendId}/${agent.backendProfileId ?? ''}`} className="inline-flex min-h-7 max-w-64 items-center gap-1.5 rounded-md bg-subtle px-2 text-xs text-fg-2">
-      <AgentLogo backend={agent.backendId} size={12} /><span className="truncate">{backendLabel(agent.backendId)}</span>
+    {agents.map(agent => <span key={agent.memberId ? `member:${agent.memberId}` : `${agent.backendId}/${agent.backendProfileId ?? ''}`} className="inline-flex min-h-7 max-w-64 items-center gap-1.5 rounded-md bg-subtle px-2 text-xs text-fg-2">
+      <AgentLogo backend={agent.backendId} size={12} /><span className="truncate">{agent.memberId ? (agent.label || agent.memberId) : backendLabel(agent.backendId)}</span>
     </span>)}
   </div>;
 }

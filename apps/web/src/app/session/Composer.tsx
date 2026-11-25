@@ -1,7 +1,7 @@
 import { flushSync } from 'react-dom';
 import { memo, useEffect, useId, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowUp, IconAtSign, IconChevronDown, IconKeyboard, IconMaximize, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
+import { IconArrowUp, IconAtSign, IconChevronDown, IconKeyboard, IconMaximize, IconMic, IconMinimize, IconPaperclip, IconPlus, IconSquare } from '@/components/icons';
 import { REMOTE_SPEECH_RECOGNIZER, type Attachment } from '@contracts';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner } from '@/components/ui/controls';
@@ -16,7 +16,8 @@ import { cn } from '@/lib/utils';
 import { formatWhen } from '../automations/automation';
 import { SendLaterMenu } from '../automations/SendLater';
 import { useLists, useSettings } from '../state/stores';
-import { ComposerMentionLayer, droppedMentions, mentionAt, mentionRanges, referenceLabel } from './agentMentions';
+import { ComposerMentionLayer, isInlineReference } from './agentMentions';
+import { useComposerAtomicMentions } from './useComposerAtomicMentions';
 import { ComposerAttachments } from './ComposerAttachments';
 import { acknowledgeRecoveredCreationDraft, readDraft, readVoiceMode, unsavedDrafts, writeDraft, writeVoiceMode } from './composerDraft';
 import { ComposerFullscreen } from './ComposerFullscreen';
@@ -34,7 +35,6 @@ import { ModelPicker } from './ModelPicker';
 import { joinQuotes, splitQuotes } from './quotes';
 import { useSwitchSettling } from './sessionFrame';
 import { useHeld } from './sessionLayout';
-import { removeSlashToken } from './slashMenu';
 import { ToolsPickerInMenu } from './ToolsPicker';
 import { useComposerAutosize } from './useComposerAutosize';
 import { useComposerDraftSync } from './useComposerDraftSync';
@@ -197,7 +197,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     projectRows,
     slashGroups,
     slashItems,
-    invokedItems,
+    invokedSlashRanges,
     slashQuery,
     unknownSlashCommand,
     menuOpen,
@@ -469,12 +469,16 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const changeReference = (index: number, next: PromptContextReference) => {
     updateReferences(referencesRef.current.map((item, itemIndex) => itemIndex === index ? next : item));
   };
-  /** Deleting a written mention takes the mention with it. */
-  const dropUnwrittenMentions = (value: string) => {
-    if (!droppedMentions(value, referencesRef.current)) return;
-    updateReferences(referencesRef.current.filter(item => !isAgentReference(item) || mentionRanges(value, [referenceLabel(item)]).length > 0));
-  };
   const [mentionMenu, setMentionMenu] = useState<number>();
+  const atomicMentions = useComposerAtomicMentions({
+    storageKey,
+    referencesRef,
+    updateReferences,
+    agentMentions: props.agentMentions,
+    setMentionMenu,
+    syncTrigger,
+  });
+  const { dropUnwrittenMentions } = atomicMentions;
   const removeQuote = (index: number) => {
     updateQuotes(quotesRef.current.filter((_, itemIndex) => itemIndex !== index));
     refocusDraft();
@@ -533,6 +537,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       if (textRevisionRef.current === submittedTextRevision) {
         updateText('');
         if (quotesRef.current.length) updateQuotes([]);
+        atomicMentions.resetDroppedMentions();
         setTrigger(null);
       }
       if (submittedAttachments.length) {
@@ -598,8 +603,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const toolsInMenu = !isMobile && Boolean(props.toolsPicker);
   const hasMobileSettings = Boolean(props.toolbar || props.toolsPicker || props.onModelChange || props.startPickers || props.endPickers || props.usage);
   const showStop = Boolean(props.onStop && (props.stopping || (running || props.backgroundCount) && !text.trim()));
-  // A mention is part of the text, not an attachment.
-  const referenceCount = visibleReferences.filter(item => !isAgentReference(item)).length + quotes.length;
+  // Inline mentions (`@member`, `@Agent`, `@file`, `@session`) live inside the text, not as top chips.
+  const inlineReferenceMask = visibleReferences.map((item) => (isInlineReference(text, item, visibleReferences) ? '1' : '0')).join('');
+  const chipReferenceCount = visibleReferences.filter((_item, index) => inlineReferenceMask[index] !== '1').length;
+  const referenceCount = chipReferenceCount + quotes.length;
   const attachedSummary = [
     referenceCount ? t`${referenceCount} 个引用` : '',
     attachments.length ? t`${attachments.length} 个附件` : '',
@@ -629,7 +636,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       </button>
     </Tip>
   ) : null;
-  const stripContent = (visibleReferences.length > 0 || quotes.length > 0 || attachments.length > 0 || uploading) ? <>
+  const stripContent = (chipReferenceCount > 0 || quotes.length > 0 || attachments.length > 0 || uploading) ? <>
     {/*
       Desktop shows the rail outright; a phone keeps the one-line summary and its expand
       toggle it has always had, because the rail would push the textarea off a small screen.
@@ -639,6 +646,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       variant="rail"
       attachments={attachments}
       references={visibleReferences}
+      hiddenMask={inlineReferenceMask}
       quotes={quotes}
       onOpenReferenceSession={props.onOpenReferenceSession ? openReferenceSession : undefined}
       pending={pendingUploads}
@@ -741,7 +749,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           {/* Slides like the textarea and the dock above, so a draft handed back grows the stack in one motion. */}
           <Collapse open={Boolean(stripContent)} className={cn(compact && 'hidden')}><div inert={!stripContent}>{heldStrip}</div></Collapse>
 
-          {props.agentMentions && <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />}
+          <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} slashRanges={invokedSlashRanges} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />
           <textarea
             ref={textareaRef}
             rows={1}
@@ -759,16 +767,14 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             aria-activedescendant={menuOpen && highlight < menuLength ? optionId(highlight) : undefined}
             placeholder={composerPlaceholder}
             className={cn('relative w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] min-w-0 flex-1 py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1', voice && draftEmpty && 'hidden')}
+            onCompositionStart={atomicMentions.onCompositionStart}
+            onCompositionEnd={atomicMentions.onCompositionEnd}
+            onPointerDown={atomicMentions.onPointerDown}
             onChange={(event) => { updateText(event.target.value); dropUnwrittenMentions(event.target.value); syncTrigger(event.target.value, event.target.selectionStart); }}
-            onClick={(event) => {
-              const element = event.currentTarget;
-              if (!props.agentMentions || element.selectionStart !== element.selectionEnd) return;
-              const at = mentionAt(element.value, referencesRef.current, element.selectionStart);
-              if (at !== undefined) setMentionMenu(at);
-            }}
-            onSelect={(event) => syncTrigger(event.currentTarget.value, event.currentTarget.selectionStart)}
+            onClick={atomicMentions.onClick}
+            onSelect={atomicMentions.onSelect}
             onFocus={() => { clearBlurTimer(); if (voice && !dictating) setVoiceMode(false, false); }}
-            onBlur={scheduleBlurClose}
+            onBlur={() => { atomicMentions.onBlurReset(); scheduleBlurClose(); }}
             onPaste={(event) => {
               const pasted = clipboardFiles(event.clipboardData);
               if (!pasted.length || disabled || props.attachmentsAllowed === false) return;
@@ -776,7 +782,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               if (!event.clipboardData.getData('text/plain')) event.preventDefault();
               void ingestFiles(pasted);
             }}
-            onKeyDown={(event) => handleComposerKeyDown(event, {
+            onKeyDown={(event) => {
+              atomicMentions.onKeyDownStart();
+              handleComposerKeyDown(event, {
               dictating,
               dictationPhase: dictation.view.phase,
               cancelDictation: dictation.cancel,
@@ -794,6 +802,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               choose,
               agentMentions: props.agentMentions,
               referencesRef,
+              setSelectionBias: atomicMentions.setSelectionBias,
               updateText,
               dropUnwrittenMentions,
               setMentionMenu,
@@ -803,28 +812,13 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               isMobile,
               keyBehavior,
               submit: () => { void submit(); },
-            })}
+            });
+            }}
           />
 
           {/* An empty draft in voice mode: the bar stands where the text would be. */}
           {voice && draftEmpty && <div className="pt-2 max-md:pl-4 max-md:pr-3 md:px-2">{holdBar(true, hero ? 'min-h-[68px]' : undefined)}</div>}
           <HoldToTalkOverlay session={hold && (!hold.released || dictation.view.phase === 'failed') ? hold : null} view={dictation.view} onRetry={dictation.retry} onDiscard={dictation.cancel} />
-
-          {/* What the draft will invoke, read back from the text itself: the token is the reference,
-              so removing a chip removes the token, and editing the token out drops the chip. */}
-          {!compact && invokedItems.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1 px-3 pt-1" aria-label={t`将调用`}>
-              {invokedItems.map((item) => (
-                <span key={item.name} title={item.description} className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-md bg-accent/10 pl-1.5 pr-0.5 text-xs text-accent md:min-h-6">
-                  {item.kind === 'skill' ? <IconSparkles className="size-3 shrink-0" /> : <IconSlash className="size-3 shrink-0" />}
-                  <span className="min-w-0 truncate font-mono">{item.name}</span>
-                  <button type="button" aria-label={t`移除 /${item.name}`} disabled={disabled} onClick={() => { updateText(removeSlashToken(textRef.current, item.name)); refocusDraft(); }} className="grid size-11 shrink-0 place-items-center rounded text-accent/70 outline-none hover:bg-accent/15 hover:text-accent focus-visible:ring-2 focus-visible:ring-accent/35 md:size-5">
-                    <IconX className="size-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
 
           <div id={draftWarningId}>
             <FeedbackNotice scope={storageKey ?? props.draftKey ?? draftWarningId} message={draftAtRisk && t`草稿无法保存到浏览器，刷新后会丢失`} recovered={!draftAtRisk}

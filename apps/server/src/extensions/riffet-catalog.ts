@@ -194,7 +194,7 @@ export function buildRiffetExtensions(input: RiffetCatalogInput): RiffetExtensio
     kind: 'mcp',
     name: 'riffet:core',
     activation: 'auto',
-    description: `基础工具（${input.mcp.core.length} 项）：会话引用读取、定时唤醒、自动化创建、通知与设备查询。`,
+    description: `基础工具（${input.mcp.core.length} 项）：会话引用读取、定时唤醒、自动化创建、通知、设备查询与团队成员创建。`,
     sourcePath: 'riffet:mcp/core.md',
     files: [{
       path: 'riffet:mcp/core.md',
@@ -202,7 +202,7 @@ export function buildRiffetExtensions(input: RiffetCatalogInput): RiffetExtensio
         '# Riffet MCP · 基础工具（`riffet:core`）',
         '',
         `- **MCP 服务名**：\`${input.mcp.serverName}\`（按次启动 CLI 动态注入，不修改 Agent 全局配置）`,
-        `- **注入范围**：所有非归档、非快速对话的普通会话默认携带（\`schedule_task\` 在个人助理中除外）`,
+        `- **注入范围**：所有非归档、非快速对话的普通会话默认携带（\`schedule_task\` 在个人助理中除外；\`agent_member\` 仅对交互式会话开放，不对被调用子会话或后台任务开放）`,
         `- **支持的 Agent**：${mcpBackendNote}`,
         '',
         '## 工具清单',

@@ -73,9 +73,16 @@ export class OwnerService {
 
   /** Whether the style's picture depends on the owner's name, so a client cannot keep it for good. */
 
-  /** The preview PNG of a style, drawn with the owner's current name when the style uses one. */
-  previewAvatar(styleId: string, query: { seed?: unknown; ink?: unknown; paper?: unknown }): Promise<Buffer> {
-    return this.generator().preview(styleId, query, this.load().name);
+  /** The preview PNG of a style, drawn with `name` (or the owner's current name) when the style uses one. */
+  previewAvatar(styleId: string, query: { seed?: unknown; ink?: unknown; paper?: unknown }, name?: string): Promise<Buffer> {
+    const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, OWNER_NAME_MAX) : this.load().name;
+    return this.generator().preview(styleId, query, label);
+  }
+
+  /** Renders a generated avatar PNG for a caller (e.g. a team member) without mutating the owner's avatar. */
+  renderGeneratedAvatar(request: unknown, name?: string): Promise<{ png: Buffer; style: string; seed: string }> {
+    const label = typeof name === 'string' && name.trim() ? name.trim().slice(0, OWNER_NAME_MAX) : undefined;
+    return this.generator().generate(request, label);
   }
 
   /** Draws the avatar a style makes of `request.seed` and stores it like an upload, remembering which style and seed it came from. */

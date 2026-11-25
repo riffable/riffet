@@ -1,6 +1,6 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { SYNC_BUDGET, type ClientAccess, type OwnerInfo, type SecurityEvent, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
+import { SYNC_BUDGET, type AgentMember, type ClientAccess, type OwnerInfo, type SecurityEvent, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
 import { apiFor, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { entryListCache, type ListCache } from '@/lib/list-cache';
 import { emitPluginData } from '@/lib/plugin-data-events';
@@ -43,6 +43,8 @@ export interface ListsState {
   projects: ProjectRecord[];
   sessions: Session[];
   terminals: TerminalInfo[];
+  /** Standing team members on this server (docs/TEAM.md). */
+  teamMembers: AgentMember[];
   /** The workbench owner's personal info (docs/OWNER.md); absent until a server that has one has answered. */
   owner: OwnerInfo | undefined;
   /** This browser's access to the entry server (docs/TRANSPORT-SECURITY.md §4); absent until an answer that has one. */
@@ -96,6 +98,7 @@ export function createListsStore(deps: ListsDeps) {
     projects: cached?.bootstrap.projects ?? [],
     sessions: cached?.bootstrap.sessions ?? [],
     terminals: cached?.bootstrap.terminals ?? [],
+    teamMembers: cached?.bootstrap.teamMembers ?? [],
     owner: cached?.bootstrap.owner,
     access: linked ? undefined : cached?.bootstrap.access,
     status: cached ? 'syncing' : 'fresh',
@@ -226,7 +229,7 @@ export function createListsStore(deps: ListsDeps) {
         const receivedSessions = data.sessions.filter((item) => !isSessionDeleted(item.id)).map(withShownTitle);
         const sessions = reconcileById(current.sessions, mergeBootstrapSessions(sessionsAtRequest, current.sessions, receivedSessions));
         if (applyProjects) { projectsGeneration += 1; projectsVersion = data.revisions?.projects; }
-        const next = { ...data, sessions, settings, ...(linked ? { owner: undefined, workItemSummaries: undefined } : {}) };
+        const next = { ...data, sessions, settings, ...(linked ? { owner: undefined, workItemSummaries: undefined, teamMembers: undefined } : {}) };
         listCache.save(next);
         // The baseline a later delta's state changes are told against.
         sessionStates = new Map(sessions.map((item) => [item.id, item.state]));
@@ -239,6 +242,7 @@ export function createListsStore(deps: ListsDeps) {
           projects: applyProjects ? reconcileById(current.projects, data.projects) : current.projects,
           sessions,
           terminals: reconcileById(current.terminals, data.terminals),
+          ...(!linked && data.teamMembers ? { teamMembers: reconcileById(current.teamMembers, data.teamMembers) } : {}),
           // A full read is the server's word: its revision can go down (a restored backup, a fresh state directory).
           ...(data.owner && !linked ? { owner: data.owner } : {}),
           ...(!linked ? { access: data.access } : {}),
@@ -313,16 +317,29 @@ export function createListsStore(deps: ListsDeps) {
     setOwner(owner: OwnerInfo) {
       store.set((current) => current.owner && current.owner.revision > owner.revision ? current : { owner });
     },
+    upsertTeamMember(member: AgentMember) {
+      store.set((current) => {
+        const index = current.teamMembers.findIndex((item) => item.id === member.id);
+        const next = index >= 0 ? current.teamMembers.map((item, i) => i === index ? member : item) : [...current.teamMembers, member];
+        return { teamMembers: next };
+      });
+      this.refreshCache();
+    },
+    removeTeamMember(id: string) {
+      store.set((current) => ({ teamMembers: current.teamMembers.filter((item) => item.id !== id) }));
+      this.refreshCache();
+    },
     /** A failed load keeps whatever lists are on screen and labels them as offline. */
     fail(message: string, unreachable = false) { store.set({ bootError: message, bootUnreachable: unreachable, status: 'offline' }); },
 
     /** Updates the local list copy after an out-of-band shell change (e.g. a work-item status change). */
     refreshCache() {
-      const { projects, sessions, terminals, owner, loaded } = store.get();
+      const { projects, sessions, terminals, teamMembers, owner, loaded } = store.get();
       if (!loaded) return;
       const workItemSummaries = deps.workItems?.summaries();
       listCache.refresh({
         projects, sessions, terminals,
+        ...(!linked ? { teamMembers } : {}),
         ...(workItemSummaries !== undefined ? { workItemSummaries } : {}),
         ...(owner ? { owner } : {}),
         settings: linked ? {} : deps.settings.current(),
@@ -335,9 +352,9 @@ export function createListsStore(deps: ListsDeps) {
     removeSessions(ids: readonly string[]) {
       const gone = new Set(ids);
       mutate((current) => current.sessions.some((item) => gone.has(item.id)) ? { sessions: current.sessions.filter((item) => !gone.has(item.id)) } : current);
-      const { projects, sessions, terminals, owner, loaded } = store.get();
+      const { projects, sessions, terminals, teamMembers, owner, loaded } = store.get();
       const workItemSummaries = deps.workItems?.summaries();
-      if (loaded) listCache.refresh({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: linked ? {} : deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
+      if (loaded) listCache.refresh({ projects, sessions, terminals, ...(!linked ? { teamMembers } : {}), ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: linked ? {} : deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
     },
     upsertSession(incoming: Session) {
       // A late write for a deleted conversation (a stream frame, a slow response) must not bring it back.
@@ -392,9 +409,9 @@ export function createListsStore(deps: ListsDeps) {
       const saveSoon = () => {
         window.clearTimeout(saveTimer);
         saveTimer = window.setTimeout(() => {
-          const { projects, sessions, terminals, owner } = store.get();
+          const { projects, sessions, terminals, teamMembers, owner } = store.get();
           const workItemSummaries = deps.workItems?.summaries();
-          listCache.refresh({ projects, sessions, terminals, ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: linked ? {} : deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
+          listCache.refresh({ projects, sessions, terminals, ...(!linked ? { teamMembers } : {}), ...(workItemSummaries !== undefined ? { workItemSummaries } : {}), ...(owner ? { owner } : {}), settings: linked ? {} : deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
         }, SAVE_DEBOUNCE_MS);
       };
       let wantedProjectsVersion: number | undefined, requestedProjectsVersion: number | undefined;
@@ -584,8 +601,13 @@ export function createListsStore(deps: ListsDeps) {
           if (active && store.get().loaded && incoming.revision !== store.get().owner?.revision) { store.set({ owner: incoming }); saveSoon(); }
         }).catch(() => {});
       };
+      const refreshTeam = () => {
+        void api.teamMembers().then(({ members }) => {
+          if (active && store.get().loaded) { store.set((current) => ({ teamMembers: reconcileById(current.teamMembers, members) })); saveSoon(); }
+        }).catch(() => {});
+      };
       const reconnected = () => {
-        if (!linked) { refreshOwner(); announceTask(undefined); announcePlugins(); emitPluginData(undefined); announceDevices(); announceChannels(); announceApprovals(); announceCouncil(); announceServers(); }
+        if (!linked) { refreshOwner(); refreshTeam(); announceTask(undefined); announcePlugins(); emitPluginData(undefined); announceDevices(); announceChannels(); announceApprovals(); announceCouncil(); announceServers(); }
         // A `list-delta` server opens the stream with a `changed` naming every list's revision; an older one is read again.
         if (hasDelta()) return;
         announce({}); refreshProjects(true); poll();
@@ -620,7 +642,7 @@ export function createListsStore(deps: ListsDeps) {
       };
       // A linked server's stream says only that its lists moved; everything else on it belongs to that server's own workbench.
       const events: Record<string, (event: Event) => void> = linked ? { changed } : {
-        changed, task, owner, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, council: announceCouncil, servers: announceServers, security: announceSecurity,
+        changed, task, owner, team: refreshTeam, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, council: announceCouncil, servers: announceServers, security: announceSecurity,
       };
       const retry = () => {
         pushed = false;

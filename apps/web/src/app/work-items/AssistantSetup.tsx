@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantInstructions, AssistantMemory, AssistantMemoryEntry, NativeBackendId } from '@contracts';
-import { IconBrain, IconChevronRight, IconDownload, IconFileText, IconRepeat, IconShieldCheck, IconSparkles, IconTrash2 } from '@/components/icons';
+import type { AgentMember, AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantInstructions, AssistantMemory, AssistantMemoryEntry, NativeBackendId } from '@contracts';
+import { IconBrain, IconChevronRight, IconDownload, IconFileText, IconRepeat, IconSettings2, IconShieldCheck, IconSparkles, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { EmptyState, Spinner, Textarea } from '@/components/ui/controls';
@@ -30,7 +30,7 @@ function written(text: string): string {
  * Shared by the page's cards and the main conversation's 会话信息, so both read and open the same
  * things. `enabled` false fetches nothing.
  */
-export function useAssistantSetup({ projectId, backendId, profileId, enabled = true }: { projectId: string; backendId: NativeBackendId; profileId: string | undefined; enabled?: boolean }) {
+export function useAssistantSetup({ projectId, backendId, profileId, memberId, memberName, onOpenConfig, enabled = true }: { projectId: string; backendId: NativeBackendId; profileId: string | undefined; memberId?: string; memberName?: string; onOpenConfig?: () => void; enabled?: boolean }) {
   const { t } = useLingui();
   const { nav, ui } = useStores();
   const [instructions, setInstructions] = useState<AssistantInstructions>();
@@ -44,33 +44,39 @@ export function useAssistantSetup({ projectId, backendId, profileId, enabled = t
   const [files, setFiles] = useState<AssistantFile[]>();
   const [filesOpen, setFilesOpen] = useState(false);
 
+  const readInstructions = () => memberId ? api.teamMemberInstructions(memberId) : api.assistantInstructions();
+  const readMemory = () => memberId ? api.teamMemberMemory(memberId) : api.assistantMemory();
+  const readDelegations = () => memberId ? api.teamMemberDelegations(memberId) : api.assistantDelegations();
+  const readFiles = () => memberId ? api.teamMemberFiles(memberId) : api.assistantFiles();
+
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    api.assistantInstructions().then((value) => { if (live) setInstructions(value); }, () => undefined);
+    setInstructions(undefined);
+    readInstructions().then((value) => { if (live) setInstructions(value); }, () => undefined);
     return () => { live = false; };
-  }, [enabled]);
+  }, [enabled, memberId]);
   // Read again each time it is opened: the 助理 writes its memory while it works.
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    api.assistantMemory().then((value) => { if (live) { setMemory(value); setMemoryFailed(false); } }, () => { if (live) setMemoryFailed(true); });
+    readMemory().then((value) => { if (live) { setMemory(value); setMemoryFailed(false); } }, () => { if (live) setMemoryFailed(true); });
     return () => { live = false; };
-  }, [enabled, memoryOpen]);
+  }, [enabled, memberId, memoryOpen]);
   // What it follows over time (docs/ASSISTANT.md §7.3); read again each time the list is opened.
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    api.assistantDelegations().then((value) => { if (live) setDelegations(value.delegations); }, () => undefined);
+    readDelegations().then((value) => { if (live) setDelegations(value.delegations); }, () => undefined);
     return () => { live = false; };
-  }, [enabled, delegationsOpen]);
+  }, [enabled, memberId, delegationsOpen]);
   // What it made for the owner; read again each time the list is opened.
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    api.assistantFiles().then((value) => { if (live) setFiles(value.files); }, () => undefined);
+    readFiles().then((value) => { if (live) setFiles(value.files); }, () => undefined);
     return () => { live = false; };
-  }, [enabled, filesOpen]);
+  }, [enabled, memberId, filesOpen]);
   const openDelegations = delegations?.filter((item) => item.state === 'active').length ?? 0;
   const forgot = (name: string) => setMemory((current) => current && { ...current, entries: current.entries.filter((entry) => entry.name !== name) });
   const remembers = Boolean(memory && (memory.entries.length || written(memory.profile) || written(memory.index)));
@@ -87,9 +93,12 @@ export function useAssistantSetup({ projectId, backendId, profileId, enabled = t
   /** The rules were read when the page opened; a read that failed then is made again, and says so when it fails again. */
   const openRules = () => {
     if (instructions) { setEditing(true); return; }
-    api.assistantInstructions().then((value) => { setInstructions(value); setEditing(true); }, (error: unknown) => toast.error(errorMessage(error)));
+    readInstructions().then((value) => { setInstructions(value); setEditing(true); }, (error: unknown) => toast.error(errorMessage(error)));
   };
-  const openSettings = () => { void nav.navigate(() => { nav.openSettings('assistant'); ui.setMobileSidebar(false); }, { keepUnderlying: true }); };
+  const openSettings = () => {
+    if (onOpenConfig) { onOpenConfig(); return; }
+    void nav.navigate(() => { nav.openSettings('assistant'); ui.setMobileSidebar(false); }, { keepUnderlying: true });
+  };
   const openAbilities = () => {
     void nav.navigate(() => {
       ui.set({ extensionsFocus: { projectId, backendId, kind: 'skill', at: Date.now() } });
@@ -97,6 +106,8 @@ export function useAssistantSetup({ projectId, backendId, profileId, enabled = t
     });
   };
   return {
+    memberId,
+    memberName,
     instructions,
     setInstructions,
     editing,
@@ -133,28 +144,37 @@ export function useAssistantSetup({ projectId, backendId, profileId, enabled = t
 /** The dialogs the setup opens; render them outside any surface that closes on navigation. */
 export function AssistantInstructions({ setup }: { setup: AssistantSetupState }) {
   return <>
-    {setup.instructions && <InstructionsDialog open={setup.editing} value={setup.instructions} onClose={() => setup.setEditing(false)} onSaved={setup.setInstructions} />}
-    <MemoryDialog open={setup.memoryOpen} memory={setup.memory} failed={setup.memoryFailed} onClose={() => setup.setMemoryOpen(false)} onForgot={setup.forgot} />
-    <FilesDialog open={setup.filesOpen} files={setup.files} onClose={() => setup.setFilesOpen(false)} />
+    {setup.instructions && <InstructionsDialog open={setup.editing} memberId={setup.memberId} value={setup.instructions} onClose={() => setup.setEditing(false)} onSaved={setup.setInstructions} />}
+    <MemoryDialog open={setup.memoryOpen} memberId={setup.memberId} memberName={setup.memberName} memory={setup.memory} failed={setup.memoryFailed} onClose={() => setup.setMemoryOpen(false)} onForgot={setup.forgot} />
+    <FilesDialog open={setup.filesOpen} memberId={setup.memberId} files={setup.files} onClose={() => setup.setFilesOpen(false)} />
     <DelegationsDialog open={setup.delegationsOpen} delegations={setup.delegations} onClose={() => setup.setDelegationsOpen(false)} onEnded={(ended) => setup.setDelegations((current) => current?.map((item) => item.id === ended.id ? ended : item))} />
   </>;
 }
 
-/** The 个人助理 page's cards, under its composer. The agent and model are the composer's own pickers, which on this page save the 助理's choice. */
-export function AssistantSetup(props: { projectId: string; backendId: NativeBackendId; profileId: string | undefined }) {
+/** The 个人助理 or team member page's cards, under its composer. */
+export function AssistantSetup(props: { projectId: string; backendId: NativeBackendId; profileId: string | undefined; member?: AgentMember; onOpenConfig?: () => void }) {
   const { t } = useLingui();
-  const setup = useAssistantSetup(props);
+  const setup = useAssistantSetup({
+    projectId: props.projectId,
+    backendId: props.backendId,
+    profileId: props.profileId,
+    memberId: props.member?.id,
+    memberName: props.member?.name,
+    onOpenConfig: props.onOpenConfig,
+  });
+  const hasConfig = Boolean(props.member && props.onOpenConfig);
   return (
-    <div className="mt-4 grid gap-2 md:mt-8 sm:grid-cols-3">
+    <div className={hasConfig ? 'mt-4 grid gap-2 md:mt-8 sm:grid-cols-4' : 'mt-4 grid gap-2 md:mt-8 sm:grid-cols-3'}>
       <QuickAction icon={<IconBrain />} title={t`记忆`} note={setup.memoryNote} onClick={() => setup.setMemoryOpen(true)} />
       <QuickAction icon={<IconShieldCheck />} title={t`规则`} note={setup.instructionsNote} onClick={setup.openRules} />
       <QuickAction icon={<IconSparkles />} title={t`能力`} note={setup.abilitiesNote} onClick={setup.openAbilities} />
+      {hasConfig && <QuickAction icon={<IconSettings2 />} title={t`设置`} onClick={props.onOpenConfig!} />}
       <AssistantInstructions setup={setup} />
     </div>
   );
 }
 
-function InstructionsDialog({ open, value, onClose, onSaved }: { open: boolean; value: AssistantInstructions; onClose: () => void; onSaved: (next: AssistantInstructions) => void }) {
+function InstructionsDialog({ open, memberId, value, onClose, onSaved }: { open: boolean; memberId?: string; value: AssistantInstructions; onClose: () => void; onSaved: (next: AssistantInstructions) => void }) {
   const { t } = useLingui();
   const [text, setText] = useState(value.text);
   const [busy, setBusy] = useState(false);
@@ -163,7 +183,11 @@ function InstructionsDialog({ open, value, onClose, onSaved }: { open: boolean; 
   const discard = useDiscardGuard(dirty, busy);
   const save = async (next: string | null) => {
     setBusy(true);
-    try { onSaved(await api.saveAssistantInstructions(next)); onClose(); }
+    try {
+      const saved = memberId ? await api.saveTeamMemberInstructions(memberId, next) : await api.saveAssistantInstructions(next);
+      onSaved(saved);
+      onClose();
+    }
     catch (error) { toast.error(errorMessage(error, t`无法保存`)); }
     finally { setBusy(false); }
   };
@@ -236,7 +260,7 @@ export function DelegationsDialog({ open, delegations, onClose, onEnded }: { ope
 }
 
 /** What the 助理 made for the owner, newest first; each row downloads its file (docs/ASSISTANT.md §3.2). */
-function FilesDialog({ open, files, onClose }: { open: boolean; files: AssistantFile[] | undefined; onClose: () => void }) {
+function FilesDialog({ open, memberId, files, onClose }: { open: boolean; memberId?: string; files: AssistantFile[] | undefined; onClose: () => void }) {
   const { t } = useLingui();
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
@@ -250,7 +274,7 @@ function FilesDialog({ open, files, onClose }: { open: boolean; files: Assistant
             : <div className="flex flex-col">
               {files.map((file) => (
                 <ListRow key={file.path} leading={<IconFileText />} meta={timeAgo(file.modifiedAt)}
-                  actions={<Button asChild variant="ghost" size="icon-sm"><a href={api.assistantFileUrl(file.path)} download aria-label={t`下载 ${file.path}`}><IconDownload /></a></Button>}>
+                  actions={<Button asChild variant="ghost" size="icon-sm"><a href={memberId ? api.teamMemberFileUrl(memberId, file.path) : api.assistantFileUrl(file.path)} download aria-label={t`下载 ${file.path}`}><IconDownload /></a></Button>}>
                   <span className="select-text break-all">{file.path}</span>
                 </ListRow>
               ))}
@@ -274,12 +298,16 @@ function describe(entry: AssistantMemoryEntry): { title: string; note: string; b
 const memoryHeading = 'mb-1 px-2.5 text-xs font-medium text-fg-3';
 
 /** What the 助理 remembers, read-only: its profile of the owner, then one row per thing it wrote down (docs/ASSISTANT.md §3.2). */
-function MemoryDialog({ open, memory, failed, onClose, onForgot }: { open: boolean; memory: AssistantMemory | undefined; failed: boolean; onClose: () => void; onForgot: (name: string) => void }) {
+function MemoryDialog({ open, memberId, memberName, memory, failed, onClose, onForgot }: { open: boolean; memberId?: string; memberName?: string; memory: AssistantMemory | undefined; failed: boolean; onClose: () => void; onForgot: (name: string) => void }) {
   const { t } = useLingui();
   const [expanded, setExpanded] = useState<string>();
   const forget = async (name: string, title: string) => {
     if (!await confirmDialog({ title: t`忘掉「${title}」？`, confirmLabel: t`忘掉`, destructive: true })) return;
-    try { await api.forgetAssistantMemory(name); onForgot(name); }
+    try {
+      if (memberId) await api.forgetTeamMemberMemory(memberId, name);
+      else await api.forgetAssistantMemory(name);
+      onForgot(name);
+    }
     catch (error) { toast.error(errorMessage(error, t`无法删除`)); }
   };
   useEffect(() => { if (!open) setExpanded(undefined); }, [open]);
@@ -292,7 +320,7 @@ function MemoryDialog({ open, memory, failed, onClose, onForgot }: { open: boole
       <DialogContent size="content" mobileFullscreen>
         <DialogHeader>
           <DialogTitle><Trans>记忆</Trans></DialogTitle>
-          <DialogDescription><Trans>要增加或更正，直接告诉个人助理</Trans></DialogDescription>
+          <DialogDescription>{memberName ? t`要增加或更正，直接告诉「${memberName}」` : <Trans>要增加或更正，直接告诉个人助理</Trans>}</DialogDescription>
         </DialogHeader>
         <DialogBody className="min-h-48 pt-2">
           {!memory ? failed ? <EmptyState icon={<IconBrain />} title={t`无法读取记忆`} /> : <div className="grid min-h-48 place-items-center"><Spinner /></div>

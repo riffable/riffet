@@ -3,6 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { withShownTitle } from './shown-title';
 import type {
   ListRevisions, SessionListDelta,
+  AgentMember, AgentMemberCreate, AgentMemberExtractDraft, AgentMemberList, AgentMemberUpdate, AgentMemberUserProfile,
   AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, PluginApprovalDecision, PluginApprovalList, PluginApprovalResult, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
@@ -171,6 +172,8 @@ export interface ProjectRecord {
   system?: 'quick-chat' | 'task-workspace' | 'assistant';
   /** The 助理's one standing conversation, on its project only (docs/ASSISTANT.md §3). */
   mainSessionId?: string;
+  /** The team member that owns this dedicated assistant project (docs/TEAM.md). */
+  agentMemberId?: string;
 }
 
 export interface Bootstrap {
@@ -179,6 +182,8 @@ export interface Bootstrap {
   terminals: TerminalInfo[];
   /** Lightweight shell summary of work items; absent from an older server. */
   workItemSummaries?: WorkItemSummary[];
+  /** Team members on this server (docs/TEAM.md); absent from an older server or a linked server. */
+  teamMembers?: AgentMember[];
   /** Where each list stood when read (`list-delta`); absent from an older server. */
   revisions?: ListRevisions;
   settings: AppSettings;
@@ -230,10 +235,11 @@ export interface BrowseResult { path: string; parent?: string; home: string; ent
  */
 export interface PickDirectoryResult { supported: boolean; cancelled: boolean; path?: string; }
 
-export interface FileContextReference { kind?: 'file'; path: string; line?: number; text?: string; }
+export interface FileContextReference { kind?: 'file'; path: string; line?: number; text?: string; inline?: boolean; }
 export interface SessionContextReference extends SessionReferenceInput {
   title?: string;
   backendId?: NativeBackendId;
+  inline?: boolean;
   path?: never;
   line?: never;
   text?: never;
@@ -252,8 +258,9 @@ export const isAgentReference = (reference: PromptContextReference): reference i
 export const isFileReference = (reference: PromptContextReference): reference is FileContextReference => reference.kind !== 'session' && reference.kind !== 'agent';
 export const sameContextReference = (left: PromptContextReference, right: PromptContextReference): boolean => isSessionReference(left)
   ? isSessionReference(right) && left.sessionId === right.sessionId
-  // One mention per Agent: its provider and model are a choice on the chip, not another mention.
-  : isAgentReference(left) ? isAgentReference(right) && left.backendId === right.backendId
+  // One mention per team member or per Agent: its provider and model are a choice on the chip, not another mention.
+  : isAgentReference(left)
+    ? isAgentReference(right) && (left.memberId || right.memberId ? left.memberId === right.memberId : left.backendId === right.backendId)
   : isFileReference(right) && left.path === right.path && left.line === right.line;
 export function mergeRestoredReferences(current: PromptContextReference[], restored: PromptContextReference[]): PromptContextReference[] {
   return [...restored, ...current.filter(item => !restored.some(reference => sameContextReference(reference, item)))];
@@ -261,7 +268,13 @@ export function mergeRestoredReferences(current: PromptContextReference[], resto
 export function messageContext(references: readonly PromptContextReference[]): Pick<NativeMessageInput, 'context' | 'references' | 'agents'> {
   const context = references.filter(isFileReference).map(({ path, line }) => ({ path, ...(line === undefined ? {} : { line }) }));
   const sessions = references.filter(isSessionReference).map(({ sessionId, fromRunId }) => ({ kind: 'session' as const, sessionId, ...(fromRunId ? { fromRunId } : {}) }));
-  const agents = references.filter(isAgentReference).map(({ backendId, backendProfileId, model }) => ({ backendId, ...(backendProfileId ? { backendProfileId } : {}), ...(model ? { model } : {}) }));
+  const agents = references.filter(isAgentReference).map(({ backendId, backendProfileId, model, memberId, label }) => ({
+    backendId,
+    ...(backendProfileId ? { backendProfileId } : {}),
+    ...(model ? { model } : {}),
+    ...(memberId ? { memberId } : {}),
+    ...(memberId && label ? { label } : {}),
+  }));
   return { ...(context.length ? { context } : {}), ...(sessions.length ? { references: sessions } : {}), ...(agents.length ? { agents } : {}) };
 }
 export function restoreContext(input: Pick<NativeMessageInput, 'context' | 'references' | 'agents'>, run?: Run): PromptContextReference[] {
@@ -314,6 +327,8 @@ export interface NativeSessionCreateInput {
   extensionsOff?: string[];
   /** The 任务 this conversation starts; absent, it belongs to none. */
   workItemId?: string;
+  /** The team member that owns this conversation (docs/TEAM.md). */
+  agentMemberId?: string;
   initialMessage: NativeMessageInput;
 }
 
@@ -1107,6 +1122,21 @@ export const api = {
     request<{ item: WorkItem; delegation: AssistantDelegation }>(`/api/work-items/${encodeURIComponent(id)}/watch-delegation`, json('POST', body)),
   /** `null` restores Riffet's own text. */
   saveAssistantInstructions: (text: string | null) => request<AssistantInstructions>('/api/assistant/instructions', json('PUT', { text })),
+  teamMembers: () => request<AgentMemberList>('/api/team/members'),
+  createTeamMember: (body: AgentMemberCreate) => request<AgentMember>('/api/team/members', json('POST', body)),
+  updateTeamMember: (id: string, body: AgentMemberUpdate) => request<AgentMember>(`/api/team/members/${encodeURIComponent(id)}`, json('PATCH', body)),
+  deleteTeamMember: (id: string) => request<void>(`/api/team/members/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  extractTeamMember: (sessionId: string) => request<AgentMemberExtractDraft>('/api/team/members/extract', json('POST', { sessionId })),
+  teamUserProfile: () => request<AgentMemberUserProfile>('/api/team/user-profile'),
+  saveTeamUserProfile: (text: string) => request<AgentMemberUserProfile>('/api/team/user-profile', json('PUT', { text })),
+  teamMemberInstructions: (id: string) => request<AssistantInstructions>(`/api/team/members/${encodeURIComponent(id)}/instructions`),
+  saveTeamMemberInstructions: (id: string, text: string | null) => request<AssistantInstructions>(`/api/team/members/${encodeURIComponent(id)}/instructions`, json('PUT', { text })),
+  teamMemberMemory: (id: string) => request<AssistantMemory>(`/api/team/members/${encodeURIComponent(id)}/memory`),
+  forgetTeamMemberMemory: (id: string, name: string) => request<void>(`/api/team/members/${encodeURIComponent(id)}/memory/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  teamMemberFiles: (id: string) => request<{ files: AssistantFile[] }>(`/api/team/members/${encodeURIComponent(id)}/files`),
+  teamMemberFileUrl: (id: string, path: string) => `/api/team/members/${encodeURIComponent(id)}/file?${new URLSearchParams({ path })}`,
+  teamMemberSessions: (id: string) => request<{ sessions: Session[] }>(`/api/team/members/${encodeURIComponent(id)}/sessions`),
+  teamMemberDelegations: (id: string) => request<{ delegations: AssistantDelegation[] }>(`/api/team/members/${encodeURIComponent(id)}/delegations`),
   startWorkItem: (id: string) => request<WorkItemStartResult>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),
   answerWorkItem: (id: string, questionId: string, body: WorkItemAnswer) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}/questions/${encodeURIComponent(questionId)}/answer`, json('POST', body)),
   reworkWorkItem: (id: string, body: WorkItemRework) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}/rework`, json('POST', body)),

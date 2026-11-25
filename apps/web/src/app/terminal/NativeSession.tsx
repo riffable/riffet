@@ -64,7 +64,7 @@ import { MessageCommandsContext } from '../session/messageCommands';
 import { useCatalog, useLists, useStores } from '../state/stores';
 import { AgentCallsProvider } from '../session/agentCalls';
 import type { AgentMentionSource } from '../session/agentMentions';
-import { AgentLogo } from '@/components/AgentLogo';
+import type { CallSenderInfo } from '../session/Timeline';
 import { ViewDots, useViewShortcut, useViewShortcuts } from '../session/ViewDots';
 import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPrefs';
 import type { SessionView } from '../state/navStore';
@@ -393,7 +393,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const projectSystem = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system);
   const assistant = projectSystem === 'assistant';
   // Its main conversation, where `/new` and the packs' entries are offered (docs/ASSISTANT.md §5.5, §8.2).
-  const assistantMain = useLists((state) => { const project = state.projects.find((item) => item.id === session.projectId); return project?.system === 'assistant' && project.mainSessionId === session.id; });
+  const assistantMain = useLists((state) => {
+    const project = state.projects.find((item) => item.id === session.projectId);
+    if (project?.system === 'assistant' && project.mainSessionId === session.id) return true;
+    if (!session.agentMemberId) return false;
+    const member = state.teamMembers.find((item) => item.id === session.agentMemberId);
+    return Boolean(member && member.sessionMode === 'continuous' && member.mainSessionId === session.id);
+  });
   const discussionAllowed = session.origin?.kind !== 'discussion' && !assistant;
   const overview = useViewPrefs((state) => state.side === 'overview');
   const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!quickChat && !mobileViewport && overview);
@@ -1044,7 +1050,11 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // A called conversation cannot call further (docs/AGENT-CALLS.md §3).
   const callsOffered = !quickChat && session.origin?.kind !== 'call' && offersRiffetTools(backendCapabilities);
   const catalogBackends = useCatalog((state) => state.backends);
-  const agentMentions = useMemo<AgentMentionSource | undefined>(() => callsOffered ? { projectId: session.projectId, backends: catalogBackends } : undefined, [callsOffered, session.projectId, catalogBackends]);
+  const teamMembers = useLists((state) => state.teamMembers);
+  const agentMentions = useMemo<AgentMentionSource | undefined>(
+    () => callsOffered ? { projectId: session.projectId, backends: catalogBackends, members: teamMembers, ...(session.agentMemberId ? { currentMemberId: session.agentMemberId } : {}) } : undefined,
+    [callsOffered, session.projectId, catalogBackends, teamMembers, session.agentMemberId],
+  );
   const toolsPicker = useMemo(() => (!quickChat && !archived && (phonesOffered || extensionsOffered || callsOffered)
     ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} servers={!remoteSession} onError={onError} footnote={t`下次启动时生效`} />
     : undefined), [quickChat, archived, phonesOffered, extensionsOffered, callsOffered, extensionPick, remoteSession, toolGroupsValue, changeToolGroups, onError, t]);
@@ -1196,11 +1206,30 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // since a handed-off conversation can still be continued here.
   const parentId = session.origin?.kind === 'fork' || session.origin?.kind === 'handoff' || session.origin?.kind === 'call' ? session.origin.sessionId : undefined;
   const parent = parentId ? findSession?.(parentId) : undefined;
-  const parentAgentLabel = parent ? labelOf(sessionBackend(parent)) : t`其他 Agent`;
-  const lineage = parentId ? (
+  const owner = useLists((state) => state.owner);
+  const parentMember = parent
+    ? (parent.agentMemberId
+      ? teamMembers.find((item) => item.id === parent.agentMemberId)
+      : teamMembers.find((item) => item.scope.kind !== 'project' && item.projectId === parent.projectId))
+    : undefined;
+  const parentAgentLabel = parentMember ? parentMember.name : parent ? labelOf(sessionBackend(parent)) : t`其他 Agent`;
+  const callSender = useMemo<CallSenderInfo | undefined>(() => {
+    if (session.origin?.kind !== 'call') return undefined;
+    if (parentMember) {
+      return { kind: 'member', name: parentMember.name, member: parentMember, ...(parent ? { sessionId: parent.id } : {}) };
+    }
+    return {
+      kind: 'agent',
+      name: parent ? (parent.displayTitle ?? parent.title ?? labelOf(sessionBackend(parent))) : t`其他 Agent`,
+      ...(parent ? { backendId: sessionBackend(parent), sessionId: parent.id } : {}),
+    };
+  }, [session.origin?.kind, parentMember, parent, labelOf, t]);
+  // Call sessions already attribute each message bubble to the calling member/Agent (`callSender`),
+  // so only fork and handoff sessions need a top lineage banner.
+  const lineage = parentId && session.origin?.kind !== 'call' ? (
     <div className="mb-6 flex items-center justify-center gap-1.5 text-xs text-fg-3">
-      {session.origin?.kind === 'fork' ? <IconGitFork className="size-3.5" /> : session.origin?.kind === 'call' && parent ? <AgentLogo backend={sessionBackend(parent)} size={14} /> : <IconArrowRightLeft className="size-3.5" />}
-      <span>{session.origin?.kind === 'fork' ? <Trans>来源会话</Trans> : session.origin?.kind === 'call' ? <Trans>由 {parentAgentLabel} 调用</Trans> : <Trans>由 {parentAgentLabel} 交接自</Trans>}</span>
+      {session.origin?.kind === 'fork' ? <IconGitFork className="size-3.5" /> : <IconArrowRightLeft className="size-3.5" />}
+      <span>{session.origin?.kind === 'fork' ? <Trans>来源会话</Trans> : <Trans>由 {parentAgentLabel} 交接自</Trans>}</span>
       {parent && onOpenSession
         ? <button type="button" className="max-w-64 truncate rounded px-0.5 text-fg-2 underline-offset-2 hover:text-fg hover:underline" onClick={() => onOpenSession(parent.id)}>{parent.title}</button>
         : <span className="text-fg-4"><Trans>已删除的会话</Trans></span>}
@@ -1345,6 +1374,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           sessionId={session.id}
           onOpenSession={onOpenSession}
           newTopicDivider={assistantMain}
+          callSender={callSender}
+          owner={owner}
           timeline={visibleTimeline}
           timelineVersion={native.timelineVersion}
           pendingConfirmationCount={interaction ? 1 : 0}

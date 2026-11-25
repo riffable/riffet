@@ -773,3 +773,21 @@ export const GIT_READ_BUDGET = {
   blameCacheBytes: 2 * MIB,
   blameCacheTtlMs: 10 * 60_000,
 } as const;
+
+/** Team members and shared owner profile limits (docs/TEAM.md §8.2). */
+export const TEAM_BUDGET = {
+  /** Maximum active (non-archived) members per server. */
+  maxMembers: 24,
+  /** Soft/enforced character cap on the cross-member global USER.md profile. */
+  globalUserProfileChars: 1_000,
+  /** Maximum background runs active across all members at once. */
+  concurrentRuns: 3,
+  /** Maximum concurrent background runs for a single member. */
+  memberConcurrentRuns: 1,
+  /** Default 24-hour background run cap per member. */
+  defaultDailyRuns: 30,
+  /** Highest 24-hour background run cap a member may be configured to. */
+  maxDailyRuns: 200,
+  /** Maximum characters of transcript read when extracting a member draft from a session. */
+  extractSourceChars: 60_000,
+} as const;

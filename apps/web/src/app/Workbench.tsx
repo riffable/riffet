@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { SETTING_DEFAULTS, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
+import { SETTING_DEFAULTS, type AgentMember, type AgentMemberExtractDraft, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
 import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -69,7 +69,11 @@ import { WorkbenchOverlays } from './WorkbenchOverlays';
 import { Onboarding } from './onboarding/Onboarding';
 import { useFirstRun } from './onboarding/useFirstRun';
 import { isAssistantProject, isQuickChatProject, mainSessionIdOf, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
-import { assistantChoice, isAssistantBackend, withAssistantDefaults } from './work-items/assistant';
+import { assistantChoice, DEFAULT_AGENT_MEMBER_ID, isAssistantBackend, memberChoice, withAssistantDefaults } from './work-items/assistant';
+import { CreateMemberDialog } from './team/CreateMemberDialog';
+import { MemberConfigDialog } from './team/MemberConfigDialog';
+import { MemberSessionSheet, MemberSessionSidebar } from './team/MemberSessionSidebar';
+import { confirmDialog } from '@/lib/dialogs';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
 const WorkItemsPage = lazy(() => import('./work-items/WorkItemsPage').then((module) => ({ default: module.WorkItemsPage })));
 const AutomationsPage = lazy(() => import('./automations/AutomationsPage').then((module) => ({ default: module.AutomationsPage })));
@@ -108,6 +112,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const projects = useLists((state) => state.projects);
   const sessions = useLists((state) => state.sessions);
   const terminals = useLists((state) => state.terminals);
+  const teamMembers = useLists((state) => state.teamMembers);
   const listsState = useLists((state) => state.status);
   const listsSavedAt = useLists((state) => state.savedAt);
   const bootError = useLists((state) => state.bootError);
@@ -116,6 +121,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   // Whole, because the new-conversation composer takes the settings object; it changes only on save.
   const settings = useSettings((value) => value);
   const selectedProjectId = useNav((state) => state.projectId);
+  const selectedMemberId = useNav((state) => state.memberId);
   const projectVisits = useNav((state) => state.projectVisits);
   const selectedSessionId = useNav((state) => state.sessionId);
   const pluginsOpen = useNav((state) => state.pluginsOpen);
@@ -142,6 +148,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const focusMessage = useNav((state) => state.focusMessage);
   const sidebarCollapsed = useUi((state) => state.sidebarCollapsed);
   const mobileSidebar = useUi((state) => state.mobileSidebar);
+  const memberSessionsPref = useUi((state) => state.memberSessionsOpen);
+  const mobileMemberSessions = useUi((state) => state.mobileMemberSessions);
+  const owner = useLists((state) => state.owner);
   const panelFullscreen = useUi((state) => state.panelFullscreen);
   const references = useUi((state) => state.references);
   const extensionsFocus = useUi((state) => state.extensionsFocus);
@@ -191,8 +200,21 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   // Stable between list updates, so the sidebar's grouping does not rerun on every render of the page.
   const sidebarProjects = useMemo(() => projects.filter((item) => !isQuickChatProject(item)), [projects]);
   const assistantProject = useMemo(() => projects.find((item) => isAssistantProject(item) && !item.archivedAt), [projects]);
-  // The 助理's directory has extensions of its own, reached from its page.
-  const extensionProjects = useMemo(() => assistantProject ? [{ ...assistantProject, name: t`个人助理` }, ...regular] : regular, [regular, assistantProject, t]);
+  // Dedicated member directories have extensions of their own, reached from their page.
+  const extensionProjects = useMemo(() => {
+    const memberProjects: typeof regular = [];
+    const seen = new Set<string>();
+    for (const member of teamMembers) {
+      if (member.archivedAt) continue;
+      const owned = projects.find((item) => item.id === member.projectId && isAssistantProject(item) && !item.archivedAt);
+      if (owned && !seen.has(owned.id)) {
+        seen.add(owned.id);
+        memberProjects.push({ ...owned, name: member.name });
+      }
+    }
+    if (!memberProjects.length && assistantProject) memberProjects.push({ ...assistantProject, name: t`个人助理` });
+    return [...memberProjects, ...regular];
+  }, [regular, teamMembers, projects, assistantProject, t]);
   const project = projects.find((item) => item.id === selectedProjectId);
   const quickChat = isQuickChatProject(project);
   // The 助理 is one long conversation: once it exists, its page is that conversation (docs/ASSISTANT.md).
@@ -203,6 +225,28 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [assistantProject, sessions]);
   const homeTab: HomeTab = quickChat ? 'chat' : 'task';
   const session = sessions.find((item) => item.id === selectedSessionId && item.projectId === selectedProjectId);
+  // Active team member: explicit nav selection, or inferred from the open session/assistant project.
+  const activeMember = useMemo(() => {
+    const active = teamMembers.filter((item) => !item.archivedAt);
+    if (selectedMemberId) {
+      const explicit = active.find((item) => item.id === selectedMemberId);
+      if (explicit) return explicit;
+    }
+    if (session?.agentMemberId) {
+      const owned = active.find((item) => item.id === session.agentMemberId);
+      if (owned) return owned;
+    }
+    if (project?.agentMemberId) {
+      const owned = active.find((item) => item.id === project.agentMemberId);
+      if (owned) return owned;
+    }
+    if (isAssistantProject(project)) return active.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID);
+    return undefined;
+  }, [teamMembers, selectedMemberId, session?.agentMemberId, project]);
+  const [createMemberOpen, setCreateMemberOpen] = useState(false);
+  const [extractDraft, setExtractDraft] = useState<AgentMemberExtractDraft>();
+  const [editingMemberId, setEditingMemberId] = useState<string>();
+  const editingMember = useMemo(() => editingMemberId ? teamMembers.find((item) => item.id === editingMemberId) : undefined, [teamMembers, editingMemberId]);
   // Each conversation keeps its own side panel; swapped before paint so the one entered never shows the last one's.
   const panelSession = useRef(selectedSessionId);
   useLayoutEffect(() => {
@@ -226,9 +270,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     : (pickedServerId && homeServerOptions.some((item) => item.id === pickedServerId && item.usable) ? pickedServerId : '');
   useEffect(() => { if (project && !project.system && pickedServerId) setPickedServerId(''); }, [project, pickedServerId]);
   useEffect(() => { if (pickedServerId && !homeServerOptions.some((item) => item.id === pickedServerId && item.usable)) setPickedServerId(''); }, [pickedServerId, homeServerOptions]);
-  // The 助理 page's composer starts with the 助理's own agent and model, and a pick made there is the
-  // 助理's, not the composer's everywhere else (docs/ASSISTANT.md).
-  const assistantHome = isAssistantProject(project) && !session;
+  // The 助理 or team member home composer starts with that member's own agent, model and approval.
+  const assistantHome = Boolean((activeMember || isAssistantProject(project)) && !session);
   // On the new-session page targeting a linked server, the agent list, providers and read-only
   // defaults come from that server so the conversation starts with what can actually run there.
   const remoteHomeServerId = !session && !quickChat && !assistantHome ? homeServerId : '';
@@ -237,22 +280,26 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const remoteBackends = remoteHomeServerId ? (remoteBackendsMap[remoteHomeServerId] ?? []) : undefined;
   const remoteSettings = remoteHomeServerId ? remoteSettingsMap[remoteHomeServerId] : undefined;
   const remoteHomeChoice = remoteHomeServerId ? remoteHomeMap[remoteHomeServerId] : undefined;
-  const assistantPick = useMemo(() => assistantHome ? assistantChoice(settings.assistant, backends) : undefined, [assistantHome, settings.assistant, backends]);
+  const assistantPick = useMemo(() => {
+    if (!assistantHome) return undefined;
+    if (activeMember) return memberChoice(activeMember.target, backends);
+    return assistantChoice(settings.assistant, backends);
+  }, [assistantHome, activeMember, settings.assistant, backends]);
   // The 助理 runs only on the agents that isolate it (docs/ASSISTANT.md §4).
   const homeBackends = useMemo(() => remoteBackends ?? (assistantHome ? backends.filter((entry) => isAssistantBackend(entry.backendId)) : backends), [remoteBackends, assistantHome, backends]);
   const homeBackendId = remoteHomeServerId ? (remoteHomeChoice?.backendId ?? pickedBackendId) : (assistantPick?.backendId ?? pickedBackendId);
   const homeProfileId = remoteHomeServerId
     ? (remoteHomeChoice?.profileId ?? remoteSettings?.nativeBackendDefaults?.[homeBackendId]?.profileId)
     : (assistantPick ? assistantPick.profileId : pickedProfileId);
-  /** The model the composer opens with: under a linked server, its read-only defaults with this browser's composer UI prefs; under the 助理, its own. */
+  /** The model the composer opens with: under a linked server, its read-only defaults with this browser's composer UI prefs; under a member/助理, its own. */
   const composerSettings = useMemo(() => {
     if (remoteHomeServerId) {
       return remoteSettings
         ? { ...remoteSettings, composerEnterBehavior: settings.composerEnterBehavior, composerRunningBehavior: settings.composerRunningBehavior, composerSendLater: settings.composerSendLater }
         : settings;
     }
-    return assistantPick ? withAssistantDefaults(settings, assistantPick) : settings;
-  }, [remoteHomeServerId, remoteSettings, settings, assistantPick]);
+    return assistantPick ? withAssistantDefaults(settings, assistantPick, activeMember?.target?.permissionMode) : settings;
+  }, [remoteHomeServerId, remoteSettings, settings, assistantPick, activeMember?.target?.permissionMode]);
   const sidebarViews = useSidebarViews(project, session?.id);
   const sessionViews = useSessionViews({ hasProject: Boolean(project), hasSession: Boolean(session), projectSystem: project?.system, capabilities: new Set() });
   const catalogProject = project;
@@ -318,11 +365,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
   const sidebarSelectedSessionId = anyPageOpen ? '' : session?.id ?? '';
   const sidebarSessions = useSidebarSessions(sidebarProjects, sessions, sidebarSelectedSessionId, t`未关联项目`);
-  /** On the 助理 page: its project, with no page over it, showing its main conversation or the empty state. Derived, so it has no address of its own. */
-  const assistantPage = isAssistantProject(project) && !anyPageOpen && (!session || session.id === mainSessionIdOf(project));
+  /** On the 助理 or a team member's page: with no overlay page open, never tabbed or listed in the sidebar. */
+  const assistantPage = Boolean((activeMember || isAssistantProject(project)) && !anyPageOpen);
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -359,7 +406,16 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     const entries = catalog.peekProfiles(project?.id ?? '', homeBackendId, profiles, remoteHomeServerId || undefined);
     return entries.length ? entries : undefined;
   }, [profilesCurrent, session, quickChat, project, projectlessTasks, remoteHomeServerId, catalogBackends, homeBackendId, catalog]);
-  const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap });
+  const extractMemberFromSession = useCallback((target: Session) => {
+    toast.info(t`正在从会话提炼角色规则…`);
+    void api.extractTeamMember(target.id).then((draft) => {
+      setExtractDraft(draft);
+      setCreateMemberOpen(true);
+    }, (error: unknown) => {
+      toast.error(errorMessage(error, t`无法提炼成员`));
+    });
+  }, [t]);
+  const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap, onExtractMember: extractMemberFromSession });
   useGlobalShortcuts(desktop, newSession);
   // A new conversation that starts from a quote (a collaboration's conclusion): added to the new-session draft, kept with
   // what was already written there, and the reader says what to do with it.
@@ -380,21 +436,76 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       ui.set({ previewTarget: undefined });
     });
   };
+  /** Opens a standing team member: continuous mode lands on its live main conversation; fresh mode opens its clean composer. */
+  const openMember = useCallback((member: AgentMember) => {
+    const memberProject = projects.find((item) => item.id === member.projectId);
+    const liveMain = member.sessionMode === 'continuous'
+      ? (() => {
+        const id = member.mainSessionId ?? mainSessionIdOf(memberProject);
+        const found = id ? sessions.find((item) => item.id === id && !item.archivedAt) : undefined;
+        return found;
+      })()
+      : undefined;
+    void nav.navigate(() => {
+      nav.set({ projectId: member.projectId, memberId: member.id, sessionId: liveMain?.id ?? '', ...NO_PAGE });
+      ui.set({ previewTarget: undefined });
+      ui.setMobileSidebar(false);
+    });
+  }, [projects, sessions, nav, ui]);
+
+  const openNewMemberSession = useCallback((member: AgentMember) => {
+    void nav.navigate(() => {
+      nav.set({ projectId: member.projectId, memberId: member.id, sessionId: '', ...NO_PAGE });
+      ui.set({ previewTarget: undefined });
+      ui.setMobileSidebar(false);
+    });
+  }, [nav, ui]);
+
+  const togglePinMember = useCallback((member: AgentMember) => {
+    void api.updateTeamMember(member.id, { pinned: !member.pinned }).then(
+      (updated) => lists.upsertTeamMember(updated),
+      (error: unknown) => toast.error(errorMessage(error, t`无法更新成员`)),
+    );
+  }, [lists, t]);
+
+  const deleteMember = useCallback((member: AgentMember) => {
+    if (member.id === DEFAULT_AGENT_MEMBER_ID) return;
+    void (async () => {
+      if (!await confirmDialog({
+        title: t`删除成员「${member.name}」？`,
+        detail: t`保留历史会话记录，不再出现在团队列表中。`,
+        confirmLabel: t`删除`,
+        destructive: true,
+      })) return;
+      try {
+        await api.deleteTeamMember(member.id);
+        lists.removeTeamMember(member.id);
+        if (nav.get().memberId === member.id) newSession();
+        toast.success(t`已删除「${member.name}」`);
+      } catch (error) {
+        toast.error(errorMessage(error, t`无法删除成员`));
+      }
+    })();
+  }, [lists, nav, newSession, t]);
+
   /** Its page: sidebar row, then the main conversation or, before there is one, the empty state (docs/ASSISTANT.md). */
   const openAssistant = () => {
+    const defaultMember = teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID && !item.archivedAt);
+    if (defaultMember) { openMember(defaultMember); return true; }
     if (!assistantProject) return false;
     void nav.navigate(() => {
-      nav.set({ projectId: assistantProject.id, sessionId: assistantMain?.id ?? '', ...NO_PAGE });
+      nav.set({ projectId: assistantProject.id, memberId: '', sessionId: assistantMain?.id ?? '', ...NO_PAGE });
       ui.set({ previewTarget: undefined });
       ui.setMobileSidebar(false);
     });
     return true;
   };
-  // Every way onto the 助理 with no conversation selected (a restored position, a link, the sidebar's
-  // group) lands on its main conversation instead of a page that would start a second one.
+  // Every way onto the default continuous 助理 with no conversation selected lands on its main conversation.
   useEffect(() => {
-    if (loaded && assistantMain && selectedProjectId === assistantMain.projectId && !selectedSessionId) nav.set({ sessionId: assistantMain.id });
-  }, [loaded, assistantMain, selectedProjectId, selectedSessionId, nav]);
+    if (loaded && assistantMain && selectedProjectId === assistantMain.projectId && !selectedSessionId && (!activeMember || activeMember.sessionMode === 'continuous')) {
+      nav.set({ sessionId: assistantMain.id });
+    }
+  }, [loaded, assistantMain, selectedProjectId, selectedSessionId, activeMember, nav]);
   const onAssistantMain = Boolean(assistantMain && session?.id === assistantMain.id);
   useEffect(() => { if (onAssistantMain) settingsStore.syncAssistantTimeZone(); }, [onAssistantMain, settings.assistant?.timeZone]);
   const approvalCount = useApprovals((state) => state.approvals.length);
@@ -480,9 +591,16 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
    * Switches provider because a model belonging to it was chosen, so the model is saved in the
    * same write; `chooseBackend` deliberately clears the model instead, having no replacement.
    */
+  const rememberMemberTarget = (target: { backendId: NativeBackendId; profileId?: string | null; model?: string | null }) => {
+    if (activeMember) {
+      void api.updateTeamMember(activeMember.id, { target }).then((member) => lists.upsertTeamMember(member), () => undefined);
+      return;
+    }
+    settingsStore.rememberAssistant(target);
+  };
   const chooseHomeProfile = (profileId: string, model: string) => {
     if (remoteHomeServerId) { catalog.setRemoteHomeProfile(remoteHomeServerId, profileId); return; }
-    if (assistantHome) { settingsStore.rememberAssistant({ backendId: homeBackendId, profileId, model }); return; }
+    if (assistantHome) { rememberMemberTarget({ backendId: homeBackendId, profileId, model }); return; }
     catalog.setHomeProfile(profileId);
     settingsStore.remember(homeBackendId, { profileId, model });
   };
@@ -492,7 +610,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       catalog.setRemoteHome(remoteHomeServerId, backendId, profileId ?? remoteSettings?.nativeBackendDefaults?.[backendId]?.profileId);
       return;
     }
-    if (assistantHome) { settingsStore.rememberAssistant({ backendId, profileId: profileId ?? null, model: model || null }); return; }
+    if (assistantHome) { rememberMemberTarget({ backendId, profileId: profileId ?? null, model: model || null }); return; }
     catalog.setHome(backendId, profileId ?? settings.nativeBackendDefaults?.[backendId]?.profileId);
     writeStored(STORAGE_KEYS.backend, backendId);
     const savedProfile = settings.nativeBackendDefaults?.[backendId]?.profileId ?? backends.find((entry) => entry.backendId === backendId)?.profiles.find((entry) => entry.isDefault)?.id;
@@ -500,7 +618,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   };
   const rememberModel = (model: string) => {
     if (remoteHomeServerId) return;
-    if (assistantHome) { settingsStore.rememberAssistant({ backendId: homeBackendId, profileId: homeProfileId ?? null, model: model || null }); return; }
+    if (assistantHome) { rememberMemberTarget({ backendId: homeBackendId, profileId: homeProfileId ?? null, model: model || null }); return; }
     settingsStore.remember(homeBackendId, { model });
   };
 
@@ -511,6 +629,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     handlers.sessionAction = (target, action) => void sessionAction(target, action);
     handlers.openMark = (id) => void openMark(id);
     handlers.openAssistant = openAssistant;
+    handlers.openMemberConfig = (memberId) => setEditingMemberId(memberId);
     handlers.quoteInProject = (projectId, reference) => {
       const target = projects.find((item) => item.id === projectId);
       if (!target) return false;
@@ -571,7 +690,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onCustomizeSidebar={() => openSettingsAt('sidebar')}
       onOpenProfile={() => openSettingsAt('profile')}
       onOpenStats={() => openPage('stats')}
-      {...(assistantProject ? { onOpenAssistant: openAssistant, assistantActive: assistantPage, ...(assistantMain ? { assistantSession: assistantMain } : {}) } : {})}
+      {...(assistantProject && listsState !== 'syncing' && !teamMembers.length ? { onOpenAssistant: openAssistant, assistantActive: assistantPage, ...(assistantMain ? { assistantSession: assistantMain } : {}) } : {})}
+      teamMembers={teamMembers}
+      activeMemberId={anyPageOpen ? '' : activeMember?.id ?? ''}
+      onSelectMember={openMember}
+      onNewMemberSession={openNewMemberSession}
+      onCreateMember={() => { setExtractDraft(undefined); setCreateMemberOpen(true); ui.setMobileSidebar(false); }}
+      onEditMember={(member) => { setEditingMemberId(member.id); ui.setMobileSidebar(false); }}
+      onTogglePinMember={togglePinMember}
+      onDeleteMember={deleteMember}
       {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: inboxCount } : {})}
       onOpenAutomations={() => openPage('automations')}
       onOpenCouncil={() => openPage('council')}
@@ -843,6 +970,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         profileCatalogs={quickChat ? undefined : composerProps.profileCatalogs}
         recentModel={recentModel}
         project={project}
+        member={activeMember}
+        onOpenMemberConfig={activeMember ? () => setEditingMemberId(activeMember.id) : undefined}
         referenceProjectId={quickChat ? taskProjectId ?? '' : project?.id ?? ''}
         sessions={sessions.filter((item) => project ? item.projectId === project.id : projects.some((target) => target.id === item.projectId && target.system === 'task-workspace'))}
         onSelectProject={selectProject}
@@ -859,6 +988,51 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       />
     );
   }
+
+  const activeMemberSessions = useMemo(() => {
+    if (!activeMember) return [];
+    return sessions.filter((item) => !item.archivedAt && (
+      item.agentMemberId === activeMember.id
+      || (activeMember.scope.kind !== 'project' && !item.agentMemberId && item.origin?.kind !== 'call' && item.projectId === activeMember.projectId)
+    ));
+  }, [activeMember, sessions]);
+  const showMemberShell = Boolean(activeMember && !anyPageOpen && project);
+  const desktopMemberSessionsOpen = showMemberShell && desktop && (memberSessionsPref ?? (activeMember!.sessionMode === 'fresh' || activeMemberSessions.length > 1));
+
+  const mainContent = showMemberShell && activeMember ? (
+    <div className="flex min-h-0 min-w-0 flex-1">
+      {desktopMemberSessionsOpen && (
+        <MemberSessionSidebar
+          member={activeMember}
+          sessions={activeMemberSessions}
+          allSessions={sessions}
+          teamMembers={teamMembers}
+          owner={owner}
+          activeSessionId={session?.id ?? ''}
+          onSelectSession={selectSession}
+          onNewSession={() => openNewMemberSession(activeMember)}
+          onCollapse={() => ui.set({ memberSessionsOpen: false })}
+        />
+      )}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {content}
+      </div>
+      {!desktop && (
+        <MemberSessionSheet
+          open={mobileMemberSessions}
+          onOpenChange={(open) => ui.set({ mobileMemberSessions: open })}
+          member={activeMember}
+          sessions={activeMemberSessions}
+          allSessions={sessions}
+          teamMembers={teamMembers}
+          owner={owner}
+          activeSessionId={session?.id ?? ''}
+          onSelectSession={selectSession}
+          onNewSession={() => openNewMemberSession(activeMember)}
+        />
+      )}
+    </div>
+  ) : content;
 
   const shownTab = () => shownView(sidebarViews, ui.get().panelTab)?.id;
   const panelShows = (tab: string) => ui.get().panelOpen && shownTab() === tab;
@@ -1028,7 +1202,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           /></Suspense></ErrorBoundary>
         </div>}
         <ErrorBoundary resetKey={`${project?.id ?? ''}:${session?.id ?? ''}`}>
-          <Suspense fallback={loadingPanel}>{content}</Suspense>
+          <Suspense fallback={loadingPanel}>{mainContent}</Suspense>
         </ErrorBoundary>
         <DockHost mode="desktop" show={desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={createShell} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
       </main>
@@ -1060,6 +1234,27 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onOpenMessage={openMessageHit}
         onImported={openImported}
         onError={pushError}
+      />
+      <CreateMemberDialog
+        open={createMemberOpen}
+        projects={projects}
+        draft={extractDraft}
+        onClose={() => { setCreateMemberOpen(false); setExtractDraft(undefined); }}
+        onCreated={(member) => {
+          lists.upsertTeamMember(member);
+          void loadBootstrap().then(() => openMember(member), () => openMember(member));
+        }}
+      />
+      <MemberConfigDialog
+        open={Boolean(editingMember)}
+        member={editingMember}
+        projects={projects}
+        onClose={() => setEditingMemberId(undefined)}
+        onUpdated={(updated) => lists.upsertTeamMember(updated)}
+        onDeleted={(id) => {
+          lists.removeTeamMember(id);
+          if (nav.get().memberId === id) newSession();
+        }}
       />
       {pluginCommands.dialogs}
       <AppearanceBackdrop placement="overlay" />

@@ -432,10 +432,6 @@ msgstr "没有运行中的终端"
 msgid "由 {parentAgentLabel} 交接自"
 msgstr "由 {parentAgentLabel} 交接自"
 
-#: src/app/terminal/NativeSession.tsx
-msgid "由 {parentAgentLabel} 调用"
-msgstr "由 {parentAgentLabel} 调用"
-
 #: src/app/terminal/TerminalView.tsx
 msgid "空格"
 msgstr "空格"

@@ -14,6 +14,8 @@ export interface SessionLaunchInput {
   /** The Riffet MCP tool signature for this conversation; '' when there is none. */
   tools: string;
   extensionsOff: Session['extensionsOff'];
+  /** Team member id when launched as a standing/isolated member (docs/TEAM.md). */
+  agentMemberId: string | undefined;
 }
 
 export function sessionLaunchInput(host: NativeBackendHost, session: Session): SessionLaunchInput {
@@ -23,6 +25,7 @@ export function sessionLaunchInput(host: NativeBackendHost, session: Session): S
     appearance: session.terminalAppearance,
     tools: host.riffetMcp?.signature?.(session.id) ?? '',
     extensionsOff: session.extensionsOff,
+    agentMemberId: session.agentMemberId,
   };
 }
 

@@ -21,6 +21,10 @@ export interface AgentCall {
   backendId: NativeBackendId;
   backendProfileId?: string;
   model?: string;
+  /** Team member id when the called conversation belongs to a standing member. */
+  memberId?: string;
+  /** Display name of the called team member. */
+  memberName?: string;
   mode: AgentCallMode;
   title: string;
   /** The state of its latest turn. */

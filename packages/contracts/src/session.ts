@@ -43,6 +43,8 @@ export interface Project {
    * name a conversation since archived or deleted, which the next one opened replaces: check before using it.
    */
   mainSessionId?: string;
+  /** Team member owning this standing project (`system: 'assistant'`), when part of Team (docs/TEAM.md). */
+  agentMemberId?: string;
 }
 export interface TaskWorkspaceLocation {
   path: string;
@@ -62,6 +64,8 @@ export interface SessionDeletionPreview {
 export interface SessionDeletionReceipt { sessionIds: string[]; deletedAt: string }
 export interface Session {
   id: string; projectId: string; kind: SessionKind; title: string; tags: string[];
+  /** Team member that owns or launched this conversation (docs/TEAM.md). */
+  agentMemberId?: string;
   /** Default colours for the next CLI launch; a running terminal keeps its own appearance. */
   terminalAppearance?: TerminalAppearance;
   state: SessionState;

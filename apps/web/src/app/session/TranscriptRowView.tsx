@@ -12,7 +12,7 @@ import { AgentCallRow, agentToolName } from './agentCalls';
 import { MarkSourceContext } from './marks';
 import { timelineItemTime, type TimelineItem } from './model';
 import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
-import { AnswerActions, AssistantMessage, ImageBlock, MergedToolRow, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, useItemsDiffStats, UserMessage, type TurnAction } from './Timeline';
+import { AnswerActions, AssistantMessage, ImageBlock, MergedToolRow, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TopicDivider, TurnTriggerBlock, useItemsDiffStats, UserMessage, type CallSenderInfo, type TurnAction } from './Timeline';
 import { groupAdjacentToolRunEntries, toolKind, toolRunSummary } from './toolView';
 import { shareModelKey, shareModelLabel, useTranscriptResources } from './transcriptResources';
 import type { TranscriptRow } from './transcriptRows';
@@ -244,6 +244,18 @@ export interface RowContext {
   canCollapseEarlier?: boolean;
   earlierTopicsCollapsed?: boolean;
   onToggleEarlierTopics?: () => void;
+  /** Caller identity when this conversation was opened via `agent_call` (docs/AGENT-CALLS.md, docs/TEAM.md). */
+  callSender?: CallSenderInfo;
+  /** Owner profile shown beside owner-authored bubbles inside multi-party/called conversations. */
+  owner?: { name?: string; avatar?: { url: string } };
+}
+
+// i18n-ignore: protocol brief prefix added by server AgentCallService
+const CALL_BRIEF_PREFIX = '[Riffet 调用] ';
+function stripCallBrief(text: string): string {
+  if (!text.startsWith(CALL_BRIEF_PREFIX)) return text;
+  const sep = text.indexOf('\n\n');
+  return sep > 0 ? text.slice(sep + 2) : text;
 }
 
 /** Under a row the server sent cut to a preview: fetches the rest when asked. */
@@ -458,7 +470,13 @@ export const TranscriptRowView = memo(function TranscriptRowView({ row, slot, hi
         />
       );
     } else {
-      content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
+      const commandId = item.run?.commandId;
+      const isCallerTurn = Boolean(context.callSender && (commandId?.startsWith('call-open-') || commandId?.startsWith('call-follow-') || item.text.startsWith(CALL_BRIEF_PREFIX)));
+      const displayText = isCallerTurn ? stripCallBrief(item.text) : item.text;
+      const sender = context.callSender
+        ? (isCallerTurn ? context.callSender : { kind: 'owner' as const, owner: context.owner })
+        : undefined;
+      content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} sender={sender} text={displayText} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
     }
   }
   else if (item.kind === 'assistant') {

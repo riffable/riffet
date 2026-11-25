@@ -1,4 +1,5 @@
 import type {
+  AgentMember,
   AttemptGroup,
   Automation,
   AutomationRun,
@@ -54,6 +55,7 @@ export interface OrchestrationDeps {
   git: GitService;
   dispatch: NativeDispatcher;
   sessionCommands: SessionCommands;
+  team?: () => { get(id: string): AgentMember; resolveFor(project: Project): AgentMember | undefined } | undefined;
   schedulerIntervalMs?: number;
   notices?: NoticeLog;
   recordAuxiliaryCall?: AuxiliaryCallRecorder;

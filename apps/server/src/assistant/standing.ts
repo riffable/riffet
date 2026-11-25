@@ -1,8 +1,9 @@
-import type { Project, Session } from '../../../../packages/contracts/src/index.js';
+import { DEFAULT_AGENT_MEMBER_ID, type AgentMember, type Project, type Session } from '../../../../packages/contracts/src/index.js';
 import type { NativeStandingHost, StandingLaunch, StandingMoment } from '../backends/types.js';
 import { AppError } from '../errors.js';
 import type { Store } from '../store.js';
 import { commitAssistantHome, type AssistantHome } from './home.js';
+import type { AgentTeamService } from './team.js';
 
 /*
  * The 助理 as a standing conversation (docs/ASSISTANT.md §3–§5): one conversation that lasts, over CLI sessions
@@ -29,6 +30,8 @@ export const NEW_TOPIC = '/new';
 export interface AssistantStandingDeps {
   store: Store;
   home(): AssistantHome;
+  /** Team service (docs/TEAM.md): resolves per-member isolated directories when present. */
+  team?: () => AgentTeamService | undefined;
   /** The owner's time zone as their client reported it; the server's when unset. */
   timeZone(): string | undefined;
   /** What background runs left for the main conversation (§7.1): offered at a message, settled when its turn ends. */
@@ -43,20 +46,33 @@ export interface AssistantStandingDeps {
 const RUN_ALLOWED = ['Read', 'Glob', 'Grep', 'Edit(/**)', 'Write(/**)', 'WebFetch', 'WebSearch'];
 
 export class AssistantStanding implements NativeStandingHost {
-  private commitTimer?: NodeJS.Timeout;
+  private readonly commitTimers = new Map<string, NodeJS.Timeout>();
   /** When each conversation's previous message was read, while this server has been up. */
   private readonly lastMessageAt = new Map<string, number>();
 
   constructor(private readonly deps: AssistantStandingDeps) {}
 
-  private project(sessionId: string): Project | undefined {
+  private resolve(sessionId: string): { project: Project; session: Session; member?: AgentMember } | undefined {
     try {
-      const project = this.deps.store.getProject(this.deps.store.getSession(sessionId).projectId);
-      return project.system === 'assistant' ? project : undefined;
+      const session = this.deps.store.getSession(sessionId);
+      const project = this.deps.store.getProject(session.projectId);
+      const member = this.deps.team?.()?.resolveFor(project, session);
+      if (member) return { project, session, member };
+      return project.system === 'assistant' ? { project, session } : undefined;
     } catch { return undefined; }
   }
 
-  launch(project: Project, session?: Pick<Session, 'origin'>): StandingLaunch | undefined {
+  launch(project: Project, session?: Pick<Session, 'origin' | 'agentMemberId'>): StandingLaunch | undefined {
+    const team = this.deps.team?.();
+    const member = team?.resolveFor(project, session);
+    if (member && team) {
+      const home = team.memberHome(member);
+      return {
+        systemPromptFile: home.systemPromptFile, memoryDir: home.memoryDir, mcpConfigFiles: home.mcpConfigFiles(), pluginDirs: [home.pluginDir, ...home.packDirs()], protectedFiles: home.protectedFiles, compactAtTokens: COMPACT_AT_TOKENS,
+        instructionFiles: home.instructionFiles, skillsDir: home.skillsDir,
+        ...(session?.origin?.kind === 'assistant' ? { allow: RUN_ALLOWED } : {}),
+      };
+    }
     if (project.system !== 'assistant') return undefined;
     const home = this.deps.home();
     return {
@@ -77,30 +93,39 @@ export class AssistantStanding implements NativeStandingHost {
    */
   newTopic(sessionId: string, text: string): boolean {
     if (text.trim() !== NEW_TOPIC) return false;
-    const project = this.project(sessionId);
-    return Boolean(project && this.isMain(sessionId, project));
+    const resolved = this.resolve(sessionId);
+    return Boolean(resolved && this.isMain(sessionId, resolved.project, resolved.member));
   }
 
   private isRun(sessionId: string): boolean {
-    try { return this.deps.store.getSession(sessionId).origin?.kind === 'assistant'; } catch { return false; }
+    try {
+      const kind = this.deps.store.getSession(sessionId).origin?.kind;
+      return kind === 'assistant' || kind === 'call';
+    } catch { return false; }
   }
-  private isMain(sessionId: string, project: Project): boolean { return project.mainSessionId === sessionId; }
+  private isMain(sessionId: string, project: Project, member?: AgentMember): boolean {
+    if (member) return member.sessionMode === 'continuous' && (member.mainSessionId === sessionId || (member.scope.kind !== 'project' && project.mainSessionId === sessionId));
+    return project.mainSessionId === sessionId;
+  }
 
   context(sessionId: string, moment: StandingMoment, runId?: string): string | undefined {
-    const project = this.project(sessionId);
-    if (!project) return undefined;
+    const resolved = this.resolve(sessionId);
+    if (!resolved) return undefined;
+    const { project, member } = resolved;
     const now = new Date();
     const lines = [`Now: ${clock(now, this.deps.timeZone())}.`];
     // A background run is one short piece of work: the time is all it needs to be told.
     if (this.isRun(sessionId)) return `<riffet-context>\n${lines.join('\n')}\n</riffet-context>`;
+    const isMain = this.isMain(sessionId, project, member);
+    const isAdminMain = isMain && (!member || member.capabilities.workbenchAdmin);
     if (moment === 'prompt') {
-      const proof = runId && this.isMain(sessionId, project) ? this.deps.workbenchProof?.(runId) : undefined;
+      const proof = runId && isAdminMain ? this.deps.workbenchProof?.(runId) : undefined;
       if (proof) lines.push(`This message originated in a verified Riffet Web workbench. For this turn only, workbench and authorized paired-client setting tools take sourceTurn="${proof}". The source identifies the workbench; check what the owner actually meant before changing it. Do not quote or save this value.`);
-      const nativeProof = runId && this.isMain(sessionId, project) ? this.deps.nativeSettingProof?.(runId) : undefined;
+      const nativeProof = runId && isAdminMain ? this.deps.nativeSettingProof?.(runId) : undefined;
       if (nativeProof) lines.push(`This message came from an authenticated paired client. For an explicitly requested instance or paired-device setting in this turn use sourceTurn="${nativeProof}". This is not a Web workbench target. Do not quote or save this value.`);
       const gap = this.sinceLastMessage(sessionId, now);
       if (gap !== undefined && gap >= GAP_WORTH_SAYING_MS) lines.push(`The previous message in this conversation was ${span(gap)} ago. State you looked up before then may have changed.`);
-      const notes = this.isMain(sessionId, project) ? this.deps.pending?.offer() ?? [] : [];
+      const notes = isMain && (!member || member.id === DEFAULT_AGENT_MEMBER_ID) ? this.deps.pending?.offer() ?? [] : [];
       if (notes.length) {
         const zone = this.deps.timeZone();
         // Each note was written by a background run; a note that quotes the wrapper must not close it.
@@ -140,20 +165,33 @@ export class AssistantStanding implements NativeStandingHost {
     return rendered.join('\n\n');
   }
 
-  /** Commits the directory shortly after a turn of the 助理 ends: its edits to its own files become history. */
+  /** Commits the member directory shortly after a turn ends: its edits to its own memory become history. */
   watch(): () => void {
     const stop = this.deps.store.onSessionState((session: Session, from: Session['state']) => {
       // A stopped turn leaves through `cancelling`; what it wrote before the stop is history too.
       if ((from !== 'running' && from !== 'cancelling') || session.state === 'running' || session.state === 'cancelling') return;
-      const project = this.project(session.id);
-      if (!project) return;
+      const resolved = this.resolve(session.id);
+      if (!resolved) return;
+      const { project, member } = resolved;
       // The turn that carried the background runs' notes ended: they reached the owner only if it ended well.
-      if (this.isMain(session.id, project)) this.deps.pending?.settle(from === 'running' && session.state === 'idle');
-      if (this.commitTimer) clearTimeout(this.commitTimer);
-      this.commitTimer = setTimeout(() => { void commitAssistantHome(project.cwd); }, COMMIT_DELAY_MS);
-      this.commitTimer.unref?.();
+      if (this.isMain(session.id, project, member) && (!member || member.id === DEFAULT_AGENT_MEMBER_ID)) {
+        this.deps.pending?.settle(from === 'running' && session.state === 'idle');
+      }
+      const dir = member && this.deps.team?.() ? this.deps.team()!.memberDir(member.id) : project.cwd;
+      const prev = this.commitTimers.get(dir);
+      if (prev) clearTimeout(prev);
+      const timer = setTimeout(() => {
+        this.commitTimers.delete(dir);
+        void commitAssistantHome(dir);
+      }, COMMIT_DELAY_MS);
+      timer.unref?.();
+      this.commitTimers.set(dir, timer);
     });
-    return () => { stop(); if (this.commitTimer) clearTimeout(this.commitTimer); };
+    return () => {
+      stop();
+      for (const timer of this.commitTimers.values()) clearTimeout(timer);
+      this.commitTimers.clear();
+    };
   }
 }
 

@@ -136,6 +136,7 @@ export function normalizedNativeSessionInput(input: NativeSessionInput) {
   if (input.mode !== undefined && (typeof input.mode !== 'string' || !input.mode || input.mode.length > 100 || /[\0\r\n]/.test(input.mode))) throw new AppError('INVALID_NATIVE_MODE', 'Native mode is invalid');
   if (input.approval !== undefined && (typeof input.approval !== 'string' || !input.approval || input.approval.length > 100 || /[\0\r\n]/.test(input.approval))) throw new AppError('INVALID_NATIVE_APPROVAL', 'Native permission setting is invalid');
   if (input.workItemId !== undefined && (typeof input.workItemId !== 'string' || !input.workItemId || input.workItemId.length > 100)) throw new AppError('INVALID_WORK_ITEM', 'workItemId must be a string of 1 to 100 characters');
+  if (input.agentMemberId !== undefined && (typeof input.agentMemberId !== 'string' || !input.agentMemberId || input.agentMemberId.length > 100 || /[\0\r\n]/.test(input.agentMemberId))) throw new AppError('INVALID_AGENT_MEMBER', 'agentMemberId must be a string of 1 to 100 characters');
   return {
     projectId: input.projectId,
     title: input.title || 'New conversation',
@@ -154,6 +155,7 @@ export function normalizedNativeSessionInput(input: NativeSessionInput) {
     ...(input.toolGroups?.length ? { toolGroups: [...input.toolGroups] } : {}),
     ...(input.extensionsOff?.length ? { extensionsOff: [...input.extensionsOff] } : {}),
     ...(input.workItemId ? { workItemId: input.workItemId } : {}),
+    ...(input.agentMemberId ? { agentMemberId: input.agentMemberId } : {}),
   };
 }
 

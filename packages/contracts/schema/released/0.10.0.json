@@ -1450,6 +1450,9 @@
           "workItemId": {
             "type": "string"
           },
+          "agentMemberId": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -1921,6 +1924,9 @@
                 "workItemId": {
                   "type": "string"
                 },
+                "agentMemberId": {
+                  "type": "string"
+                },
                 "createdAt": {
                   "type": "string"
                 },
@@ -2090,6 +2096,12 @@
                           "type": "string"
                         },
                         "model": {
+                          "type": "string"
+                        },
+                        "memberId": {
+                          "type": "string"
+                        },
+                        "label": {
                           "type": "string"
                         }
                       },
@@ -2603,6 +2615,12 @@
                               "type": "string"
                             },
                             "model": {
+                              "type": "string"
+                            },
+                            "memberId": {
+                              "type": "string"
+                            },
+                            "label": {
                               "type": "string"
                             }
                           },
@@ -3530,6 +3548,9 @@
                   "workItemId": {
                     "type": "string"
                   },
+                  "agentMemberId": {
+                    "type": "string"
+                  },
                   "createdAt": {
                     "type": "string"
                   },
@@ -4332,6 +4353,12 @@
                                     "type": "string"
                                   },
                                   "model": {
+                                    "type": "string"
+                                  },
+                                  "memberId": {
+                                    "type": "string"
+                                  },
+                                  "label": {
                                     "type": "string"
                                   }
                                 },
@@ -5152,6 +5179,12 @@
                                     "type": "string"
                                   },
                                   "model": {
+                                    "type": "string"
+                                  },
+                                  "memberId": {
+                                    "type": "string"
+                                  },
+                                  "label": {
                                     "type": "string"
                                   }
                                 },
@@ -6165,6 +6198,12 @@
                                 "type": "string"
                               },
                               "model": {
+                                "type": "string"
+                              },
+                              "memberId": {
+                                "type": "string"
+                              },
+                              "label": {
                                 "type": "string"
                               }
                             },
@@ -7776,6 +7815,12 @@
                                 "type": "string"
                               },
                               "model": {
+                                "type": "string"
+                              },
+                              "memberId": {
+                                "type": "string"
+                              },
+                              "label": {
                                 "type": "string"
                               }
                             },
@@ -9947,6 +9992,12 @@
                                   },
                                   "model": {
                                     "type": "string"
+                                  },
+                                  "memberId": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
@@ -10451,6 +10502,12 @@
                                   "type": "string"
                                 },
                                 "model": {
+                                  "type": "string"
+                                },
+                                "memberId": {
+                                  "type": "string"
+                                },
+                                "label": {
                                   "type": "string"
                                 }
                               },
@@ -11666,6 +11723,9 @@
                   "workItemId": {
                     "type": "string"
                   },
+                  "agentMemberId": {
+                    "type": "string"
+                  },
                   "createdAt": {
                     "type": "string"
                   },
@@ -11885,6 +11945,12 @@
                                     "type": "string"
                                   },
                                   "model": {
+                                    "type": "string"
+                                  },
+                                  "memberId": {
+                                    "type": "string"
+                                  },
+                                  "label": {
                                     "type": "string"
                                   }
                                 },
@@ -12877,6 +12943,12 @@
                       "type": "string"
                     },
                     "model": {
+                      "type": "string"
+                    },
+                    "memberId": {
+                      "type": "string"
+                    },
+                    "label": {
                       "type": "string"
                     }
                   },
@@ -14467,6 +14539,12 @@
                             "type": "string"
                           },
                           "model": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "label": {
                             "type": "string"
                           }
                         },
@@ -16089,6 +16167,12 @@
                             "type": "string"
                           },
                           "model": {
+                            "type": "string"
+                          },
+                          "memberId": {
+                            "type": "string"
+                          },
+                          "label": {
                             "type": "string"
                           }
                         },

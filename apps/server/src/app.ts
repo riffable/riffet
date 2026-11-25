@@ -74,11 +74,14 @@ import { patchSession, registerSessionRoutes } from './routes/sessions.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
+import { registerTeamRoutes } from './routes/team.js';
 import { registerPluginApprovalRoutes } from './routes/plugin-approvals.js';
 import { PluginApprovals } from './plugins/approvals.js';
-import { AssistantBoard, Supervision, Verification, WorkItemService, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
+import { AssistantBoard, Supervision, Verification, WorkItemService, assistantInstructionsFile, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
 import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
+import { AgentTeamService } from './assistant/team.js';
+import { extractMemberFromSession } from './assistant/extract.js';
 import { AssistantRuns } from './assistant/runs.js';
 import { AssistantDelegations } from './assistant/delegations.js';
 import { createAssistantWorkbenchQueries, workbenchReads } from './assistant/workbench-queries.js';
@@ -265,11 +268,14 @@ export async function createApp(options: AppOptions = {}) {
   });
   // Agent calls (docs/AGENT-CALLS.md) need the orchestration and the timeline made further down; the MCP tools and delivery reach them through this.
   let agentCallsRef:AgentCallService|undefined;
-  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
+  let teamRef:AgentTeamService|undefined;
+  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,team:()=>teamRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
     const session=store.getSession(sessionId);
     if(session.archivedAt || session.state==='archived') return undefined;
     const project=store.getProject(session.projectId);
     if(project.system!=='assistant' || project.archivedAt || project.mainSessionId!==sessionId || session.origin?.kind==='assistant') return undefined;
+    const member=teamRef?.resolveFor(project,session);
+    if(member && !member.capabilities.workbenchAdmin) return undefined;
     const turn=nativeBackends.ownedForegroundTurn(sessionId);
     if(!turn) return undefined;
     const run=store.getRun(turn.ownerRunId);
@@ -329,7 +335,19 @@ export async function createApp(options: AppOptions = {}) {
   // The 助理's background work (docs/ASSISTANT.md §7) is made further down; the standing conversation reaches it through these.
   let assistantRuns:AssistantRuns|undefined;
   let consolidation:Consolidation|undefined;
-  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),timeZone:()=>settings.getSettings().assistant?.timeZone,
+  const team=new AgentTeamService({
+    store,
+    stateDir,
+    defaultProject:()=>assistantProject(store,stateDir),
+    defaultInstructions:text=>assistantInstructionsFile(store,stateDir,text),
+    assistantSettings:()=>settings.getSettings().assistant,
+    syncDefaultSettings:target=>{
+      settings.setSettings({assistant:{backendId:target?.backendId??null,profileId:target?.profileId??null,model:target?.model??null}});
+    },
+    renderAvatar:(request,name)=>owner.renderGeneratedAvatar(request,name),
+  });
+  teamRef=team;
+  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),team:()=>team,timeZone:()=>settings.getSettings().assistant?.timeZone,
     workbenchProof:runId=>workbenchAppearance.proofFor(runId),
     nativeSettingProof:runId=>workbenchAppearance.nativeProofFor(runId),
     pending:{offer:()=>assistantRuns?.offerPending()??[],settle:delivered=>assistantRuns?.settlePending(delivered)},
@@ -386,7 +404,7 @@ export async function createApp(options: AppOptions = {}) {
   const offIndexFeed=journalFeed.subscribe((_sessionId,lane)=>lane==='main',batch=>liveIndex.observeEntities(batch.sessionId,latestEvents(batch.items)));
   const offServiceFeed=nativeBackends.readJournal(journalFeed);
   const sessionCommands=new SessionCommands();
-  const orchestration=new OrchestrationService({store,settings,nativeBackends,git,dispatch,sessionCommands,notices,recordAuxiliaryCall,onWakeup:wakeup=>devices.wakeupChanged(wakeup)});
+  const orchestration=new OrchestrationService({store,settings,nativeBackends,git,dispatch,sessionCommands,team:()=>team,notices,recordAuxiliaryCall,onWakeup:wakeup=>devices.wakeupChanged(wakeup)});
   orchestrationRef=orchestration;
   const app=Fastify({logger:options.logger??false,bodyLimit:36*1024*1024,requestTimeout:60_000});
   // Apps reach this port over TLS with the certificate pinned from the pairing code; browsers keep plain HTTP (docs/TRANSPORT-SECURITY.md §3).
@@ -635,10 +653,14 @@ export async function createApp(options: AppOptions = {}) {
       },
     },
   });
-  const deps:RouteDeps={profile,links:()=>linksRef,bindWorkbench:(request,session,run)=>{
+  const deps:RouteDeps={profile,team:()=>team,extractTeamMember:(sessionId,signal)=>extractMemberFromSession({store,settings:()=>settings.getSettings(),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),transcript:async id=>{const events=await nativeBackends.contextTranscript(id,CONTEXT_LIMITS.bytes,AbortSignal.timeout(CONTEXT_LIMITS.timeoutMs));if(!events?.length)return '';return assistantSearch.extractIndexable(id,events.map((event,index)=>({sequence:index+1,sessionId:id,type:event.type,data:event.data,createdAt:event.createdAt}))).map(item=>`${item.kind==='user'?'User':item.kind==='assistant'?'Assistant':'Tool'}: ${item.text}`).join('\n\n');},recordAuxiliaryCall},sessionId,signal),links:()=>linksRef,bindWorkbench:(request,session,run)=>{
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
-    if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
+    const member=team.resolveFor(project,session);
+    const allowed=member
+      ? (member.capabilities.workbenchAdmin && member.sessionMode==='continuous' && (member.mainSessionId===session.id || (project.system==='assistant' && project.mainSessionId===session.id)))
+      : (project.system==='assistant' && project.mainSessionId===session.id);
+    if(allowed) workbenchAppearance.bind(request,run);
   },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,clientAccess:(request:FastifyRequest)=>{const {secure,granted}=accessOf(request);return {secure,capabilities:[...granted]};},recordSecurity,securityAudit,tlsFingerprint:serverTls.fingerprint,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
@@ -653,11 +675,14 @@ export async function createApp(options: AppOptions = {}) {
   registerExternalSessionRoutes(app,deps);
   registerMarkRoutes(app,deps);
   registerWorkItemRoutes(app,deps);
+  registerTeamRoutes(app,deps);
   registerPluginApprovalRoutes(app,deps);
   registerCouncilRoutes(app,deps);
   const shares=new ShareService(deps);
   registerShareRoutes(app,deps,shares);
   const agentCalls=new AgentCallService({store,timeline,orchestration,
+    team:()=>team,
+    assistantDefaults:()=>settings.getSettings().assistant,
     agents:()=>nativeBackends.catalog.listBackends(),
     capabilities:(backendId,profileId)=>nativeBackends.catalog.capabilitiesFor(backendId,profileId),
     // What the composer's model menu reads for the same project and provider: its models, and the account's quota.
@@ -758,7 +783,7 @@ export async function createApp(options: AppOptions = {}) {
   reclaimerRef=reclaimer;
   // Made before anyone can ask for it, so a phone opening the list sees it at once. A failure costs quick chat, not the server.
   try{quickChatProject(store,stateDir);}catch(error){console.warn('[riffet] quick chat project unavailable',error);}
-  try{assistantHome=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd);}catch(error){console.warn('[riffet] assistant project unavailable',error);}
+  try{assistantHome=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd);team.ensureDefaultMember();}catch(error){console.warn('[riffet] assistant project unavailable',error);}
   const stopAssistantWatch=assistantStanding.watch();
   // ---- The 助理's background runs (docs/ASSISTANT.md §7) ----
   const ownerZone=()=>settings.getSettings().assistant?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -921,7 +946,7 @@ export async function createApp(options: AppOptions = {}) {
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,profile,cacheRegistry,links,registeredRoutes,workItems,pluginApprovals,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,profile,cacheRegistry,links,registeredRoutes,workItems,pluginApprovals,team,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */

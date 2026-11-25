@@ -9,19 +9,24 @@ export interface SlashTrigger {
   leading: boolean;
 }
 
+/** Characters that may directly precede a mid-message `/token` without triggering on paths, URLs, fractions, or CJK `A/B` pairs. */
+const SLASH_BEFORE = /[\s([{"'（【「『《，。！？；：、]/;
+/** Characters that close a slash query so scanning stops at the boundary of an earlier token. */
+const SLASH_QUERY_STOP = /[\s)\]}"'）】」』》，。！？；：、]/;
+
 /**
- * The `/` token the caret is in, if any. A slash opens a token at the start of the draft or after
- * whitespace, the same boundary the backends require of a `/name` they invoke; `a/b`, URLs and
- * paths typed mid-word never open the menu. The scan stops at whitespace, so the query is the
- * text between the opening slash and the caret.
+ * The `/` token the caret is in, if any. A slash opens a token at the start of the draft, after
+ * whitespace, or after opening/separating punctuation; URLs (`https://`), paths (`src/app`,
+ * `/Users/foo`), fractions (`1/2`), and CJK pairs (`浅色/深色`) never open the menu.
  */
 export function detectSlashTrigger(text: string, caret: number): SlashTrigger | null {
   for (let index = caret - 1; index >= 0; index -= 1) {
     const char = text[index]!;
-    if (/\s/.test(char)) return null;
-    if (char !== '/') continue;
-    if (index > 0 && !/\s/.test(text[index - 1]!)) continue;
-    return { query: text.slice(index + 1, caret), start: index, leading: text.search(/\S/) === index };
+    if (char === '/') {
+      if (index > 0 && !SLASH_BEFORE.test(text[index - 1]!)) return null;
+      return { query: text.slice(index + 1, caret), start: index, leading: text.search(/\S/) === index };
+    }
+    if (SLASH_QUERY_STOP.test(char)) return null;
   }
   return null;
 }
@@ -79,28 +84,45 @@ export function slashMenuGroups(items: readonly SlashCommand[], query: string): 
   ];
 }
 
-const SLASH_TOKEN = /(^|\s)\/([A-Za-z0-9][\w.:-]*)(?=\s|$)/g;
+const SLASH_TOKEN = /(^|[\s([{"'（【「『《，。！？；：、])\/([A-Za-z0-9][\w.:-]*)(?=$|[^A-Za-z0-9_.:/-])/g;
+
+/** Every invoked `/name` range in `text` that the backend will act on, in text order. */
+export function slashTokenRanges(
+  text: string,
+  byName: ReadonlyMap<string, SlashCommand>,
+  inlineSkills: boolean,
+): Array<{ start: number; end: number; item: SlashCommand }> {
+  const first = text.search(/\S/);
+  const ranges: Array<{ start: number; end: number; item: SlashCommand }> = [];
+  for (const match of text.matchAll(SLASH_TOKEN)) {
+    const item = byName.get(match[2]!);
+    if (!item) continue;
+    const start = match.index + match[1]!.length;
+    const leading = start === first;
+    if (leading || (inlineSkills && item.kind === 'skill')) {
+      ranges.push({ start, end: start + 1 + match[2]!.length, item });
+    }
+  }
+  return ranges;
+}
 
 /**
- * The catalog entries the draft invokes as written: a whitespace-bounded `/name` the backend will
+ * The catalog entries the draft invokes as written: a bounded `/name` the backend will
  * act on — the leading token for any entry, a later one only for a skill on a backend that loads
  * skills mid-message. Deduplicated in order. The catalog comes keyed by name, so the caller builds
  * that once per catalog instead of once per keystroke.
  */
 export function invokedSlashItems(text: string, byName: ReadonlyMap<string, SlashCommand>, inlineSkills: boolean): SlashCommand[] {
-  const first = text.search(/\S/);
   const found: SlashCommand[] = [];
-  for (const match of text.matchAll(SLASH_TOKEN)) {
-    const item = byName.get(match[2]!);
-    if (!item || found.includes(item)) continue;
-    const leading = match.index + match[1]!.length === first;
-    if (leading || (inlineSkills && item.kind === 'skill')) found.push(item);
+  for (const { item } of slashTokenRanges(text, byName, inlineSkills)) {
+    if (!found.includes(item)) found.push(item);
   }
   return found;
 }
 
-/** `text` with the whitespace-bounded `/name` tokens removed, collapsing the gap each leaves. */
+/** `text` with the bounded `/name` tokens removed, collapsing the gap each leaves. */
 export function removeSlashToken(text: string, name: string): string {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return text.replace(new RegExp(`(^|\\s)\\/${escaped}(?=\\s|$)\\s?`, 'g'), '$1');
+  // i18n-ignore — regex boundary character class, not user-facing text
+  return text.replace(new RegExp(`(^|[\\s([{"'（【「『《，。！？；：、])\\/${escaped}(?=$|[^A-Za-z0-9_.:/-])\\s?`, 'g'), '$1');
 }

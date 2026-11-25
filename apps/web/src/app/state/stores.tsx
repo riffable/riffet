@@ -31,6 +31,7 @@ export interface WorkbenchHandlers {
   /** Locates a 收藏 and opens its conversation at the message. */
   openMark: (id: string) => void;
   openAssistant: () => boolean;
+  openMemberConfig: (memberId: string) => void;
   openPluginView: (id: string) => boolean;
   /** Puts a reference to a project file in a composer of that project: the conversation underneath when it is one, else a new conversation's. */
   quoteInProject: (projectId: string, reference: PromptContextReference) => boolean;
@@ -40,7 +41,7 @@ const SEEN_REPORT_DELAY_MS = 1000;
 
 /** One workbench's state, split by what changes together. */
 export function createWorkbenchStores() {
-  const handlers: WorkbenchHandlers = { selectSession: () => {}, reload: () => {}, sessionAction: () => {}, openMark: () => {}, openAssistant: () => false, openPluginView: () => false, quoteInProject: () => false };
+  const handlers: WorkbenchHandlers = { selectSession: () => {}, reload: () => {}, sessionAction: () => {}, openMark: () => {}, openAssistant: () => false, openMemberConfig: () => {}, openPluginView: () => false, quoteInProject: () => false };
   const cached = loadCachedLists()?.bootstrap;
   // `lists` is only read once a catalog request has answered, by which point it exists.
   const catalog = createCatalogStore({ offline: () => lists.get().status !== 'fresh' });

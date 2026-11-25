@@ -55,6 +55,8 @@ export const AgentMentionSchema = z.object({
   backendId: NativeBackendIdSchema,
   backendProfileId: z.string().optional(),
   model: z.string().optional(),
+  memberId: z.string().optional(),
+  label: z.string().optional(),
 });
 
 export const CapturedSessionReferenceSchema = z.object({

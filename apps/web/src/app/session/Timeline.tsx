@@ -3,7 +3,9 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconBot, IconBrain, IconChevronRight, IconCopy, IconCornerUpRight, IconEllipsis, IconGitFork, IconImageDown, IconRotateCcw, IconTextQuote } from '@/components/icons';
-import type { CapturedSessionReference, NativeRunRecovery, Run, RunMetrics } from '@contracts';
+import type { AgentMember, CapturedSessionReference, NativeBackendId, NativeRunRecovery, Run, RunMetrics } from '@contracts';
+import { AgentLogo } from '@/components/AgentLogo';
+import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -13,6 +15,7 @@ import { copyWithToast } from '@/lib/files';
 import { cn, formatDateTime } from '@/lib/utils';
 import { reasoningPreview } from '../../../../../packages/timeline/src/findText';
 import { useAnswerShare } from '../marks/ShareImage';
+import { MemberAvatar } from '../team/MemberAvatar';
 import { MessageWithMentions, unwrittenMentions } from './agentMentions';
 import { nativeDeliveryStatus, nativeTaskOutcome, sendPhase } from './delivery';
 import { FailureDetails } from './FailureDetails';
@@ -149,7 +152,19 @@ export const TopicDivider = memo(function TopicDivider({ time, collapsible, coll
   );
 });
 
-export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
+export interface CallSenderInfo {
+  kind: 'member' | 'agent';
+  name: string;
+  member?: AgentMember;
+  backendId?: NativeBackendId;
+  sessionId?: string;
+}
+
+export type MessageSender =
+  | { kind: 'owner'; owner?: { name?: string; avatar?: { url: string } } }
+  | CallSenderInfo;
+
+export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, sender, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
   /** Same-turn agent output already follows this prompt, proving the CLI received it. */
@@ -158,6 +173,8 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   progressShown?: boolean;
   /** Written by another agent, not the reader: the conversation leading a subagent, or a peer agent. */
   from?: 'coordinator' | 'peer';
+  /** Identifies who sent this turn in multi-party/called conversations (avatar + restrained low-saturation bubble tint). */
+  sender?: MessageSender;
   text: string;
   attachments: UserAttachment[];
   references?: CapturedSessionReference[];
@@ -195,18 +212,45 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   const continueAction = run && recovery?.canContinue && !run.native?.queueReleasedAt && onContinueNativeRun
     ? <button type="button" disabled={runActionPending} onClick={() => onContinueNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}>{recovery.queuedRunIds.length ? <Trans>继续发送 {recovery.queuedRunIds.length} 条消息</Trans> : <Trans>继续对话</Trans>}</button>
     : null;
+  const peerSender = sender && sender.kind !== 'owner' ? sender : undefined;
+  const senderAvatar = !sender ? null
+    : sender.kind === 'owner'
+      ? <OwnerAvatar owner={sender.owner} size={24} className="mt-1 shrink-0" />
+      : sender.kind === 'member' && sender.member
+        ? <MemberAvatar member={sender.member} size={24} className="mt-1 shrink-0" />
+        : (
+          <span className="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
+            {sender.backendId ? <AgentLogo backend={sender.backendId} size={14} /> : <IconBot aria-hidden className="size-3.5" />}
+          </span>
+        );
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <div className="flex max-w-[min(82%,560px)] items-start gap-1">
-        <div className="min-w-0 whitespace-pre-wrap break-words rounded-3xl bg-bubble px-4 py-2.5 text-base text-fg"><MessageWithMentions text={quoted.body} agents={run?.native?.input.agents} /></div>
+      <div className={cn('flex max-w-[min(82%,560px)] items-start', sender ? 'gap-2' : 'gap-1')}>
+        <div className={cn(
+          'min-w-0 whitespace-pre-wrap break-words rounded-3xl px-4 py-2.5 text-base text-fg',
+          peerSender ? 'bg-accent-soft ring-1 ring-inset ring-accent/15' : 'bg-bubble',
+        )}>
+          <MessageWithMentions
+            text={quoted.body}
+            agents={run?.native?.input.agents}
+            files={run?.native?.input.context}
+            sessions={references ?? run?.native?.contextSnapshots}
+          />
+        </div>
+        {senderAvatar}
       </div>
       <MessageQuotes quotes={quoted.quotes} />
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {!resources && <MentionedAgents agents={unwrittenMentions(quoted.body, run?.native?.input.agents)} />}
-      {(text || time || delivery) && (
-        <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !resources && revealOnOwnHover)}>
-          {from && <span className="inline-flex items-center gap-1"><IconBot aria-hidden className="size-3" />{from === 'coordinator' ? <Trans>主对话</Trans> : <Trans>另一个 Agent</Trans>}</span>}
+      {(text || time || delivery || peerSender) && (
+        <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', sender && 'pr-8', statusRow, !footerPinned && !delivery && !from && !peerSender && !resources && revealOnOwnHover)}>
+          {peerSender && (
+            peerSender.sessionId && onOpenSession
+              ? <button type="button" onClick={() => onOpenSession(peerSender.sessionId!)} className="inline-flex items-center gap-1 text-fg-2 underline-offset-2 hover:text-fg hover:underline">{peerSender.name}</button>
+              : <span className="inline-flex items-center gap-1 text-fg-2">{peerSender.name}</span>
+          )}
+          {!peerSender && from && <span className="inline-flex items-center gap-1"><IconBot aria-hidden className="size-3" />{from === 'coordinator' ? <Trans>主对话</Trans> : <Trans>另一个 Agent</Trans>}</span>}
           {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充</Trans></span>}
           {delivery && (deliveryError ? <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'inline-flex items-center gap-0.5 text-fg-3 hover:text-fg')}>{delivery}<IconChevronRight aria-hidden className={cn('size-3 transition-transform', errorOpen && 'rotate-90')} /></button> : <span role="status" className="min-w-0 [overflow-wrap:anywhere]">{delivery}</span>)}
           {!taskOutcome && openTerminal}

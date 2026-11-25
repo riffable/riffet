@@ -29,11 +29,12 @@ export interface ClaudeWarm {
 }
 
 /** What a warm CLI is taken by: the same launch (profile, model, permission, colours) and the same tools. */
-export function claudeWarmKey(project: Project, profile: NativeBackendProfileConfig, input: { model?: string; approval?: string; appearance?: TerminalAppearance; tools?: string; extensionsOff?: readonly string[] }): string {
+export function claudeWarmKey(project: Project, profile: NativeBackendProfileConfig, input: { model?: string; approval?: string; appearance?: TerminalAppearance; tools?: string; extensionsOff?: readonly string[]; agentMemberId?: string }): string {
   const launch = createHash('sha256').update(JSON.stringify([profile.id, profile.config])).digest('hex');
   return JSON.stringify([
     project.id, project.cwd, launch, input.model ?? string(profile.config.defaultModel) ?? '', input.approval ?? string(profile.config.approval) ?? '',
     input.appearance ?? null, input.tools ?? '', [...extensionsOffNames(input.extensionsOff, 'mcp'), ...extensionsOffNames(input.extensionsOff, 'skill')].sort(),
+    input.agentMemberId ?? '',
   ]);
 }
 
@@ -46,11 +47,13 @@ export function sessionClaudeWarmKey(host: NativeBackendHost, session: Session, 
     appearance: input.appearance,
     tools: input.tools,
     extensionsOff: input.extensionsOff,
+    agentMemberId: input.agentMemberId,
   } satisfies LaunchKeyParts;
   return claudeWarmKey(project, profile, {
     ...(parts.model ? { model: parts.model } : {}), ...(parts.approval ? { approval: parts.approval } : {}),
     ...(parts.appearance ? { appearance: parts.appearance } : {}),
     tools: parts.tools, ...(parts.extensionsOff ? { extensionsOff: parts.extensionsOff } : {}),
+    ...(parts.agentMemberId ? { agentMemberId: parts.agentMemberId } : {}),
   });
 }
 

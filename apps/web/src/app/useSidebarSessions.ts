@@ -34,6 +34,8 @@ export function selectSidebarSessions(sessions: readonly Session[], visibleProje
   let unreadCount = 0;
   for (const session of sessions) {
     if (!visibleProjects.has(session.projectId) || sessionBackend(session) === 'chat') continue;
+    // Standing team member conversations live under the 团队 section, like the 个人助理's (docs/TEAM.md).
+    if (session.agentMemberId) continue;
     const origin = session.origin;
     if (origin?.kind === 'assistant' || origin?.kind === 'council' || origin?.kind === 'discussion') continue;
     const selected = session.id === filters.selectedSessionId;

@@ -15,7 +15,15 @@ export interface NativeRunInput {
  * for it is binding on the call: the provider, and the model with its parameters (`model[effort=high,fast=true]`).
  * Left out, the calling Agent chooses.
  */
-export interface AgentMention { backendId: NativeBackendId; backendProfileId?: string; model?: string; }
+export interface AgentMention {
+  backendId: NativeBackendId;
+  backendProfileId?: string;
+  model?: string;
+  /** Team member id when `@`-mentioning a standing member (docs/TEAM.md §4.3). */
+  memberId?: string;
+  /** Display name snapshot as written in the message (`@<label>`). */
+  label?: string;
+}
 /** A provider turn identity; unlike a display run id it can fence a mid-turn input. */
 export interface NativeTurnTarget { nativeSessionId: string; turnId: string; }
 /** A Stop belongs to the exact state the caller saw; retries preserve this identity. */
@@ -125,7 +133,7 @@ export interface OutputRate {
   /** Absent when the window has no token samples. */
   tokens?: MetricsTokenSource | 'mixed';
 }
-export type NativeSessionInput = Pick<Session, 'projectId'> & Partial<Pick<Session, 'title' | 'tags' | 'model' | 'mode' | 'approval' | 'backendId' | 'backendProfileId' | 'nativeSessionId' | 'cursorSessionId' | 'resumePicker' | 'origin' | 'terminalAppearance' | 'toolGroups' | 'extensionsOff' | 'workItemId'>>;
+export type NativeSessionInput = Pick<Session, 'projectId'> & Partial<Pick<Session, 'title' | 'tags' | 'model' | 'mode' | 'approval' | 'backendId' | 'backendProfileId' | 'nativeSessionId' | 'cursorSessionId' | 'resumePicker' | 'origin' | 'terminalAppearance' | 'toolGroups' | 'extensionsOff' | 'workItemId' | 'agentMemberId'>>;
 export interface Run {
   id: string; sessionId: string; commandId: string; prompt: string;
   state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';

@@ -47,4 +47,21 @@ describe('list cache', () => {
     ]);
     expect(parseCachedLists(serializeCachedLists(bounded, 1))?.bootstrap.workItemSummaries).toEqual(bounded.workItemSummaries);
   });
+
+  it('keeps team members across reloads so the sidebar paints in place', () => {
+    const teamMembers = [{
+      id: 'default',
+      name: '个人助理',
+      scope: { kind: 'global' },
+      sessionMode: 'continuous',
+      capabilities: { workspace: true, taskBoard: true, delegations: true, memberCalls: true, externalTools: true, workbenchAdmin: true },
+      memory: { consolidation: true },
+      budget: { dailyRuns: 30 },
+      projectId: 'assistant-project',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }] as Bootstrap['teamMembers'];
+    const cached = parseCachedLists(serializeCachedLists(bootstrap({ teamMembers }), 1));
+    expect(cached?.bootstrap.teamMembers).toEqual(teamMembers);
+  });
 });

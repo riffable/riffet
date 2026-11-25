@@ -3,20 +3,35 @@ import { useLingui } from '@lingui/react/macro';
 import { AGENT_CALL_BUDGET, type FileEntry, type Session } from '@contracts';
 import { api, isAgentReference, isSessionReference, sameContextReference, type ProjectRecord, type PromptContextReference } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
-import { agentMentionCandidates, mentionText, type AgentMentionSource } from './agentMentions';
+import { agentMentionCandidates, inlineMentionRanges, mentionText, type AgentMentionSource } from './agentMentions';
 import type { SlashCommand } from './model';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
-import { detectSlashTrigger, invokedSlashItems, slashCandidates, slashMenuGroups } from './slashMenu';
+import { detectSlashTrigger, slashCandidates, slashMenuGroups, slashTokenRanges } from './slashMenu';
 
 export type Trigger = { type: 'slash' | 'mention'; query: string; start: number; leading?: boolean };
 
 const NO_FILES: FileEntry[] = [];
+/** ASCII local-part / identifier chars that precede `@` in emails or handles (`alice@example.com`), never a mention trigger. */
+const MENTION_BEFORE_REJECT = /[A-Za-z0-9._%+-]/;
 
-function detectTrigger(text: string, caret: number, mentions = true): Trigger | null {
-  const before = text.slice(0, caret);
+function detectMentionTrigger(text: string, caret: number, committed: readonly { start: number; end: number }[]): Trigger | null {
+  for (let index = caret - 1; index >= 0; index -= 1) {
+    const char = text[index]!;
+    if (/\s/.test(char)) return null;
+    if (char !== '@') continue;
+    // A `@` that already opens a committed inline mention must not reopen autocomplete (e.g. `@Claude` or `@理财帮我看下`).
+    if (committed.some(range => index >= range.start && index < range.end)) return null;
+    if (index > 0 && MENTION_BEFORE_REJECT.test(text[index - 1]!) && !committed.some(range => range.end === index)) return null;
+    return { type: 'mention', query: text.slice(index + 1, caret), start: index };
+  }
+  return null;
+}
+
+function detectTrigger(text: string, caret: number, references: readonly PromptContextReference[], mentions = true): Trigger | null {
   if (mentions) {
-    const mention = /(?:^|\s)@([^\s@]*)$/.exec(before);
-    if (mention) return { type: 'mention', query: mention[1]!, start: caret - mention[1]!.length - 1 };
+    const committed = inlineMentionRanges(text, references);
+    const mention = detectMentionTrigger(text, caret, committed);
+    if (mention) return mention;
   }
   const slash = detectSlashTrigger(text, caret);
   if (slash) return { type: 'slash', query: slash.query, start: slash.start, leading: slash.leading };
@@ -92,7 +107,7 @@ export function useComposerTrigger({
   }, [trigger, commands, inlineSkills]);
   const slashItems = useMemo(() => slashGroups.flatMap((group) => group.items), [slashGroups]);
   const commandsByName = useMemo(() => new Map(commands.map((item) => [item.name, item])), [commands]);
-  const invokedItems = useMemo(() => invokedSlashItems(text, commandsByName, inlineSkills === true), [text, commandsByName, inlineSkills]);
+  const invokedSlashRanges = useMemo(() => slashTokenRanges(text, commandsByName, inlineSkills === true), [text, commandsByName, inlineSkills]);
 
   const slashQuery = trigger?.type === 'slash' ? trigger.query.trim() : '';
   /**
@@ -132,7 +147,14 @@ export function useComposerTrigger({
     return () => { active = false; controller.abort(); window.clearTimeout(timer); };
   }, [projectId, mentionQuery, searchable]);
 
-  const referenceCandidates = useMemo(() => (referenceSessions ?? []).filter(item => item.id !== recipientSessionId), [referenceSessions, recipientSessionId]);
+  const activeMemberIds = useMemo(
+    () => new Set((agentMentions?.members ?? []).filter(member => !member.archivedAt).map(member => member.id)),
+    [agentMentions?.members],
+  );
+  const referenceCandidates = useMemo(
+    () => (referenceSessions ?? []).filter(item => item.id !== recipientSessionId && (!item.agentMemberId || !activeMemberIds.has(item.agentMemberId) || Boolean(browsing))),
+    [referenceSessions, recipientSessionId, activeMemberIds, browsing],
+  );
   const sessionFiles = useMemo(() => {
     if (!sessionMentions || mentionQuery === undefined) return [];
     const query = mentionQuery.toLocaleLowerCase();
@@ -152,11 +174,17 @@ export function useComposerTrigger({
       || (b.session.lastActivityAt ?? b.session.updatedAt).localeCompare(a.session.lastActivityAt ?? a.session.updatedAt)).slice(0, browsing ? undefined : 10);
   }, [sessionMentions, mentionQuery, browsing, referenceCandidates, referenceProjects, projectId]);
 
-  const agentCandidates = useMemo(() => agentMentions ? agentMentionCandidates(agentMentions.backends) : [], [agentMentions]);
+  const agentCandidates = useMemo(
+    () => agentMentions ? agentMentionCandidates(agentMentions.backends, agentMentions.members, agentMentions.currentMemberId) : [],
+    [agentMentions],
+  );
   const agentRows = useMemo(() => {
     if (!agentCandidates.length || mentionQuery === undefined || browsing) return [];
     const query = mentionQuery.toLocaleLowerCase();
-    return agentCandidates.filter(item => !query || item.label.toLocaleLowerCase().includes(query) || item.backendId.toLocaleLowerCase().includes(query));
+    return agentCandidates.filter(item => !query
+      || item.label.toLocaleLowerCase().includes(query)
+      || item.backendId.toLocaleLowerCase().includes(query)
+      || (item.member?.description?.toLocaleLowerCase().includes(query) ?? false));
   }, [agentCandidates, mentionQuery, browsing]);
 
   /** Projects with a live session, this one first (its full list is one step in), then most recently active; a query narrows them by name. */
@@ -186,7 +214,7 @@ export function useComposerTrigger({
     const dismissed = dismissedTriggerRef.current;
     if (dismissed?.text === value && dismissed.caret === caret) return;
     dismissedTriggerRef.current = null;
-    setTrigger(detectTrigger(value, caret, fileMentions || sessionMentions || agentCandidates.length > 0));
+    setTrigger(detectTrigger(value, caret, referencesRef.current, fileMentions || sessionMentions || agentCandidates.length > 0));
   };
 
   const replaceRange = (start: number, end: number, insert: string) => {
@@ -229,26 +257,35 @@ export function useComposerTrigger({
       const selected = sessionFiles[index - files.length - agentRows.length]?.session;
       const project = projectRows[index - files.length - agentRows.length - sessionFiles.length];
       if (project) { browseInto(project.id); return; }
+      const suffix = /^\s/.test(textRef.current.slice(caret)) ? '' : ' ';
       if (agent) {
-        const reference = { kind: 'agent' as const, backendId: agent.backendId, label: agent.label };
+        const reference = {
+          kind: 'agent' as const,
+          backendId: agent.backendId,
+          label: agent.label,
+          ...(agent.member ? { memberId: agent.member.id } : {}),
+        };
         if (!referencesRef.current.some(item => sameContextReference(item, reference))) {
           if (referencesRef.current.filter(isAgentReference).length >= AGENT_CALL_BUDGET.mentions) { onError(t`最多提到 ${AGENT_CALL_BUDGET.mentions} 个 Agent`); return; }
           updateReferences([...referencesRef.current, reference]);
         }
         // The mention is written where the `@` was, so the sentence reads as the request it is.
-        replaceRange(trigger.start, caret, `${mentionText(agent.label)} `);
+        replaceRange(trigger.start, caret, `${mentionText(agent.label)}${suffix}`);
         return;
       } else if (file) {
-        const reference = { path: file.path };
+        const reference = { path: file.path, inline: true as const };
         if (!referencesRef.current.some(item => sameContextReference(item, reference))) updateReferences([...referencesRef.current, reference]);
+        replaceRange(trigger.start, caret, `${mentionText(file.path)}${suffix}`);
+        return;
       } else if (selected) {
-        const reference = { kind: 'session' as const, sessionId: selected.id, title: selected.title, backendId: sessionBackend(selected) };
+        const reference = { kind: 'session' as const, sessionId: selected.id, title: selected.title, backendId: sessionBackend(selected), inline: true as const };
         if (!referencesRef.current.some(item => sameContextReference(item, reference))) {
           if (referencesRef.current.filter(isSessionReference).length >= 5) { onError(t`最多引用 5 个会话`); return; }
           updateReferences([...referencesRef.current, reference]);
         }
+        replaceRange(trigger.start, caret, `${mentionText(selected.title || selected.id)}${suffix}`);
+        return;
       } else return;
-      replaceRange(trigger.start, caret, '');
     }
   };
 
@@ -286,7 +323,7 @@ export function useComposerTrigger({
     projectRows,
     slashGroups,
     slashItems,
-    invokedItems,
+    invokedSlashRanges,
     slashQuery,
     unknownSlashCommand,
     menuOpen,

@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type Dispatch, type MutableRefObject, type RefObject, type SetStateAction } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { Attachment } from '@contracts';
-import { api, HttpError, isAgentReference, isFileReference, mergeRestoredReferences, sameContextReference, type NativeSessionCreateInput, type PromptContextReference } from '@/lib/api';
-import { mentionRanges, referenceLabel } from './agentMentions';
+import { api, HttpError, isAgentReference, isFileReference, isSessionReference, mergeRestoredReferences, sameContextReference, type NativeSessionCreateInput, type PromptContextReference } from '@/lib/api';
+import { inlineReferenceLabel, mentionRanges, referenceLabel } from './agentMentions';
 import type { PendingUpload } from './composerAttachmentIntake';
 import { creationDraftRemainder, markDraftUnsaved, readDraft, recoveredCreationEvent, unsavedDrafts, writeDraft, type StoredDraft } from './composerDraft';
 import { joinQuotes, splitQuotes } from './quotes';
@@ -155,7 +155,14 @@ export function useComposerDraftSync(options: {
     if (restored.quotes.length) updateQuotes([...restored.quotes, ...quotesRef.current]);
     updateAttachments((existing) => [...restoreDraft.attachments.filter((item) => !existing.some((other) => other.id === item.id)), ...existing]);
     // An Agent an older message mentioned beside its text has no mark to show here; it is not restored unseen.
-    const context = restoreDraft.context?.filter(item => !isAgentReference(item) || mentionRanges(nextText, [referenceLabel(item)]).length > 0);
+    // Restored file/session references whose `@label` is already in the text stay inline-owned.
+    const context = restoreDraft.context
+      ?.filter(item => !isAgentReference(item) || mentionRanges(nextText, [referenceLabel(item)]).length > 0)
+      .map(item => {
+        if (!isFileReference(item) && !isSessionReference(item)) return item;
+        const label = inlineReferenceLabel(item);
+        return label && mentionRanges(nextText, [label]).length > 0 ? { ...item, inline: true as const } : item;
+      });
     if (context?.length) updateReferences(mergeRestoredReferences(referencesRef.current, context));
     if (restoreDraft.missingAttachments) updatePendingUploads(current => [...current, ...restoreDraft.missingAttachments!.filter(item => !current.some(other => other.key === item.key))]);
     if (restoreDraft.scheduledAt && restoreDraft.scheduledAt.getTime() > Date.now()) {

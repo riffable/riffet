@@ -1943,6 +1943,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2065,6 +2066,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2187,6 +2189,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2309,6 +2312,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2431,6 +2435,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2553,6 +2558,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2675,6 +2681,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2797,6 +2804,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -2919,6 +2927,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3041,6 +3050,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3163,6 +3173,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3285,6 +3296,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3407,6 +3419,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3529,6 +3542,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3651,6 +3665,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3773,6 +3788,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -3895,6 +3911,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -4017,6 +4034,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -4139,6 +4157,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -4261,6 +4280,7 @@
       "futureField": 4
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text",
     "futureField": 4
@@ -4387,6 +4407,7 @@
           "futureField": 4
         },
         "workItemId": "text",
+        "agentMemberId": "text",
         "createdAt": "text",
         "updatedAt": "text",
         "futureField": 4
@@ -4438,6 +4459,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -4564,6 +4587,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -4690,6 +4715,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -4816,6 +4843,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -4942,6 +4971,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -5068,6 +5099,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -5201,6 +5234,8 @@
               "backendId": "claude",
               "backendProfileId": "text",
               "model": "text",
+              "memberId": "text",
+              "label": "text",
               "futureField": 4
             }
           ],
@@ -5438,6 +5473,7 @@
         "futureField": 4
       },
       "workItemId": "text",
+      "agentMemberId": "text",
       "createdAt": "text",
       "updatedAt": "text",
       "futureField": 4
@@ -5661,6 +5697,8 @@
                 "backendId": "claude",
                 "backendProfileId": "text",
                 "model": "text",
+                "memberId": "text",
+                "label": "text",
                 "futureField": 4
               }
             ],
@@ -5873,6 +5911,8 @@
                 "backendId": "claude",
                 "backendProfileId": "text",
                 "model": "text",
+                "memberId": "text",
+                "label": "text",
                 "futureField": 4
               }
             ],
@@ -6139,6 +6179,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -6225,6 +6267,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -6472,6 +6516,8 @@
                 "backendId": "claude",
                 "backendProfileId": "text",
                 "model": "text",
+                "memberId": "text",
+                "label": "text",
                 "futureField": 4
               }
             ],
@@ -6603,6 +6649,8 @@
               "backendId": "claude",
               "backendProfileId": "text",
               "model": "text",
+              "memberId": "text",
+              "label": "text",
               "futureField": 4
             }
           ],
@@ -6924,6 +6972,7 @@
         "futureField": 4
       },
       "workItemId": "text",
+      "agentMemberId": "text",
       "createdAt": "text",
       "updatedAt": "text",
       "futureField": 4
@@ -6978,6 +7027,8 @@
                 "backendId": "claude",
                 "backendProfileId": "text",
                 "model": "text",
+                "memberId": "text",
+                "label": "text",
                 "futureField": 4
               }
             ],
@@ -7238,6 +7289,8 @@
         "backendId": "claude",
         "backendProfileId": "text",
         "model": "text",
+        "memberId": "text",
+        "label": "text",
         "futureField": 4
       }
     ],
@@ -7691,6 +7744,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -7779,6 +7834,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -7869,6 +7926,8 @@
             "backendId": "claude",
             "backendProfileId": "text",
             "model": "text",
+            "memberId": "text",
+            "label": "text",
             "futureField": 4
           }
         ],
@@ -9074,6 +9133,7 @@
       "updatedAt": "text"
     },
     "workItemId": "text",
+    "agentMemberId": "text",
     "createdAt": "text",
     "updatedAt": "text"
   },
@@ -9189,6 +9249,7 @@
           "updatedAt": "text"
         },
         "workItemId": "text",
+        "agentMemberId": "text",
         "createdAt": "text",
         "updatedAt": "text"
       }
@@ -9227,7 +9288,9 @@
           {
             "backendId": "claude",
             "backendProfileId": "text",
-            "model": "text"
+            "model": "text",
+            "memberId": "text",
+            "label": "text"
           }
         ]
       },
@@ -9341,7 +9404,9 @@
             {
               "backendId": "claude",
               "backendProfileId": "text",
-              "model": "text"
+              "model": "text",
+              "memberId": "text",
+              "label": "text"
             }
           ]
         },
@@ -9544,6 +9609,7 @@
         "updatedAt": "text"
       },
       "workItemId": "text",
+      "agentMemberId": "text",
       "createdAt": "text",
       "updatedAt": "text"
     },
@@ -9743,7 +9809,9 @@
               {
                 "backendId": "claude",
                 "backendProfileId": "text",
-                "model": "text"
+                "model": "text",
+                "memberId": "text",
+                "label": "text"
               }
             ]
           },
@@ -9932,7 +10000,9 @@
               {
                 "backendId": "claude",
                 "backendProfileId": "text",
-                "model": "text"
+                "model": "text",
+                "memberId": "text",
+                "label": "text"
               }
             ]
           },
@@ -10157,7 +10227,9 @@
       {
         "backendId": "claude",
         "backendProfileId": "text",
-        "model": "text"
+        "model": "text",
+        "memberId": "text",
+        "label": "text"
       }
     ],
     "pending": "future-value"
@@ -10229,7 +10301,9 @@
           {
             "backendId": "claude",
             "backendProfileId": "text",
-            "model": "text"
+            "model": "text",
+            "memberId": "text",
+            "label": "text"
           }
         ],
         "pending": "future-value"
@@ -10309,7 +10383,9 @@
           {
             "backendId": "claude",
             "backendProfileId": "text",
-            "model": "text"
+            "model": "text",
+            "memberId": "text",
+            "label": "text"
           }
         ],
         "pending": "future-value"

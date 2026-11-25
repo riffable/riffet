@@ -2,10 +2,11 @@ import type { ExternalSessions } from '../native/external-sessions.js';
 import type { TerminalHolds } from '../native/terminal-hold.js';
 import type { IncomingHttpHeaders, ServerResponse } from 'node:http';
 import type { FastifyRequest } from 'fastify';
-import type { AppSettings, ClientAccess, NativeRunInput, Run, SecurityEvent, SecurityEventKind, Session } from '../../../../packages/contracts/src/index.js';
+import type { AgentMemberExtractDraft, AppSettings, ClientAccess, NativeRunInput, Run, SecurityEvent, SecurityEventKind, Session } from '../../../../packages/contracts/src/index.js';
 import type { Auth } from '../auth.js';
 import type { AssistantDelegations } from '../assistant/delegations.js';
 import type { AssistantRuns } from '../assistant/runs.js';
+import type { AgentTeamService } from '../assistant/team.js';
 import type { NativeBackendService } from '../backends/service.js';
 import type { GitService } from '../git/index.js';
 import type { PluginRegistry } from '../plugins/registry.js';
@@ -41,6 +42,10 @@ export type NativeMessageBody = { commandId?: string; text: string; attachments?
 export interface RouteDeps {
   /** Active server memory profile (`full` hub vs `lite` low-footprint node). */
   profile?: 'full' | 'lite';
+  /** Team & members (docs/TEAM.md): evolves the singleton personal assistant into configurable members. */
+  team?: () => AgentTeamService | undefined;
+  /** Distills an existing conversation into a Team Member draft (docs/TEAM.md §5.3). */
+  extractTeamMember?: (sessionId: string, signal?: AbortSignal) => Promise<AgentMemberExtractDraft>;
   /** The 助理's delegations (docs/ASSISTANT.md §7.3); made after the routes' dependencies. */
   assistantDelegations?: () => AssistantDelegations | undefined;
   /** The 助理's background runs (docs/ASSISTANT.md §7.1); made after the routes' dependencies. */

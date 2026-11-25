@@ -7,6 +7,7 @@ import { Spinner } from '@/components/ui/controls';
 import { isSessionReference, type ProjectRecord, type PromptContextReference } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
 import { cn } from '@/lib/utils';
+import { MemberAvatar } from '../team/MemberAvatar';
 import type { SlashCommand } from './model';
 import type { AgentMentionCandidate } from './agentMentions';
 import type { Trigger } from './useComposerTrigger';
@@ -69,6 +70,8 @@ export function ComposerTriggerMenu({
   referenceSessions?: Session[];
 }) {
   const { t } = useLingui();
+  const memberRows = agentRows.filter(item => Boolean(item.member));
+  const backendRows = agentRows.filter(item => !item.member);
   return (
     <div className={cn('inset-x-0 z-(--z-dock) overflow-hidden rounded-xl bg-popover shadow-pop animate-in fade-in-0 duration-[var(--duration-fast)] ease-[var(--ease-decelerate)]', fullscreen ? 'absolute bottom-14 mx-3 mb-2' : isMobile ? 'relative mb-2' : hero ? 'absolute top-full mt-2 slide-in-from-top-1' : 'absolute bottom-full mb-2 slide-in-from-bottom-1')}>
       <div className="flex h-8 items-center gap-1.5 edge-b px-3 text-xs text-fg-3">
@@ -112,10 +115,22 @@ export function ComposerTriggerMenu({
             <span className="min-w-0 truncate font-mono text-2xs text-fg-3">{file.path}</span>
           </button>
         ))}
-        {trigger.type === 'mention' && agentRows.length > 0 && <div role="group" aria-label="Agent">
-          <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">Agent</div>
-          {agentRows.map((item, itemIndex) => {
+        {trigger.type === 'mention' && memberRows.length > 0 && <div role="group" aria-label={t`团队成员`}>
+          <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4"><Trans>团队成员</Trans></div>
+          {memberRows.map((item, itemIndex) => {
             const index = files.length + itemIndex;
+            const member = item.member!;
+            return <button key={`member:${member.id}`} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm md:h-8', index === highlight && 'bg-hover')}>
+              <MemberAvatar member={member} size={18} className="shrink-0" />
+              <span className="shrink-0 truncate text-fg">{item.label}</span>
+              {member.description && <span className="min-w-0 flex-1 truncate text-2xs text-fg-3">{member.description}</span>}
+            </button>;
+          })}
+        </div>}
+        {trigger.type === 'mention' && backendRows.length > 0 && <div role="group" aria-label="Agent">
+          <div className="px-2 pb-0.5 pt-1.5 text-2xs font-medium text-fg-4">Agent</div>
+          {backendRows.map((item, itemIndex) => {
+            const index = files.length + memberRows.length + itemIndex;
             return <button key={item.backendId} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm md:h-8', index === highlight && 'bg-hover')}>
               <AgentLogo backend={item.backendId} size={14} className="shrink-0 text-fg-3" />
               <span className="min-w-0 flex-1 truncate text-fg">{item.label}</span>

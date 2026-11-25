@@ -247,7 +247,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
     <PlaceRow icon={<IconSparkles />} label={t`能力`} hint={assistant.abilitiesNote} onClick={go(assistant.openAbilities)} />
     {assistant.hasFiles && <PlaceRow icon={<IconFileText />} label={t`文件`} hint={assistant.filesNote} onClick={go(() => assistant.setFilesOpen(true))} />}
     {assistant.hasDelegations && <PlaceRow icon={<IconRepeat />} label={t`委托`} hint={assistant.delegationsNote} onClick={go(() => assistant.setDelegationsOpen(true))} />}
-    <PlaceRow icon={<IconSettings2 />} label={t`设置`} onClick={go(assistant.openSettings)} />
+    {!assistant.memberId && <PlaceRow icon={<IconSettings2 />} label={t`设置`} onClick={go(assistant.openSettings)} />}
   </>;
   const projectPlaces = Boolean(project && (changesVisible || !isAssistantProject(project)));
 

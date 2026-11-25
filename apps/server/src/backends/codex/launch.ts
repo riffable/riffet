@@ -94,8 +94,8 @@ export interface CodexWarm {
 }
 
 /** What a warm thread is taken by: the same launch, model, permission and tools as the conversation's. */
-export function warmKey(project: Project, profile: NativeBackendProfileConfig, flavor: CodexFlavor, model: string | undefined, approval: string | undefined, tools: string | undefined, mcpOff: readonly string[] = []): string {
-  return JSON.stringify([project.id, runtimeFingerprintFor(project, profile, flavor), model ?? str(profile.config.defaultModel) ?? '', permissionOf(approval, flavor.id).id, tools ?? '', [...mcpOff].sort()]);
+export function warmKey(project: Project, profile: NativeBackendProfileConfig, flavor: CodexFlavor, model: string | undefined, approval: string | undefined, tools: string | undefined, mcpOff: readonly string[] = [], agentMemberId = ''): string {
+  return JSON.stringify([project.id, runtimeFingerprintFor(project, profile, flavor), model ?? str(profile.config.defaultModel) ?? '', permissionOf(approval, flavor.id).id, tools ?? '', [...mcpOff].sort(), agentMemberId]);
 }
 
 /** The key of the conversation `session` would start: its own model, permission, tools and switched-off servers. */
@@ -107,8 +107,9 @@ export function sessionWarmKey(host: NativeBackendHost, session: Session, projec
     appearance: notKeyed('the app-server has no terminal; an attached TUI takes its own colours'),
     tools: input.tools,
     extensionsOff: extensionsOffNames(input.extensionsOff, 'mcp'),
+    agentMemberId: input.agentMemberId,
   } satisfies LaunchKeyParts;
-  return warmKey(project, profile, flavor, parts.model, parts.approval, parts.tools, parts.extensionsOff);
+  return warmKey(project, profile, flavor, parts.model, parts.approval, parts.tools, parts.extensionsOff, parts.agentMemberId ?? '');
 }
 
 /**

@@ -64,7 +64,14 @@ msgstr ""
 msgid "「{0}」{body}"
 msgstr ""
 
+#. placeholder {0}: TEAM_BUDGET.maxDailyRuns
+#: src/app/team/MemberConfigDialog.tsx
+msgid "1–{0} 次"
+msgstr ""
+
 #: src/app/plugins/PluginMark.tsx
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
 msgid "Agent 与模型"
 msgstr ""
 
@@ -101,6 +108,11 @@ msgstr ""
 msgid "Shell 终端"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "一条主对话，/new 换话题"
+msgstr ""
+
 #: src/app/hostShortcuts.ts
 msgid "上一个标签"
 msgstr ""
@@ -128,6 +140,10 @@ msgstr ""
 
 #: src/app/hostShortcuts.ts
 msgid "下一个标签"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "下次启动生效"
 msgstr ""
 
 #: src/app/FolderFavorites.tsx
@@ -160,6 +176,11 @@ msgstr ""
 msgid "不过期"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "个人事务"
+msgstr ""
+
 #: src/app/Header.tsx
 #: src/app/SessionInfo.tsx
 #: src/app/sidebarDestinations.ts
@@ -174,6 +195,10 @@ msgstr ""
 
 #: src/app/SidebarUserMenu.tsx
 msgid "个人资料与更多"
+msgstr ""
+
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "主对话"
 msgstr ""
 
 #: src/app/DirectoryPicker.tsx
@@ -271,6 +296,10 @@ msgstr ""
 msgid "会话内查找"
 msgstr ""
 
+#: src/app/Header.tsx
+msgid "会话列表"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "会话操作"
 msgstr ""
@@ -283,6 +312,11 @@ msgstr ""
 msgid "会话标签页"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "作用范围"
+msgstr ""
+
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "使用"
 msgstr ""
@@ -291,8 +325,16 @@ msgstr ""
 msgid "使用中"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "使用已配对设备与外部能力"
+msgstr ""
+
 #: src/app/DirectoryPicker.tsx
 msgid "使用此目录"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "例如：发版打包、Riffet 验收、理财分析"
 msgstr ""
 
 #: src/app/hostShortcuts.ts
@@ -305,6 +347,7 @@ msgstr ""
 
 #: src/app/FolderFavorites.tsx
 #: src/app/plugins/PluginsPage.tsx
+#: src/app/team/MemberConfigDialog.tsx
 #: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 #: src/app/WorkbenchHeader.tsx
@@ -313,6 +356,10 @@ msgstr ""
 
 #: src/app/WorkbenchHeader.tsx
 msgid "保存为项目"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "保留历史会话记录，不再出现在团队列表中。"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
@@ -354,6 +401,10 @@ msgstr ""
 #. placeholder {0}: activeServer?.name ?? ''
 #: src/app/ProjectHome.tsx
 msgid "先在 {0} 选择一个目录"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "全局用户画像（USER.md）"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
@@ -465,6 +516,10 @@ msgstr ""
 msgid "最近会话"
 msgstr ""
 
+#: src/app/team/MemberSessionsList.tsx
+msgid "最近对话"
+msgstr ""
+
 #: src/app/SessionSearchDialog.tsx
 msgid "最近搜索"
 msgstr ""
@@ -511,6 +566,7 @@ msgstr ""
 msgid "切换视图"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
 #: src/app/use-project-actions.ts
 msgid "创建"
 msgstr ""
@@ -518,6 +574,27 @@ msgstr ""
 #: src/app/SessionInfo.tsx
 msgctxt "workbench-created-at"
 msgid "创建"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "创建和更新任务状态"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "创建定时唤醒、委托与通知"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "创建成员"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "初始记忆"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+#: src/app/Workbench.tsx
+msgid "删除"
 msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -530,6 +607,11 @@ msgstr ""
 msgid "删除…"
 msgstr ""
 
+#. placeholder {0}: member.name
+#: src/app/team/MemberConfigDialog.tsx
+msgid "删除「{0}」？"
+msgstr ""
+
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "删除「{title}」的数据？"
 msgstr ""
@@ -540,6 +622,15 @@ msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "删除后无法恢复"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "删除成员"
+msgstr ""
+
+#. placeholder {0}: member.name
+#: src/app/Workbench.tsx
+msgid "删除成员「{0}」？"
 msgstr ""
 
 #. placeholder {0}: entry.query
@@ -590,6 +681,10 @@ msgstr ""
 msgid "卸载插件？"
 msgstr ""
 
+#: src/app/team/MemberSessionsList.tsx
+msgid "历史执行记录"
+msgstr ""
+
 #: src/app/use-session-actions.ts
 msgid "原会话已不存在，只能查看收藏里保存的内容"
 msgstr ""
@@ -609,6 +704,8 @@ msgstr ""
 #: src/app/PluginCommandForm.tsx
 #: src/app/plugins/PluginGrantDialog.tsx
 #: src/app/plugins/PluginsPage.tsx
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
 #: src/plugins/TaskConfirmDialog.tsx
 #: src/plugins/TasksView.tsx
 msgid "取消"
@@ -664,8 +761,14 @@ msgstr ""
 msgid "各自在独立 Worktree"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
 #: src/app/use-project-actions.ts
 msgid "名称"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "向团队内其他成员发起协作调用"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
@@ -713,6 +816,10 @@ msgstr ""
 #: src/app/CommandPalette.tsx
 #: src/app/hostShortcuts.ts
 msgid "命令面板"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "团队"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -781,6 +888,11 @@ msgstr ""
 msgid "在网页中查看"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgctxt "team-member-tab"
+msgid "基础"
+msgstr ""
+
 #: src/app/SessionInfo.tsx
 msgid "复制{label}"
 msgstr ""
@@ -808,6 +920,10 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "外部插件已暂停"
+msgstr ""
+
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "外部调用"
 msgstr ""
 
 #: src/app/use-project-actions.ts
@@ -846,9 +962,18 @@ msgstr ""
 msgid "完成"
 msgstr ""
 
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "对话"
+msgstr ""
+
 #: src/plugins/hostViews.ts
 msgctxt "session-view"
 msgid "对话"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "对话模式"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
@@ -885,9 +1010,22 @@ msgstr ""
 msgid "工作台"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "工作台管理"
+msgstr ""
+
 #: src/app/Header.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "已中断"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "已从会话提炼规则与初始记忆"
+msgstr ""
+
+#. placeholder {0}: latest.name
+#: src/app/team/MemberConfigDialog.tsx
+msgid "已保存「{0}」"
 msgstr ""
 
 #: src/app/plugins/PluginChannelsBlock.tsx
@@ -898,6 +1036,17 @@ msgstr ""
 #. placeholder {0}: target.worktree?.branch ?? target.name
 #: src/app/use-project-actions.ts
 msgid "已切换到 {0}"
+msgstr ""
+
+#. placeholder {0}: member.name
+#: src/app/team/CreateMemberDialog.tsx
+msgid "已创建「{0}」"
+msgstr ""
+
+#. placeholder {0}: member.name
+#: src/app/team/MemberConfigDialog.tsx
+#: src/app/Workbench.tsx
+msgid "已删除「{0}」"
 msgstr ""
 
 #: src/app/plugins/PluginTasksBlock.tsx
@@ -940,6 +1089,10 @@ msgstr ""
 
 #: src/app/use-session-actions.ts
 msgid "已归档「{shownTitle}」"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "已恢复默认规则"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -1055,6 +1208,10 @@ msgstr ""
 msgid "恢复项目"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "恢复默认"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "恢复默认服务器范围"
 msgstr ""
@@ -1062,6 +1219,31 @@ msgstr ""
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
 msgid "成功"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "成员操作"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "成员目录与历史会话保留在磁盘上，不再出现在团队列表中。"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "成员规则（AGENTS.md）"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "成员设置"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "成员设置分类"
+msgstr ""
+
+#. placeholder {0}: TEAM_BUDGET.globalUserProfileChars
+#: src/app/team/MemberConfigDialog.tsx
+msgid "所有成员只读，最多 {0} 字"
 msgstr ""
 
 #: src/app/SessionDeletion.tsx
@@ -1143,6 +1325,11 @@ msgstr ""
 msgid "折叠"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "持续对话"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "按时间平铺"
 msgstr ""
@@ -1198,6 +1385,15 @@ msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "提供模型源"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "提炼为团队成员"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+msgid "提炼为成员"
 msgstr ""
 
 #: src/app/plugins/PluginsNav.tsx
@@ -1290,6 +1486,10 @@ msgstr ""
 msgid "撤销失败"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "操作任务看板"
+msgstr ""
+
 #: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1328,6 +1528,10 @@ msgstr ""
 
 #: src/app/AddProjectDialog.tsx
 msgid "收藏的目录"
+msgstr ""
+
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "收起会话列表"
 msgstr ""
 
 #: src/app/Header.tsx
@@ -1399,6 +1603,11 @@ msgctxt "workbench-sidebar-new-action"
 msgid "新会话"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "新对话"
+msgstr ""
+
 #: src/app/use-project-actions.ts
 msgid "新建 Worktree"
 msgstr ""
@@ -1418,6 +1627,11 @@ msgstr ""
 
 #: src/app/onboarding/Onboarding.tsx
 msgid "新建会话时可以换"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/team/CreateMemberDialog.tsx
+msgid "新建成员"
 msgstr ""
 
 #: src/app/SidebarUpdateButton.tsx
@@ -1446,6 +1660,10 @@ msgstr ""
 
 #: src/app/use-project-actions.ts
 msgid "无法使用该目录开始会话"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "无法保存"
 msgstr ""
 
 #: src/app/useSidebarPinned.ts
@@ -1494,8 +1712,17 @@ msgstr ""
 msgid "无法创建会话"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+msgid "无法创建成员"
+msgstr ""
+
 #: src/app/state/workItemsStore.ts
 msgid "无法删除任务"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+#: src/app/Workbench.tsx
+msgid "无法删除成员"
 msgstr ""
 
 #: src/app/state/marksStore.ts
@@ -1564,6 +1791,10 @@ msgstr ""
 msgid "无法开始这个任务"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "无法恢复默认"
+msgstr ""
+
 #: src/plugins/CodeFile.tsx
 msgid "无法打开文件"
 msgstr ""
@@ -1585,6 +1816,10 @@ msgstr ""
 msgid "无法打开这个目录"
 msgstr ""
 
+#: src/app/Workbench.tsx
+msgid "无法提炼成员"
+msgstr ""
+
 #: src/app/plugins/PluginSharesBlock.tsx
 msgid "无法撤下"
 msgstr ""
@@ -1595,6 +1830,10 @@ msgstr ""
 
 #: src/app/FolderFavorites.tsx
 msgid "无法收藏该目录"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "无法更新成员"
 msgstr ""
 
 #: src/app/use-session-actions.ts
@@ -1633,6 +1872,10 @@ msgstr ""
 msgid "无法读取恢复命令"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "无法读取成员规则"
+msgstr ""
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "无法读取插件"
 msgstr ""
@@ -1651,6 +1894,10 @@ msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
 msgid "无法读取终端会话"
+msgstr ""
+
+#: src/app/team/MemberAvatar.tsx
+msgid "无法读取这张图片"
 msgstr ""
 
 #: src/app/use-session-actions.ts
@@ -1734,6 +1981,10 @@ msgstr ""
 msgid "暂无会话"
 msgstr ""
 
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "暂无历史对话"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 #: src/app/use-session-actions.ts
 msgid "暂时无法确认是否已发送"
@@ -1761,6 +2012,10 @@ msgstr ""
 #: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "更多操作"
+msgstr ""
+
+#: src/app/team/MemberAvatar.tsx
+msgid "更换头像"
 msgstr ""
 
 #: src/app/plugins/PluginMarket.tsx
@@ -1813,6 +2068,14 @@ msgstr ""
 msgid "未加密连接，只能查看"
 msgstr ""
 
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "未命名会话"
+msgstr ""
+
+#: src/app/team/MemberSessionsList.tsx
+msgid "未命名对话"
+msgstr ""
+
 #: src/app/onboarding/Onboarding.tsx
 msgid "未安装"
 msgstr ""
@@ -1843,6 +2106,10 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
+msgstr ""
+
+#: src/app/team/MemberSessionSidebar.tsx
+msgid "来信与调用"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
@@ -1911,6 +2178,10 @@ msgstr ""
 msgid "模型选择已保留，目录恢复前暂不能发送。"
 msgstr ""
 
+#: src/app/Workbench.tsx
+msgid "正在从会话提炼角色规则…"
+msgstr ""
+
 #: src/app/Header.tsx
 msgid "正在停止"
 msgstr ""
@@ -1930,6 +2201,20 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "此配置在当前客户端不可用"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "每日运行上限"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "每次新开"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "每次新开对话，靠记忆复用"
 msgstr ""
 
 #: src/app/plugins/PluginSharesBlock.tsx
@@ -2151,6 +2436,7 @@ msgid "移出标签栏"
 msgstr ""
 
 #: src/app/plugins/PluginSources.tsx
+#: src/app/team/MemberAvatar.tsx
 msgid "移除"
 msgstr ""
 
@@ -2161,6 +2447,10 @@ msgstr ""
 #. placeholder {0}: sourceName(source)
 #: src/app/plugins/PluginSources.tsx
 msgid "移除“{0}”？"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "移除团队入口，保留磁盘目录"
 msgstr ""
 
 #: src/app/DirectoryPicker.tsx
@@ -2266,6 +2556,15 @@ msgstr ""
 msgid "终端会话"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "绑定代码项目时生效"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "绑定项目"
+msgstr ""
+
 #: src/app/Workbench.tsx
 msgid "统计"
 msgstr ""
@@ -2300,6 +2599,18 @@ msgstr ""
 msgid "置顶会话"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "置顶在团队列表顶部"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "职责、常用步骤、输出规范或边界…"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+msgid "职责与规则"
+msgstr ""
+
 #: src/app/Workbench.tsx
 msgid "聚焦输入框"
 msgstr ""
@@ -2308,8 +2619,16 @@ msgstr ""
 msgid "能力"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "能力权限"
+msgstr ""
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "自动"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "自动值守与提醒"
 msgstr ""
 
 #: src/app/sidebarDestinations.ts
@@ -2347,8 +2666,16 @@ msgstr ""
 msgid "规则"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "规则与画像"
+msgstr ""
+
 #: src/app/SessionInfo.tsx
 msgid "记忆"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "设备与外部工具"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
@@ -2392,12 +2719,26 @@ msgstr ""
 msgid "请在服务器所在设备上安装此插件"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "请填写成员名称"
+msgstr ""
+
 #: src/app/use-workbench-bootstrap.ts
 msgid "请稍后重试"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "请选择绑定的代码项目"
+msgstr ""
+
 #: src/app/use-session-actions.ts
 msgid "请重新选择文件"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "读写代码目录"
 msgstr ""
 
 #: src/app/plugins/PluginModelSourceProviders.tsx
@@ -2410,6 +2751,10 @@ msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "读取所在项目的会话内容，可由插件界面发出"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "读取状态与修改外观设置"
 msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
@@ -2429,12 +2774,21 @@ msgctxt "session-origin"
 msgid "调用"
 msgstr ""
 
+#: src/app/team/MemberConfigDialog.tsx
+msgid "调用其他成员"
+msgstr ""
+
 #: src/plugins/TasksView.tsx
 msgid "警告"
 msgstr ""
 
 #: src/app/SidebarUserMenu.tsx
 msgid "跟随系统"
+msgstr ""
+
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
+msgid "跨项目通用"
 msgstr ""
 
 #: src/app/onboarding/Onboarding.tsx
@@ -2472,6 +2826,10 @@ msgstr ""
 #: src/app/state/listsStore.ts
 #: src/app/tabs/TabBar.tsx
 msgid "运行失败"
+msgstr ""
+
+#: src/app/team/MemberConfigDialog.tsx
+msgid "运行设置"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
@@ -2598,6 +2956,10 @@ msgstr ""
 msgid "选择运行服务器的电脑上的代码目录，所选 Agent 会在其中读写文件、执行命令。"
 msgstr ""
 
+#: src/app/team/CreateMemberDialog.tsx
+msgid "选择项目"
+msgstr ""
+
 #: src/app/AddProjectDialog.tsx
 #: src/app/onboarding/Onboarding.tsx
 msgid "选择项目目录"
@@ -2616,6 +2978,10 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-detail-tab"
 msgid "配置"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "配置…"
 msgstr ""
 
 #: src/app/Header.tsx
@@ -2744,6 +3110,8 @@ msgid "默认 Agent"
 msgstr ""
 
 #: src/app/ProjectHome.tsx
+#: src/app/team/CreateMemberDialog.tsx
+#: src/app/team/MemberConfigDialog.tsx
 msgid "默认模型"
 msgstr ""
 

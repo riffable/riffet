@@ -104,6 +104,7 @@ const RULES: readonly Rule[] = [
   { path: '/api/appearance', prefix: true, policy: 'deny' },
   { path: '/api/workbench', prefix: true, policy: 'deny' },
   { path: '/api/assistant', prefix: true, policy: 'deny' },
+  { path: '/api/team', prefix: true, policy: 'deny' },
   { path: '/api/channels', prefix: true, policy: 'deny' },
   { path: '/api/plugin-approvals', prefix: true, policy: 'deny' },
   { path: '/api/dictation', prefix: true, policy: 'deny' },

@@ -734,6 +734,10 @@ msgstr "回答操作"
 msgid "回退代码到本轮开始前"
 msgstr "回退代码到本轮开始前"
 
+#: src/app/session/ComposerMenus.tsx
+msgid "团队成员"
+msgstr "团队成员"
+
 #: src/app/session/image-upload.ts
 #: src/app/session/Markdown.tsx
 msgctxt "session-image-name"
@@ -911,10 +915,6 @@ msgstr "将作为普通消息原样发送"
 #: src/app/session/Activities.tsx
 msgid "将停止全部后台任务：这个会话不能单独停止其中一个。"
 msgstr "将停止全部后台任务：这个会话不能单独停止其中一个。"
-
-#: src/app/session/Composer.tsx
-msgid "将调用"
-msgstr "将调用"
 
 #: src/app/session/Attempts.tsx
 msgid "尝试"
@@ -1822,11 +1822,6 @@ msgstr "移除 {0}"
 #: src/app/session/ComposerAttachments.tsx
 msgid "移除 {name}"
 msgstr "移除 {name}"
-
-#. placeholder {0}: item.name
-#: src/app/session/Composer.tsx
-msgid "移除 /{0}"
-msgstr "移除 /{0}"
 
 #: src/app/session/ComposerAttachments.tsx
 msgid "移除会话引用"
