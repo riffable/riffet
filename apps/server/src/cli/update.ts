@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
@@ -10,7 +11,7 @@ import { OFFICIAL_NPM_REGISTRY, displayRegistry, inspectNpmUpdate, isMissingNpmT
 import { writeCachedCheck } from '../update/status.js';
 import { SERVER_BUILD, SOURCE_ROOT } from '../version.js';
 import { APP_MANAGED_HINT, accessToken, active, appAgentLoaded, entry, installRoot, ownsPid, pidExists, readDaemon, serverUrl, stateDir, type DaemonRecord, type Health } from './context.js';
-import { drainForRestart } from './drain.js';
+import { drainForRestart, drainWithProgress } from './drain.js';
 import { restartWaitSeconds, type RestartWaitOptions } from './launch.js';
 import { LAUNCH_AGENT_LABEL, LAUNCH_AGENT_PATH, SYSTEMD_UNIT, serviceFile, serviceRunsThis } from './service.js';
 import { readAppInstallation, runSourceUpdate, shellQuote } from './source-update.js';
@@ -19,6 +20,13 @@ import { CliError, MARK, UsageError, duration, err, fields, hint, note, out, pri
 export interface UpdateOptions extends RestartWaitOptions { stateDir: string; check?: boolean; json?: boolean; app?: boolean; configuration?: string }
 
 const sleep = (ms: number) => new Promise(done => setTimeout(done, ms));
+
+/** Runs another riffet CLI with its output on this terminal; resolves to its exit code. */
+const runAttached = (args: string[], cwd: string) => new Promise<number | null>((resolve, reject) => {
+  const child = spawn(process.execPath, args, { cwd, stdio: ['ignore', 'inherit', 'inherit'] });
+  child.once('error', reject);
+  child.once('exit', code => resolve(code));
+});
 const buildLabel = (build: BuildInfo) => build.tag && !build.dirty ? build.tag : `${build.version} ${out.dim(`dev ${build.commit?.slice(0, 7) ?? ''}${build.dirty ? '+' : ''}`.trimEnd())}`;
 
 function updateRoot(): string {
@@ -153,7 +161,7 @@ async function updateNpm(options: UpdateOptions, dir: string, waitSeconds: numbe
   if (!record) { success(`Updated to v${target} ${out.dim('· Riffet was not running')}`); return; }
   // The new files restart the server: launchd or systemd restart their own service, otherwise the new CLI does.
   if (health?.managedBy === 'launchd') {
-    const release = waitSeconds > 0 ? await drainForRestart(record, accessToken(dir), { waitSeconds, log: note }) : undefined;
+    const release = waitSeconds > 0 ? await drainWithProgress(record, accessToken(dir), waitSeconds) : undefined;
     try {
       // A server without the drain endpoints: refuse while any conversation is active, as a source update does.
       if (waitSeconds > 0 && !release) assertIdle(dir);
@@ -162,8 +170,9 @@ async function updateNpm(options: UpdateOptions, dir: string, waitSeconds: numbe
       if (restarted.code !== 0) throw new CliError('The login service did not restart; the new version is installed', ['riffet service status', 'riffet update']);
     } catch (error) { await release?.(); throw error; }
   } else {
-    const restarted = await runProcess(process.execPath, [join(installer.root, 'dist/cli.js'), 'restart', '--state-dir', dir, ...(options.force ? ['--force'] : options.waitIdle !== undefined ? ['--wait-idle', options.waitIdle] : [])], { cwd: dir, timeoutMs: COMPACTION_WAIT_MS + (waitSeconds + 60) * 1000 });
-    if (restarted.code !== 0) throw new CliError('Riffet did not restart on the new version; the new version is installed', ['riffet update', `To go back: ${rollback}, then \`riffet restart\``]);
+    // The new version's own CLI restarts onto itself; its steps are this command's steps, so they reach the terminal.
+    const restarted = await runAttached([join(installer.root, 'dist/cli.js'), 'restart', '--state-dir', dir, ...(options.force ? ['--force'] : options.waitIdle !== undefined ? ['--wait-idle', options.waitIdle] : [])], dir);
+    if (restarted !== 0) throw new CliError('Riffet did not restart on the new version; the new version is installed', ['riffet update', `To go back: ${rollback}, then \`riffet restart\``]);
   }
   const confirming = spinner('Waiting for the new version to answer');
   let ready = false;
@@ -229,14 +238,14 @@ export async function update(options: UpdateOptions): Promise<void> {
     root, current, app: options.app, configuration: options.configuration, runningPid: options.app ? undefined : record?.pid,
     lifecycle: {
       recoveryCommand,
-      stop: async () => {
+      stop: async (tell: (text: string) => void) => {
         if (appAgentLoaded()) throw new CliError('Riffet.app\'s server is still registered', [APP_MANAGED_HINT]);
         if (options.app || !record) return;
         await verifiedHealth(record);
         // Turns of Claude, Cursor, Codex and Traex outlive the restart; only the ones it would end are waited for.
         // `--force` / `--wait-idle 0` stop without waiting, as `riffet restart` does; a service without the drain
         // endpoints falls back to refusing while any session is active.
-        const release = waitSeconds > 0 ? await drainForRestart(record, accessToken(dir), { waitSeconds }) : undefined;
+        const release = waitSeconds > 0 ? await drainForRestart(record, accessToken(dir), { waitSeconds, log: tell }) : undefined;
         try {
           if (waitSeconds > 0 && !release) assertIdle(dir);
           if (manager === 'launchd') await controller(process.platform === 'darwin' ? ['bootout', domain, LAUNCH_AGENT_PATH] : ['--user', 'stop', SYSTEMD_UNIT]);

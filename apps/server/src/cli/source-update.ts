@@ -4,12 +4,12 @@ import { join, resolve } from 'node:path';
 import type { BuildInfo, ReleaseTag } from '@contracts';
 import { runProcess } from '../git/exec.js';
 import { satisfiesMinimum } from '../doctor.js';
-import { CliError, duration, err, hint, MARK, spinner, success, type Spinner } from './ui.js';
+import { CliError, duration, err, hint, MARK, note, spinner, success, type Spinner } from './ui.js';
 import { checkForUpdates, compareReleaseTags, fetchRelease, gitEnvironment, readSourceInfo } from '../update/git.js';
 
 export interface UpdateLifecycle {
-  /** Runs after all remote/toolchain checks, before changing dependencies or source. */
-  stop(): Promise<void>;
+  /** Runs after all remote/toolchain checks, before changing dependencies or source; `note` tells the person what it waits for. */
+  stop(note: (text: string) => void): Promise<void>;
   /** Restores the original launcher and verifies the new running build. */
   restore(release: ReleaseTag): Promise<void | 'stopped'>;
   recoveryCommand: string;
@@ -160,9 +160,15 @@ export async function runSourceUpdate(options: {
     appendFileSync(logPath, `${new Date().toISOString()} ${cleanOutput(line)}\n`, { mode: 0o600 });
   };
   const ok = err.ok(MARK.ok);
-  let running: { spinner: Spinner; startedAt: number } | undefined;
+  let running: { spinner: Spinner; startedAt: number; text: string } | undefined;
   /** Shows a spinner until `finish`, which replaces it with `✓ done`. */
-  const begin = (text: string) => { running = { spinner: spinner(text), startedAt: Date.now() }; };
+  const begin = (text: string) => { running = { spinner: spinner(text), startedAt: Date.now(), text }; };
+  /** A line above the running step, which then keeps spinning. */
+  const interject = (text: string) => {
+    running?.spinner.stop();
+    note(text);
+    if (running) running.spinner = spinner(running.text);
+  };
   const finish = (done: string, timed = false) => {
     if (!running) return;
     const elapsed = Date.now() - running.startedAt;
@@ -236,7 +242,7 @@ export async function runSourceUpdate(options: {
     step = 'stopping the service';
     begin('Stopping the service');
     logFile('Entering the update phase; the service stays stopped during install and build.');
-    await lifecycle.stop();
+    await lifecycle.stop(interject);
     await assertSourceProcessesStopped(root);
     await unchanged();
     finish('Stopped the service');

@@ -4,9 +4,12 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { currentEnvironmentReport, terminalEnvironment } from '../environment.js';
 import { buildLaunchAgentPlist, buildSystemdUnit, xmlEscape, systemdValue } from '../service-files.js';
-import { APP_MANAGED_HINT, appAgentLoaded, entry, stateDir } from './context.js';
+import { SERVER_BUDGET } from '../../../../packages/contracts/src/index.js';
+import { APP_MANAGED_HINT, active, appAgentLoaded, entry, health, stateDir, type DaemonRecord } from './context.js';
+import { logSize, startingServer, waitForStartup } from './startup.js';
+import { serverSummary } from './status.js';
 import type { LaunchOptions } from './launch.js';
-import { CliError, MARK, fields, hint, note, out, printLines, success, tilde } from './ui.js';
+import { CliError, MARK, fields, hint, note, out, printLines, spinner, success, tilde } from './ui.js';
 
 /*
  * `riffet service`: a login service (launchd on macOS, systemd --user on Linux) that runs `serve` at
@@ -77,12 +80,35 @@ export async function installService(options: LaunchOptions & { refreshEnvironme
   if (entry.endsWith('.ts')) throw new CliError('Build Riffet before installing a login service', ['`pnpm build`']);
   if (process.platform !== 'darwin' && process.platform !== 'linux') throw unsupported();
   if (options.refreshEnvironment && !existsSync(serviceFile())) throw new CliError('No login service is installed to refresh', ['riffet service install']);
+  const dir = stateDir(options.stateDir);
+  // The service's own server is replaced by the one it starts now; a server started otherwise keeps the state directory.
+  const before = await active(dir);
+  const replaced = before && (await health(before))?.managedBy === 'launchd' ? before : undefined;
+  const log = join(dir, 'server.log'), offset = logSize(log), since = Date.now();
   if (process.platform === 'darwin') {
     if (appAgentLoaded()) throw new CliError('Riffet.app already runs a server at login; a second service would compete for the same state directory', [APP_MANAGED_HINT]);
     writeLaunchAgent(options);
   } else writeSystemdUnit(options);
   success(`${options.refreshEnvironment ? 'Refreshed' : 'Installed'} the login service ${out.dim(tilde(serviceFile()))}`);
   if (process.platform === 'linux') note('It runs while you are logged in; `loginctl enable-linger $USER` keeps it running after logout');
+  if (before && !replaced) return;
+  const record = await awaitServiceStart(dir, since, offset, replaced);
+  printLines(await serverSummary(record, dir, { readyMs: Date.now() - since }));
+}
+
+/** The server the service manager starts: found once it holds the state directory, then followed like `riffet start`. */
+async function awaitServiceStart(dir: string, since: number, offset: number, previous: DaemonRecord | undefined): Promise<DaemonRecord> {
+  const progress = spinner('Starting Riffet');
+  try {
+    for (const deadline = Date.now() + SERVER_BUDGET.startupStallMs; ;) {
+      const record = await active(dir);
+      if (record && record.instanceId !== previous?.instanceId) return record;
+      const starting = startingServer(dir);
+      if (starting && starting.pid !== previous?.pid) return await waitForStartup({ dir, pid: starting.pid, since, offset }, progress);
+      if (Date.now() > deadline) throw new CliError('The login service has not started Riffet', ['riffet service status', 'riffet logs']);
+      await new Promise(done => setTimeout(done, 200));
+    }
+  } finally { progress.stop(); }
 }
 
 export async function uninstallService(): Promise<void> {

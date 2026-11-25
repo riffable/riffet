@@ -18,7 +18,7 @@ import { list, resume } from './sessions.js';
 import { status } from './status.js';
 import { update } from './update.js';
 import { promptForUpdate, refreshUpdateCheck, relaunchAfterUpdate } from './update-notice.js';
-import { Cancelled, CliError, UsageError, err, interactive, out, printError, printLines, success, suggest, warning } from './ui.js';
+import { Cancelled, CliError, UsageError, err, interactive, out, printError, printLines, spinner, success, suggest, warning } from './ui.js';
 
 // Captured before the environment is normalized: `update` fetches with the user's own Git agent.
 const updateSshAuthSocket = process.env.SSH_AUTH_SOCK;
@@ -230,7 +230,10 @@ export function buildProgram(relaunchArgs?: string[]): Command {
     .addHelpText('after', EXAMPLES([['riffet restore --backup ~/Backups/riffet-2026-11-01 --state-dir ~/riffet-restored', 'the destination must be empty']]))
     .action(async (_opts, command: Command) => {
       const { backup, stateDir: dir } = options<{ backup: string }>(command);
-      const result = await restoreBackup(backup, dir);
+      const progress = spinner('Verifying and copying the backup');
+      let result: Awaited<ReturnType<typeof restoreBackup>>;
+      try { result = await restoreBackup(backup, dir, (done, total) => progress.update(`Verifying and copying the backup · ${done}/${total}`)); }
+      finally { progress.stop(); }
       success(`Restored ${result.files} files to ${result.path}`);
     });
 

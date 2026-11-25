@@ -3,7 +3,7 @@ import WebSocket, { createWebSocketStream } from 'ws';
 import type { LinkInfo, LinkInviteResult, LinkSelfInfo, LinkUpdateRequest } from '../../../../packages/contracts/src/index.js';
 import { Api } from './api.js';
 import { accessToken, requireActive, serverUrl, stateDir } from './context.js';
-import { CliError, ago, columns, note, out, printJson, printLines, success } from './ui.js';
+import { CliError, ago, columns, note, out, printJson, printLines, spinning, success } from './ui.js';
 
 /**
  * `riffet link` (docs/SERVER-LINKS.md §7). `--allow-in` always means the same thing: the other server may operate
@@ -30,7 +30,7 @@ export async function linkInvite(options: Common & { url?: string; allowIn?: boo
 
 export async function linkJoin(options: Common & { link: string; allowIn?: boolean }) {
   const client = await api(options.stateDir);
-  const { link } = await client.call<{ link: LinkInfo }>('POST', '/api/links/join', { link: options.link, inbound: Boolean(options.allowIn) }, 30_000);
+  const { link } = await spinning('Connecting to the other server', () => client.call<{ link: LinkInfo }>('POST', '/api/links/join', { link: options.link, inbound: Boolean(options.allowIn) }, 30_000));
   if (options.json) { printJson(link); return; }
   success(`Linked with ${link.name}`);
   printLines(describe([link]));
@@ -48,10 +48,10 @@ export async function linkSsh(options: Common & { host: string; allowIn?: boolea
   let invite: LinkInviteResult;
   try { invite = JSON.parse(result.stdout) as LinkInviteResult; } catch { throw new CliError(`${options.host} did not answer with a link string`); }
   const client = await api(options.stateDir);
-  const { link } = await client.call<{ link: LinkInfo }>('POST', '/api/links/join', {
+  const { link } = await spinning(`Connecting to ${options.host} over SSH`, () => client.call<{ link: LinkInfo }>('POST', '/api/links/join', {
     link: invite.link, inbound: Boolean(options.allowIn), transport: 'ssh', sshHost: options.host,
     ...(options.remoteCommand ? { remoteCommand: remote } : {}),
-  }, 60_000);
+  }, 60_000));
   if (options.json) { printJson(link); return; }
   success(`Linked with ${link.name} over SSH`);
   printLines(describe([link]));

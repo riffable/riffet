@@ -210,7 +210,8 @@ export async function createBackup(store:Store, stateDir:string) {
   finally{releaseBlobGc();}
 }
 
-export async function restoreBackup(backupDir:string, destinationDir:string) {
+/** `onProgress` hears each file as it is verified and copied, out of the manifest's count. */
+export async function restoreBackup(backupDir:string, destinationDir:string, onProgress?:(done:number,total:number)=>void) {
   const source=resolve(backupDir),destination=resolve(destinationDir);
   if(source===destination||destination.startsWith(source+sep))throw new AppError('INVALID_RESTORE_PATH','Choose a separate empty destination');
   const existing=await readdir(destination).catch((error:NodeJS.ErrnoException)=>{if(error.code==='ENOENT')return [];throw error;});
@@ -240,6 +241,7 @@ export async function restoreBackup(backupDir:string, destinationDir:string) {
       const { sha256, size } = await digestFile(input);
       if(size!==file.size||sha256!==file.sha256)throw new AppError('BACKUP_CORRUPTED',`Backup checksum does not match: ${file.path}`);
       await mkdir(dirname(output),{recursive:true,mode:0o700});await copyFile(input,output);await chmod(output,0o600);restored++;
+      onProgress?.(seen.size,manifest.files.length);
     }
     await rmdir(destination).catch((error:NodeJS.ErrnoException)=>{if(error.code!=='ENOENT')throw error;});await rename(staging,destination);
     return {path:destination,files:restored};

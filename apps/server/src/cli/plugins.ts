@@ -8,7 +8,7 @@ import { PluginStore } from '../plugins/store.js';
 import type { PluginDescriptor } from '../../../../packages/contracts/src/index.js';
 import type { PairingDaemon } from './pair.js';
 import { Api } from './api.js';
-import { MARK, columns, out, tilde, type Status } from './ui.js';
+import { MARK, columns, out, spinning, tilde, type Status } from './ui.js';
 import { AppError } from '../errors.js';
 import { PackageStore, checkExpected, type PackageInput } from '../plugins-host/packages.js';
 import { addMarketSource, checkMarketSource, checkSourceAddress, downloadMarketPackage, findMarketSource, installedPackages, listMarket, marketRecord, marketSourceId, marketSources, parseMarketReference, removeMarketSource, resolveMarketPackage, setMarketSourceEnabled, type MarketOptions, type MarketPackage, type MarketReference } from '../plugins-host/market.js';
@@ -132,15 +132,16 @@ export async function installPlugin(context: PluginCliContext, path: string, opt
 async function installTarget(context: PluginCliContext, target: InstallTarget, options: InstallOptions): Promise<string[]> {
   const given = parseGrant(options.grant);
   const market = 'market' in target ? target.market : undefined;
+  const name = market ? `${market.id}${market.version ? '@' + market.version : ''}` : tilde((target as { path: string }).path);
   if (context.daemon) {
     const call = await connect(context.daemon, context.token());
-    let reply = await call('POST', '/api/integrations/install', { ...target, grant: given ?? [], trusted: options.trusted === true });
+    let reply = await spinning(`Installing ${name}`, () => call('POST', '/api/integrations/install', { ...target, grant: given ?? [], trusted: options.trusted === true }));
     const details = reply.body.error?.details as { id?: string; version?: string; sourceId?: string; capabilities?: string[] } | undefined;
     if (reply.status === 409 && reply.body.error?.code === 'PLUGIN_GRANT_REQUIRED' && details?.capabilities) {
       if (!options.yes && !await options.confirm?.(String(details.id), String(details.version), details.capabilities)) return asks(String(details.id), String(details.version), details.capabilities);
       // The release the user was shown, even if the index changed since.
       const confirmed = market && details.id && details.version ? { market: { ...(details.sourceId ? { source: details.sourceId } : {}), id: details.id, version: details.version } } : target;
-      reply = await call('POST', '/api/integrations/install', { ...confirmed, grant: details.capabilities, trusted: options.trusted === true });
+      reply = await spinning(`Installing ${name}`, () => call('POST', '/api/integrations/install', { ...confirmed, grant: details.capabilities, trusted: options.trusted === true }));
     }
     if (reply.status !== 200) fail(reply);
     const installed = reply.body as unknown as PluginDescriptor;
@@ -150,9 +151,9 @@ async function installTarget(context: PluginCliContext, target: InstallTarget, o
   let found: MarketPackage | undefined;
   let input: PackageInput;
   let origin: string;
-  if (market) { found = await resolveMarketPackage(market, offlineMarket(context)); input = { archive: await downloadMarketPackage(found) }; origin = marketRecord(found); }
+  if (market) { found = await resolveMarketPackage(market, offlineMarket(context)); const release = found; input = { archive: await spinning(`Downloading ${name}`, () => downloadMarketPackage(release)) }; origin = marketRecord(found); }
   else { const { path } = target as { path: string }; input = { path }; origin = `path:${path}`; }
-  const staged = await store.stage(input, { trusted: options.trusted === true });
+  const staged = await spinning(`Checking ${name}`, () => store.stage(input, { trusted: options.trusted === true }));
   if (found) {
     try { checkExpected(staged, found); } catch (error) { await store.discard(staged); throw error; }
   }
@@ -174,7 +175,7 @@ async function installTarget(context: PluginCliContext, target: InstallTarget, o
   }
   const id = String(staged.manifest.id);
   const existing = store.record(id);
-  const { status } = await store.commit(staged, origin, true);
+  const { status } = await spinning(`Installing ${name}`, () => store.commit(staged, origin, true));
   return [status === 'present' ? done(`${out.bold(id)} ${staged.manifest.version} is already installed`) : done(`Installed ${out.bold(id)} ${staged.manifest.version}${existing ? ' and selected it' : ''} ${out.dim('· takes effect when Riffet starts')}`), ...(options.trusted ? [`  ${out.dim('Trusted: its server code runs with Riffet\'s permissions')}`] : [])];
 }
 
@@ -186,10 +187,11 @@ export async function updatePlugins(context: PluginCliContext, ids: string[], op
   for (const id of ids) if (!PLUGIN_ID.test(id) || id.length > 64) throw new Error(`${id} is not a plugin id.`);
   let list: Pick<PluginMarketList, 'plugins' | 'sources'>;
   if (context.daemon) {
-    const reply = await (await connect(context.daemon, context.token()))('GET', '/api/integrations/market?refresh=1');
+    const call = await connect(context.daemon, context.token());
+    const reply = await spinning('Checking sources for updates', () => call('GET', '/api/integrations/market?refresh=1'));
     if (reply.status !== 200) fail(reply);
     list = reply.body as unknown as PluginMarketList;
-  } else list = await listMarket({ ...offlineMarket(context), fresh: true });
+  } else list = await spinning('Checking sources for updates', () => listMarket({ ...offlineMarket(context), fresh: true }));
   const lines = list.sources.filter(source => source.enabled && source.error).map(source => `${out.fail(MARK.fail)} Source ${out.bold(source.id)} could not be read: ${source.error}`);
   const targets = list.plugins.filter(entry => entry.update && (!ids.length || ids.includes(entry.id)));
   for (const id of ids) {
