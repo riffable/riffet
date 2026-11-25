@@ -147,8 +147,10 @@ export function nextLook(facts: LookFacts): number | undefined {
       if (retry > at) consider(retry);
     } else if (native.delivery === 'input_sent') {
       const due = (native.timings?.inputSentAt ?? at) + facts.confirmationMs + 1;
-      // Past the window but still input_sent: the provider was busy. Look again on this conversation only.
-      consider(due > at ? due : at + facts.intervalMs);
+      const unacceptedSteer = native.intent === 'steer' && !native.timings?.providerAcceptedAt;
+      // Past the window but still input_sent: an unaccepted steer times out immediately, while an
+      // ordinary send whose provider is busy is polled again on this conversation only.
+      consider(due > at ? due : unacceptedSteer ? at : at + facts.intervalMs);
     } else if (native.delivery === 'observed') {
       const since = facts.idleSince(run.id);
       if (since !== undefined) consider(since + facts.idleWindow(run) > at ? since + facts.idleWindow(run) : at + facts.intervalMs);

@@ -75,7 +75,7 @@ export class WatchHub {
   private readonly outputRates = new Map<string, { binding: string; tracker: OutputRateTracker; updatedAt: number; published?: string }>();
   private outputRateTimer?: NodeJS.Timeout;
   readonly following = new Map<string, () => void>();
-  private readonly eventListeners = new Map<string, Set<(event: NativeWorkbenchEvent) => void>>();
+  private readonly eventListeners = new Map<string | undefined, Set<(event: NativeWorkbenchEvent) => void>>();
   private readonly jobs = new Map<string, Map<string, NativeJob>>();
   private readonly jobListeners = new Set<(sessionId: string, job: NativeJob) => void>();
 
@@ -371,8 +371,12 @@ export class WatchHub {
   }
   emitEvent(sessionId: string, event: NativeWorkbenchEvent): void {
     for (const listener of this.eventListeners.get(sessionId) ?? []) { try { listener(event); } catch { /* a reader's failure is its own */ } }
+    if (event.sessionId === sessionId) {
+      for (const listener of this.eventListeners.get(undefined) ?? []) { try { listener(event); } catch { /* a reader's failure is its own */ } }
+    }
   }
-  watchEvents(sessionId: string, listener: (event: NativeWorkbenchEvent) => void): () => void {
+  /** A passive subscription. An omitted session filter also hears receipts after a live watch closes. */
+  watchEvents(sessionId: string | undefined, listener: (event: NativeWorkbenchEvent) => void): () => void {
     let listeners = this.eventListeners.get(sessionId);
     if (!listeners) this.eventListeners.set(sessionId, listeners = new Set());
     listeners.add(listener);

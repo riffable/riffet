@@ -82,7 +82,7 @@ export class FakeHost implements AgentHost {
   private handle(id: string): AgentTerminalHandle {
     const info = this.terminal(id);
     if (!info) throw new AppError('TERMINAL_NOT_FOUND', 'Terminal does not exist', 404);
-    return { id, epoch: info.epoch, state: this.stateOf?.(id) ?? info.state };
+    return { id, epoch: info.epoch, state: this.stateOf?.(id) ?? info.state, ...(info.ownerId ? { ownerId: info.ownerId } : {}) };
   }
 
   private reservation(id: string): AgentReservation {

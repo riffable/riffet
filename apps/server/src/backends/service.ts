@@ -386,6 +386,11 @@ export class NativeBackendService {
     return await driver.canReleaseInput?.(this.host, session, profile, run) ?? false;
   }
 
+  async canReleaseAfterLaterTurn(session: Session, run: Run): Promise<boolean> {
+    const { driver, profile } = this.resolveSync(session);
+    return await driver.canReleaseAfterLaterTurn?.(this.host, session, profile, run) ?? false;
+  }
+
   transcriptSource(sessionId: string): TranscriptSource | undefined {
     const session = this.options.store.getSession(sessionId);
     if (session.kind !== 'native') return undefined;
@@ -399,7 +404,7 @@ export class NativeBackendService {
   }
   listJobs(sessionId: string): NativeJob[] { return this.watches.listJobs(sessionId); }
   onJobChanged(listener: (sessionId: string, job: NativeJob) => void): () => void { return this.watches.onJobChanged(listener); }
-  watchEvents(sessionId: string, listener: (event: NativeWorkbenchEvent) => void): () => void { return this.watches.watchEvents(sessionId, listener); }
+  watchEvents(sessionId: string | undefined, listener: (event: NativeWorkbenchEvent) => void): () => void { return this.watches.watchEvents(sessionId, listener); }
   readJournal(feed: JournalFeed): () => void { return this.watches.readJournal(feed); }
 
   async contextTranscript(sessionId: string, maxBytes: number, signal: AbortSignal): Promise<NativeWorkbenchEvent[] | undefined> {

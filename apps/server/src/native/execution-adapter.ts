@@ -320,7 +320,10 @@ export class ExecutionAdapter {
     const claimed = params.claim();
     if (!claimed) return { status: 'skipped' };
     const armed = params.arm(claimed);
-    if (!armed) return { status: 'delivered', run: claimed.run };
+    if (!armed) {
+      if (this.store.getRun(claimed.run.id).native?.delivery === 'queued') return { status: 'skipped' };
+      throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The replacement message could not be armed', 409);
+    }
     try {
       const session = params.open(claimed, armed);
       const result = await this.startTurn({
@@ -338,7 +341,10 @@ export class ExecutionAdapter {
       return { status: 'delivered', run: claimed.run };
     } catch (error) {
       params.recover(claimed, error);
-      return { status: 'delivered', run: claimed.run };
+      const delivery = this.store.getRun(claimed.run.id).native?.delivery;
+      if (delivery === 'queued') return { status: 'skipped' };
+      if (delivery === 'failed') return { status: 'delivered', run: claimed.run };
+      throw error;
     }
   }
 
@@ -387,7 +393,14 @@ export class ExecutionAdapter {
       turnIds.add(native.nativeTurnId);
     }
     if (!turnIds.size && fallbackTurnId) turnIds.add(fallbackTurnId);
+    const nativeSessionId = stop?.nativeSessionId ?? this.store.getSession(sessionId).nativeSessionId;
     const at = new Date().toISOString();
-    for (const turnId of turnIds) await endTurn(sessionId, turnId, 'interrupted', at).catch(() => undefined);
+    for (const turnId of turnIds) {
+      if (nativeSessionId) {
+        const owner = this.store.findRunsByNativeTurn(sessionId, nativeSessionId, turnId).find(run => !run.native?.intent);
+        if (owner && (owner.state === 'completed' || owner.state === 'failed')) continue;
+      }
+      await endTurn(sessionId, turnId, 'interrupted', at).catch(() => undefined);
+    }
   }
 }

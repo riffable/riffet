@@ -46,6 +46,7 @@ function makeEvent(sessionId: string, sequence: number, type: string, text: stri
 
 class FakeNative {
   readonly listeners = new Map<string, (message: DispatchObservation) => void>();
+  readonly correctionListeners = new Set<(sessionId: string, message: DispatchObservation) => void>();
   readonly writes: Array<{ sessionId: string; text: string }> = [];
   deliverCalls: string[] = [];
   subscribeCalls = 0;
@@ -102,6 +103,11 @@ class FakeNative {
     return () => this.listeners.delete(sessionId);
   }
 
+  subscribeCorrections(listener: (sessionId: string, message: DispatchObservation) => void) {
+    this.correctionListeners.add(listener);
+    return () => { this.correctionListeners.delete(listener); };
+  }
+
   async snapshot(sessionId: string) {
     const nativeSessionId = this.store.getSession(sessionId).cursorSessionId;
     return { events: [...this.events], status: this.statuses.get(sessionId) ?? this.currentStatus, ...(nativeSessionId ? { nativeSessionId } : {}) };
@@ -142,7 +148,9 @@ class FakeNative {
   /** A status heard is the provider's status from then on. */
   emit(sessionId: string, message: DispatchObservation) {
     if (message.type === 'status') { this.emittedStatusCount++; this.statuses.set(sessionId, message.status); }
-    this.listeners.get(sessionId)?.(message);
+    const direct = this.listeners.get(sessionId);
+    if (direct) direct(message);
+    else if (message.type === 'events') for (const listener of this.correctionListeners) listener(sessionId, message);
   }
 }
 
@@ -2099,7 +2107,7 @@ describe('message recovery and targeted stop', () => {
     } finally { await send.close(); store.close(); }
   });
 
-  it('sends a targeted stop through send-now, then settles the old turn', async () => {
+  it('sends a targeted stop through send-now and only settles the old turn once replacement is observed on a new turn', async () => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const created = createSession();
     const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
@@ -2113,9 +2121,11 @@ describe('message recovery and targeted stop', () => {
     const sends: Array<{ now?: boolean; expectedStop?: { requestId: string } } | undefined> = [];
     const ended: Array<{ turnId: string; status: string }> = [];
     const native = Object.assign(new FakeNative(store), {
-      async sendRun(current: Session, run: { native?: { input: { text: string } } }, fence: (binding?: object) => unknown, options?: { now?: boolean; expectedStop?: { requestId: string } }) {
+      async sendRun(current: Session, run: { id: string; commandId: string; native?: { input: { text: string } } }, fence: (binding?: object) => unknown, options?: { now?: boolean; expectedStop?: { requestId: string } }) {
         sends.push(options);
         fence({ backendId: 'cursor', nativeSessionId: current.nativeSessionId, terminalId: current.terminalId, terminalEpoch: live.epoch, baselineSequence: 0, renderedText: run.native?.input.text });
+        store.transitionNativeRun(run.id, ['dispatching'], { delivery: 'observed', stage: 'executing', nativeMessageId: 'msg-replacement', nativeTurnId: 'replacement-turn' }, { state: 'running' });
+        native.setStatus(current.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: 'replacement-turn' } });
       },
       endTurn: async (_sessionId: string, turnId: string, status: string) => { ended.push({ turnId, status }); },
     });
@@ -2126,9 +2136,70 @@ describe('message recovery and targeted stop', () => {
       const promoted = await send.sendQueuedNow(session.id, queued.id, stop);
       expect(sends).toEqual([{ now: true, expectedStop: stop }]);
       expect(native.interruptCalls).toBe(0);
-      expect(promoted.native?.delivery).toBe('input_sent');
+      expect(promoted.native?.delivery).toBe('observed');
       expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
       expect(ended).toEqual([{ turnId: 'running-turn', status: 'interrupted' }]);
+    } finally { await send.close(); store.close(); }
+  });
+
+  it('refuses to settle the old turn when send-now only leaves the replacement unconfirmed in input_sent', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
+    const active = accept(session.id, 'running-task', 'still running');
+    seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest() } });
+    const bound = store.getSession(session.id);
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'running-turn', terminalEpoch: 8 });
+    const live = store.updateTerminal(bound.terminalId!, { epoch: store.getTerminal(bound.terminalId!).epoch + 1 });
+    const queued = accept(session.id, 'replacement-unconfirmed', 'do this instead');
+    const stop = { requestId: 'send-now-unconfirmed', nativeSessionId: bound.nativeSessionId!, turnId: 'running-turn', terminalId: live.id, terminalEpoch: live.epoch };
+    const native = Object.assign(new FakeNative(store), {
+      async sendRun(current: Session, run: { native?: { input: { text: string } } }, fence: (binding?: object) => unknown) {
+        fence({ backendId: 'cursor', nativeSessionId: current.nativeSessionId, terminalId: current.terminalId, terminalEpoch: live.epoch, baselineSequence: 0, renderedText: run.native?.input.text });
+      },
+    });
+    native.sendNow = true;
+    native.setStatus(session.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } });
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      await expect(send.sendQueuedNow(session.id, queued.id, stop)).rejects.toMatchObject({ code: 'NATIVE_STOP_UNCONFIRMED' });
+      expect(store.getRun(active.id)).toMatchObject({ state: 'running', native: { delivery: 'observed' } });
+    } finally { await send.close(); store.close(); }
+  });
+
+  it('auto-releases an uncertain run after a later turn completes (even after terminal recreation) and dispatches queued messages', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: 'terminal-new', nativeSessionId: created.cursorSessionId });
+    const old = accept(session.id, 'old-uncertain', 'stuck prompt');
+    store.transitionNativeRun(old.id, ['queued'], {
+      delivery: 'uncertain', stage: 'runtime_exit', backendId: session.backendId,
+      nativeSessionId: created.cursorSessionId, terminalId: 'terminal-old',
+      timings: { dispatchAt: nowForTest() - 60_000 },
+    }, { state: 'interrupted', error: '暂时无法确认是否已发送' });
+    const queued = accept(session.id, 'next-queued', 'follow-up prompt');
+    let probeCount = 0;
+    let allowRelease = false;
+    const native = Object.assign(new FakeNative(store), {
+      canReleaseAfterLaterTurn: async () => { probeCount += 1; return allowRelease; },
+    });
+    native.argvInitialPrompt = false;
+    native.currentStatus = { phase: 'idle' };
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      send.kick(session.id);
+      await until(() => probeCount === 1, 'initial later-turn probe runs once');
+      // Repeated settle/wake without a state change must not spam probes.
+      await new Promise(resolve => setTimeout(resolve, 40));
+      expect(probeCount).toBe(1);
+      expect(native.writes).toEqual([]);
+
+      // When a later turn completes or terminal input becomes available (kick), the probe runs again and unblocks the queue.
+      allowRelease = true;
+      send.kick(session.id);
+      await until(() => Boolean(store.getRun(old.id).native?.queueReleasedAt) && native.writes.length === 1, 'auto-release unblocks queued send');
+      expect(native.writes).toEqual([{ sessionId: session.id, text: 'follow-up prompt' }]);
+      expect(store.getRun(queued.id).native?.delivery).not.toBe('queued');
     } finally { await send.close(); store.close(); }
   });
 

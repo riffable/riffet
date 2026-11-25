@@ -71,3 +71,16 @@ export function nativeEventIds(event: WorkbenchEvent): string[] {
 export function nativeSourceIds(event: ProjectedEvent): string[] {
   return [...new Set([event, ...event.sourceEvents].flatMap(nativeEventIds))];
 }
+
+/** Whether the provider confirmed receipt of this native run's own input (never borrowed from a parent turn). */
+export function hasNativeInputReceipt(run: Run | undefined): boolean {
+  const native = run?.native;
+  if (!native) return false;
+  return Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt)
+    || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
+}
+
+/** A steer row whose provider receipt has not landed yet must not split or end its target turn's running block. */
+export function isUnreceivedSteer(item: TimelineItem): boolean {
+  return item.kind === 'user' && item.run?.native?.intent === 'steer' && !hasNativeInputReceipt(item.run);
+}

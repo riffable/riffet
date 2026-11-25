@@ -39,6 +39,7 @@ export interface NativeDispatcherBackend {
   subscribeCorrections?(listener: (sessionId: string, message: DispatchObservation) => void): () => void;
   snapshot(sessionId: string): Promise<DispatchSnapshot>;
   reconcile?(sessionId: string): Promise<void>;
+  canReleaseAfterLaterTurn?(session: Session, run: Run): Promise<boolean>;
   canReleaseInput?(session: Session, run: Run): Promise<boolean>;
   status(sessionId: string): NativeStatus;
   /** Whether a driver is bound to the session; without it every session counts as possibly live. */
@@ -63,7 +64,7 @@ export interface NativeDispatcherBackend {
 }
 
 interface NativeDispatcherRuntime {
-  withSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
+  withSession<T>(sessionId: string, operation: () => Promise<T>, options?: { detached?: boolean }): Promise<T>;
   /** With `initialPrompt`, must call `beforeSpawn` right before spawning and abort the spawn if it throws. */
   ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<unknown>;
 }
@@ -123,8 +124,8 @@ export class NativeDispatcher {
     if (this.closed) return;
     if (sessionId !== undefined) {
       const existing = this.actors.get(sessionId);
-      if (existing) existing.step();
-      else if (this.store.listUnfinishedNativeRuns(sessionId).some(runNeedsDispatchWatch)) this.actor(sessionId).step();
+      if (existing) existing.kick();
+      else if (this.store.listUnfinishedNativeRuns(sessionId).some(runNeedsDispatchWatch)) this.actor(sessionId).kick();
       return;
     }
     if (this.scanning) return;
