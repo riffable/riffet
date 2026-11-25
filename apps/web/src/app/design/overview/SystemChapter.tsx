@@ -4,8 +4,6 @@ import { IconArrowRight, IconPlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
-import { useStyleNote } from '../mac/notes';
-import { STYLES } from '../mac/values';
 import { Chapter, Frame, Matrix, Plate, Token } from '../specimen';
 
 /** One layer of the ladder: its name, the test for belonging to it, and something drawn from it. */
@@ -79,7 +77,6 @@ function Threads() {
 /** The two axes across the layers: which platform, and which style. */
 function Axes() {
   const { t } = useLingui();
-  const styleNote = useStyleNote();
   const platforms: Array<[string, string]> = [['Web', 'WAI-ARIA APG'], ['macOS', 'HIG'], ['iOS', 'HIG'], ['Android', 'Material 3']];
   const box = 'flex min-w-0 flex-col gap-4 rounded-xl bg-bg p-5 shadow-[0_0_0_1px_var(--line)]';
   return (
@@ -93,7 +90,7 @@ function Axes() {
       <div className={box}>
         <span className="flex flex-col gap-1"><span className="text-base font-medium text-fg">{t`风格`}</span><span className="text-xs text-fg-3">{t`换取值与形态：状态、键盘和文案不变`}</span></span>
         <ul className="flex flex-col edge-b">
-          <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">{t`桌面`}<span className="flex flex-wrap justify-end gap-x-2 text-fg-2">{STYLES.map((style) => <span key={style.id}>{styleNote(style).title}</span>)}</span></li>
+          <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">{t`桌面`}<span className="flex flex-wrap justify-end gap-x-2 text-fg-2"><span>Riffet</span></span></li>
           <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">Android<Token className="text-right text-fg-3">material3 · ios · expressive · miuix · fluent</Token></li>
           <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">iOS<span className="text-fg-2">{t`系统控件`}</span></li>
         </ul>

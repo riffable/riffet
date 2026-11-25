@@ -5,10 +5,6 @@ extension NSAttributedString.Key {
     static let riffetPlain = NSAttributedString.Key("riffet.plain")
     /// A top-level answer heading's rank, retained while its paragraphs share one text layout.
     static let riffetHeading = NSAttributedString.Key("riffet.heading")
-    /// An inline code chip's corner radius.
-    static let riffetChipRadius = NSAttributedString.Key("riffet.chipRadius")
-    /// Set on a chip that is a hairline around the glyphs rather than a fill.
-    static let riffetChipOutline = NSAttributedString.Key("riffet.chipOutline")
 }
 
 /// Text laid out once with TextKit 1, on whichever thread builds it, and afterwards only drawn.
@@ -24,7 +20,7 @@ final class TextLayout: @unchecked Sendable {
 
     init(_ text: NSAttributedString, width: CGFloat, wraps: Bool = true, maximumLines: Int = 0) {
         storage = NSTextStorage(attributedString: text)
-        let manager = ChipLayoutManager()
+        let manager = NSLayoutManager()
         manager.backgroundLayoutEnabled = false
         manager.allowsNonContiguousLayout = false
         manager.delegate = OwnLinkStyle.shared
@@ -122,54 +118,13 @@ final class TextLayout: @unchecked Sendable {
 }
 
 /// Outside a text view TextKit still paints every `.link` run in the system link blue with an
-/// underline, over the run's own colour. Links here style themselves (ink in the native style, a file
-/// mention in body colour), so the drawing-time attributes are dropped.
+/// underline, over the run's own colour. Links here style themselves (the accent, a file mention in body
+/// colour), so the drawing-time attributes are dropped.
 private final class OwnLinkStyle: NSObject, NSLayoutManagerDelegate, @unchecked Sendable {
     static let shared = OwnLinkStyle()
 
     func layoutManager(_ layoutManager: NSLayoutManager, shouldUseTemporaryAttributes attrs: [NSAttributedString.Key: Any] = [:], forDrawingToScreen toScreen: Bool, atCharacterIndex charIndex: Int, effectiveRange effectiveCharRange: NSRangePointer?) -> [NSAttributedString.Key: Any]? {
         [:]
-    }
-}
-
-/// Draws inline code's background as a rounded chip around the glyphs; TextKit would fill the whole
-/// line, line spacing included. Selection and other fills draw as usual.
-final class ChipLayoutManager: NSLayoutManager {
-    override func fillBackgroundRectArray(_ rectArray: UnsafePointer<NSRect>, count rectCount: Int, forCharacterRange charRange: NSRange, color: NSColor) {
-        guard let storage = textStorage, charRange.location < storage.length, let container = textContainers.first,
-              storage.attribute(.backgroundColor, at: charRange.location, effectiveRange: nil) as? NSColor === color,
-              let font = storage.attribute(.font, at: charRange.location, effectiveRange: nil) as? NSFont else {
-            return super.fillBackgroundRectArray(rectArray, count: rectCount, forCharacterRange: charRange, color: color)
-        }
-        let radius = storage.attribute(.riffetChipRadius, at: charRange.location, effectiveRange: nil) as? CGFloat ?? 4
-        let outlined = storage.attribute(.riffetChipOutline, at: charRange.location, effectiveRange: nil) != nil
-        color.setFill()
-        color.setStroke()
-        let chipGlyphs = glyphRange(forCharacterRange: charRange, actualCharacterRange: nil)
-        for rect in UnsafeBufferPointer(start: rectArray, count: rectCount) {
-            let glyph = glyphIndex(for: NSPoint(x: rect.midX, y: rect.midY), in: container)
-            var lineGlyphs = NSRange()
-            let line = lineFragmentRect(forGlyphAt: glyph, effectiveRange: &lineGlyphs)
-            let baseline = line.minY + location(forGlyphAt: glyph).y
-            // A run that wraps fills to the end of its first line; the chip covers only its glyphs.
-            let shown = NSIntersectionRange(chipGlyphs, lineGlyphs)
-            var minX = rect.minX, maxX = rect.maxX
-            if shown.length > 0 {
-                let used = boundingRect(forGlyphRange: shown, in: container)
-                minX = max(minX, used.minX)
-                maxX = min(maxX, used.maxX)
-            }
-            guard maxX > minX else { continue }
-            let box = NSRect(x: minX, y: baseline - font.ascender - 1, width: maxX - minX, height: font.ascender - font.descender + 2)
-            if outlined {
-                // Inset by half the line so the stroke stays inside the box the fill would cover.
-                let path = NSBezierPath(roundedRect: box.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-                path.lineWidth = 1
-                path.stroke()
-            } else {
-                NSBezierPath(roundedRect: box, xRadius: radius, yRadius: radius).fill()
-            }
-        }
     }
 }
 

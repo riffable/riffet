@@ -31,7 +31,6 @@ struct QuickChatSettingsView: View {
                     modelPicker(workbench, settings: settings)
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .formPicker()
                         .fixedSize()
                         .disabled(save.busy || options == nil)
                 }
@@ -48,7 +47,6 @@ struct QuickChatSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .formPicker()
                     .fixedSize()
                     .disabled(save.busy)
                 }

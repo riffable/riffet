@@ -74,7 +74,6 @@ struct ComposerMenuView: View {
     let hover: (Int) -> Void
     @Environment(\.palette) private var palette
 
-    private static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Radius.container, style: .continuous) }
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -87,7 +86,7 @@ struct ComposerMenuView: View {
             .fixedSize(horizontal: false, vertical: true)
             .onChange(of: highlight) { _, value in proxy.scrollTo(value) }
         }
-        .modifier(ComposerMenuChrome(shape: Self.shape))
+        .floatingSurface(cornerRadius: Radius.menu)
     }
 
     @ViewBuilder
@@ -196,21 +195,5 @@ struct ReferenceChip: View {
         .help(reference.path + (reference.line.map { ":\($0.int64Value)" } ?? ""))
         .onHover { hovering = $0 }
         .onTapGesture { open?() }
-    }
-}
-
-/// The menu's card: the drawn menus' surface under the drawn recipe, the system's material otherwise.
-private struct ComposerMenuChrome: ViewModifier {
-    let shape: RoundedRectangle
-
-    func body(content: Content) -> some View {
-        if DisplayPreferences.shared.style.menu == .drawn {
-            content.floatingSurface(cornerRadius: Radius.menu)
-        } else {
-            content
-                .background(.regularMaterial, in: shape)
-                .overlay(shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-                .elevation(.pop)
-        }
     }
 }

@@ -238,7 +238,6 @@ struct AgentProviderEditor: View {
                         Text(source == "custom" ? "API" : sourceChoiceTitle(source)).tag(source)
                     }
                 }
-                .formPicker()
                 .disabled(saving || !canChangeSource)
                 if pluginsLoading {
                     HStack {
@@ -262,7 +261,6 @@ struct AgentProviderEditor: View {
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .formPicker()
                         .disabled(saving)
                     }
                 }
@@ -272,7 +270,6 @@ struct AgentProviderEditor: View {
                             Text(source == "custom" ? String(localized: "通用") : sourceChoiceTitle(source)).tag(source)
                         }
                     }
-                    .formPicker()
                     .disabled(saving || !canChangeSource)
                 } else {
                     sourceLoginControls
@@ -611,7 +608,6 @@ struct AgentProviderEditor: View {
             }
         }
         .labelsHidden()
-        .formPicker()
         .disabled(disabled)
     }
 
@@ -669,7 +665,6 @@ struct AgentProviderEditor: View {
             }
             .labelsHidden()
             .pickerStyle(.menu)
-            .formPicker()
             .fixedSize()
             .disabled(disabled)
         }

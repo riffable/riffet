@@ -18,51 +18,36 @@ struct TranscriptStyle: @unchecked Sendable {
     let styleFonts: StyleSpec.Fonts
     /// The interface style's corners, read on the main thread for the layout queue.
     let radii: StyleSpec.Radii
-    /// How a run of tool calls is drawn; read with the radii, so a style switch lays the rows out again.
-    let toolRun: StyleSpec.ToolRun
-    /// How a block of content (code, tables, chips) is set off from the page.
-    let block: StyleSpec.Block
-    /// The paper the rows sit on (`Palette.page`): what an outlined block shows through.
-    let paper: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable
     /// The icon pack in use; symbols are drawn from cached images, so a switch redraws every row.
     let iconPack: String
-    /// What a checked box, a step in progress or a saved reply is marked with (`Palette.markRole`).
-    var mark: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.accent
-    /// A link's colour: ink with its underline in the native style, the accent in the drawn ones.
-    var link: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.accent
-    /// The native interface style (its `key` already differs through `link`).
-    var native = false
-    /// The prose line the style sets 14pt text on (`StyleSpec.Text.readingLine`).
+    /// What a checked box, a step in progress or a saved reply is marked with: ink, so colour stays
+    /// with the agents and the states that ask for attention.
+    let mark: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.fg2
+    /// A link's colour.
+    let link: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.accent
+    /// The prose line 14pt text is set on (`StyleSpec.Text.readingLine`).
     var bodyLineHeight: CGFloat = MarkdownStyle.bodyLineHeight
-    /// Inline code as a tinted chip, or the code face alone on the sentence's paper.
-    var inlineCode: StyleSpec.InlineCode = .chip
-    /// Quiet, running work is told once, by the working line under the turn; its process header stays still.
-    var ink: StyleSpec.Ink = .brand
     let gutter: CGFloat = TranscriptStyle.gutterWidth
     /// The reading column's side margin, also used to tell how much slack the column has around it.
     static let gutterWidth: CGFloat = 28
 
     /// The revision belongs in the key: editing a custom theme keeps its id and changes its colours.
-    var key: String { "\(palette.values.id)|\(palette.revision)|\(codeTheme.id)|\(codeThemeRevision)|\(scale)|\(density)|\(column)|\(dark)|\(fonts.key)|\(styleFonts.ui),\(styleFonts.mono)|\(radii.control),\(radii.container),\(radii.card),\(radii.floating)|\(toolRun.rawValue)|\(block.rawValue),\(paper == \.bg)|\(iconPack)|\(mark == \.accent),\(link == \.accent)|\(bodyLineHeight),\(inlineCode.rawValue),\(ink.rawValue)" }
+    var key: String { "\(palette.values.id)|\(palette.revision)|\(codeTheme.id)|\(codeThemeRevision)|\(scale)|\(density)|\(column)|\(dark)|\(fonts.key)|\(styleFonts.ui),\(styleFonts.mono)|\(radii.control),\(radii.container),\(radii.card),\(radii.floating)|\(iconPack)|\(bodyLineHeight)" }
 
     @MainActor
     static func current(dark: Bool) -> TranscriptStyle {
         let preferences = DisplayPreferences.shared
-        let native = preferences.style.backend == .native
         let codeTheme = ThemeStore.shared.codeTheme
         let codeRevision = ThemeStore.shared.codeThemeRevision
-        return TranscriptStyle(palette: ThemeStore.shared.palette, codeTheme: codeTheme, codeThemeRevision: codeRevision, scale: preferences.textScale, density: preferences.density, column: preferences.contentWidth, dark: dark, fonts: AppearanceStore.shared.fonts, styleFonts: preferences.style.fonts, radii: preferences.style.radii, toolRun: preferences.style.toolRun, block: preferences.style.block, paper: preferences.style.window == .flat ? \.bgElevated : \.bg, iconPack: IconPack.shared.effective, mark: preferences.style.ink == .quiet ? \.fg2 : Palette.markRole, link: native ? \.fg : \.accent, native: native, bodyLineHeight: preferences.style.text.readingLine, inlineCode: preferences.style.inlineCode, ink: preferences.style.ink)
+        return TranscriptStyle(palette: ThemeStore.shared.palette, codeTheme: codeTheme, codeThemeRevision: codeRevision, scale: preferences.textScale, density: preferences.density, column: preferences.contentWidth, dark: dark, fonts: AppearanceStore.shared.fonts, styleFonts: preferences.style.fonts, radii: preferences.style.radii, iconPack: IconPack.shared.effective, bodyLineHeight: preferences.style.text.readingLine)
     }
 
     func s(_ size: CGFloat) -> CGFloat { ladderTextSize(size) * scale }
 
-    /// A content block's tint; outlined blocks leave the paper bare.
-    var blockFill: NSColor? { block == .filled ? color(\.bgSubtle) : nil }
+    /// A content block's tint.
+    var blockFill: NSColor { color(\.bgSubtle) }
 
-    /// An outlined content block's hairline.
-    var blockStroke: NSColor? { block == .outlined ? color(\.line) : nil }
-
-    func blockBox(radius: CGFloat) -> BoxSpec { BoxSpec(fill: blockFill, stroke: blockStroke, radius: radius) }
+    func blockBox(radius: CGFloat) -> BoxSpec { BoxSpec(fill: blockFill, radius: radius) }
 
     /// A one-line process row (a tool, a run, a thought): it grows with the text in it, so a larger
     /// text scale keeps the same air rather than crowding the line.
@@ -253,9 +238,8 @@ enum MarkdownStyle {
     static var unorderedContent: CGFloat { unorderedMarkerBox + markerTextGap }
     static var orderedContent: CGFloat { orderedMarkerBox + markerTextGap }
     static let quoteInset: CGFloat = 14
-    static let inlineCodeSize: CGFloat = 12.5
-    /// Inline code without its chip (`StyleSpec.InlineCode.plain`): 0.86 of the body.
-    static let plainInlineCodeSize: CGFloat = 12
+    /// Inline code: 0.86 of the body.
+    static let inlineCodeSize: CGFloat = 12
     static let codeSize: CGFloat = 12.5
     static let codeHeaderHeight: CGFloat = 28
     static let codeBodyInset: CGFloat = 11

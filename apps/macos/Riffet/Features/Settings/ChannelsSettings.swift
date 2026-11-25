@@ -237,7 +237,6 @@ struct ChannelsSettings: View {
                     ForEach(app.workbench?.projects ?? [], id: \.id) { project in Text(project.name).tag(project.id) }
                 }
                 .labelsHidden()
-                .formPicker()
                 .fixedSize()
                 Menu {
                     Button("移除", role: .destructive) { pending = .removeChat(chat) }

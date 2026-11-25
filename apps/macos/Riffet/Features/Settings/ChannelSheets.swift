@@ -347,10 +347,10 @@ private struct ChannelManualStep: View {
             Form {
                 TextField("App ID", text: $appId)
                     .font(.riffet(size: S(13), design: .monospaced))
-                    .formField(label: "App ID")
+                    .formField()
                     .disabled(busy || account != nil)
                 SecureField("App Secret", text: $appSecret)
-                    .formField(label: "App Secret")
+                    .formField()
                     .disabled(busy)
                 SettingsRow("域名") {
                     FormSegmented("域名", selection: $domain) {

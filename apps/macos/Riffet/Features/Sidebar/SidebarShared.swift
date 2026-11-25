@@ -2,9 +2,9 @@ import AppKit
 import SwiftUI
 import RiffetKit
 
-// What the native sidebar (`SidebarView`) and the drawn one (`CustomSidebar`) both do: the row menu,
+// What the sidebar (`CustomSidebar`) and the quick chat history share: the row menu,
 // the project menu and its dialogs, the dialogs of the list, the filter menu, and the footer's menu
-// and status wording. Neither sidebar owns a copy.
+// and status wording. Neither owns a copy.
 
 
 /// A conversation row's context menu; a quick chat keeps only the actions that apply to one.
@@ -235,19 +235,14 @@ enum SidebarProjects {
 }
 
 /// The menu of arrangement, archive, unread and tag filters, and mark all as seen.
-/// [addProject], when given, is the menu's first item.
 @MainActor
 enum SidebarFilterMenu {
-    static func make(workbench: Workbench, addProject: (() -> Void)? = nil) -> NSMenu {
+    static func make(workbench: Workbench) -> NSMenu {
         let menu = NSMenu()
         func add(_ title: String, on: Bool, _ action: @escaping () -> Void) {
             let item = MenuAction.item(title, action)
             item.state = on ? .on : .off
             menu.addItem(item)
-        }
-        if let addProject {
-            menu.addItem(MenuAction.item(String(localized: "添加项目"), symbol: "folder.badge.plus", addProject))
-            menu.addItem(.separator())
         }
         menu.addItem(.sectionHeader(title: String(localized: "排列方式")))
         add(String(localized: "按项目分组"), on: workbench.sidebar.layout == "PROJECT") { workbench.sidebar.choose(layout: "PROJECT") }

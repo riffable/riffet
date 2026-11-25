@@ -68,14 +68,6 @@ struct RiffetApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        Window("界面风格设计稿", id: InterfaceStyleDraftsWindow.id) {
-            InterfaceStyleDraftsWindow()
-                .environment(\.palette, theme.palette)
-        }
-        .defaultSize(width: 1240, height: 860)
-        .defaultLaunchBehavior(.suppressed)
-        .restorationBehavior(.disabled)
-
         Settings {
             SettingsView()
                 .environment(model)

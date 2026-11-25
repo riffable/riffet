@@ -1,6 +1,6 @@
 # Riffet 风格视觉规则
 
-Riffet 风格（`InterfaceStyle.riffet`）是主风格，以 Web 为准，Mac 与 Web 共用这一页。原生和线条风格保留，各自的规则见 `macos-native.md` 和 `interface-styles/`。这里打磨出来的规则，之后按同样的方式套用到其他风格。
+Riffet 风格以 Web 为准，Mac 与 Web 共用这一页。Mac 只画这一种风格（[决定](DECISIONS.md) 2026-11-25）；平台行为与动效见 `macos-native.md`。
 
 参照对象是 Multica 的桌面端：它用的值很少，每一处都守着这些值。稿件见 `interface-styles/pages/riffet-next/`，用 `./render.sh riffet-next` 渲染。
 
@@ -66,19 +66,20 @@ Riffet 风格（`InterfaceStyle.riffet`）是主风格，以 Web 为准，Mac �
 
 ## 7. 落到代码
 
-规则通过风格配方生效（`packages/contracts/src/interface-styles.ts`，`pnpm gen:styles` 生成 Mac 的 `StyleSpec`），代码判断配方字段，不判断风格名：
+尺寸由 `packages/contracts/src/interface-styles.ts` 定义，`pnpm gen:styles` 生成 Mac 的 `StyleSpec`：
 
-| 配方 | Riffet | 作用 |
+| 取值 | Riffet | 作用 |
 |---|---|---|
 | `text` | 13 / 12 / 12 / 13，正文行高 23 | 界面三档字号；对话正文行高 |
-| `inlineCode: plain` | | 行内代码无底色，12pt 等宽，次一档墨色 |
-| `ink: quiet` | | 运行状态不用强调色，只在回合末尾计时；开关用墨色，弹窗里的选择是胶囊 |
-| `toolRun: labelled` | | 工具名、说明用界面字体，只有命令用等宽 |
-| `tabs: pill` | | 面板视图用图标页签，Git 子页是胶囊，范围收进胶囊菜单 |
-| `fileRow: inline` | | 文件名和目录在同一行 |
 | `radii.menu` | 12 | 菜单和弹出层的圆角（输入框仍是 16） |
 
-其他风格想采用某条规则，改自己的配方即可。
+下面这些不是取值，直接写在 Mac 的组件里：
+
+- 行内代码无底色，12pt 等宽，次一档墨色。
+- 运行状态不用强调色，只在回合末尾计时；开关用墨色，弹窗里的选择是胶囊。
+- 工具名、说明用界面字体，只有命令用等宽。
+- 面板视图用图标页签，Git 子页是胶囊，范围收进胶囊菜单。
+- 文件名和目录在同一行。
 
 ## 8. 交付前自审
 

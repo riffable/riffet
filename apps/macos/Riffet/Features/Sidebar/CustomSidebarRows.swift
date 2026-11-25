@@ -4,15 +4,15 @@ import RiffetKit
 
 /// The fill of a row of the drawn sidebar: a block when picked, a lighter one under the pointer.
 @MainActor
-private func rowFill(_ palette: Palette, style: StyleSpec, selected: Bool, hovering: Bool) -> Color {
-    if selected { return style.selection == .block ? palette.bgActive : palette.bgHover }
+private func rowFill(_ palette: Palette, selected: Bool, hovering: Bool) -> Color {
+    if selected { return palette.bgActive }
     return hovering ? palette.bgHover : .clear
 }
 
 /// The icon column every row shares, so titles line up under one another.
 private let iconColumn: CGFloat = 16
 private let rowInset: CGFloat = Space.sm + Space.xxs
-/// The main actions keep one height in every style; the conversations below take the style's row.
+/// The main actions keep one height; the conversations below take `StyleSpec.Layout.sidebarRow`.
 private let navRow: CGFloat = 32
 
 /// An icon and a title in the main actions: new conversation, search, pages, menus.
@@ -51,7 +51,7 @@ struct CustomNavRow: View {
             .frame(maxWidth: .infinity, minHeight: navRow, maxHeight: navRow, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .fill(rowFill(palette, style: style, selected: selected, hovering: hovering))
+                    .fill(rowFill(palette, selected: selected, hovering: hovering))
             )
             .contentShape(Rectangle())
         }
@@ -124,55 +124,8 @@ struct CustomSectionTitle<Trailing: View>: View {
     }
 }
 
-/// A foldable band of the time layout: dark, medium, with a chevron that turns when it folds, and
-/// its buttons at the trailing edge.
-struct CustomGroupTitle<Trailing: View>: View {
-    let title: String
-    let expanded: Bool
-    let style: StyleSpec
-    let toggle: () -> Void
-    @ViewBuilder let trailing: Trailing
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Button(action: toggle) {
-                HStack(spacing: Space.xs + Space.xxs) {
-                    Text(title)
-                        .font(.riffet(size: S(style.text.body), weight: .medium))
-                        .foregroundStyle(palette.fg)
-                    // A solid caret, wider than it is tall, as Claude Desktop draws its bands' toggles.
-                    Caret()
-                        .fill(palette.fg3)
-                        .frame(width: S(7), height: S(4))
-                        .rotationEffect(.degrees(expanded ? 0 : -90))
-                    Spacer(minLength: 0)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            trailing.buttonStyle(IconButtonStyle(size: 24))
-        }
-        .padding(.leading, rowInset)
-        .padding(.trailing, Space.xxs)
-        .frame(height: style.layout.sidebarRow)
-    }
-}
-
-/// A downward triangle with softened corners.
-private struct Caret: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        path.closeSubpath()
-        return path.strokedPath(StrokeStyle(lineWidth: 1, lineJoin: .round)).union(path)
-    }
-}
-
 /// One conversation. Rows compare by what they show, so re-rendering the list re-draws only the
-/// rows that changed, as the native sidebar's rows do.
+/// rows that changed.
 struct CustomSessionRow: View, Equatable {
     let session: Session
     /// The hover card's text, composed only as the card is about to show.
@@ -210,7 +163,7 @@ struct CustomSessionRow: View, Equatable {
             .frame(maxWidth: .infinity, minHeight: style.layout.sidebarRow, maxHeight: style.layout.sidebarRow, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .fill(rowFill(palette, style: style, selected: selected, hovering: hovering))
+                    .fill(rowFill(palette, selected: selected, hovering: hovering))
             )
             .contentShape(Rectangle())
         }
@@ -243,7 +196,7 @@ struct CustomSessionRow: View, Equatable {
 }
 
 /// A project of the tree: folder, name, a plus for a new conversation. The row folds its conversations;
-/// the folder gives way to a chevron under the pointer. The menu and its dialogs are shared with `ProjectHeader`.
+/// the folder gives way to a chevron under the pointer.
 struct CustomProjectRow: View {
     let workbench: Workbench
     let project: Project
@@ -294,49 +247,5 @@ struct CustomProjectRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .projectActions(workbench: workbench, project: project, favorites: favorites)
-    }
-}
-
-/// 任务 | 对话: the two homes a new conversation starts from, as a sliding pair.
-struct CustomModeSwitch: View {
-    let workbench: Workbench
-    let style: StyleSpec
-    @Environment(\.palette) private var palette
-
-    /// A raised switch sets the chosen half 3pt inside the track on a shadow; an outlined one, as
-    /// Claude Desktop draws it, fills the half to the track's edge and lets its hairline be that edge.
-    private var inset: CGFloat { style.surface == .outlined ? 0 : 3 }
-
-    var body: some View {
-        let chat = workbench.homeIsQuickChat || workbench.openSessionIsQuickChat
-        HStack(spacing: style.surface == .outlined ? 0 : Space.xxs) {
-            segment(String(localized: "任务"), symbol: "chevron.left.forwardslash.chevron.right", on: !chat) { workbench.showHomeTab(quickChat: false) }
-            segment(String(localized: "对话"), symbol: "bubble.left", on: chat) { workbench.showHomeTab(quickChat: true) }
-        }
-        .padding(inset)
-        // An outlined style keeps the track a shade under the rows' own fill, as Claude Desktop does.
-        .background(style.surface == .outlined ? palette.bgHover : palette.bgActive, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-    }
-
-    private func segment(_ title: String, symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
-        // Concentric with the track.
-        let shape = RoundedRectangle(cornerRadius: max(Radius.container - inset, 2), style: .continuous)
-        return Button(action: action) {
-            HStack(spacing: Space.xs + Space.xxs) {
-                Image(icon: symbol).font(.riffet(size: S(style.text.secondary - 1)))
-                Text(title).font(.riffet(size: S(style.text.body)))
-            }
-            .foregroundStyle(on ? palette.fg : palette.fg3)
-            .frame(maxWidth: .infinity, minHeight: style.layout.sidebarRow - 6, maxHeight: style.layout.sidebarRow - 6)
-            .background(
-                shape
-                    .fill(on ? palette.bgElevated : .clear)
-                    // Lifted by a shadow, or drawn by a hairline (`StyleSpec.Surface`).
-                    .elevation(on && style.surface == .raised ? .raised : nil)
-                    .overlay(shape.strokeBorder(on && style.surface == .outlined ? palette.line : .clear))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 }

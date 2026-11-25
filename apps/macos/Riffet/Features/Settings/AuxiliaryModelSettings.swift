@@ -105,7 +105,6 @@ private struct AuxiliaryModelSection: View {
                         picker(purpose, settings: settings)
                             .labelsHidden()
                             .pickerStyle(.menu)
-                            .formPicker()
                         if purpose.canPreview {
                             Button("试用") {
                                 if let ref = purpose.ref(in: settings) {
@@ -185,7 +184,6 @@ private struct PluginModelSection: View {
                         )
                         .labelsHidden()
                         .pickerStyle(.menu)
-                        .formPicker()
                         .disabled(state.options == nil || state.saving != nil || state.savingUse != nil)
                     }
                 }

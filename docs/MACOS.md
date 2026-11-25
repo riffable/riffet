@@ -1014,7 +1014,7 @@ CSV / JSON 导出；页面可见时订阅
 | 阶段 | 功能 | Web 位置 | Mac 现状 | 做法 |
 | --- | --- | --- | --- | --- |
 | 进行中 | 会话标签页：临时标签、置顶分区、右键菜单、关闭其他 / 右侧、重新打开、溢出菜单、未读点；设置「标签样式」「打开会话时」，改键在「快捷键」页 | `tabs/*`、`settings/TabsSection.tsx` | 仅 Riffet 风格，最多 12 个，只能点击与关闭 | 标签状态移出视图，按服务器存在本机；快捷键用 Mac 惯例：⌘1–9、⌃Tab / ⇧⌘[ ]、⌘W、⇧⌘T（均可改键）。不做「独立一行」 |
-| 一 | 会话概览栏：计划、章节导航、子 Agent 与后台任务、产出文件 | `session/SessionAside.tsx` | 无；计划在输入框上方 | Riffet 风格配方 `rightPanel: outline` 的落地：正文右侧 248pt 一栏；设置「会话右侧：概览 / 仅导航条」，只在 Riffet 风格出现，默认概览；宽度不够或检查器放不下时退回导航条，空栏也保留；显示时隐藏输入框上方计划与右侧刻线；`sessionOutputs` 移到 `apps/mobile/core` 共用 |
+| 一 | 会话概览栏：计划、章节导航、子 Agent 与后台任务、产出文件 | `session/SessionAside.tsx` | 无；计划在输入框上方 | Riffet 风格配方 `rightPanel: outline` 的落地：正文右侧 248pt 一栏；设置「会话右侧：概览 / 仅导航条」，默认概览；宽度不够或检查器放不下时退回导航条，空栏也保留；显示时隐藏输入框上方计划与右侧刻线；`sessionOutputs` 移到 `apps/mobile/core` 共用 |
 | 一 | 技能与工具选择器：手机控制、MCP、Skill 按会话开关 | `session/ToolsPicker.tsx` | `toolGroups` / `extensionsOff` 固定传 nil | 新会话页输入框左侧工具按钮；已有会话走 `SessionUpdate` |
 | 一 | 插件快捷键生效 | `app/pluginKeybindings.ts` | 只显示文字 | 注册为菜单命令，与 App 快捷键冲突时 App 优先，插件页标出冲突；在标签页之后做 |
 | 二 | 文件面板代码导航：⌘ 点击跳到定义、查找用法、最近查看、⌘P 快速打开 | `panels/FilesPanel.tsx`、`panels/QuickOpen.tsx` | 只有按名称 / 内容搜索 | 走服务端 `code-nav`；`CodeTextView` 点击位置换算成字符偏移；⌘P 独立于命令面板 |

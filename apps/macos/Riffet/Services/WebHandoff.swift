@@ -130,15 +130,10 @@ struct WebHandoffButton: View {
     var body: some View {
         if WebHandoff.isAvailable(workbench) {
             let title = String(localized: "在 Web 中打开")
-            if DisplayPreferences.shared.style.backend == .native {
-                Button { WebHandoff.open(page, in: workbench) } label: { Label(title, icon: "arrow.up.right.square") }
-                    .help(title)
-            } else {
-                Button { WebHandoff.open(page, in: workbench) } label: { Image(icon: "arrow.up.right.square") }
-                    .buttonStyle(IconButtonStyle())
-                    .help(title)
-                    .accessibilityLabel(title)
-            }
+            Button { WebHandoff.open(page, in: workbench) } label: { Image(icon: "arrow.up.right.square") }
+                .buttonStyle(IconButtonStyle())
+                .help(title)
+                .accessibilityLabel(title)
         }
     }
 }

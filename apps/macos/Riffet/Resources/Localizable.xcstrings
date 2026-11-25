@@ -4716,50 +4716,6 @@
         }
       }
     },
-    "%lld 个后台任务": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld background task"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld background tasks"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "%lld 个子 Agent": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld sub-Agent"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld sub-Agents"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%lld 个工作流运行中": {
       "localizations": {
         "en": {
@@ -5958,16 +5914,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "−%lld"
-          }
-        }
-      }
-    },
-    "⌘K": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌘K"
           }
         }
       }
@@ -7509,16 +7455,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Global shortcut"
-          }
-        }
-      }
-    },
-    "全屏": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Full screen"
           }
         }
       }
@@ -14702,16 +14638,6 @@
         }
       }
     },
-    "显示/隐藏侧栏 (⌘B)": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show/hide sidebar (⌘B)"
-          }
-        }
-      }
-    },
     "显示/隐藏检查器": {
       "localizations": {
         "en": {
@@ -20995,16 +20921,6 @@
         }
       }
     },
-    "面板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Panel"
-          }
-        }
-      }
-    },
     "页面背景": {
       "localizations": {
         "en": {
@@ -24010,42 +23926,12 @@
         }
       }
     },
-    "界面风格": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Interface style"
-          }
-        }
-      }
-    },
     "会话信息": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Conversation info"
-          }
-        }
-      }
-    },
-    "最近": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recent"
-          }
-        }
-      }
-    },
-    "显示更多": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show more"
           }
         }
       }
@@ -24060,26 +23946,6 @@
         }
       }
     },
-    "线条": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Line"
-          }
-        }
-      }
-    },
-    "原生": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Native"
-          }
-        }
-      }
-    },
     "图标": {
       "localizations": {
         "en": {
@@ -24090,32 +23956,12 @@
         }
       }
     },
-    "跟随界面风格": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Match interface style"
-          }
-        }
-      }
-    },
     "界面": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Interface"
-          }
-        }
-      }
-    },
-    "界面风格设计稿": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Interface Style Drafts"
           }
         }
       }

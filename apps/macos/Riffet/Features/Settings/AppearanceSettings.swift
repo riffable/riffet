@@ -91,7 +91,6 @@ struct ThemeSettings: View {
                             }
                         }
                         .labelsHidden()
-                        .formPicker()
                         .fixedSize()
                         if theme.canEditThemes {
                             Button("自定义…") {
@@ -157,7 +156,7 @@ private struct CodeThemePreview: View {
             .font(RiffetFont.codeSmall)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Space.md)
-            .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+            .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line))
             .padding(.vertical, Space.xs)
             .task {
@@ -218,48 +217,36 @@ struct WindowSettings: View {
         @Bindable var iconPack = IconPack.shared
         Form {
             Section {
-                SettingsRow("界面风格") {
-                    FormSegmented("界面风格", selection: $prefs.interfaceStyle) {
-                        ForEach(InterfaceStyle.allCases) { style in
-                            Text(style.title).tag(style)
-                        }
-                    }
-                    .labelsHidden()
-                }
-
                 SettingsRow("图标") {
                     Picker("图标", selection: $iconPack.choice) {
-                        Text("跟随界面风格").tag("")
+                        Text("默认").tag("")
                         Divider()
                         ForEach(IconPack.choices, id: \.id) { pack in
                             Text(verbatim: pack.title).tag(pack.id)
                         }
                     }
                     .labelsHidden()
-                    .formPicker()
                     .fixedSize()
                 }
             }
 
-            if prefs.materialApplies {
-                Section {
-                    SettingsRow(String(localized: "材质"), detail: prefs.reduceTransparency ? String(localized: "系统已开启「降低透明度」。") : nil) {
-                        FormSegmented("材质", selection: $prefs.windowMaterial) {
-                            ForEach(WindowMaterial.available) { material in
-                                Text(material.title).tag(material)
-                            }
+            Section {
+                SettingsRow(String(localized: "材质"), detail: prefs.reduceTransparency ? String(localized: "系统已开启「降低透明度」。") : nil) {
+                    FormSegmented("材质", selection: $prefs.windowMaterial) {
+                        ForEach(WindowMaterial.available) { material in
+                            Text(material.title).tag(material)
                         }
-                        .labelsHidden()
-                        .disabled(prefs.reduceTransparency)
                     }
+                    .labelsHidden()
+                    .disabled(prefs.reduceTransparency)
+                }
 
-                    if !prefs.reduceTransparency, prefs.windowMaterial != .solid {
-                        SettingsRow("侧栏透明度") {
-                            SettingsNumberSlider(value: $prefs.sidebarTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 60)
-                        }
-                        SettingsRow("主区透明度") {
-                            SettingsNumberSlider(value: $prefs.contentTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 0)
-                        }
+                if !prefs.reduceTransparency, prefs.windowMaterial != .solid {
+                    SettingsRow("侧栏透明度") {
+                        SettingsNumberSlider(value: $prefs.sidebarTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 60)
+                    }
+                    SettingsRow("主区透明度") {
+                        SettingsNumberSlider(value: $prefs.contentTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 0)
                     }
                 }
             }
@@ -309,14 +296,12 @@ struct TypographySettings: View {
                         .toggleStyle(.switch)
                 }
 
-                if prefs.style.rightPanel == .outline {
-                    SettingsRow("会话右侧") {
-                        FormSegmented("会话右侧", selection: $prefs.sessionOverview) {
-                            Text("概览").tag(true)
-                            Text("仅导航条").tag(false)
-                        }
-                        .labelsHidden()
+                SettingsRow("会话右侧") {
+                    FormSegmented("会话右侧", selection: $prefs.sessionOverview) {
+                        Text("概览").tag(true)
+                        Text("仅导航条").tag(false)
                     }
+                    .labelsHidden()
                 }
 
                 SettingsRow("导航条样式") {
@@ -352,7 +337,7 @@ struct TypographySettings: View {
         }
         .padding(Space.lg)
         .frame(maxWidth: width, alignment: .leading)
-        .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
                 .strokeBorder(palette.line)
@@ -543,7 +528,7 @@ struct TerminalSettings: View {
             }
             .padding(.horizontal, Space.md)
             .padding(.vertical, Space.xs)
-            .background(palette.formFill(palette.bgElevated))
+            .background(palette.bgElevated)
 
             Divider()
 
@@ -714,7 +699,7 @@ private struct ThemePreviewCard: View {
                 }
             }
             .padding(Space.sm)
-            .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+            .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: Radius.container, style: .continuous)
                     .strokeBorder(selected ? palette.accent : palette.lineSoft, lineWidth: selected ? 1.5 : 1)

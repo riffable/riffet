@@ -4,21 +4,20 @@ import SwiftUI
 @MainActor
 enum CustomChrome {
     /// Where the first control after the traffic lights starts, from the window's leading edge. In
-    /// the toolbar's title bar (52pt) the lights end at 73pt and sit 26pt down; the compact one
-    /// (40pt) draws them 7pt further left and 20pt down.
-    static func trafficLights(_ style: StyleSpec) -> CGFloat { style.titleBar == .compact ? 77 : 84 }
+    /// the toolbar's title bar (52pt) the lights end at 73pt and sit 26pt down.
+    static let trafficLights: CGFloat = 84
 
-    /// How far the traffic lights are moved down from the title bar's middle: beside an inset card
-    /// they sit level with the card's header, which starts a card gap below the window's top
-    /// (30pt down rather than the toolbar's 26).
+    /// How far the traffic lights are moved down from the title bar's middle: they sit level with
+    /// the card's header, which starts a card gap below the window's top (30pt down rather than the
+    /// toolbar's 26).
     static func trafficLightsDrop(_ style: StyleSpec) -> CGFloat {
-        style.window == .insetCard && style.titleBar == .unified ? Space.sm + style.layout.header / 2 - 26 : 0
+        Space.sm + style.layout.header / 2 - 26
     }
 
-    /// The drawn sidebar's top row, level with the traffic lights: the header's height, and beside a
-    /// card the card's gap above and below it, so its middle is the card header's.
+    /// The drawn sidebar's top row, level with the traffic lights: the header's height and the
+    /// card's gap above and below it, so its middle is the card header's.
     static func titleRow(_ style: StyleSpec) -> CGFloat {
-        style.layout.header + (style.window == .insetCard ? 2 * Space.sm : 0)
+        style.layout.header + 2 * Space.sm
     }
     static let sidebarWidths: ClosedRange<Double> = 210...400
     /// The sidebar's width as the reader left it; 0 until dragged, which means the style's own.
@@ -43,16 +42,13 @@ extension EnvironmentValues {
     @Entry var customSidebarPeeking = false
 }
 
-/// The main window drawn by the app instead of the system (`StyleSpec.backend == .custom`): the
-/// sidebar column, the content and the title bar, laid out by the style's `window` recipe. The
-/// conversation, its panel and terminal (`content`) are the same views the native window shows;
-/// this only frames them. One structure for every custom style: a recipe changes parameters, so
-/// switching between two custom styles rebuilds nothing.
-struct CustomWorkbench<Header: View, Content: View>: View {
+/// The main window drawn by the app instead of the system: the sidebar column beside the content,
+/// which sits in inset cards on the window's canvas. The conversation, its panel and terminal
+/// (`content`) are the same views a conversation window shows; this only frames them.
+struct CustomWorkbench<Content: View>: View {
     let workbench: Workbench
-    /// The reader's (or the panel's) choice; the same state the native split view's columns follow.
+    /// The reader's (or the panel's) choice.
     let sidebarShown: Bool
-    @ViewBuilder let header: Header
     @ViewBuilder let content: Content
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -67,15 +63,13 @@ struct CustomWorkbench<Header: View, Content: View>: View {
         let style = DisplayPreferences.shared.style
         let width = CustomChrome.sidebarWidth(stored: storedSidebarWidth, style: style)
         ZStack(alignment: .leading) {
-            if style.window == .insetCard {
-                PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
-            }
+            PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
             // The content takes its width in one step; the sidebar slides over the space it leaves,
             // so the transcript is laid out once, not on every frame of the slide or the drag.
             HStack(spacing: 0) {
                 Color.clear
                     .frame(width: sidebarShown ? width : 0)
-                main(style)
+                main
             }
             if !sidebarShown {
                 Color.clear.frame(width: 6).frame(maxHeight: .infinity)
@@ -102,31 +96,24 @@ struct CustomWorkbench<Header: View, Content: View>: View {
         .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
     }
 
-    /// The sidebar's background: flat windows use content tint, inset-card windows let the full-window
-    /// canvas gradient shine through when docked so there is no seam, and paint their own backdrop
-    /// when sliding, peeking or dragging over content.
+    /// The sidebar's background: docked, the full-window canvas shows through so there is no seam;
+    /// sliding, peeking or dragging over the content, it paints its own.
     @ViewBuilder
-    private func sidebarBackdrop(_ style: StyleSpec) -> some View {
-        if style.window == .flat {
-            palette.bg.opacity(DisplayPreferences.shared.contentTint)
-        } else if !sidebarShown || peeking || draggedWidth != nil {
+    private var sidebarBackdrop: some View {
+        if !sidebarShown || peeking || draggedWidth != nil {
             PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
         } else {
             Color.clear
         }
     }
 
-    /// The content beside the sidebar. Beside a card it keeps the gaps; the cards themselves are the
-    /// content's (`CustomCard`): the conversation's column, and the side panel as a card of its own.
-    private func main(_ style: StyleSpec) -> some View {
-        let card = style.window == .insetCard
-        return VStack(spacing: 0) {
-            header
-            content
-        }
-        .padding(.leading, card && !sidebarShown ? Space.sm : 0)
-        .padding([.top, .trailing, .bottom], card ? Space.sm : 0)
-        .background(alignment: .top) { WindowDragArea().frame(height: card ? Space.sm : 0) }
+    /// The content beside the sidebar, keeping the card gaps; the cards themselves are the content's
+    /// (`CustomCard`): the conversation's column, and the side panel as a card of its own.
+    private var main: some View {
+        content
+            .padding(.leading, sidebarShown ? 0 : Space.sm)
+            .padding([.top, .trailing, .bottom], Space.sm)
+            .background(alignment: .top) { WindowDragArea().frame(height: Space.sm) }
     }
 
     /// Always built: hiding moves it off the window's edge, so its list, scroll position and sheets stay.
@@ -139,10 +126,10 @@ struct CustomWorkbench<Header: View, Content: View>: View {
             .background(alignment: .top) {
                 WindowDragArea().frame(height: CustomChrome.titleRow(style))
             }
-            .background { sidebarBackdrop(style) }
+            .background { sidebarBackdrop }
             .overlay(alignment: .trailing) {
                 SidebarResizeHandle(
-                    dragged: $draggedWidth, current: width, drawn: style.window == .flat,
+                    dragged: $draggedWidth, current: width,
                     commit: { storedSidebarWidth = CustomChrome.clamp($0) },
                     reset: { storedSidebarWidth = 0 }
                 )
@@ -160,26 +147,24 @@ struct CustomWorkbench<Header: View, Content: View>: View {
     }
 }
 
-/// A surface of an `insetCard` window: the content's colour, rounded, with a faint shadow; the colour
-/// against the sidebar's is its edge, with no hairline. Off in a drawn window, it changes nothing and cuts nothing, so the modifier stays in place
-/// across the custom styles (a page may rise over the header above it). Outside a drawn window
-/// (`drawn` false: the native window, a conversation window) it is not applied at all, and the
-/// content keeps running up under the toolbar; that choice never changes for a view that exists.
+/// A card of the drawn window: the content's colour, rounded, with a faint shadow; the colour
+/// against the sidebar's is its edge, with no hairline. Outside a drawn window (`drawn` false: a
+/// conversation window) it is not applied at all, and the content keeps running up under the
+/// toolbar; that choice never changes for a view that exists.
 struct CustomCard: ViewModifier {
-    let on: Bool
     let drawn: Bool
     @Environment(\.palette) private var palette
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if drawn {
-            let shape = CardShape(radius: on ? Radius.floating : 0)
+            let shape = RoundedRectangle(cornerRadius: Radius.floating, style: .continuous)
             let fillOpacity = DisplayPreferences.shared.contentTint * palette.cardOpacity
             content
                 .clipShape(shape)
                 .background(
-                    shape.fill(on ? palette.bg.opacity(fillOpacity) : .clear)
-                        .elevation(on && fillOpacity > 0.05 ? .raised : nil)
+                    shape.fill(palette.bg.opacity(fillOpacity))
+                        .elevation(fillOpacity > 0.05 ? .raised : nil)
                 )
         } else {
             content
@@ -187,46 +172,23 @@ struct CustomCard: ViewModifier {
     }
 }
 
-/// A rounded rectangle; at radius 0, one far larger than any view, whose clip cuts nothing.
-private struct CardShape: InsettableShape {
-    let radius: CGFloat
-    var inset: CGFloat = 0
-
-    func path(in rect: CGRect) -> Path {
-        guard radius > 0 else { return Path(rect.insetBy(dx: -8192, dy: -8192)) }
-        return RoundedRectangle(cornerRadius: radius, style: .continuous).path(in: rect.insetBy(dx: inset, dy: inset))
-    }
-
-    func inset(by amount: CGFloat) -> CardShape {
-        var shape = self
-        shape.inset += amount
-        return shape
-    }
-}
-
-/// The sidebar's trailing edge: drag to resize. A flat window draws it as the column's hairline;
-/// beside a card it is the gap and draws nothing.
+/// The sidebar's trailing edge: drag to resize. It is the gap beside the card and draws nothing.
 private struct SidebarResizeHandle: View {
     @Binding var dragged: CGFloat?
     let current: CGFloat
-    let drawn: Bool
     let commit: (Double) -> Void
     /// A double-click: back to the style's own width.
     let reset: () -> Void
-    @Environment(\.palette) private var palette
     @State private var start: CGFloat?
-    @State private var hovering = false
 
     var body: some View {
-        Rectangle()
-            .fill(drawn ? (hovering || start != nil ? palette.lineStrong : palette.line) : .clear)
+        Color.clear
             .frame(width: 1)
             .overlay(
                 Color.clear.frame(width: 8)
                     .contentShape(Rectangle())
                     .pointerStyle(.columnResize)
             )
-            .onHover { hovering = $0 }
             .onTapGesture(count: 2, perform: reset)
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)

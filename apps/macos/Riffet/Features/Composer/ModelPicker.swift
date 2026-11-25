@@ -340,7 +340,6 @@ struct ModelPanel: View {
 
     private func row(_ param: ModelParam_) -> some View {
         let kind = paramKind(param: param)
-        let quiet = DisplayPreferences.shared.style.ink == .quiet
         return HStack(spacing: Space.sm) {
             Text(Self.title(param, kind)).font(.riffet(size: S(13))).foregroundStyle(palette.fg2).lineLimit(1).layoutPriority(1)
             Spacer(minLength: Space.sm)
@@ -348,32 +347,20 @@ struct ModelPanel: View {
             case .fast, .toggle:
                 // Fast is a switch only, as on the web: a "Default" beside it was a third state with no visible effect.
                 Toggle(Self.title(param, kind), isOn: Binding(get: { isOn(param: param) }, set: { value(for: param, toggledValue(param: param, on: $0, fallback: nil)) }))
-                    .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(quiet ? palette.primary : palette.accent)
+                    .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(palette.primary)
                     .accessibilityValue(Text(verbatim: isOn(param: param) ? "On" : "Off"))
             default:
                 ChoiceMenu(options: (kind == .max ? param.options : listValues(param: param)).map { option in
                     ChoiceOption(title: optionLabel(param: param, value: option.value), selected: param.value == option.value) { value(for: param, option.value) }
                 }) {
-                    if quiet {
-                        // A bare chip, as the composer's own: the value and a chevron, flush right.
-                        HStack(spacing: Space.xs) {
-                            Text(optionLabel(param: param, value: param.value)).lineLimit(1)
-                            Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
-                        }
-                        .font(.riffet(size: S(13))).foregroundStyle(palette.fg)
-                        .padding(.horizontal, Space.sm).frame(height: 26)
-                        .contentShape(Rectangle())
-                    } else {
-                        HStack(spacing: 6) {
-                            Text(optionLabel(param: param, value: param.value)).lineLimit(1)
-                            Spacer(minLength: 0)
-                            Image(icon: "chevron.up.chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
-                        }
-                        .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
-                        .padding(.horizontal, 8).frame(width: 100, height: 24)
-                        .background(palette.bg, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
+                    // A bare chip, as the composer's own: the value and a chevron, flush right.
+                    HStack(spacing: Space.xs) {
+                        Text(optionLabel(param: param, value: param.value)).lineLimit(1)
+                        Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
                     }
+                    .font(.riffet(size: S(13))).foregroundStyle(palette.fg)
+                    .padding(.horizontal, Space.sm).frame(height: 26)
+                    .contentShape(Rectangle())
                 }
                 .fixedSize()
                 .accessibilityLabel(Self.title(param, kind))

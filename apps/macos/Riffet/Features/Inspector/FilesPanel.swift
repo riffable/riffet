@@ -202,7 +202,6 @@ struct FilesPanel: View {
                         .buttonStyle(IconButtonStyle())
                         .help("刷新")
                 }
-                PanelMaximizeButton()
             }
             .padding(.trailing, Space.sm)
             .frame(height: InspectorMetrics.headerHeight)
@@ -464,31 +463,18 @@ struct FileListRow: View {
     var body: some View {
         let style = DisplayPreferences.shared.style
         Button(action: action) {
-            HStack(spacing: style.fileRow == .inline ? Space.xs + 2 : Space.sm + 2) {
-                // Quiet ink draws folders as files are drawn, outlined in the icon grey.
-                let quiet = style.ink == .quiet
-                Image(icon: entry.kind == .directory ? (quiet ? "folder" : "folder.fill") : FileSymbols.symbol(entry.name))
+            HStack(spacing: Space.xs + 2) {
+                // Folders are drawn as files are, outlined in the icon grey.
+                Image(icon: entry.kind == .directory ? "folder" : FileSymbols.symbol(entry.name))
                     .font(.riffet(size: S(13)))
-                    .foregroundStyle(entry.kind == .directory && !quiet ? palette.accent.opacity(0.85) : palette.fg3)
+                    .foregroundStyle(palette.fg3)
                     .frame(width: 18)
                 let nameColor = entry.name.hasPrefix(".") ? palette.fg3 : palette.fg
                 let directory = (path as NSString).deletingLastPathComponent
-                if style.fileRow == .inline {
-                    Text(entry.name).font(.riffet(size: S(style.text.body))).foregroundStyle(nameColor).lineLimit(1).layoutPriority(1)
-                    if starred { Image(icon: "star.fill").font(.riffet(size: S(9))).foregroundStyle(palette.warning) }
-                    if showsDirectory {
-                        Text(directory.isEmpty ? "/" : directory).font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
-                    }
-                } else {
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 4) {
-                            Text(entry.name).font(.riffet(size: S(13))).foregroundStyle(nameColor).lineLimit(1)
-                            if starred { Image(icon: "star.fill").font(.riffet(size: S(9))).foregroundStyle(palette.warning) }
-                        }
-                        if showsDirectory {
-                            Text(directory.isEmpty ? "/" : directory).font(.riffet(size: S(11), design: .monospaced)).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
-                        }
-                    }
+                Text(entry.name).font(.riffet(size: S(style.text.body))).foregroundStyle(nameColor).lineLimit(1).layoutPriority(1)
+                if starred { Image(icon: "star.fill").font(.riffet(size: S(9))).foregroundStyle(palette.warning) }
+                if showsDirectory {
+                    Text(directory.isEmpty ? "/" : directory).font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
                 }
                 Spacer(minLength: Space.sm)
                 if entry.kind == .file {
@@ -506,9 +492,8 @@ struct FileListRow: View {
                 }
             }
             .padding(.horizontal, Space.sm)
-            .padding(.vertical, style.fileRow == .inline ? 0 : (showsDirectory ? 5 : 6))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: style.fileRow == .inline ? style.layout.sidebarRow : 30)
+            .frame(minHeight: style.layout.sidebarRow)
         }
         .buttonStyle(HoverRowStyle())
         .onHover { hovering = $0 }

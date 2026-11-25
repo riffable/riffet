@@ -108,16 +108,12 @@ struct WorkbenchWindowBinder: NSViewRepresentable {
     }
 }
 
-/// Gives the window the style's title bar (`StyleSpec.TitleBar`). The scene opens every window with
-/// the unified toolbar; a compact one is shorter and, on macOS 26, rounds the window less. The
-/// traffic lights move [lightsDrop] points down from where the title bar puts them
-/// (`CustomChrome.trafficLightsDrop`).
+/// Moves the window's traffic lights [lightsDrop] points down from where the unified title bar puts
+/// them (`CustomChrome.trafficLightsDrop`).
 struct WindowTitleBarBinder: NSViewRepresentable {
-    let titleBar: StyleSpec.TitleBar
     var lightsDrop: CGFloat = 0
 
     final class Anchor: NSView {
-        var toolbarStyle: NSWindow.ToolbarStyle = .unified
         var drop: CGFloat = 0
 
         override func viewDidMoveToWindow() {
@@ -127,7 +123,6 @@ struct WindowTitleBarBinder: NSViewRepresentable {
 
         func apply() {
             guard let window else { return }
-            if window.toolbarStyle != toolbarStyle { window.toolbarStyle = toolbarStyle }
             TrafficLights.of(window).hold(drop)
         }
     }
@@ -135,14 +130,13 @@ struct WindowTitleBarBinder: NSViewRepresentable {
     func makeNSView(context: Context) -> Anchor { Anchor() }
 
     func updateNSView(_ anchor: Anchor, context: Context) {
-        anchor.toolbarStyle = titleBar == .compact ? .unifiedCompact : .unified
         anchor.drop = lightsDrop
         anchor.apply()
     }
 }
 
 /// Keeps a window's traffic lights [drop] points below where AppKit lays them out. One per window:
-/// while a style switch rebuilds the view tree two anchors share the window, and each keeping its
+/// while a rebuilt view tree briefly holds two anchors in the window, and each keeping its
 /// own record would take the other's move for AppKit's and push the buttons down without end.
 @MainActor
 private final class TrafficLights {

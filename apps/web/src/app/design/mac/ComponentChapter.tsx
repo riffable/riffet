@@ -22,9 +22,9 @@ export function ComponentChapter() {
         { web: 'Input · Textarea', native: '.formField() · TextEditor' },
         { web: 'Switch', native: 'Toggle(.switch)', note: t`墨色；设置的分组列表里用迷你尺寸` },
         { web: 'Segmented', native: 'SegmentedTrack · FormSegmented', note: t`2–4 个固定的短选项` },
-        { web: 'Select', native: 'ChoiceMenu · .formPicker()', note: t`工作台里是应用菜单，设置里是系统弹出菜单` },
+        { web: 'Select', native: 'ChoiceMenu · Picker', note: t`工作台里是应用菜单，设置里是系统弹出菜单` },
         { web: 'Select appearance="heading"', native: 'ChoiceMenu(.heading)', note: t`切换下方内容所属的对象`, added: true },
-        { web: 'UnderlineTabs', native: 'style.tabs', note: t`页面与面板的一级视图` },
+        { web: 'UnderlineTabs', native: 'PillTab', note: t`页面与面板的一级视图` },
       ],
     },
     {

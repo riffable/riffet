@@ -1,26 +1,22 @@
 import { useLingui } from '@lingui/react/macro';
 import { Chapter, Frame, Plate, Token, Value } from '../specimen';
 import { CompareTable, type CompareRow } from '../compare';
-import { useFamilyNotes, useMacColumns } from './notes';
-import { MAC, STYLES } from './values';
+import { COLUMNS, MAC, STYLE } from './values';
 
 function Workbench() {
   const { t } = useLingui();
-  const familyNote = useFamilyNotes();
-  const columns = useMacColumns();
   const cell = (value: number | string, range?: string) => (
     <span className="flex flex-col"><span className="font-mono tabular-nums">{value}</span>{range && <Value className="text-fg-4">{range}</Value>}</span>
   );
   const rows: CompareRow[] = [
-    { label: t`主区`, hint: <Token className="text-2xs text-fg-4">window</Token>, keys: STYLES.map((style) => style.recipes.window), cells: STYLES.map((style) => <span key={style.id}>{familyNote('window').options[style.recipes.window] ?? style.recipes.window}</span>) },
-    { label: t`主区内缩`, keys: STYLES.map((style) => String(style.recipes.window === 'insetCard')), cells: STYLES.map((style) => <span key={style.id}>{cell(style.recipes.window === 'insetCard' ? MAC.cardInset : 0)}</span>) },
-    { label: t`侧栏`, hint: t`窗口放不下侧栏、主区 ${MAC.mainMin} 与面板时自动收起`, keys: STYLES.map((style) => style.tokens.layout.sidebarWidth), cells: STYLES.map((style) => <span key={style.id}>{cell(style.tokens.layout.sidebarWidth, `${MAC.sidebar.min}–${MAC.sidebar.max}`)}</span>) },
-    { label: t`页头`, keys: STYLES.map((style) => style.tokens.layout.header), cells: STYLES.map((style) => <span key={style.id}>{cell(style.tokens.layout.header)}</span>) },
-    { label: t`右侧面板`, hint: t`停靠、悬浮、全屏由用户切换`, keys: STYLES.map((style) => style.tokens.layout.rightPanel), cells: STYLES.map((style) => <span key={style.id}>{cell(style.tokens.layout.rightPanel, t`${MAC.panelMin} 到窗口宽 − ${MAC.mainMin}`)}</span>) },
-    { label: t`终端`, keys: STYLES.map(() => MAC.terminal.default), cells: STYLES.map((style) => <span key={style.id}>{cell(MAC.terminal.default, t`${MAC.terminal.min} 起，最多详情高的 60%`)}</span>) },
-    { label: t({ message: '阅读列', context: 'content-column' }), hint: t`读者拖动调整`, keys: STYLES.map(() => MAC.reading.default), cells: STYLES.map((style) => <span key={style.id}>{cell(MAC.reading.default, `${MAC.reading.min}–${MAC.reading.max}`)}</span>) },
+    { label: t`主区内缩`, cells: [cell(MAC.cardInset)] },
+    { label: t`侧栏`, hint: t`窗口放不下侧栏、主区 ${MAC.mainMin} 与面板时自动收起`, cells: [cell(STYLE.layout.sidebarWidth, `${MAC.sidebar.min}–${MAC.sidebar.max}`)] },
+    { label: t`页头`, cells: [cell(STYLE.layout.header)] },
+    { label: t`右侧面板`, hint: t`停靠、悬浮、全屏由用户切换`, cells: [cell(STYLE.layout.rightPanel, t`${MAC.panelMin} 到窗口宽 − ${MAC.mainMin}`)] },
+    { label: t`终端`, cells: [cell(MAC.terminal.default, t`${MAC.terminal.min} 起，最多详情高的 60%`)] },
+    { label: t({ message: '阅读列', context: 'content-column' }), hint: t`读者拖动调整`, cells: [cell(MAC.reading.default, `${MAC.reading.min}–${MAC.reading.max}`)] },
   ];
-  return <CompareTable columns={columns} groups={[{ rows }]} />;
+  return <CompareTable columns={COLUMNS} groups={[{ rows }]} head={false} />;
 }
 
 /** A page drawn with its parts named: the header from `pageChrome`, the one scroller, the centred column. */
@@ -45,7 +41,7 @@ function PageAnatomy() {
         </div>
       </div>
       <div className="mx-auto mt-6 grid max-w-2xl gap-4 text-sm md:grid-cols-3">
-        <span className="flex flex-col gap-0.5"><Token>pageChrome</Token><span className="text-fg-3">{t`原生风格是窗口工具栏，自绘风格是 CustomPageBar`}</span></span>
+        <span className="flex flex-col gap-0.5"><Token>pageChrome</Token><span className="text-fg-3">{t`CustomPageBar`}</span></span>
         <span className="flex flex-col gap-0.5"><Token>.document {MAC.page.document}</Token><span className="text-fg-3">{t`列表、表单、收藏、任务、插件`}</span></span>
         <span className="flex flex-col gap-0.5"><Token>.board {MAC.page.board}</Token><span className="text-fg-3">{t`统计、扩展概览、并行尝试`}</span></span>
       </div>
@@ -83,14 +79,14 @@ function SettingsWindow() {
 export function WindowChapter() {
   const { t } = useLingui();
   return (
-    <Chapter title={t`窗口与页面`} lede={t`工作台的尺寸一部分来自风格配方，一部分各风格相同；页面和设置的骨架三种风格一致。`} source="docs/design/system/macos.md §3">
-      <Plate number={1} title={t`工作台`} note={t`侧栏、页头与右侧面板的默认值随风格变，范围各风格相同。`}>
+    <Chapter title={t`窗口与页面`} lede={t`工作台的默认尺寸读自 interface-styles.ts；页面和设置有各自的骨架。`} source="docs/design/system/macos.md §3">
+      <Plate number={1} title={t`工作台`}>
         <Workbench />
       </Plate>
       <Plate number={2} title={t`页面骨架`} note={t`非会话页都用 PageScaffold：页头、一个滚动区和一条居中的内容列。内容列宽度不含内边距。`}>
         <PageAnatomy />
       </Plate>
-      <Plate number={3} title={t`设置窗口`} note={t`所有风格下都是独立窗口，⌘, 打开；分类保持原样，顶部搜索按分类和设置项筛选。`}>
+      <Plate number={3} title={t`设置窗口`} note={t`独立窗口，⌘, 打开；分类保持原样，顶部搜索按分类和设置项筛选。`}>
         <SettingsWindow />
       </Plate>
     </Chapter>

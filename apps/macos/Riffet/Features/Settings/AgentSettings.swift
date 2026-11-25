@@ -71,7 +71,6 @@ struct AgentSettings: View {
                     Picker("默认 Agent", selection: defaultAgentBinding(workbench, settings: settings)) {
                         ForEach(agents(workbench), id: \.self) { Text(backendTitle($0)).tag($0) }
                     }
-                    .formPicker()
                     .disabled(saving)
                 }
             }
@@ -228,7 +227,6 @@ struct AgentSettings: View {
                 )) {
                     ForEach(profiles, id: \.id) { Text($0.name).tag($0.id) }
                 }
-                .formPicker()
                 .disabled(loading || saving)
             }
 
@@ -268,7 +266,6 @@ struct AgentSettings: View {
                     Text(option.label).tag(option.id)
                 }
             }
-            .formPicker()
             .disabled(saving)
         } else if entry == nil {
             SettingsRow(title) {
@@ -373,7 +370,6 @@ struct AgentSettings: View {
             }
         }
         .labelsHidden()
-        .formPicker()
         .disabled(disabled)
     }
 
@@ -424,7 +420,6 @@ struct AgentSettings: View {
                         }
                     }
                     .labelsHidden()
-                    .formPicker()
                 }
             }
             .disabled(saving || loading || modelCatalogLoading)

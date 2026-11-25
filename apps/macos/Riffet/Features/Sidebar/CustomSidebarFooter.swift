@@ -5,7 +5,6 @@ import RiffetKit
 /// The drawn sidebar's single footer entry opens the shared personal menu.
 struct CustomSidebarFooter: View {
     let workbench: Workbench
-    let style: StyleSpec
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var scheme
     @Environment(\.openSettings) private var openSettings
@@ -32,9 +31,6 @@ struct CustomSidebarFooter: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Space.md)
-        .frame(height: style.sidebar == .timeGroups ? 52 : 48)
-        .overlay(alignment: .top) {
-            if style.sidebar == .timeGroups { palette.lineSoft.frame(height: 1) }
-        }
+        .frame(height: 48)
     }
 }

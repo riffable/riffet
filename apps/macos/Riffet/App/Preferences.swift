@@ -43,8 +43,6 @@ enum PreferenceKey {
     static let permissionIconStyle = "riffet.permission-icons"
     /// What shows behind the window (`WindowMaterial.rawValue`).
     static let windowMaterial = "riffet.window-material"
-    /// The interface style (`InterfaceStyle.rawValue`).
-    static let interfaceStyle = "riffet.interface-style"
     /// Code syntax highlighting theme (`auto` or a built-in id).
     static let codeTheme = "riffet.code-theme"
     /// How much of the material shows through the sidebar and the content, in percent.
@@ -235,8 +233,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     /// The sidebar and command palette walk these, in order.
     @MainActor static var navigable: [SettingsSection] {
-        // The tab pane is the Riffet style's: other styles draw no tabs.
-        all.filter { $0 != .tabs || DisplayPreferences.shared.style.header == .sessionTabs }
+        all
     }
 
     private static let all: [SettingsSection] = [
@@ -353,26 +350,17 @@ final class DisplayPreferences {
     var appIcon: String { didSet { save(PreferenceKey.appIcon, appIcon); applyIcon() } }
     var permissionIconStyle: PermissionIconStyle { didSet { save(PreferenceKey.permissionIconStyle, permissionIconStyle.rawValue) } }
     var windowMaterial: WindowMaterial { didSet { save(PreferenceKey.windowMaterial, windowMaterial.rawValue) } }
-    var interfaceStyle: InterfaceStyle {
-        didSet {
-            save(PreferenceKey.interfaceStyle, interfaceStyle.rawValue)
-            NotificationCenter.default.post(name: .riffetInterfaceStyleChanged, object: nil)
-        }
-    }
     var codeTheme: String { didSet { save(PreferenceKey.codeTheme, codeTheme) } }
-    /// The recipe of the style on screen.
-    var style: StyleSpec { interfaceStyle.spec }
+    /// The workbench's sizes, faces and icons.
+    var style: StyleSpec { .riffet }
     /// 0–100, for the sidebar and the content each.
     var sidebarTransparency: Double { didSet { save(PreferenceKey.sidebarTransparency, sidebarTransparency) } }
     var contentTransparency: Double { didSet { save(PreferenceKey.contentTransparency, contentTransparency) } }
     /// The system's 降低透明度, which overrides the material.
     private(set) var reduceTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
 
-    /// A flat window (`StyleSpec.Window.flat`) is one opaque sheet whatever the material.
-    var materialApplies: Bool { style.window != .flat }
-    /// The material on screen: the stored one unless the system asks for no transparency or the
-    /// style draws no material.
-    var material: WindowMaterial { reduceTransparency || !materialApplies ? .solid : windowMaterial }
+    /// The material on screen: the stored one unless the system asks for no transparency.
+    var material: WindowMaterial { reduceTransparency ? .solid : windowMaterial }
     /// Alpha of the palette's sidebar and content colours over the material.
     var sidebarTint: Double { material == .solid ? 1 : 1 - sidebarTransparency / 100 }
     var contentTint: Double { material == .solid ? 1 : 1 - contentTransparency / 100 }
@@ -422,10 +410,6 @@ final class DisplayPreferences {
         windowMaterial = defaults.string(forKey: PreferenceKey.windowMaterial)
             .flatMap(WindowMaterial.init(rawValue:))
             .flatMap { WindowMaterial.available.contains($0) ? $0 : nil } ?? .defaultValue
-        // `claude` was the line style's id before it was renamed.
-        interfaceStyle = defaults.string(forKey: PreferenceKey.interfaceStyle)
-            .map { $0 == "claude" ? InterfaceStyle.line.rawValue : $0 }
-            .flatMap(InterfaceStyle.init(rawValue:)) ?? .defaultValue
         let storedCodeTheme = defaults.string(forKey: PreferenceKey.codeTheme)
         codeTheme = storedCodeTheme.flatMap { id in
             RiffetCodeThemeCatalog.all.contains(where: { $0.id == id }) || ThemeLibraryRules.isValidID(id) ? id : nil

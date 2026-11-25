@@ -55,7 +55,6 @@ struct AppearancePackRows: View {
                 ForEach(options, id: \.id) { Text($0.title).tag($0.id) }
             }
             .labelsHidden()
-            .formPicker()
         }
     }
 }

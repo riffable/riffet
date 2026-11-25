@@ -36,9 +36,6 @@ struct WorkbenchView: View {
     /// the column takes its new width in one step, and the content glides there with the panel
     /// instead of jumping ahead of it.
     @State private var panelShift: CGFloat = 0
-    @State private var sidebarOpacity: Double = 1
-    /// The app, not the split view, changed the columns: they snap rather than animate.
-    @State private var sidebarSnaps = false
     /// The service alert's height above the content, which a page rising over the header passes.
     @State private var bannerHeight: CGFloat = 0
 
@@ -91,19 +88,9 @@ struct WorkbenchView: View {
         Group {
             if isWindow {
                 workspace.toolbar { toolbar }.toolbarBackgroundVisibility(toolbarBackground, for: .windowToolbar)
-            } else if DisplayPreferences.shared.style.backend == .custom {
-                CustomWorkbench(workbench: workbench, sidebarShown: columns != .detailOnly) {
-                    if DisplayPreferences.shared.style.header == .titleMenu { customHeader }
-                } content: {
-                    workspace
-                }
             } else {
-                NavigationSplitView(columnVisibility: $columns) {
-                    SidebarView(workbench: workbench)
-                        .opacity(sidebarOpacity)
-                        .navigationSplitViewColumnWidth(min: 210, ideal: StyleSpec.native.layout.sidebarWidth, max: 400)
-                } detail: {
-                    workspace.toolbar { toolbar }.toolbarBackgroundVisibility(toolbarBackground, for: .windowToolbar)
+                CustomWorkbench(workbench: workbench, sidebarShown: columns != .detailOnly) {
+                    workspace
                 }
             }
         }
@@ -113,7 +100,6 @@ struct WorkbenchView: View {
         .background { WindowBackdrop(material: DisplayPreferences.shared.material).ignoresSafeArea() }
         .background(WorkbenchWindowBinder(workbench: workbench))
         .background(WindowTitleBarBinder(
-            titleBar: isWindow ? .unified : DisplayPreferences.shared.style.titleBar,
             lightsDrop: drawn ? CustomChrome.trafficLightsDrop(DisplayPreferences.shared.style) : 0
         ))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
@@ -131,13 +117,11 @@ struct WorkbenchView: View {
                 if width < sidebarColumnWidth + 420 + inspectorWidth, columns != .detailOnly {
                     sidebarMoved = true
                     sidebarAutoCollapsed = true
-                    sidebarSnaps = true
                     columns = .detailOnly
                 }
             } else if sidebarAutoCollapsed {
                 sidebarMoved = true
                 sidebarAutoCollapsed = false
-                sidebarSnaps = true
                 columns = .all
             }
             // Only the reader's toggle slides; a page or another conversation shows or hides it at once.
@@ -160,26 +144,10 @@ struct WorkbenchView: View {
                 }
             }
         }
-        .onChange(of: columns) { old, columns in
+        .onChange(of: columns) { _, columns in
             // Showing the sidebar by hand ends the automatic collapse; only the reader's choice is kept.
             if sidebarAutoCollapsed, columns != .detailOnly { sidebarAutoCollapsed = false }
             if !sidebarAutoCollapsed { sidebarVisible = columns != .detailOnly }
-            let snaps = sidebarSnaps
-            sidebarSnaps = false
-            // A column that snapped in has its rows fade in over it. One the split view animates
-            // slides in with its rows already drawn, as one piece.
-            if old == .detailOnly, columns != .detailOnly {
-                if snaps { fadeInSidebar() } else { sidebarOpacity = 1 }
-            }
-            // The folding column narrows under its rows, which would re-lay out and clip as it
-            // goes; they fade out in its first frames instead, and are drawn again once it is gone,
-            // ready to slide in with it.
-            if old != .detailOnly, columns == .detailOnly, !snaps {
-                withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.1)) { sidebarOpacity = 0 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    if self.columns == .detailOnly { sidebarOpacity = 1 }
-                }
-            }
         }
         .disabled(searchPresented || importRequest != nil)
         .accessibilityHidden(searchPresented || importRequest != nil)
@@ -287,8 +255,8 @@ struct WorkbenchView: View {
     private var workspace: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                // A drawn header of the conversation's own column; the native window's is the toolbar.
-                if !isWindow, DisplayPreferences.shared.style.backend == .custom, DisplayPreferences.shared.style.header == .sessionTabs {
+                // A drawn header of the conversation's own column; a conversation window's is the toolbar.
+                if !isWindow {
                     customHeader
                     // Its own row under the tabs, as on the web, so the tabs keep the header's width.
                     if homeShown {
@@ -318,8 +286,8 @@ struct WorkbenchView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailHeight = $0 }
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth.value = $0 }
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
-                .background { if !cards { canvasBackdrop } }
-                .modifier(CustomCard(on: cards, drawn: drawn))
+                .background { if !drawn { canvasBackdrop } }
+                .modifier(CustomCard(drawn: drawn))
                 // Maximized, the conversation keeps its width under the panel: no re-layout of
                 // the transcript on the way in or out, and its scroll position stays.
                 .opacity(maximized ? 0 : 1)
@@ -330,19 +298,18 @@ struct WorkbenchView: View {
                 // window's glass shows there until the panel has slid in over it.
                 Color.clear
                     .frame(width: panelRoom)
-                    .background { if !cards { canvasBackdrop } }
+                    .background { if !drawn { canvasBackdrop } }
             }
         }
         .overlay(alignment: .trailing) { sidePanel }
     }
 
-    /// The sidebar column's width: the split view's ideal one, or the drawn sidebar's own.
+    /// The drawn sidebar's width.
     private var sidebarColumnWidth: CGFloat {
-        let style = DisplayPreferences.shared.style
-        return style.backend == .custom ? CustomChrome.sidebarWidth(stored: customSidebarWidth, style: style) : StyleSpec.native.layout.sidebarWidth
+        CustomChrome.sidebarWidth(stored: customSidebarWidth, style: DisplayPreferences.shared.style)
     }
 
-    /// The drawn title bar of a custom style, over the whole content or the conversation's column.
+    /// The drawn title bar over the conversation's column.
     private var customHeader: some View {
         CustomHeader(workbench: workbench, sidebarShown: columns != .detailOnly) { runtimeNotice }
     }
@@ -355,27 +322,25 @@ struct WorkbenchView: View {
     }
 
     /// The content's colour over the window material; pages in the detail column paint none of their own.
-    private var canvas: Color { palette.page.opacity(DisplayPreferences.shared.contentTint) }
+    private var canvas: Color { palette.bg.opacity(DisplayPreferences.shared.contentTint) }
 
-    /// Content column backdrop when not framed by `CustomCard`: blends the canvas gradient through
-    /// `palette.page` in native split-view and flat windows as well.
+    /// Content column backdrop when not framed by `CustomCard` (a conversation window): blends the
+    /// canvas gradient through `palette.bg`.
     @ViewBuilder
     private var canvasBackdrop: some View {
         if palette.gradient != nil, palette.cardOpacity < 1 {
             ZStack {
                 PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
-                palette.page.opacity(DisplayPreferences.shared.contentTint * palette.cardOpacity)
+                palette.bg.opacity(DisplayPreferences.shared.contentTint * palette.cardOpacity)
             }
         } else {
             canvas
         }
     }
 
-    /// The window is drawn by the app (`CustomWorkbench`), not the system's.
-    private var drawn: Bool { !isWindow && DisplayPreferences.shared.style.backend == .custom }
+    /// The window is drawn by the app (`CustomWorkbench`); a conversation window keeps the system's.
+    private var drawn: Bool { !isWindow }
 
-    /// The conversation and the side panel are cards of their own (`StyleSpec.Window.insetCard`).
-    private var cards: Bool { drawn && DisplayPreferences.shared.style.window == .insetCard }
 
     /// The panel over the conversation, in the detail area; the conversation keeps its width.
     @ViewBuilder
@@ -393,16 +358,16 @@ struct WorkbenchView: View {
             if panelReserved {
                 HStack(spacing: 0) {
                     if !maximized {
-                        PanelResizeHandle(size: Binding(get: { inspectorWidth }, set: { storedInspectorWidth = $0 }), limit: max(300, width - 420 - (columns == .detailOnly ? 0 : sidebarColumnWidth)), drawn: !cards)
-                            .frame(width: cards ? Space.sm : 1)
+                        PanelResizeHandle(size: Binding(get: { inspectorWidth }, set: { storedInspectorWidth = $0 }), limit: max(300, width - 420 - (columns == .detailOnly ? 0 : sidebarColumnWidth)), drawn: !drawn)
+                            .frame(width: drawn ? Space.sm : 1)
                     }
                     InspectorView(workbench: workbench, tab: inspectorTab, maximized: maximized, toggleFloating: {
                         floating = true
                         workbench.exitInspectorMaximized()
                     }) { workbench.toggleInspectorMaximized() }
                         .frame(minWidth: maximized ? 0 : panelWidth, maxWidth: maximized ? .infinity : panelWidth)
-                        .background { if !cards { canvasBackdrop } }
-                        .modifier(CustomCard(on: cards, drawn: drawn))
+                        .background { if !drawn { canvasBackdrop } }
+                        .modifier(CustomCard(drawn: drawn))
                 }
                 .frame(maxWidth: maximized ? .infinity : nil)
                 .transition(panelTransition(.trailing))
@@ -453,7 +418,7 @@ struct WorkbenchView: View {
     private var panelWidth: CGFloat { min(max(inspectorWidth, 300), max(300, width - 420)) }
 
     /// What the panel takes from the conversation's column: the panel and its divider or gap.
-    private var panelRoom: CGFloat { (cards ? Space.sm : 1) + panelWidth }
+    private var panelRoom: CGFloat { (drawn ? Space.sm : 1) + panelWidth }
 
     private var terminalHeightLimit: CGFloat { max(140, min(detailHeight * 0.6, detailHeight - 240)) }
 
@@ -464,21 +429,10 @@ struct WorkbenchView: View {
         return workbench.showsTerminalPage ? "terminal" : "transcript"
     }
 
-    /// The column itself snaps for the same reason as the inspector: the detail column would re-lay
-    /// out per frame. The sidebar's content fades in instead.
     private func toggleSidebar() {
         guard !isWindow else { return }
         sidebarAutoCollapsed = false
-        sidebarSnaps = true
         columns = columns == .detailOnly ? .all : .detailOnly
-    }
-
-    /// The returning sidebar's rows fade in over the column that has already taken its width.
-    private func fadeInSidebar() {
-        sidebarOpacity = 0
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.2)) { sidebarOpacity = 1 }
-        }
     }
 
     /// The open conversation stays built under the home page and the one-level pages once it has been
@@ -496,7 +450,6 @@ struct WorkbenchView: View {
             }
             if covered { cover.padding(.top, -coverRise) }
         }
-        .background(ColumnCrossfade(key: workbench.page?.rawValue ?? (covered ? "cover" : workbench.selected?.id ?? "")))
         .onChange(of: covered, initial: true) { _, covered in
             if !covered { shownSessionId = workbench.selected?.id }
             else { resignCoveredFocus() }
@@ -512,12 +465,12 @@ struct WorkbenchView: View {
     }
 
     /// How far a page rises over the drawn header above it, which it covers with its own bar
-    /// (`pageChrome`), and over the service alert between them. 0 for everything else and in the
-    /// native window.
+    /// (`pageChrome`), and over the service alert between them. 0 for everything else and in a
+    /// conversation window.
     private var coverRise: CGFloat {
         let style = DisplayPreferences.shared.style
         guard drawn, workbench.page != nil else { return 0 }
-        return style.layout.header + (style.header == .titleMenu ? 1 : 0) + bannerHeight
+        return style.layout.header + bannerHeight
     }
 
     /// The new-conversation page fills the detail column.
@@ -690,13 +643,10 @@ extension EnvironmentValues {
 }
 
 extension View {
-    /// A one-level page's title and actions: in the toolbar of the native window, in a bar drawn
-    /// over the hidden header of a custom one (`CustomPageBar`).
-    /// [hasActions] false adds no toolbar item to the native window, whatever [actions] draws.
-    /// [search] filters the page: the system's toolbar search field in the native window, a field
-    /// beside the actions in a custom one.
-    func pageChrome<Actions: View>(_ page: WorkbenchPage, workbench: Workbench, hasActions: Bool = true, search: PageSearch? = nil, @ViewBuilder actions: () -> Actions) -> some View {
-        modifier(PageChrome(page: page, workbench: workbench, hasActions: hasActions, search: search, actions: actions()))
+    /// A one-level page's title and actions, in a bar drawn over the hidden header (`CustomPageBar`).
+    /// [search] filters the page: a field beside the actions.
+    func pageChrome<Actions: View>(_ page: WorkbenchPage, workbench: Workbench, search: PageSearch? = nil, @ViewBuilder actions: () -> Actions) -> some View {
+        modifier(PageChrome(page: page, workbench: workbench, search: search, actions: actions()))
     }
 
     func pageChrome(_ page: WorkbenchPage, workbench: Workbench) -> some View {
@@ -713,72 +663,39 @@ struct PageSearch {
 private struct PageChrome<Actions: View>: ViewModifier {
     let page: WorkbenchPage
     let workbench: Workbench
-    let hasActions: Bool
     let search: PageSearch?
     let actions: Actions
-
-    private var showsWebButton: Bool { page.webPage != nil && WebHandoff.isAvailable(workbench) }
 
     @ViewBuilder
     private var webButton: some View {
         if let web = page.webPage { WebHandoffButton(page: web, workbench: workbench) }
     }
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        if DisplayPreferences.shared.style.backend == .native {
-            // The title leads; the actions sit on the trailing edge as the system's own items, each
-            // in its own place rather than one capsule beside the title.
-            let bar = content.toolbar {
-                PageTitleToolbar(page: page)
-                if (hasActions && !(actions is EmptyView)) || showsWebButton {
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        webButton
-                        if hasActions { actions }
-                    }
-                }
-            }
-            if let search {
-                bar.searchable(text: search.text, placement: .toolbar, prompt: Text(search.prompt))
-            } else {
-                bar
-            }
-        } else {
-            content.safeAreaInset(edge: .top, spacing: 0) {
-                CustomPageBar(workbench: workbench, title: page.title) {
-                    if let search { PageSearchField(search: search) }
-                    webButton
-                    actions
-                }
+        content.safeAreaInset(edge: .top, spacing: 0) {
+            CustomPageBar(workbench: workbench, title: page.title) {
+                if let search { PageSearchField(search: search) }
+                webButton
+                actions
             }
         }
     }
 }
 
-/// A page action: the system's toolbar button in the native window, a chip in a custom one.
-/// [titled] spells the action out in the native toolbar too, for words an icon would not say (完成).
+/// A page action: a chip in the page bar.
 struct PageActionButton: View {
     let title: String
     let symbol: String
-    var titled = false
     let action: () -> Void
 
     var body: some View {
-        if DisplayPreferences.shared.style.backend == .native {
-            if titled {
-                Button(title, action: action)
-            } else {
-                Button(action: action) { Label(title, icon: symbol) }.help(title)
-            }
-        } else {
-            Button(action: action) { ChipLabel(text: title, symbol: symbol, chevron: false) }
-                .buttonStyle(ChipButtonStyle())
-                .help(title)
-        }
+        Button(action: action) { ChipLabel(text: title, symbol: symbol, chevron: false) }
+            .buttonStyle(ChipButtonStyle())
+            .help(title)
     }
 }
 
-/// A page's menu behind an icon: `ToolbarMenuButton` in the native window, a drawn one in a custom one.
+/// A page's menu behind an icon.
 struct PageMenuButton: View {
     let symbol: String
     let help: String
@@ -786,18 +703,14 @@ struct PageMenuButton: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        if DisplayPreferences.shared.style.backend == .native {
-            ToolbarMenuButton(symbol: symbol, help: help, build: build)
-        } else {
-            MenuLabelButton(label: AnyView(
-                Image(icon: symbol).font(.riffet(size: S(13))).foregroundStyle(palette.fg3).frame(width: 26, height: 26)
-            ), build: build)
-            .help(help)
-        }
+        MenuLabelButton(label: AnyView(
+            Image(icon: symbol).font(.riffet(size: S(13))).foregroundStyle(palette.fg3).frame(width: 26, height: 26)
+        ), build: build)
+        .help(help)
     }
 }
 
-/// The page search of a custom window, where there is no system toolbar to hold one.
+/// The page search in the page bar.
 private struct PageSearchField: View {
     let search: PageSearch
     @Environment(\.palette) private var palette
@@ -823,15 +736,6 @@ private struct PageSearchField: View {
     }
 }
 
-struct PageTitleToolbar: ToolbarContent {
-    let page: WorkbenchPage
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .navigation) { PageTitleText(title: page.title) }
-            .hideSharedToolbarBackground()
-    }
-}
-
 /// 活动: the connected service's load, requests and processes, as a page of the main window.
 struct ActivityPage: View {
     let workbench: Workbench
@@ -840,20 +744,6 @@ struct ActivityPage: View {
         ServiceMonitorDashboard()
             .navigationTitle(WorkbenchPage.activity.title)
             .pageChrome(.activity, workbench: workbench)
-    }
-}
-
-struct PageTitleText: View {
-    let title: String
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Text(title)
-            .font(.riffet(size: S(16), weight: .bold))
-            .foregroundStyle(palette.fg)
-            .lineLimit(1)
-            .fixedSize()
-            .padding(.leading, Space.sm)
     }
 }
 
@@ -989,77 +879,21 @@ struct SessionTitleView: View {
     }
 }
 
-/// Cross-fades the detail column when what fills it changes (a page, the home page, another
-/// conversation): the frame, the toolbar and the sidebar stay where they are and only the content
-/// changes (docs/design/macos-native.md 1.3). A Core Animation transition on the column's own layer,
-/// added in the same update that swaps the content, so SwiftUI does no work per frame; an animation
-/// on the column in SwiftUI re-laid the window out on every one.
-private struct ColumnCrossfade: NSViewRepresentable {
-    let key: String
-
-    final class Anchor: NSView {
-        var key: String?
-
-        /// The split view's column holding this view; none in a conversation window or a drawn layout.
-        var column: NSView? {
-            var view = superview
-            while let current = view {
-                if current.superview is NSSplitView { return current }
-                view = current.superview
-            }
-            return nil
-        }
-
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-    }
-
-    func makeNSView(context: Context) -> Anchor { Anchor() }
-
-    func updateNSView(_ anchor: Anchor, context: Context) {
-        defer { anchor.key = key }
-        guard let old = anchor.key, old != key, let column = anchor.column else { return }
-        column.wantsLayer = true
-        let fade = CATransition()
-        fade.type = .fade
-        fade.duration = 0.2
-        fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        column.layer?.add(fade, forKey: "riffet.crossfade")
-    }
-}
-
 /// A width kept for reading, outside SwiftUI's change tracking.
 private final class ColumnWidthBox {
     var value: CGFloat = 800
 }
 
-/// An entry of the header's ⋯ menu besides the conversation's own work.
-struct HeaderMoreItem {
-    let title: String
-    var symbol: String?
-    var on = false
-    /// Shown beside the title; the main menu owns the shortcut itself.
-    var shortcut: (key: String, modifiers: NSEvent.ModifierFlags)?
-    let action: () -> Void
-}
-
-/// Subagents and background tasks of the open conversation (`SessionWorkActions.tsx`): one chip each,
-/// sharing a capsule when both exist. With [more], they fold into one ⋯ menu after those entries
-/// instead, as Claude Desktop keeps its header to the panels it opens.
+/// Subagents and background tasks of the open conversation (`SessionWorkActions.tsx`), as sections
+/// of 会话信息 and the conversation's aside.
 struct SessionWorkActions: View {
     let workbench: Workbench
-    var more: [HeaderMoreItem]?
-    var size: CGFloat = 26
-    /// Lists them in place, as sections of 会话信息, instead of behind chips; [onOpen] closes the
-    /// surface holding them when a row leaves for a subagent.
-    var inline = false
+    /// Closes the surface holding them when a row leaves for a subagent.
     var onOpen: (() -> Void)?
     @Environment(\.palette) private var palette
-    /// A subagent's state and stats: quiet ink in the native style, the theme's accent in the drawn ones.
-    private var workTint: Color { DisplayPreferences.shared.style.backend == .native ? palette.fg3 : palette.accent }
-    @State private var showSubagents = false
-    @State private var showTasks = false
+    /// A subagent's state and stats, in the theme's accent.
+    private var workTint: Color { palette.accent }
     @State private var confirming: NativeActivity?
-    @State private var anchor = MenuAnchor()
     @State private var showAllSubagents = false
 
     var body: some View {
@@ -1070,87 +904,11 @@ struct SessionWorkActions: View {
         let known = Set(subagents.map(\.toolCallId) + jobs.map(\.toolCallId))
         let tasks = workbench.dock.tasks.filter { $0.toolCallId.map { !known.contains($0) } ?? true }
         let taskCount = tasks.count + jobs.count
-        Group {
-            if inline {
-                sections(subagents: subagents, tasks: tasks, jobs: jobs, taskCount: taskCount)
-            } else if let more {
-                folded(more, subagents: subagents, tasks: tasks, jobs: jobs, taskCount: taskCount)
-            } else {
-                chips(subagents: subagents, tasks: tasks, jobs: jobs, taskCount: taskCount)
-            }
-        }
+        sections(subagents: subagents, tasks: tasks, jobs: jobs, taskCount: taskCount)
         .alert("停止后台任务？", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } })) {
             Button("停止", role: .destructive) { if let id = confirming?.id { Task { _ = await workbench.stop(activity: id) } }; confirming = nil }
             Button("取消", role: .cancel) { confirming = nil }
         } message: { Text(confirming.map { activityView(activity: $0, stopping: false, nowMillis: 0).stopWarning ?? "" } ?? "") }
-    }
-
-    private func chips(subagents: [SubagentEntry], tasks: [NativeActivity], jobs: [NativeJob], taskCount: Int) -> some View {
-        let both = !subagents.isEmpty && taskCount > 0
-        return HStack(spacing: 0) {
-            if !subagents.isEmpty {
-                Button { showSubagents.toggle() } label: {
-                    WorkCount(count: subagents.count, title: String(localized: "子 Agent"), running: subagents.contains { $0.state == .running })
-                }
-                .buttonStyle(ChipButtonStyle())
-                .help("\(subagents.count) 个子 Agent")
-                .anchoredPopup(isPresented: $showSubagents, edge: .below) { subagentList(subagents) }
-                .fadesIn()
-            }
-            if both { Rectangle().fill(palette.line).frame(width: 0.5, height: 14).fadesIn() }
-            if taskCount > 0 {
-                Button { showTasks.toggle() } label: {
-                    WorkCount(count: taskCount, title: String(localized: "后台任务"), running: !tasks.isEmpty || jobs.contains { $0.status == .running })
-                }
-                .buttonStyle(ChipButtonStyle())
-                .help("\(taskCount) 个后台任务")
-                .anchoredPopup(isPresented: $showTasks, edge: .below) { taskList(tasks: tasks, jobs: jobs, count: taskCount) }
-                .fadesIn()
-            }
-        }
-        .overlay { if both { RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line, lineWidth: 0.5) } }
-    }
-
-    /// The ⋯ button: the conversation's work first, then [more]; the lists open under the button.
-    @ViewBuilder
-    private func folded(_ more: [HeaderMoreItem], subagents: [SubagentEntry], tasks: [NativeActivity], jobs: [NativeJob], taskCount: Int) -> some View {
-        if !subagents.isEmpty || taskCount > 0 || !more.isEmpty {
-            Button { popUp(more, subagents: subagents.count, tasks: taskCount) } label: { Image(icon: "ellipsis") }
-                .buttonStyle(IconButtonStyle(size: size, active: showSubagents || showTasks))
-                .background(MenuAnchorView(anchor: anchor))
-                .help("更多")
-                .accessibilityLabel("更多")
-                .anchoredPopup(isPresented: $showSubagents, edge: .below) { subagentList(subagents) }
-                .anchoredPopup(isPresented: $showTasks, edge: .below) { taskList(tasks: tasks, jobs: jobs, count: taskCount) }
-        }
-    }
-
-    private func popUp(_ more: [HeaderMoreItem], subagents: Int, tasks: Int) {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        var chosen: (() -> Void)?
-        if subagents > 0 {
-            menu.addItem(MenuAction.item(String(localized: "\(subagents) 个子 Agent"), symbol: "bubble.left.and.bubble.right") { chosen = { showSubagents = true } })
-        }
-        if tasks > 0 {
-            menu.addItem(MenuAction.item(String(localized: "\(tasks) 个后台任务"), symbol: "square.stack.3d.up") { chosen = { showTasks = true } })
-        }
-        if menu.numberOfItems > 0, !more.isEmpty { menu.addItem(.separator()) }
-        for entry in more {
-            let item = MenuAction.item(entry.title, symbol: entry.symbol) { chosen = entry.action }
-            item.state = entry.on ? .on : .off
-            if let shortcut = entry.shortcut {
-                item.keyEquivalent = shortcut.key
-                item.keyEquivalentModifierMask = shortcut.modifiers
-            }
-            menu.addItem(item)
-        }
-        if anchor.popUp(menu) { chosen?() }
-    }
-
-    private func subagentList(_ subagents: [SubagentEntry]) -> some View {
-        WorkList(title: String(localized: "子 Agent"), count: subagents.count) { subagentRows(subagents) }
-            .popupSurface(palette)
     }
 
     private func subagentRows(_ subagents: [SubagentEntry]) -> some View {
@@ -1191,11 +949,6 @@ struct SessionWorkActions: View {
         }
     }
 
-    private func taskList(tasks: [NativeActivity], jobs: [NativeJob], count taskCount: Int) -> some View {
-        WorkList(title: String(localized: "后台任务"), count: taskCount) { taskRows(tasks: tasks, jobs: jobs) }
-            .popupSurface(palette)
-    }
-
     @ViewBuilder
     private func taskRows(tasks: [NativeActivity], jobs: [NativeJob]) -> some View {
         if !tasks.isEmpty {
@@ -1225,7 +978,6 @@ struct SessionWorkActions: View {
     private func subagentRow(_ entry: SubagentEntry, task: NativeActivity? = nil, view: ActivityView? = nil) -> some View {
         HStack(spacing: Space.sm) {
             Button {
-                showSubagents = false
                 onOpen?()
                 NotificationCenter.default.post(name: .riffetOpenSubagent, object: workbench, userInfo: ["id": entry.toolCallId, "title": entry.name])
             } label: {
@@ -1315,67 +1067,6 @@ private struct FadeIn: ViewModifier {
 private extension View {
     func fadesIn() -> some View { modifier(FadeIn()) }
 
-    @ViewBuilder
-    func popupSurface(_ palette: Palette) -> some View {
-        // These popups sit in a panel with no room around it, so the window server draws the shadow.
-        if DisplayPreferences.shared.style.menu == .drawn {
-            let shape = RoundedRectangle(cornerRadius: Radius.menu, style: .continuous)
-            background(palette.bgPopover, in: shape)
-                .overlay(shape.strokeBorder(palette.line, lineWidth: 1))
-                .clipShape(shape)
-        } else {
-            popupCard(palette)
-        }
-    }
-
-    private func popupCard(_ palette: Palette) -> some View {
-        background(palette.bgPopover, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line, lineWidth: 0.5))
-            .clipShape(RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-            .elevation(.pop)
-    }
-}
-
-/// The toolbar's count of subagents or background tasks; a spinner while any of them runs.
-private struct WorkCount: View {
-    let count: Int
-    let title: String
-    let running: Bool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text("\(count)").font(.riffet(size: S(12)).monospacedDigit())
-            Text(title).font(.riffet(size: S(12)))
-            if running { Spinner(size: .mini) }
-        }
-        .foregroundStyle(palette.fg2)
-        .padding(.horizontal, 4)
-    }
-}
-
-private struct WorkList<Content: View>: View {
-    let title: String
-    let count: Int
-    @ViewBuilder let content: Content
-    @Environment(\.palette) private var palette
-    @Environment(\.popupAvailableSize) private var popupAvailableSize
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: Space.sm) {
-                Text(title).font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.fg2)
-                Text("\(count)").font(.riffet(size: S(12)).monospacedDigit()).foregroundStyle(palette.fg3)
-            }
-            .padding(.horizontal, Space.md)
-            .frame(height: 34)
-            Rectangle().fill(palette.line).frame(height: 1)
-            ScrollView { VStack(alignment: .leading, spacing: 0) { content }.padding(Space.xs) }
-                .frame(maxHeight: min(480, max(40, popupAvailableSize.height - 34)))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(width: min(420, popupAvailableSize.width))
-    }
 }
 
 /// The ⋯ menu: the branch, the view switch, the panels, and editing this conversation. The menu is
@@ -1740,7 +1431,6 @@ extension FocusedValues {
 struct RiffetCommands: Commands {
     let model: AppModel
     @FocusedValue(\.workbenchActions) private var actions
-    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
@@ -1755,8 +1445,6 @@ struct RiffetCommands: Commands {
                 UserDefaults.standard.set(SettingsSection.diagnostics.rawValue, forKey: PreferenceKey.settingsSection)
                 WindowRouter.shared.showSettings()
             }
-            Divider()
-            Button("界面风格设计稿") { openWindow(id: InterfaceStyleDraftsWindow.id) }
         }
         // 显示: what is on screen — the sidebar, the inspector and its panels, the terminal — then
         // the appearance and the text size.

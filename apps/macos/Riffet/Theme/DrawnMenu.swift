@@ -1,7 +1,7 @@
 import AppKit
 
-// 菜单配方: under `style.menu == .drawn` an NSMenu popped up from the app's own controls is shown
-// as a drawn panel instead of the system's Liquid Glass menu. The menu object is the same one the
+// An NSMenu popped up from the app's own controls is shown as a drawn panel instead of the
+// system's Liquid Glass menu. The menu object is the same one the
 // call site built; this file only presents it. Right-click `.contextMenu`s stay the system's.
 //
 // The panel is a non-activating borderless window and never becomes key, so the window underneath
@@ -10,12 +10,12 @@ import AppKit
 // read from that loop and are not forwarded to other windows while the menu is open.
 
 extension NSMenu {
-    /// `popUp(positioning:at:in:)`, drawn when the style's menu recipe says so. A menu with a
-    /// custom item view (`NSMenuItem.view`) stays the system's.
+    /// `popUp(positioning:at:in:)`, drawn. A menu with a custom item view (`NSMenuItem.view`) stays
+    /// the system's.
     @MainActor
     @discardableResult
     func popUpStyled(at point: NSPoint, in view: NSView, aboveAnchor: Bool = false) -> Bool {
-        if DisplayPreferences.shared.style.menu == .drawn, view.window != nil, !DrawnMenu.hasCustomView(self) {
+        if view.window != nil, !DrawnMenu.hasCustomView(self) {
             return DrawnMenu.popUp(self, at: point, in: view, aboveAnchor: aboveAnchor)
         }
         var origin = point
@@ -75,8 +75,6 @@ private struct MenuLook {
     let border: NSColor
     let radius: CGFloat
     let rowRadius: CGFloat
-    /// A raised surface lifts the card the way the web's `--shadow-pop` does; an outlined one keeps its warm shadow.
-    let raised: Bool
 
     init() {
         let style = DisplayPreferences.shared.style
@@ -90,11 +88,10 @@ private struct MenuLook {
         fg3 = palette.nsColor(\.fg3)
         fg4 = palette.nsColor(\.fg4)
         line = palette.nsColor(\.line)
-        border = style.surface == .outlined ? palette.nsColor(\.lineStrong) : palette.nsColor(\.line)
+        border = palette.nsColor(\.line)
         radius = style.radii.menu
         // A row's corner nests inside the card's, which is padded by `MenuMetric.pad`.
         rowRadius = min(style.radii.container, max(4, style.radii.menu - MenuMetric.pad))
-        raised = style.surface == .raised
     }
 
     func attributed(_ text: String, font: NSFont, color: NSColor) -> NSAttributedString {
@@ -194,12 +191,6 @@ private final class MenuCardView: NSView {
         layer.cornerCurve = .continuous
         layer.borderWidth = 1
         layer.masksToBounds = false
-        if !look.raised {
-            // The line style's own warm shadow (FloatingShadow); raised, `Elevation.pop`, set in refreshColors.
-            layer.shadowRadius = 20
-            layer.shadowOffset = CGSize(width: 0, height: -12)
-            layer.shadowOpacity = 1
-        }
         layer.shadowPath = CGPath(roundedRect: NSRect(origin: .zero, size: size), cornerWidth: look.radius, cornerHeight: look.radius, transform: nil)
         refreshColors()
     }
@@ -217,11 +208,7 @@ private final class MenuCardView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer.backgroundColor = look.bg.cgColor
             layer.borderColor = look.border.cgColor
-            if look.raised {
-                Elevation.pop.apply(to: layer, dark: dark)
-            } else {
-                layer.shadowColor = (dark ? NSColor.black.withAlphaComponent(0.5) : NSColor(srgbRed: 60 / 255, green: 50 / 255, blue: 40 / 255, alpha: 0.16)).cgColor
-            }
+            Elevation.pop.apply(to: layer, dark: dark)
         }
     }
 }

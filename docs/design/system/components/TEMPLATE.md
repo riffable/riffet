@@ -92,7 +92,7 @@
 | 端 | 组件 | 位置 | 系统控件 / 依赖 |
 |---|---|---|---|
 | Web | | `apps/web/src/components/ui/` | Radix … |
-| macOS | | `apps/macos/Riffet/Theme/` | 原生风格：…；自绘风格：… |
+| macOS | | `apps/macos/Riffet/Theme/` | 自绘：… |
 | Android | | `apps/mobile/shared/src/commonMain/kotlin/riffet/ui/design/` | material3：…；其他：自绘 |
 | iOS | | `apps/mobile/iosApp/Riffet/Design/` | SwiftUI … |
 

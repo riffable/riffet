@@ -218,7 +218,7 @@ riffet plugin install my-plugin.tgz
 ### 06 · Appearance
 
 - **Themes**: built-in palettes plus custom themes, wallpapers, and logos, with more themes available as plugins.
-- **Interface styles**: switchable interface styles on macOS and Android.
+- **Interface styles**: switchable interface styles on Android.
 - **Session layout**: manage sessions in horizontal tabs, with a side panel for each session’s plan, outline, subagents, and output files.
 
 <p align="center">

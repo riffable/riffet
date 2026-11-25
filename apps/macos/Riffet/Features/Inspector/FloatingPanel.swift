@@ -175,8 +175,6 @@ typealias PanelDrag = (CGSize, Bool) -> Void
 
 extension EnvironmentValues {
     @Entry var panelDrag: PanelDrag?
-    /// Set where the panel's bar carries its float toggle.
-    @Entry var panelFloat: PanelFloat?
 }
 
 struct PanelFloat {
@@ -208,17 +206,4 @@ private struct PanelDragHandle: ViewModifier {
 extension View {
     /// Lets the floating panel be dragged by this bar's background; nothing in a docked panel.
     func panelDragHandle() -> some View { modifier(PanelDragHandle()) }
-}
-
-/// The panel's own drag strip, for a panel whose views draw their own top bars.
-struct PanelGrip: View {
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        Capsule().fill(palette.line)
-            .frame(width: 32, height: 3)
-            .frame(maxWidth: .infinity)
-            .frame(height: 14)
-            .panelDragHandle()
-    }
 }

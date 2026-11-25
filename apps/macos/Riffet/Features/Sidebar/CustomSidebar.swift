@@ -2,23 +2,20 @@ import AppKit
 import SwiftUI
 import RiffetKit
 
-/// The sidebar of the drawn styles (`StyleSpec.backend == .custom`): a header, the main actions, a
-/// scrolling list of conversations and a footer, all drawn here instead of by `List(.sidebar)`. The
-/// data and the actions are the native sidebar's: `WorkbenchSidebar`'s groups and buckets, the same
-/// row menu, hover card and page routing. The window's chrome paints the column behind it.
+/// The workbench's sidebar: a header, the main actions, a scrolling list of conversations and a
+/// footer, all drawn here instead of by `List(.sidebar)`. The data is `WorkbenchSidebar`'s groups and
+/// buckets. The window's chrome paints the column behind it.
 struct CustomSidebar: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
     @Environment(\.customSidebarPeeking) private var peeking
     @AppStorage(WorkbenchSidebar.collapsedProjectsKey) private var collapsed = ""
-    @AppStorage(WorkbenchSidebar.collapsedTimeGroupsKey) private var collapsedTime = ""
     @State private var renaming: Session?
     @State private var renameText = ""
     @State private var taggingSession: Session?
     @State private var browsing = false
     @State private var addError: String?
     @State private var favorites = FolderFavoritesModel()
-    @State private var customAnchor = MenuAnchor()
     @State private var moreAnchor = MenuAnchor()
     @Environment(\.openSettings) private var openSettings
 
@@ -26,14 +23,12 @@ struct CustomSidebar: View {
 
     var body: some View {
         let style = DisplayPreferences.shared.style
-        // The chrome is the style's; the list is the arrangement the reader picked.
-        let treeChrome = style.sidebar != .timeGroups
         let tree = workbench.sidebar.layout == "PROJECT"
         VStack(spacing: 0) {
-            if treeChrome { treeHeader(style) } else { timeHeader(style) }
-            if treeChrome { treeActions(style) } else { timeActions(style) }
+            treeHeader(style)
+            treeActions(style)
             list(style, tree: tree)
-            CustomSidebarFooter(workbench: workbench, style: style)
+            CustomSidebarFooter(workbench: workbench)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Opening a project at a favorite stamps it on the server; the list moves with the projects.
@@ -77,23 +72,9 @@ struct CustomSidebar: View {
         }
         // Clear of the traffic lights by twice their own spacing, so the mark does not read as a
         // fourth button; a fixed gap, as the sidebar's width changes.
-        .padding(.leading, CustomChrome.trafficLights(style) + Space.sm)
+        .padding(.leading, CustomChrome.trafficLights + Space.sm)
         .padding(.trailing, Space.md)
         .frame(height: headerHeight(style))
-    }
-
-    private func timeHeader(_ style: StyleSpec) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Space.xs) {
-                toggleButton()
-                Spacer(minLength: 0)
-            }
-            .padding(.leading, CustomChrome.trafficLights(style) + Space.xs)
-            .padding(.trailing, Space.md)
-            .frame(height: headerHeight(style))
-            CustomModeSwitch(workbench: workbench, style: style)
-                .padding(.horizontal, Space.sm)
-        }
     }
 
     // MARK: Actions
@@ -134,49 +115,13 @@ struct CustomSidebar: View {
         .padding(.bottom, Space.sm)
     }
 
-    private func timeActions(_ style: StyleSpec) -> some View {
-        VStack(spacing: Space.xxs) {
-            CustomNavRow(symbol: "plus", title: String(localized: "新会话"), selected: workbench.showingHome && workbench.page == nil, style: style) {
-                workbench.showHome()
-            }
-            .help("新会话 (⌘N)")
-            CustomNavRow(symbol: "magnifyingglass", title: String(localized: "搜索"), style: style) {
-                workbench.sidebar.searchRequested = .titles
-            }
-            .help("搜索内容 (⌘K)")
-            CustomNavRow(symbol: "briefcase", title: String(localized: "自定义"), anchor: customAnchor, style: style) {
-                showPages([.plugins, .extensions], at: customAnchor)
-            }
-            CustomNavRow(symbol: "ellipsis", title: String(localized: "更多"), anchor: moreAnchor, style: style) {
-                showPages([.assistant, .tasks, .marks, .stats, .activity], at: moreAnchor)
-            }
-        }
-        .padding(.horizontal, Space.sm)
-        .padding(.top, Space.sm + Space.xxs)
-    }
-
-    /// Archive and tag filters, at a fixed place whatever the list holds. The time layout has no
-    /// project header, so its menu also adds a project.
-    private func filterButton(addProject: Bool) -> some View {
+    /// Archive and tag filters, at a fixed place whatever the list holds.
+    private var filterButton: some View {
         SidebarFilterButton {
-            SidebarFilterMenu.make(
-                workbench: workbench,
-                addProject: addProject ? { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } : nil
-            )
+            SidebarFilterMenu.make(workbench: workbench)
         }
     }
 
-
-    private func showPages(_ pages: [WorkbenchPage], at anchor: MenuAnchor) {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        var chosen: (() -> Void)?
-        for page in pages {
-            menu.addItem(MenuAction.item(page.title, symbol: page.symbol) { chosen = { workbench.show(page) } })
-        }
-        _ = anchor.popUp(menu)
-        chosen?()
-    }
 
     // MARK: List
 
@@ -185,7 +130,7 @@ struct CustomSidebar: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     tagChip(style)
-                    if tree { projectRows(style) } else if style.sidebar == .projectTree { bucketRows(style) } else { timeRows(style) }
+                    if tree { projectRows(style) } else { bucketRows(style) }
                 }
                 .padding(.horizontal, Space.sm)
                 .padding(.bottom, Space.md)
@@ -248,14 +193,13 @@ struct CustomSidebar: View {
 
     private func projectLines(_ style: StyleSpec) -> [SidebarLine] {
         let hidden = Set(collapsed.split(separator: ",").map(String.init))
-        let tree = style.sidebar == .projectTree
         var lines: [SidebarLine] = []
         for group in workbench.sidebar.groups {
             let open = group.forceOpen || !hidden.contains(group.project.id)
             lines.append(.project(group, open: open))
             guard open else { continue }
             let slice = workbench.sidebar.slice(for: group)
-            lines += slice.sessions.map { .session($0, indented: tree, timed: tree) }
+            lines += slice.sessions.map { .session($0, indented: true) }
             if slice.hiddenCount > 0 { lines.append(.expand(group, hidden: slice.hiddenCount)) }
             else if slice.canCollapse { lines.append(.collapse(group)) }
             if group.sessions.isEmpty { lines.append(.empty(group)) }
@@ -266,7 +210,7 @@ struct CustomSidebar: View {
     /// The list's filter and add-project buttons, on its first label.
     private func listButtons() -> some View {
         HStack(spacing: Space.xxs) {
-            filterButton(addProject: false)
+            filterButton
             Button { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } label: { Image(icon: "folder.badge.plus") }
                 .buttonStyle(IconButtonStyle(size: 24))
                 .help("添加项目")
@@ -296,61 +240,18 @@ struct CustomSidebar: View {
         var lines: [SidebarLine] = []
         for (index, bucket) in buckets.enumerated() where !bucket.sessions.isEmpty {
             lines.append(.label(bucket.label, first: index == 0))
-            lines += bucket.sessions.map { .session($0, indented: false, timed: true) }
+            lines += bucket.sessions.map { .session($0, indented: false) }
         }
         return lines
     }
 
-    // MARK: Time groups
-
-    @ViewBuilder private func timeRows(_ style: StyleSpec) -> some View {
-        let sections = workbench.sidebar.timeSections
-        // The filter menu holds 添加项目 and 显示已归档: it stays reachable with no band to carry it.
-        if sections.isEmpty {
-            CustomSectionTitle(title: "", style: style, buttonsOnHover: false) { filterButton(addProject: true) }
-        }
-        if sections.isEmpty, !workbench.sidebar.tag.isEmpty {
-            Text("没有匹配的结果")
-                .font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg3)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Space.xl)
-        }
-        ForEach(timeLines(sections)) { entry in line(entry, style: style) }
-    }
-
-    private func timeLines(_ sections: [WorkbenchSidebar.TimeSection]) -> [SidebarLine] {
-        let folded = Set(collapsedTime.split(separator: ",").map(String.init))
-        // The filters sit on the first band past the pinned one, where the list's order starts.
-        let filtered = sections.first { $0.band != .pinned }?.id ?? sections.first?.id
-        var lines: [SidebarLine] = []
-        for section in sections {
-            let open = !folded.contains(section.id)
-            lines.append(.band(section, open: open, filters: section.id == filtered))
-            guard open else { continue }
-            let visible = workbench.sidebar.shown(section)
-            lines += visible.sessions.map { .session($0, indented: false, timed: false) }
-            if visible.more { lines.append(.more) }
-        }
-        return lines
-    }
-
-    /// The list's rows, one flat `ForEach` for every band and project. Nested ones lost updates: in a
-    /// lazy stack, an `.equatable()` row that moved from one inner `ForEach` to another (a
-    /// conversation going up to 最近 as it opened) kept drawing what it showed before, so the
-    /// conversations picked earlier stayed selected.
+    /// The list's rows, one flat `ForEach` for every label and project. Nested ones lost updates: in a
+    /// lazy stack, an `.equatable()` row that moved from one inner `ForEach` to another kept drawing
+    /// what it showed before, so the conversations picked earlier stayed selected.
     @ViewBuilder private func line(_ line: SidebarLine, style: StyleSpec) -> some View {
         switch line {
-        case let .band(section, open, filters):
-            CustomGroupTitle(title: section.title, expanded: open, style: style, toggle: {
-                collapsedTime = toggleCollapsed(raw: collapsedTime, id: section.id)
-            }) {
-                if filters { filterButton(addProject: true) }
-            }
-            .padding(.top, style.layout.sidebarGap)
         case let .label(title, first):
             CustomSectionTitle(title: title, style: style) { if first { listButtons() } }
-        case .more:
-            CustomLinkRow(symbol: nil, title: String(localized: "显示更多"), style: style) { workbench.sidebar.showAllEarlier = true }
         case let .project(group, open):
             CustomProjectRow(
                 workbench: workbench, project: group.project, favorites: favorites, expanded: open, style: style,
@@ -369,14 +270,14 @@ struct CustomSidebar: View {
             Text("暂无会话").font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4)
                 .padding(.leading, Space.sm + Space.xxs + 16 + Space.sm)
                 .frame(height: style.layout.sidebarRow)
-        case let .session(session, indented, timed):
-            sessionRow(session, style: style, indented: indented, timed: timed)
+        case let .session(session, indented):
+            sessionRow(session, style: style, indented: indented)
         }
     }
 
     // MARK: Rows
 
-    private func sessionRow(_ session: Session, style: StyleSpec, indented: Bool, timed: Bool) -> some View {
+    private func sessionRow(_ session: Session, style: StyleSpec, indented: Bool) -> some View {
         let project = workbench.project(session.projectId)
         let now = Int64(workbench.minute.timeIntervalSince1970 * 1000)
         return CustomSessionRow(
@@ -384,7 +285,7 @@ struct CustomSidebar: View {
             info: { sessionHoverInfo(session: session, project: project?.name, models: workbench.catalogs.cached(for: session)?.models ?? [], now: now) },
             selected: workbench.sidebarRowSelected(session),
             indented: indented,
-            activity: timed ? relativeLabel(value: activityAt(session: session), now: now) : nil,
+            activity: relativeLabel(value: activityAt(session: session), now: now),
             style: style,
             menu: workbench.sidebarRowMenu(for: session, rename: { renameText = session.title; renaming = session }, editTags: { taggingSession = session }),
             hover: { hovering in workbench.hover(sessionId: session.id, entered: hovering) },
@@ -412,8 +313,8 @@ struct CustomSidebar: View {
     }
 }
 
-/// The filter button. Each place it appears (the project tree's title, a time band's) owns its
-/// anchor: switching the arrangement swaps one for the other, and a shared anchor would be left
+/// The filter button. Each place it appears (the project tree's title, the first time label) owns
+/// its anchor: switching the arrangement swaps one for the other, and a shared anchor would be left
 /// pointing at the one that went away.
 private struct SidebarFilterButton: View {
     let menu: () -> NSMenu
@@ -429,25 +330,21 @@ private struct SidebarFilterButton: View {
 
 /// A line of the drawn sidebar's list (`CustomSidebar.line`).
 private enum SidebarLine: Identifiable {
-    case band(WorkbenchSidebar.TimeSection, open: Bool, filters: Bool)
     case label(String, first: Bool)
-    case more
     case project(ProjectGroup, open: Bool)
     case expand(ProjectGroup, hidden: Int)
     case collapse(ProjectGroup)
     case empty(ProjectGroup)
-    case session(Session, indented: Bool, timed: Bool)
+    case session(Session, indented: Bool)
 
     var id: String {
         switch self {
-        case let .band(section, _, _): "band:" + section.id
         case let .label(title, _): "label:" + title
-        case .more: "more"
         case let .project(group, _): "project:" + group.project.id
         case let .expand(group, _): "expand:" + group.project.id
         case let .collapse(group): "collapse:" + group.project.id
         case let .empty(group): "empty:" + group.project.id
-        case let .session(session, _, _): session.id
+        case let .session(session, _): session.id
         }
     }
 }

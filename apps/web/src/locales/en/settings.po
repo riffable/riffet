@@ -155,11 +155,6 @@ msgstr "{0}"
 msgid "{0} 种界面风格共用一套组件：数值决定尺寸与动效，配方决定每类组件画成哪种形态。颜色由主题决定，与风格无关。"
 msgstr "{0} interface styles share one set of components: values set sizes and motion, recipes set which form each kind of component takes. Colour comes from the theme, not the style."
 
-#. placeholder {0}: STYLES.length
-#: src/app/design/mac/StylesChapter.tsx
-msgid "{0} 种界面风格共用一套组件：配方决定每类组件取哪种形态，数值决定它的尺寸。颜色由主题决定，与风格无关。"
-msgstr "{0} interface styles share one set of components: the recipe decides which form each component takes, and the values decide its size. Colour comes from the theme, independent of style."
-
 #. placeholder {0}: MAC.terminal.min
 #: src/app/design/mac/WindowChapter.tsx
 msgid "{0} 起，最多详情高的 60%"
@@ -169,11 +164,6 @@ msgstr "From {0}, up to 60% of the detail height"
 #: src/app/design/android/PhoneMiniature.tsx
 msgid "{0} 风格的手机缩样"
 msgstr "Phone miniature in the {0} style"
-
-#. placeholder {0}: style.id
-#: src/app/design/mac/StyleMiniature.tsx
-msgid "{0} 风格的窗口缩样"
-msgstr "Window thumbnail in the {0} style"
 
 #. placeholder {0}: current.model
 #: src/app/settings/QuickChatSection.tsx
@@ -449,6 +439,10 @@ msgstr "CPU and memory"
 msgid "CRDT。离线编辑是本地优先的前提，合并必须在没有服务端时也成立；代价是文档体积和撤销语义更复杂。"
 msgstr "CRDTs. Offline editing is the premise of local-first, so merging has to work without a server; the cost is larger documents and trickier undo."
 
+#: src/app/design/mac/WindowChapter.tsx
+msgid "CustomPageBar"
+msgstr "CustomPageBar"
+
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "DropdownMenuContent 默认变成底部面板；贴着光标的菜单传 mobileSheet={false}。"
 msgstr "DropdownMenuContent becomes a bottom sheet by default; pass mobileSheet={false} for menus anchored to the cursor."
@@ -496,10 +490,6 @@ msgstr "Mac does not hand-write these values: edit the source, run the generator
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "Mac 用 ⌘，其他平台用 Ctrl；标签页用 ⌥（Alt）。Escape 关闭最上面的一层。"
 msgstr "Mac uses ⌘, other platforms use Ctrl; tabs use ⌥ (Alt). Escape closes the topmost layer."
-
-#: src/app/design/mac/notes.ts
-msgid "Mac 的设置总是独立窗口，这一项只对 Web 生效。"
-msgstr "Settings on Mac is always a separate window; this option applies to the web only."
 
 #: src/app/design/android/notes.ts
 msgid "Material 控件，更大的圆角与选中面，浮动底栏，空间动效用更有弹性的弹簧。"
@@ -669,10 +659,6 @@ msgstr "Defined once, generated for four platforms"
 msgid "一套代码覆盖最多用户"
 msgstr "One codebase reaches the most users"
 
-#: src/app/design/mac/notes.ts
-msgid "一张满铺的纸，边缘全部用细线，面板从页头的图标打开。"
-msgstr "A single full-bleed sheet of paper with hairline edges everywhere; panels open from the header icons."
-
 #: src/app/design/components/InputsChapter.tsx
 msgid "一整页只做这一个决定、选项带标志时用；设置里用 RadioGroup。"
 msgstr "For a page that makes this one decision, with options worth showing a mark for; settings use RadioGroup."
@@ -821,7 +807,6 @@ msgstr "Move up"
 msgid "下一章"
 msgstr "Next chapter"
 
-#: src/app/design/mac/notes.ts
 #: src/app/settings/PreferencesSections.tsx
 msgid "下划线"
 msgstr "Underline"
@@ -1077,16 +1062,8 @@ msgid "主内容区"
 msgstr "Main content area"
 
 #: src/app/design/mac/WindowChapter.tsx
-msgid "主区"
-msgstr "Main area"
-
-#: src/app/design/mac/WindowChapter.tsx
 msgid "主区内缩"
 msgstr "Inset main area"
-
-#: src/app/design/mac/notes.ts
-msgid "主区满铺，玻璃感只来自底层材质和连续的标题栏"
-msgstr "The main area is full-bleed; the glass look comes only from the underlying material and a continuous title bar"
 
 #: src/app/design/foundations/IconChapter.tsx
 msgid "主导航"
@@ -1146,22 +1123,9 @@ msgstr "Theme canvas"
 msgid "主题说明"
 msgstr "Theme description"
 
-#: src/app/design/mac/notes.ts
-msgid "主题选中色"
-msgstr "Theme selection colour"
-
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "主题颜色写入 Mac、Android、iOS 与 Web 的主题文件"
 msgstr "Writes theme colours to the Mac, Android, iOS and Web theme files"
-
-#: src/app/design/mac/notes.ts
-#: src/app/design/mac/StylesChapter.tsx
-msgid "主风格"
-msgstr "Main style"
-
-#: src/app/design/mac/notes.ts
-msgid "主风格，以 Web 为准：内缩卡片、项目树侧栏、会话标签栏，菜单与弹出层共用一种浮层。"
-msgstr "The main style, defined by the web: inset card, project-tree sidebar, session tab bar, with menus and popovers sharing one overlay."
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "事件循环延迟"
@@ -1283,7 +1247,6 @@ msgstr "Mobile only"
 msgid "仅用于显示"
 msgstr "Display only"
 
-#: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "今天"
 msgstr "Today"
@@ -1380,7 +1343,6 @@ msgstr "Numbers that change use tabular figures"
 
 #: src/app/design/catalog.tsx
 #: src/app/design/components/OverlaysChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
@@ -1441,10 +1403,6 @@ msgstr "Context beside the conversation: changes, files, browser and plugin view
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "会话暂时无法读取，请重试"
 msgstr "Unable to read this session. Try again."
-
-#: src/app/design/mac/notes.ts
-msgid "会话标签栏"
-msgstr "Session tab bar"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "会话标签页"
@@ -1562,7 +1520,6 @@ msgid "侧板视图"
 msgstr "Side panel views"
 
 #: src/app/design/engineering/PluginsChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
@@ -1579,10 +1536,6 @@ msgstr "Sidebar + tabs + conversation"
 #: src/app/design/catalog.tsx
 msgid "侧栏、标签页、返回与关闭"
 msgstr "Sidebar, tabs, back and close"
-
-#: src/app/design/mac/WindowChapter.tsx
-msgid "侧栏、页头与右侧面板的默认值随风格变，范围各风格相同。"
-msgstr "Defaults for the sidebar, header and right panel vary by style; the ranges are the same across styles."
 
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "侧栏与面板"
@@ -2044,10 +1997,6 @@ msgstr "Content cards, user messages, settings groups"
 msgid "内容可以选中复制；界面文字和元信息不可选，光标保持箭头。"
 msgstr "Content can be selected and copied; UI text and meta cannot be selected, and the cursor stays an arrow."
 
-#: src/app/design/mac/notes.ts
-msgid "内容块"
-msgstr "Content block"
-
 #: src/app/design/android/PlatformChapter.tsx
 msgid "内容画到系统栏下，按 inset 让位"
 msgstr "Content draws under the system bars and makes room by insets"
@@ -2055,10 +2004,6 @@ msgstr "Content draws under the system bars and makes room by insets"
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "内缩"
 msgstr "Inset"
-
-#: src/app/design/mac/notes.ts
-msgid "内缩卡片"
-msgstr "Inset card"
 
 #: src/app/design/components/NavigationChapter.tsx
 msgid "内置"
@@ -2116,7 +2061,6 @@ msgid "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
 msgstr "Max width 720, sides 32 (mobile 16), top max(48, 14vh), bottom 64"
 
 #: src/app/design/engineering/PluginsChapter.tsx
-#: src/app/design/mac/StyleMiniature.tsx
 msgid "最近"
 msgstr "Recent"
 
@@ -2148,8 +2092,8 @@ msgid "最高 {0}%"
 msgstr "At most {0}%"
 
 #: src/app/design/mac/StylesChapter.tsx
-msgid "写成 Web 变量名的数值在生成时从样式表读出，所以 Riffet 风格跟着 Web 变。各风格取值相同的行颜色变淡。"
-msgstr "Values written as web variable names are read from the stylesheet at generation time, so the Riffet style follows the web. Rows with the same value in every style are dimmed."
+msgid "写成 Web 变量名的数值在生成时从样式表读出，Mac 跟着 Web 变。颜色由主题决定。"
+msgstr "Values written as web variable names are read from the stylesheet at generation, so the Mac follows the web. Colour comes from the theme."
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "写明原因与否决的做法"
@@ -2559,10 +2503,6 @@ msgstr "A separate message showing thinking and tool calls"
 msgid "单色"
 msgstr "Single color"
 
-#: src/app/design/mac/notes.ts
-msgid "单行"
-msgstr "Single line"
-
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "单行标签"
 msgstr "Single-line label"
@@ -2589,7 +2529,6 @@ msgid "占用最多的会话"
 msgstr "Largest conversations"
 
 #: src/app/design/foundations/RadiusChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -2604,10 +2543,6 @@ msgstr "Cards, code blocks, user messages"
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "卡片、列表、面板"
 msgstr "Cards, lists, panels"
-
-#: src/app/design/mac/notes.ts
-msgid "卡片与内容块用细线勾边，不用阴影"
-msgstr "Cards and content blocks are outlined with hairlines, not shadows"
 
 #. placeholder {0}: formatCount(eventLoop.stalls)
 #: src/app/settings/ServiceStatusSection.tsx
@@ -2671,15 +2606,6 @@ msgstr "Wrap the original text, do not truncate"
 #: src/app/settings/TitleRulesSection.tsx
 msgid "原标题"
 msgstr "Title"
-
-#: src/app/design/mac/notes.ts
-msgctxt "interface-style"
-msgid "原生"
-msgstr "Native"
-
-#: src/app/design/mac/WindowChapter.tsx
-msgid "原生风格是窗口工具栏，自绘风格是 CustomPageBar"
-msgstr "The Native style uses the window toolbar; Drawn styles use CustomPageBar"
 
 #: src/app/design/android/PagesChapter.tsx
 msgid "去哪里，用什么搭"
@@ -2792,6 +2718,7 @@ msgid "取代工具行"
 msgstr "Replaces the toolbar"
 
 #: src/app/design/foundations/StatesChapter.tsx
+#: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "取值"
 msgstr "Values"
@@ -2875,10 +2802,6 @@ msgstr "Only state where it is stored, whether it can be undone, whether it work
 #: src/app/design/components/DisplayChapter.tsx
 msgid "只呈现信息、不接受操作的元素。颜色只在表示状态时使用。"
 msgstr "Elements that only present information and accept no action. Color is used only to express state."
-
-#: src/app/design/mac/notes.ts
-msgid "只换等宽字体"
-msgstr "Only the monospace font changes"
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "只改变显示的名称，CLI 里的会话名不变；保存在这台服务器"
@@ -2997,7 +2920,6 @@ msgstr "Right drawer: session details, {0} wide"
 msgid "右侧概览按轮次或阶段导航。并排的发言卡可以分别滚动，也可以展开到整行。"
 msgstr "The overview on the right links to each round or phase. Side-by-side answers scroll independently and can expand across the row."
 
-#: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx
 msgid "右侧面板"
 msgstr "Right panel"
@@ -3028,10 +2950,6 @@ msgstr "Context menu"
 msgid "右键菜单仍是系统菜单"
 msgstr "Context menus are still system menus"
 
-#: src/app/design/mac/notes.ts
-msgid "右键菜单在所有风格下都是系统菜单。"
-msgstr "Context menus are system menus in every style."
-
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "右键菜单用系统菜单"
 msgstr "Context menus use the system menu"
@@ -3059,10 +2977,6 @@ msgstr "Each in its own Worktree"
 #: src/app/design/catalog.tsx
 msgid "各风格的字阶映射"
 msgstr "Each style's type scale, mapped"
-
-#: src/app/design/catalog.tsx
-msgid "各风格的数值、配方与窗口"
-msgstr "Values, recipes and windows of each style"
 
 #: src/app/settings/StorageSection.tsx
 msgid "合计"
@@ -3105,14 +3019,6 @@ msgstr "Two states of the same colour differ by filled and hollow; the pulse mar
 #: src/app/settings/ThemeEditor.tsx
 msgid "名称"
 msgstr "Name"
-
-#: src/app/design/mac/notes.ts
-msgid "名称与目录同行"
-msgstr "Name and directory on one line"
-
-#: src/app/design/mac/notes.ts
-msgid "名称在上、目录在下"
-msgstr "Name above, directory below"
 
 #: src/app/design/components/ActionsChapter.tsx
 msgid "名称由 Tip 与 aria-label 给出。"
@@ -3373,6 +3279,10 @@ msgstr "Corner radius"
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "圆角 {radius}"
 msgstr "Radius {radius}"
+
+#: src/app/design/catalog.tsx
+msgid "圆角、布局、文字与窗口缩样"
+msgstr "Radii, layout, text and a window miniature"
 
 #. placeholder {0}: tiers.length
 #: src/app/design/foundations/RadiusChapter.tsx
@@ -3646,10 +3556,6 @@ msgstr "Size"
 msgid "大标题"
 msgstr "Large title"
 
-#: src/app/design/mac/notes.ts
-msgid "大纲加检查器"
-msgstr "Outline plus inspector"
-
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "太棒了，设置已成功保存！"
 msgstr "Awesome, your settings were saved successfully!"
@@ -3805,10 +3711,6 @@ msgstr "Locate the redirect issue"
 msgid "实底卡片，与转录同宽同轴；悬浮玻璃只用于移动端。"
 msgstr "A solid card on the transcript’s width and axis; floating glass is for mobile only."
 
-#: src/app/design/mac/notes.ts
-msgid "实心块"
-msgstr "Solid block"
-
 #: src/app/settings/PreferencesSections.tsx
 msgid "实时预览"
 msgstr "Live preview"
@@ -3817,10 +3719,6 @@ msgstr "Live preview"
 #: src/app/design/components/OverlaysChapter.tsx
 msgid "实际组件"
 msgstr "Actual components"
-
-#: src/app/design/mac/notes.ts
-msgid "审批"
-msgstr "Approval"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "审批与交互"
@@ -4078,10 +3976,6 @@ msgstr "Depth comes from surfaces first. Shadows come in five tiers for elements
 msgid "层级"
 msgstr "Elevation"
 
-#: src/app/design/mac/notes.ts
-msgid "居中加操作卡片"
-msgstr "Centred with an action card"
-
 #: src/app/design/android/PagesChapter.tsx
 msgid "屏幕宽度 · 从左边缘向右"
 msgstr "Screen width · from the left edge"
@@ -4156,12 +4050,12 @@ msgstr "Taken by the workbench"
 #. placeholder {2}: MAC.menu.minWidth
 #. placeholder {3}: MAC.menu.maxWidth
 #: src/app/design/mac/OverlayChapter.tsx
-msgid "工作台控件弹出的菜单经 popUpStyled：自绘风格画在纸上，原生风格交给系统。内边距 {0}，行高 {1}，宽 {2}–{3}。"
-msgstr "Menus opened from workbench controls go through popUpStyled: Drawn styles paint them on the paper, the Native style hands them to the system. Padding {0}, row height {1}, width {2}–{3}."
+msgid "工作台控件弹出的菜单经 popUpStyled 画在纸上。内边距 {0}，行高 {1}，宽 {2}–{3}。"
+msgstr "Menus opened from workbench controls go through popUpStyled and are drawn on the paper. Padding {0}, row height {1}, width {2}–{3}."
 
 #: src/app/design/mac/WindowChapter.tsx
-msgid "工作台的尺寸一部分来自风格配方，一部分各风格相同；页面和设置的骨架三种风格一致。"
-msgstr "Part of the workbench sizing comes from the style recipe and part is the same in every style; the page and settings skeletons are identical across the three styles."
+msgid "工作台的默认尺寸读自 interface-styles.ts；页面和设置有各自的骨架。"
+msgstr "The workbench's default sizes come from interface-styles.ts; pages and Settings have their own skeletons."
 
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "工作台里是应用菜单，设置里是系统弹出菜单"
@@ -4174,29 +4068,13 @@ msgstr "An app menu in the workbench, a system pop-up menu in settings"
 msgid "工作目录"
 msgstr "Working directory"
 
-#: src/app/design/mac/notes.ts
-msgid "工具名行"
-msgstr "Tool name row"
-
-#: src/app/design/mac/notes.ts
-msgid "工具栏标题"
-msgstr "Toolbar title"
-
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "工具栏的命令在菜单栏都有对应项"
 msgstr "Every toolbar command has a counterpart in the menu bar"
 
-#: src/app/design/mac/notes.ts
-msgid "工具栏的每个动作是单独的 ToolbarItem，不放说明文字"
-msgstr "Each toolbar action is its own ToolbarItem, with no descriptive text"
-
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "工具行"
 msgstr "Tool row"
-
-#: src/app/design/mac/notes.ts
-msgid "工具调用"
-msgstr "Tool call"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "工具调用与过程"
@@ -4717,14 +4595,6 @@ msgstr "Dialog implementation"
 msgid "弹窗结构"
 msgstr "Dialog structure"
 
-#: src/app/design/mac/notes.ts
-msgid "强调色"
-msgstr "Accent"
-
-#: src/app/design/mac/notes.ts
-msgid "强调色只用于焦点环、文本选区和链接"
-msgstr "The accent colour is used only for focus rings, text selection and links"
-
 #: src/app/design/components/ActionsChapter.tsx
 msgid "归档"
 msgstr "Archive"
@@ -5023,10 +4893,6 @@ msgstr "Applies on all devices"
 msgid "所有连接这台服务器的设备共用"
 msgstr "Shared by every device connected to this server"
 
-#: src/app/design/mac/WindowChapter.tsx
-msgid "所有风格下都是独立窗口，⌘, 打开；分类保持原样，顶部搜索按分类和设置项筛选。"
-msgstr "A separate window in every style, opened with ⌘,; categories are unchanged, and the search at the top filters by category and setting."
-
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "手写的字号、圆角、层级、色值与无说明的循环动画"
 msgstr "Hand-written sizes, radii, layers, colours, and loops without a stated reason"
@@ -5258,10 +5124,6 @@ msgstr "Hold to talk"
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "按文档类型分：长文本与列表用 CRDT，结构化记录由服务端裁决。两边都同意权限必须在服务端检查。"
 msgstr "Split by document type: CRDTs for long text and lists, server arbitration for structured records. Both agree permissions must be checked on the server."
-
-#: src/app/design/mac/notes.ts
-msgid "按时间分组"
-msgstr "Grouped by time"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "按标题或内容找会话"
@@ -5582,14 +5444,6 @@ msgstr "Search settings"
 msgid "摘要"
 msgstr "Summary"
 
-#: src/app/design/mac/notes.ts
-msgid "摘要加列表"
-msgstr "Summary plus list"
-
-#: src/app/design/mac/notes.ts
-msgid "摘要行"
-msgstr "Summary row"
-
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "撑满设置行，再加一项就放不下。"
 msgstr "Fills the settings row; one more item will not fit."
@@ -5695,6 +5549,7 @@ msgid "改源：index.css 或 packages/contracts"
 msgstr "Change the source: index.css or packages/contracts"
 
 #: src/app/design/android/StylesChapter.tsx
+#: src/app/design/catalog.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 msgid "数值"
@@ -5704,13 +5559,13 @@ msgstr "Values"
 msgid "数值的基准，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
 msgstr "The baseline for values; other styles change only the fields that differ. Material's control structure, ripple, and dialog layout."
 
+#: src/app/design/DesignPage.tsx
+msgid "数值读自同一份定义。"
+msgstr "Values come from the same definition."
+
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "数值读自实际绘制的控件。图形可以小，点击区不缩。"
 msgstr "Values are read from the control as actually drawn. The graphic can be small; the hit area does not shrink."
-
-#: src/app/design/foundations/RadiusChapter.tsx
-msgid "数值读自当前风格的配方。"
-msgstr "Values are read from the current style's recipe."
 
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "数值越大越靠前。组件引用变量名。"
@@ -5779,10 +5634,6 @@ msgstr "Files & Editor"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "文件的其他看法"
 msgstr "Another view of a file"
-
-#: src/app/design/mac/notes.ts
-msgid "文件行"
-msgstr "File row"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "文件访问"
@@ -5875,10 +5726,6 @@ msgstr "New conversations start here."
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "新会话的起始页，输入框居中"
 msgstr "Start page for a new conversation, composer centered"
-
-#: src/app/design/mac/notes.ts
-msgid "新会话页"
-msgstr "New session page"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "新会话默认"
@@ -6629,10 +6476,6 @@ msgstr "No key configured"
 msgid "本会话内允许此类命令"
 msgstr "Allow this kind of command in this conversation"
 
-#: src/app/design/mac/StyleMiniature.tsx
-msgid "本周"
-msgstr "This week"
-
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "本地优先的同步该用 CRDT 还是服务端裁决"
 msgstr "Should local-first sync use CRDTs or server arbitration"
@@ -6826,10 +6669,6 @@ msgstr "Title · truncation"
 msgid "标题 16 · 500"
 msgstr "Title 16 · 500"
 
-#: src/app/design/mac/notes.ts
-msgid "标题与菜单"
-msgstr "Title and menu"
-
 #: src/app/design/android/ComponentChapter.tsx
 msgid "标题与说明是 GroupTitle、GroupFootnote"
 msgstr "Title and footnote are GroupTitle and GroupFootnote"
@@ -6851,7 +6690,6 @@ msgstr "The title syncs to every device."
 msgid "标题式选择"
 msgstr "Heading select"
 
-#: src/app/design/mac/notes.ts
 #: src/app/settings/channels/CardSettings.tsx
 msgid "标题栏"
 msgstr "Title bar"
@@ -6929,6 +6767,10 @@ msgstr "Desktop: sidebar swaps to settings nav; main area uses board (1200)"
 msgid "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
 msgstr "On desktop the agent is part of the model menu; its button opens the toolbar row and the menu unfolds rightwards from it. Phones keep an Agent row in the settings sheet."
 
+#: src/app/design/engineering/ArchitectureChapter.tsx
+msgid "桌面端尺寸写入 Mac 的 InterfaceStyles.swift"
+msgstr "Desktop sizes are written to the Mac's InterfaceStyles.swift"
+
 #: src/app/design/foundations/RadiusChapter.tsx
 msgid "档位"
 msgstr "Steps"
@@ -6949,10 +6791,6 @@ msgstr "Check the current theme and syntax highlighting"
 #: src/app/settings/UpdateSection.tsx
 msgid "检查于{checkedAt}"
 msgstr "Checked {checkedAt}"
-
-#: src/app/design/mac/notes.ts
-msgid "检查器页签"
-msgstr "Inspector tab"
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "检查文件预览在窄窗口里的布局"
@@ -7131,10 +6969,6 @@ msgstr "This browser doesn't support notifications."
 msgid "每 10 秒一格"
 msgstr "One bar per 10 seconds"
 
-#: src/app/design/mac/StylesChapter.tsx
-msgid "每个形态在 Mac 上只有一份实现。新风格只是重新组合已有形态时，在 contracts 里加一条即可，不写界面代码。"
-msgstr "Each form has one implementation on the Mac. A new style that only recombines existing forms is one more entry in contracts, with no interface code."
-
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "每个操作都能用键盘完成，每个控件都有名称，文字和布局随读者的设定变化。"
 msgstr "Every action works from the keyboard, every control has a name, and text and layout follow the reader's settings."
@@ -7170,10 +7004,6 @@ msgstr "Nightly, and before the main conversation is compacted"
 #: src/app/settings/ProviderUsage.tsx
 msgid "每月"
 msgstr "Monthly"
-
-#: src/app/design/mac/TypeChapter.tsx
-msgid "每格用该风格的字体与字号排出；取值在各风格间相同的行颜色变淡。"
-msgstr "Each cell is set in that style's font and size; rows whose value is the same across styles are dimmed."
 
 #: src/app/design/android/TypeChapter.tsx
 msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
@@ -7299,14 +7129,6 @@ msgstr "Italic comments"
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "流式生成"
 msgstr "Streaming"
-
-#: src/app/design/mac/notes.ts
-msgid "浅底"
-msgstr "Tint"
-
-#: src/app/design/mac/notes.ts
-msgid "浅底标签"
-msgstr "Tinted label"
 
 #: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/components/InputsChapter.tsx
@@ -7525,10 +7347,6 @@ msgstr "The source is on the latest release, but the server hasn't picked up tha
 msgid "滑块轨道"
 msgstr "Slider track"
 
-#: src/app/design/mac/notes.ts
-msgid "满铺单层"
-msgstr "Full-bleed single layer"
-
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "滚动"
 msgstr "Scroll"
@@ -7624,9 +7442,9 @@ msgstr "Status code distribution"
 msgid "独立的胶囊"
 msgstr "Separate pills"
 
-#: src/app/design/mac/notes.ts
-msgid "独立窗口"
-msgstr "Separate window"
+#: src/app/design/mac/WindowChapter.tsx
+msgid "独立窗口，⌘, 打开；分类保持原样，顶部搜索按分类和设置项筛选。"
+msgstr "A separate window, opened with ⌘,. Categories stay as they are; the search at the top filters by category and setting."
 
 #: src/app/settings/ServiceCharts.tsx
 msgid "现在"
@@ -7765,10 +7583,6 @@ msgstr "The interface uses 12, 14, 16 and 18. At larger sizes the stroke stays 1
 msgid "界面字体"
 msgstr "Interface font"
 
-#: src/app/design/mac/notes.ts
-msgid "界面文字三档字号、两种字重，只有一种分隔线"
-msgstr "Three text sizes and two weights for interface text, and a single kind of divider"
-
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "界面文字只写用户推断不出的信息。动词开头，与结果一致；一条不超过一句。"
 msgstr "Interface text only states what the user cannot infer. Start with a verb, match the result, and keep each line to one sentence."
@@ -7780,10 +7594,6 @@ msgstr "The interface frame is greyscale. Colour appears on run status, diffs, s
 #: src/app/design/foundations/TypeChapter.tsx
 msgid "界面用 Inter，代码用 JetBrains Mono，中文回退苹方。字重为 400 与 500；600 仅用于品牌名。"
 msgstr "Inter for the interface, JetBrains Mono for code, PingFang for Chinese. Weights are 400 and 500; 600 is for the brand name only."
-
-#: src/app/design/mac/notes.ts
-msgid "界面用色"
-msgstr "Interface colours"
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "界面自有的四种彩色，用于 agent 的头像与名称标记。"
@@ -8116,10 +7926,6 @@ msgstr "Spatial spring · damping"
 msgid "窄窗口与手机"
 msgstr "Narrow windows and phones"
 
-#: src/app/design/mac/notes.ts
-msgid "窗口"
-msgstr "Window"
-
 #. placeholder {0}: MAC.settings.window.min[0]
 #. placeholder {1}: MAC.settings.window.min[1]
 #: src/app/design/mac/WindowChapter.tsx
@@ -8130,10 +7936,6 @@ msgstr "Window {width} × {height}, minimum {0} × {1}"
 #: src/app/design/mac/WindowChapter.tsx
 msgid "窗口与页面"
 msgstr "Windows and pages"
-
-#: src/app/design/mac/notes.ts
-msgid "窗口内弹窗"
-msgstr "In-window dialog"
 
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "窗口失焦时选中态变淡"
@@ -8152,13 +7954,10 @@ msgstr "Window base, sidebar"
 msgid "窗口放不下侧栏、主区 {0} 与面板时自动收起"
 msgstr "Collapses automatically when the window cannot fit the sidebar, a main area of {0} and the panel"
 
-#: src/app/design/mac/notes.ts
-msgid "窗口结构"
-msgstr "Window structure"
-
-#: src/app/design/mac/notes.ts
-msgid "窗口里的控件只有图标按钮和胶囊两种"
-msgstr "Controls in a window are only icon buttons and capsules"
+#: src/app/design/mac/StyleMiniature.tsx
+#: src/app/design/mac/StylesChapter.tsx
+msgid "窗口缩样"
+msgstr "Window miniature"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "立即执行，通知里带撤销"
@@ -8275,18 +8074,6 @@ msgstr "Paste the conversation"
 msgid "粘贴链接串"
 msgstr "Paste link string"
 
-#: src/app/design/mac/notes.ts
-msgid "系统分栏"
-msgstr "System split view"
-
-#: src/app/design/mac/notes.ts
-msgid "系统分组框"
-msgstr "System group box"
-
-#: src/app/design/mac/notes.ts
-msgid "系统列表"
-msgstr "System list"
-
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "系统开启「减少动态效果」时，位移与缩放替换为淡入淡出。"
 msgstr "With Reduce Motion on, movement and scaling are replaced by fades."
@@ -8295,10 +8082,6 @@ msgstr "With Reduce Motion on, movement and scaling are replaced by fades."
 msgid "系统开启后，位移和缩放换成淡入淡出，过渡缩短为 100ms。"
 msgstr "When the system setting is on, movement and scaling become fades and transitions shorten to 100ms."
 
-#: src/app/design/mac/notes.ts
-msgid "系统强调色只用于系统控件本身：开关、文本选区、焦点环、选中的列表行"
-msgstr "The system accent colour is used only by system controls themselves: switches, text selection, focus rings, selected list rows"
-
 #: src/app/design/overview/SystemChapter.tsx
 msgid "系统控件"
 msgstr "System controls"
@@ -8306,18 +8089,6 @@ msgstr "System controls"
 #: src/app/design/android/PlatformChapter.tsx
 msgid "系统界面"
 msgstr "System screens"
-
-#: src/app/design/mac/notes.ts
-msgid "系统组件"
-msgstr "System components"
-
-#: src/app/design/mac/notes.ts
-msgid "系统组件：系统侧栏、工具栏与分组表单，菜单用系统菜单。"
-msgstr "System components: system sidebar, toolbar and grouped form, with the system menu for menus."
-
-#: src/app/design/mac/notes.ts
-msgid "系统菜单"
-msgstr "System menu"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "系统负载"
@@ -8347,14 +8118,6 @@ msgstr "Plain"
 msgid "紧凑"
 msgstr "Compact"
 
-#: src/app/design/mac/notes.ts
-msgid "紧凑工具栏"
-msgstr "Compact toolbar"
-
-#: src/app/design/mac/notes.ts
-msgid "紧凑标题栏：页头与红绿灯同高"
-msgstr "Compact title bar: the header is as tall as the traffic lights"
-
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "纯图标按钮的名称与快捷键。"
@@ -8368,10 +8131,6 @@ msgstr "Name and shortcut of an icon-only button"
 msgid "纯图标按钮的名称旁带快捷键；列表里用 Kbd；文字里用 shortcutHint；键位读自快捷键表，用户改键后一起变。"
 msgstr "Icon-only buttons carry the shortcut beside the name; lists use Kbd; running text uses shortcutHint. Keys come from the shortcut table and follow a rebinding."
 
-#: src/app/design/mac/notes.ts
-msgid "纵向堆叠"
-msgstr "Stacked vertically"
-
 #: src/app/settings/ThemeCanvas.tsx
 msgid "纸张"
 msgstr "Paper"
@@ -8379,11 +8138,6 @@ msgstr "Paper"
 #: src/app/settings/ThemeCanvas.tsx
 msgid "紫雾"
 msgstr "Mist"
-
-#: src/app/design/mac/notes.ts
-msgctxt "interface-style"
-msgid "线条"
-msgstr "Line"
 
 #: src/app/settings/ViewsSection.tsx
 msgid "线条导航条"
@@ -8409,10 +8163,6 @@ msgstr "Component map"
 msgid "组件引用文字角色，字号与行高由角色决定。"
 msgstr "Components refer to text roles; the role sets size and line height."
 
-#: src/app/design/mac/notes.ts
-msgid "组件来源"
-msgstr "Component source"
-
 #: src/app/design/android/PlatformChapter.tsx
 msgid "组件的种类与状态"
 msgstr "Kinds of component and their states"
@@ -8428,14 +8178,6 @@ msgstr "4–8 within a group, 16 between groups, 12–16 page margins, 4 inside 
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "组合示例"
 msgstr "Composition example"
-
-#: src/app/design/mac/notes.ts
-msgid "细线"
-msgstr "Hairline"
-
-#: src/app/design/mac/notes.ts
-msgid "细线分隔"
-msgstr "Hairline dividers"
 
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
@@ -8518,10 +8260,6 @@ msgstr "Results, errors, in progress, empty states"
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "绕过 lib/motion.ts 读取动画状态"
 msgstr "Reading animation state around lib/motion.ts"
-
-#: src/app/design/mac/notes.ts
-msgid "统一工具栏"
-msgstr "Unified toolbar"
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "统计"
@@ -8644,7 +8382,6 @@ msgid "网页交互诊断"
 msgstr "Browser interaction diagnostics"
 
 #: src/app/design/components/ActionsChapter.tsx
-#: src/app/design/mac/StyleMiniature.tsx
 msgid "置顶"
 msgstr "Pinned"
 
@@ -8685,7 +8422,6 @@ msgstr "Background"
 
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
-#: src/app/design/mac/notes.ts
 msgid "胶囊"
 msgstr "Capsule"
 
@@ -8774,14 +8510,6 @@ msgstr "Custom font…"
 msgid "自定义字体名"
 msgstr "Custom font name"
 
-#: src/app/design/mac/notes.ts
-msgid "自绘"
-msgstr "Drawn"
-
-#: src/app/design/mac/notes.ts
-msgid "自绘浮层"
-msgstr "Drawn overlay"
-
 #: src/app/design/android/StylesChapter.tsx
 msgid "色块"
 msgstr "Fill"
@@ -8806,7 +8534,6 @@ msgstr "Also shown on keyboard focus"
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/ElevationChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
@@ -8824,10 +8551,6 @@ msgstr "Menus, popovers"
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "菜单、弹出层、提示气泡、弹窗"
 msgstr "Menus, popovers, tooltips, dialogs"
-
-#: src/app/design/mac/notes.ts
-msgid "菜单、弹出层、模型选择器共用圆角 12 的浮层"
-msgstr "Menus, popovers and the model picker share one overlay with a 12 corner radius"
 
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "菜单、提示气泡退出"
@@ -8879,8 +8602,8 @@ msgid "行为"
 msgstr "Behavior"
 
 #: src/app/design/mac/PlatformChapter.tsx
-msgid "行为跟 macOS 的人机界面指南，外观跟风格配方；桌面的数值 Mac 与 Web 相同，单位是 pt。"
-msgstr "Behaviour follows the macOS Human Interface Guidelines and appearance follows the style recipe; desktop values are the same on Mac and web, in pt."
+msgid "行为跟 macOS 的人机界面指南，外观跟 Riffet 风格；桌面的数值 Mac 与 Web 相同，单位是 pt。"
+msgstr "Behaviour follows the macOS Human Interface Guidelines and appearance follows the Riffet style; desktop values are the same on the Mac and the web, in pt."
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "行为跟 Material 3 与 Android 系统，外观跟风格配方；数值以 material3 风格为准，其余风格只改配方里写到的字段。"
@@ -8901,10 +8624,6 @@ msgstr "Inline"
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "行内：紧挨出错的字段或步骤"
 msgstr "Inline: right next to the field or step that failed"
-
-#: src/app/design/mac/notes.ts
-msgid "行内代码"
-msgstr "Inline code"
 
 #: src/app/design/patterns/ListsChapter.tsx
 msgid "行的结构"
@@ -8927,7 +8646,6 @@ msgstr "Add to current task"
 msgid "补充说明"
 msgstr "Add a note"
 
-#: src/app/design/mac/notes.ts
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "表单"
 msgstr "Form"
@@ -8936,10 +8654,6 @@ msgstr "Form"
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "表单与设置"
 msgstr "Forms and settings"
-
-#: src/app/design/mac/notes.ts
-msgid "表单是细线分隔的行，字段的描边画在纸上"
-msgstr "A form is rows separated by hairlines, with field strokes drawn on the paper"
 
 #: src/app/design/android/PagesChapter.tsx
 msgid "表单有未保存的改动时，任何一种返回都先确认"
@@ -8950,10 +8664,6 @@ msgstr "With unsaved changes in a form, every kind of back asks first"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "表面"
 msgstr "Surface"
-
-#: src/app/design/mac/notes.ts
-msgid "表面与控件"
-msgstr "Surfaces and controls"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "表面高亮"
@@ -9067,7 +8777,6 @@ msgstr "Devices"
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/settings/SettingsPage.tsx
@@ -9340,8 +9049,8 @@ msgid "调用处只写角色，不写 .sp"
 msgstr "Call sites name a role, never .sp"
 
 #: src/app/design/mac/TypeChapter.tsx
-msgid "调用处只写角色，不写字号。角色的取值随风格变：界面、次要、侧栏三档来自配方，正文、注脚、标题与代码各端相同。"
-msgstr "Call sites name a role, not a font size. Role values vary by style: the interface, secondary and sidebar tiers come from the recipe, while body, footnote, title and code are the same on every platform."
+msgid "调用处只写角色，不写字号。界面、次要、侧栏三档读自 interface-styles.ts，其余各端相同。"
+msgstr "Call sites name a role, never a size. The interface, secondary and sidebar sizes come from interface-styles.ts; the rest are the same on every platform."
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "质询从发言里分出来，按裁判的记录标出回答情况。"
@@ -9506,10 +9215,6 @@ msgstr "The transcript and attachments are deleted with it and cannot be restore
 msgid "轮次导航"
 msgstr "Turn navigation"
 
-#: src/app/design/mac/notes.ts
-msgid "软阴影"
-msgstr "Soft shadow"
-
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "辅助侧栏"
 msgstr "Auxiliary sidebar"
@@ -9551,7 +9256,6 @@ msgid "输入时滚到底部"
 msgstr "Scroll to bottom on input"
 
 #: src/app/design/foundations/StatesChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -9573,10 +9277,6 @@ msgstr "The composer; one step deeper when focused"
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "输入框上方"
 msgstr "Above the composer"
-
-#: src/app/design/mac/notes.ts
-msgid "输入框停靠底部"
-msgstr "The composer docks at the bottom"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "输入框列"
@@ -9797,10 +9497,6 @@ msgstr "This theme was deleted on another device. Reload the theme library."
 msgid "这段历史来自导入的终端会话。"
 msgstr "This history came from an imported terminal session."
 
-#: src/app/design/mac/notes.ts
-msgid "这种风格还没有说明，数值与配方取自 interface-styles.ts。"
-msgstr "This style has no description yet; values and recipe come from interface-styles.ts."
-
 #: src/app/design/android/notes.ts
 msgid "这种风格还没有说明，数值读自 mobile-styles.ts。"
 msgstr "This style has no notes yet; its values are read from mobile-styles.ts."
@@ -9930,7 +9626,6 @@ msgstr "Applies to"
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/foundations/TypesetChapter.tsx
-#: src/app/design/mac/notes.ts
 msgid "选中"
 msgstr "Selected"
 
@@ -10013,10 +9708,6 @@ msgstr "Options"
 msgid "选项多或要读说明时用；就在触发点旁的两三个选项用菜单。"
 msgstr "For many options, or ones that need reading; two or three options right by the control use a menu."
 
-#: src/app/design/mac/notes.ts
-msgid "选项行"
-msgstr "Option row"
-
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "选项超过四个"
 msgstr "More than four options"
@@ -10087,7 +9778,6 @@ msgid "配对码"
 msgstr "Pairing code"
 
 #: src/app/design/android/StylesChapter.tsx
-#: src/app/design/mac/StylesChapter.tsx
 msgid "配方"
 msgstr "Recipe"
 
@@ -10475,7 +10165,6 @@ msgstr "Chapter navigation"
 msgid "页"
 msgstr "Page"
 
-#: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -10490,16 +10179,11 @@ msgstr "Page header 52 · centered content column"
 msgid "页头、单一滚动区、内容列档位"
 msgstr "Header, single scroll area, content column tiers"
 
-#: src/app/design/mac/notes.ts
-msgid "页头图标各开一栏"
-msgstr "Each header icon opens its own column"
-
 #: src/app/design/mac/StylesChapter.tsx
 msgid "页头高"
 msgstr "Header height"
 
 #: src/app/design/components/NavigationChapter.tsx
-#: src/app/design/mac/notes.ts
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "页签"
@@ -10584,10 +10268,6 @@ msgstr "Pages cover the conversation and overlays cover everything; closing the 
 msgid "页面类型"
 msgstr "Page type"
 
-#: src/app/design/mac/notes.ts
-msgid "页面级搜索用工具栏的 .searchable"
-msgstr "Page-level search uses the toolbar's .searchable"
-
 #: src/app/design/android/StylesChapter.tsx
 msgid "页面边距"
 msgstr "Page margin"
@@ -10647,10 +10327,6 @@ msgstr "Project name"
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "项目是 Git 仓库"
 msgstr "Project is a Git repository"
-
-#: src/app/design/mac/notes.ts
-msgid "项目树"
-msgstr "Project tree"
 
 #. placeholder {0}: ANDROID.back.previewScale
 #: src/app/design/android/PagesChapter.tsx
@@ -10713,8 +10389,8 @@ msgid "颜色角色、--riffet-* 与元素规则"
 msgstr "Color roles, --riffet-* and element rules"
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
-msgid "颜色角色与主题取值；间距、字号、圆角、动效；风格配方"
-msgstr "Colour roles and theme values; spacing, type, radii, motion; style recipes"
+msgid "颜色角色与主题取值；间距、字号、圆角、动效；桌面端尺寸"
+msgstr "Colour roles and theme values; spacing, type sizes, radii, motion; desktop sizes"
 
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
@@ -10732,7 +10408,6 @@ msgstr "Could not read quota"
 
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
-#: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/overview/SystemChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "风格"
@@ -10742,17 +10417,9 @@ msgstr "Style"
 msgid "风格各有一节，尺寸与动效读自同一份定义。"
 msgstr "Each style has a section; sizes and motion are read from one definition."
 
-#: src/app/design/DesignPage.tsx
-msgid "风格各有一节，数值与配方读自同一份定义。"
-msgstr "Each style has its own section; values and recipe are read from the same definition."
-
 #: src/app/design/android/PlatformChapter.tsx
 msgid "风格是配方"
 msgstr "Styles are recipes"
-
-#: src/app/design/engineering/ArchitectureChapter.tsx
-msgid "风格配方写入 Mac 的 InterfaceStyles.swift"
-msgstr "Writes style recipes to the Mac's InterfaceStyles.swift"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -10816,7 +10483,6 @@ msgid "高级启动配置"
 msgstr "Advanced launch configuration"
 
 #: src/app/design/foundations/ColorChapter.tsx
-#: src/app/design/mac/notes.ts
 msgid "墨色"
 msgstr "Inks"
 

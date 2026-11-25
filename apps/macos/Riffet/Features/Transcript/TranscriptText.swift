@@ -1,7 +1,7 @@
 import AppKit
 
 /// Attributed text for the transcript, set on the `MarkdownStyle` scale (which the web's `.md`
-/// surface mirrors): medium for emphasis, quiet list markers, inline code as a padded chip.
+/// surface mirrors): medium for emphasis, quiet list markers, inline code in the code face.
 /// Runs on the layout queue; formulas it has no snapshot for yet are listed in `pending`.
 struct TranscriptText {
     let style: TranscriptStyle
@@ -167,20 +167,11 @@ struct TranscriptText {
         return NSAttributedString(string: ordered ? "\(number)." : "•", attributes: [.font: font, .foregroundColor: style.color(\.fg3)])
     }
 
-    /// Emphasis at the web's weights, inline code as a padded chip, links and file mentions, and
+    /// Emphasis at the web's weights, inline code in the code face, links and file mentions, and
     /// formulas as their rendered images.
     mutating func inline(_ text: AttributedString, size: CGFloat, weight: NSFont.Weight, color: NSColor) -> NSMutableAttributedString {
         let result = NSMutableAttributedString()
-        // A quieter chip than `bgMuted`: inline code names things mid-sentence, and at the old
-        // contrast a path-dense paragraph read as a row of buttons louder than its own headings.
-        // Outlined, the chip is the hairline alone: its "background" is the stroke colour, flagged
-        // so the layout manager strokes it, and TextKit still has a run to ask it about.
-        // Plain, the code face alone marks it, a step smaller, with a narrow space each side.
-        let plain = style.inlineCode == .plain
-        let outlined = style.block == .outlined
-        let codeBackground = outlined ? style.color(\.lineSoft) : style.color(\.bgSubtle)
-        var chip: [NSAttributedString.Key: Any] = plain ? [:] : [.backgroundColor: codeBackground, .riffetChipRadius: min(4, style.radii.control)]
-        if outlined && !plain { chip[.riffetChipOutline] = true }
+        // The code face alone marks inline code, a step smaller, with a narrow space each side.
         for run in text.runs {
             let piece = String(text[run.range].characters)
             if let link = run.link, let tex = MathText.tex(link) {
@@ -198,8 +189,7 @@ struct TranscriptText {
                 attributes[.font] = intent.contains(.emphasized) ? style.italic(font) : font
                 attributes[.baselineOffset] = inlineTag == .sup ? size * 0.35 : -size * 0.18
             } else if code {
-                attributes[.font] = style.mono((plain ? MarkdownStyle.plainInlineCodeSize : MarkdownStyle.inlineCodeSize) * size / MarkdownStyle.bodySize, strong ? .semibold : .regular)
-                attributes.merge(chip) { $1 }
+                attributes[.font] = style.mono(MarkdownStyle.inlineCodeSize * size / MarkdownStyle.bodySize, strong ? .semibold : .regular)
             } else {
                 // Medium, not semibold: PingFang's semibold turns a bolded sentence into a black bar.
                 // Text that is already heavier (headings) keeps its weight.
@@ -223,8 +213,8 @@ struct TranscriptText {
                     attributes[.underlineColor] = style.color(\.lineStrong)
                 }
             }
-            // The web pads inline code by 5px; a no-break space each side cannot wrap away from it.
-            let pad = code ? NSAttributedString(string: plain ? "\u{202F}" : "\u{00A0}", attributes: chip.merging([.font: style.font(MarkdownStyle.bodySize)]) { $1 }) : nil
+            // A narrow no-break space each side cannot wrap away from the code.
+            let pad = code ? NSAttributedString(string: "\u{202F}", attributes: [.font: style.font(MarkdownStyle.bodySize)]) : nil
             if let pad { result.append(pad) }
             result.append(NSAttributedString(string: piece, attributes: attributes))
             if let pad { result.append(pad) }

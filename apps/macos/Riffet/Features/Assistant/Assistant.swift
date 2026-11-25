@@ -552,7 +552,7 @@ private struct AssistantRulesSheet: View {
                 .scrollContentBackground(.hidden)
                 .disabled(busy)
                 .padding(Space.sm)
-                .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityLabel("AGENTS.md")

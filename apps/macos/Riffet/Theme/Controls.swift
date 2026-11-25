@@ -139,30 +139,13 @@ struct MenuAnchorView: NSViewRepresentable {
 /// A quiet control: neutral text, a background only on hover or press. The composer's model, mode
 /// and approval pickers and the inspector's toolbars use it; accent colour is kept for the one
 /// primary action on screen.
-/// A chip's size: the toolbar's, or a larger one where chips are the row's main controls (the line
-/// composer's environment row).
-struct ChipMetrics: Equatable {
-    var height: CGFloat = 26
-    var text: CGFloat = 12
-
-    static let row = ChipMetrics(height: 28, text: 13)
-}
-
-extension EnvironmentValues {
-    @Entry var chipMetrics = ChipMetrics()
-    /// Chips carry a hairline at rest: a lined form outlines every control (`LinedFormStyle`).
-    @Entry var chipOutlined = false
-}
-
 struct ChipButtonStyle: ButtonStyle {
     var active = false
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
-    @Environment(\.chipMetrics) private var metrics
-    @Environment(\.chipOutlined) private var outlined
 
     func makeBody(configuration: Configuration) -> some View {
-        ChipBody(configuration: configuration, active: active, palette: palette, enabled: enabled, metrics: metrics, outlined: outlined)
+        ChipBody(configuration: configuration, active: active, palette: palette, enabled: enabled)
     }
 
     private struct ChipBody: View {
@@ -170,21 +153,18 @@ struct ChipButtonStyle: ButtonStyle {
         let active: Bool
         let palette: Palette
         let enabled: Bool
-        let metrics: ChipMetrics
-        let outlined: Bool
         @State private var hovering = false
 
         var body: some View {
-            let shape = RoundedRectangle(cornerRadius: metrics == ChipMetrics() ? Radius.control : Radius.container, style: .continuous)
+            let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
             configuration.label
-                .font(.riffet(size: S(metrics.text)))
+                .font(.riffet(size: S(DisplayPreferences.shared.style.text.secondary)))
                 .foregroundStyle(enabled ? (active ? palette.fg : palette.fg2) : palette.fg4)
                 .padding(.horizontal, 8)
-                .frame(height: metrics.height)
+                .frame(height: 26)
                 .background(
                     shape.fill(configuration.isPressed ? palette.bgActive : (hovering || active) ? palette.bgHover : .clear)
                 )
-                .overlay(shape.strokeBorder(outlined ? palette.line : .clear))
                 .contentShape(shape)
                 .onHover { hovering = $0 && enabled }
                 .animation(Motion.fast, value: hovering)
@@ -300,13 +280,12 @@ extension View {
     @MainActor
     func card(radius: CGFloat? = nil, palette: Palette) -> some View {
         let radius = radius ?? Radius.floating
-        let raised = DisplayPreferences.shared.style.surface == .raised
         return background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(palette.bgElevated)
-                .elevation(raised ? .raised : nil)
+                .elevation(.raised)
         )
-        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(raised ? palette.line : palette.lineStrong, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
     }
 
     /// Liquid Glass on macOS 26; before it, the material and hairline of the composer's menus.

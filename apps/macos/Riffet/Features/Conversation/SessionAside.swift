@@ -56,7 +56,7 @@ struct SessionAside: View {
             VStack(alignment: .leading, spacing: 0) {
                 if goal != nil || !todos.isEmpty { plan(goal: goal, todos: todos) }
                 if let scroll, !scroll.turns.isEmpty { turns(scroll) }
-                SessionWorkActions(workbench: workbench, inline: true)
+                SessionWorkActions(workbench: workbench)
                 if !outputs.isEmpty { self.outputs(outputs) }
             }
             // The first section's hairline is pulled out of the scroll view's top edge.

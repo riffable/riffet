@@ -47,11 +47,8 @@ final class SessionTabsPreferences {
         newMode = defaults.string(forKey: Self.newModeKey).flatMap(SessionTabNewMode.init) ?? .keep
     }
 
-    /// The tab bar is on screen: the style draws one and the setting has not turned it off.
-    var active: Bool {
-        let spec = DisplayPreferences.shared.style
-        return style == .titleBar && spec.backend == .custom && spec.header == .sessionTabs
-    }
+    /// The tab bar is on screen: the setting has not turned it off.
+    var active: Bool { style == .titleBar }
 }
 
 struct SessionTabEntry: Codable, Equatable {

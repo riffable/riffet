@@ -80,23 +80,8 @@ struct InteractionCardView: View {
     private var selectsOptions: Bool { interactionSelectsOptions(interaction: shown) }
     private var answerPresent: Bool { !current.selectedIds.isEmpty || !current.otherText.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// How the approval card is drawn; the card never asks which style is on screen.
-    private var recipe: StyleSpec.Approval { DisplayPreferences.shared.style.approval }
-
-    /// The inline card has no outer padding, so each section carries its own; the other recipes
-    /// space their sections by the stack and the card's padding.
-    private func inset(_ top: CGFloat) -> EdgeInsets {
-        recipe == .inline ? EdgeInsets(top: top, leading: 16, bottom: 0, trailing: 16) : EdgeInsets()
-    }
-
-    private var containerInsets: EdgeInsets {
-        switch recipe {
-        case .stack: EdgeInsets(top: Space.lg, leading: Space.lg, bottom: Space.lg, trailing: Space.lg)
-        // The web card: px-3 py-2.5.
-        case .rows: EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12)
-        case .inline: EdgeInsets(top: 0, leading: 0, bottom: 10, trailing: 0)
-        }
-    }
+    /// The web card: px-3 py-2.5.
+    private var containerInsets: EdgeInsets { EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12) }
 
     var body: some View {
         Group {
@@ -110,7 +95,7 @@ struct InteractionCardView: View {
         }
         // Clicking the card's empty space focuses it; text fields and buttons keep their own clicks.
         .background { Color.clear.contentShape(Rectangle()).onTapGesture { cardFocused = true } }
-        .modifier(ApprovalChrome(recipe: recipe, palette: palette))
+        .background(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).fill(palette.bgSubtle.opacity(0.45)))
         .overlay {
             if cardFocused {
                 RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.accent.opacity(0.35), lineWidth: 2)
@@ -169,7 +154,6 @@ struct InteractionCardView: View {
             }
             if summaryContext?.title != title {
                 HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
-                    headerIcon
                     Text(title).font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg)
                         .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -340,11 +324,10 @@ struct InteractionCardView: View {
     }
 
     private var expandedCard: some View {
-        VStack(alignment: .leading, spacing: recipe == .inline ? 0 : Space.sm) {
-            HStack(alignment: recipe == .stack ? .firstTextBaseline : .center, spacing: recipe == .inline ? 10 : Space.sm) {
-                headerIcon
+        VStack(alignment: .leading, spacing: Space.sm) {
+            HStack(alignment: .center, spacing: Space.sm) {
                 Text(title)
-                    .font(.riffet(size: S(recipe == .rows ? 13 : 14), weight: recipe == .rows ? .medium : .semibold))
+                    .font(.riffet(size: S(13), weight: .medium))
                     .foregroundStyle(palette.fg)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -357,9 +340,9 @@ struct InteractionCardView: View {
                     Text("\(max(1, shown.questionIndex?.int64Value ?? 1)) / \(count)").font(.riffet(size: S(12)).monospacedDigit()).foregroundStyle(palette.fg3)
                 }
             }
-            .padding(inset(14))
-            if let message = shown.message, !message.isEmpty { messageView(message).padding(inset(10)) }
-            Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle()).padding(inset(8))
+
+            if let message = shown.message, !message.isEmpty { messageView(message) }
+            Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle())
             if isInteractionRenderable(interaction: shown) {
                 if selectsOptions, !shown.options.isEmpty { options }
                 if isQuestion, shown.allowOther?.boolValue == true || shown.options.isEmpty {
@@ -368,20 +351,20 @@ struct InteractionCardView: View {
                         // Disabled rather than refused: a field whose edit is refused can show text the draft does not hold.
                         .disabled(busy || !connected || otherTextLocked(interaction: shown))
                         .onSubmit(submitOnEnter)
-                        .padding(inset(8))
+
                     if otherTextLocked(interaction: shown) {
-                        Text("其他回答暂不能清空。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3).padding(inset(8))
+                        Text("其他回答暂不能清空。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
                     }
                 }
                 notices
                 footer
             } else {
                 notices
-                Text("这个对话框需要在终端里处理。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3).padding(inset(8))
-                if let openTerminal { Button("打开终端", action: openTerminal).buttonStyle(SolidButtonStyle(kind: .secondary)).padding(inset(8)) }
+                Text("这个对话框需要在终端里处理。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+                if let openTerminal { Button("打开终端", action: openTerminal).buttonStyle(SolidButtonStyle(kind: .secondary)) }
             }
             if !connected {
-                Text("重连后提交").font(.riffet(size: S(12))).foregroundStyle(palette.fg3).frame(maxWidth: .infinity, alignment: .trailing).padding(inset(8))
+                Text("重连后提交").font(.riffet(size: S(12))).foregroundStyle(palette.fg3).frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .padding(containerInsets)
@@ -430,41 +413,6 @@ struct InteractionCardView: View {
         return isQuestion ? String(localized: "需要回答") : shown.kind == .plan ? String(localized: "需要批准计划") : String(localized: "需要选择")
     }
 
-    private var icon: String {
-        switch shown.kind {
-        case .permission: "hand.raised"
-        case .question: "questionmark.bubble"
-        case .plan: "list.bullet.clipboard"
-        default: "exclamationmark.bubble"
-        }
-    }
-
-    /// The web card has no icon; the inline card marks a shell request with the terminal.
-    @ViewBuilder
-    private var headerIcon: some View {
-        switch recipe {
-        case .stack:
-            Image(icon: icon).font(.riffet(size: S(13))).foregroundStyle(iconColor)
-        case .rows:
-            EmptyView()
-        case .inline:
-            Image(icon: asksShell ? "terminal" : icon).font(.riffet(size: S(13))).foregroundStyle(palette.fg2)
-        }
-    }
-
-    /// Whether the request names a shell as its tool (Claude sends `toolName`).
-    private var asksShell: Bool {
-        guard shown.kind == .permission,
-              let name = (shown.request?["toolName"] as? Kotlinx_serialization_jsonJsonPrimitive)?.content else { return false }
-        return ["bash", "shell", "powershell", "terminal"].contains(name.lowercased())
-    }
-
-    /// A permission asks to act, so it takes the accent; questions and plans stay neutral. The
-    /// warning colour is kept for the waiting state, not for every card.
-    private var iconColor: Color {
-        shown.kind == .permission ? palette.accent : palette.fg3
-    }
-
     /// Whether the plan is longer than the collapsed window can show.
     private var planIsLong: Bool { (shown.message?.count ?? 0) > 1_200 }
 
@@ -496,16 +444,14 @@ struct InteractionCardView: View {
             .background(blockFill, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
 
         } else if !isQuestion, !selectsOptions {
-            let inline = recipe == .inline
             ScrollView {
                 Text(message)
-                    .font(.riffet(size: S(inline ? 13 : 12), design: .monospaced))
-                    .foregroundStyle(inline ? palette.fg : palette.fg2)
-                    .lineSpacing(inline ? 4 : 0)
+                    .font(.riffet(size: S(12), design: .monospaced))
+                    .foregroundStyle(palette.fg2)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, inline ? 12 : Space.sm)
-                    .padding(.vertical, inline ? 9 : 6)
+                    .padding(.horizontal, Space.sm)
+                    .padding(.vertical, Space.xs + Space.xxs)
             }
             .frame(maxHeight: 220)
             .fixedSize(horizontal: false, vertical: true)
@@ -522,9 +468,8 @@ struct InteractionCardView: View {
         }
     }
 
-    /// What sits on the card: the page colour on the stack and rows cards, whose fills differ from it,
-    /// and the subtle fill on the inline card, whose own fill is the page colour.
-    private var blockFill: Color { recipe == .inline ? palette.bgSubtle : palette.bg }
+    /// What sits on the card: the page colour, which the card's tint differs from.
+    private var blockFill: Color { palette.bg }
 
     private var options: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -534,32 +479,28 @@ struct InteractionCardView: View {
                 }
             }
         }
-        .padding(inset(8))
+
     }
 
-    /// One choice. The stack draws the system symbols; the rows card a full-width row with a filled
-    /// radio; the inline card a bare radio and label.
+    /// One choice: a full-width row with a filled radio.
     private func optionRow(label: String, on: Bool, multiple: Bool, wide: Bool = true, action: @escaping () -> Void) -> some View {
-        let inline = recipe == .inline
         let button = Button(action: action) {
-            HStack(alignment: recipe == .stack ? .firstTextBaseline : .center, spacing: recipe == .stack ? Space.sm + 2 : inline ? 8 : 10) {
+            HStack(alignment: .center, spacing: 10) {
                 optionGlyph(on: on, multiple: multiple)
                 Text(label)
                     .font(.riffet(size: S(13)))
-                    .foregroundStyle(on && !inline ? palette.fg : palette.fg2)
+                    .foregroundStyle(on ? palette.fg : palette.fg2)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 if wide { Spacer(minLength: 0) }
             }
-            .padding(.horizontal, inline ? 0 : Space.sm)
-            .padding(.vertical, inline ? 3 : recipe == .rows ? 4 : 6)
-            .frame(minHeight: recipe == .rows ? 32 : inline ? 0 : 30)
-            .background(on && !inline ? palette.accentSoft.opacity(0.55) : Color.clear, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .padding(.horizontal, Space.sm)
+            .padding(.vertical, Space.xs)
+            .frame(minHeight: 32)
+            .background(on ? palette.accentSoft.opacity(0.55) : Color.clear, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .contentShape(Rectangle())
         }
-        return Group {
-            if inline { button.buttonStyle(.plain) } else { button.buttonStyle(HoverRowStyle()) }
-        }
+        return button.buttonStyle(HoverRowStyle())
         .disabled(busy || !connected)
         .opacity(busy ? 0.65 : 1)
         .accessibilityAddTraits(on ? .isSelected : [])
@@ -567,35 +508,16 @@ struct InteractionCardView: View {
 
     @ViewBuilder
     private func optionGlyph(on: Bool, multiple: Bool) -> some View {
-        switch recipe {
-        case .stack:
-            Image(icon: multiple ? (on ? "checkmark.square.fill" : "square") : (on ? "largecircle.fill.circle" : "circle"))
-                .font(.riffet(size: S(13)))
-                .foregroundStyle(on ? palette.accent : palette.fg4)
-        case .rows:
-            let ring: Color = on ? palette.accent : palette.lineStrong
-            if multiple {
-                RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(ring, lineWidth: 1.5)
-                    .background(on ? palette.accent : Color.clear, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-                    .overlay { if on { Image(icon: "checkmark").font(.riffet(size: 9, weight: .bold)).foregroundStyle(.white) } }
-                    .frame(width: 16, height: 16)
-            } else {
-                Circle().strokeBorder(ring, lineWidth: 1.5)
-                    .overlay { if on { Circle().fill(palette.accent).frame(width: 8, height: 8) } }
-                    .frame(width: 16, height: 16)
-            }
-        case .inline:
-            let ring: Color = on ? palette.fg : palette.fg4
-            if multiple {
-                RoundedRectangle(cornerRadius: 3, style: .continuous).strokeBorder(ring, lineWidth: 1.5)
-                    .background(on ? palette.fg : Color.clear, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-                    .overlay { if on { Image(icon: "checkmark").font(.riffet(size: 8, weight: .bold)).foregroundStyle(palette.bg) } }
-                    .frame(width: 14, height: 14)
-            } else {
-                Circle().strokeBorder(ring, lineWidth: 1.5)
-                    .overlay { if on { Circle().fill(palette.fg).frame(width: 6, height: 6) } }
-                    .frame(width: 14, height: 14)
-            }
+        let ring: Color = on ? palette.accent : palette.lineStrong
+        if multiple {
+            RoundedRectangle(cornerRadius: 4, style: .continuous).strokeBorder(ring, lineWidth: 1.5)
+                .background(on ? palette.accent : Color.clear, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                .overlay { if on { Image(icon: "checkmark").font(.riffet(size: 9, weight: .bold)).foregroundStyle(.white) } }
+                .frame(width: 16, height: 16)
+        } else {
+            Circle().strokeBorder(ring, lineWidth: 1.5)
+                .overlay { if on { Circle().fill(palette.accent).frame(width: 8, height: 8) } }
+                .frame(width: 16, height: 16)
         }
     }
 
@@ -624,11 +546,11 @@ struct InteractionCardView: View {
     }
 
     private func noticeLine(_ text: String, _ color: Color) -> some View {
-        Text(text).font(.riffet(size: S(12))).foregroundStyle(color).fixedSize(horizontal: false, vertical: true).padding(inset(8))
+        Text(text).font(.riffet(size: S(12))).foregroundStyle(color).fixedSize(horizontal: false, vertical: true)
     }
 
     private var footer: some View {
-        HStack(spacing: recipe == .inline ? 8 : 6) {
+        HStack(spacing: 6) {
             submissionActions
             Spacer(minLength: Space.sm)
             ForEach(shown.actions.filter { $0.id != "next" }, id: \.id) { action in
@@ -643,18 +565,12 @@ struct InteractionCardView: View {
                     .modifier(DefaultActionIf(enabled: submits))
             }
         }
-        .padding(recipe == .inline ? EdgeInsets(top: 12, leading: 16, bottom: 0, trailing: 10) : EdgeInsets())
     }
 
-    /// The stack and the rows card use the shared solid buttons (the web card's sizes and tones); the inline card draws its own.
-    @ViewBuilder
+    /// The shared solid buttons, in the web card's sizes and tones.
     private func actionButton(_ title: String, _ role: ApprovalActionRole, action: @escaping () -> Void) -> some View {
-        if recipe != .inline {
-            Button(title, action: action)
-                .buttonStyle(SolidButtonStyle(kind: role == .danger ? .danger : role == .primary ? .primary : .secondary))
-        } else {
-            Button(title, action: action).buttonStyle(ApprovalButtonStyle(role: role))
-        }
+        Button(title, action: action)
+            .buttonStyle(SolidButtonStyle(kind: role == .danger ? .danger : role == .primary ? .primary : .secondary))
     }
 
     @ViewBuilder
@@ -854,53 +770,5 @@ private struct DefaultActionIf: ViewModifier {
     }
 }
 
-/// The card's surface per recipe: the stack's shared card, the rows card's tinted fill (the web's `bg-subtle/45`, no border),
-/// and the inline card's page-coloured fill with a 1pt border and no shadow.
-private struct ApprovalChrome: ViewModifier {
-    let recipe: StyleSpec.Approval
-    let palette: Palette
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-        switch recipe {
-        case .stack:
-            content.card(radius: Radius.card, palette: palette)
-        case .rows:
-            content
-                .background(shape.fill(palette.bgSubtle.opacity(0.45)))
-        case .inline:
-            content
-                .background(shape.fill(palette.page))
-                .overlay(shape.strokeBorder(palette.lineStrong, lineWidth: 1))
-        }
-    }
-}
-
 private enum ApprovalActionRole { case primary, secondary, danger }
 
-/// The inline card's outlined and inverted buttons.
-private struct ApprovalButtonStyle: ButtonStyle {
-    let role: ApprovalActionRole
-    @Environment(\.palette) private var palette
-    @Environment(\.isEnabled) private var enabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-        let foreground: Color = switch role {
-        case .primary: palette.page
-        case .danger: palette.danger
-        case .secondary: palette.fg
-        }
-        configuration.label
-            .font(.riffet(size: S(13), weight: role == .primary ? .medium : .regular))
-            .foregroundStyle(foreground)
-            .lineLimit(1)
-            .padding(.horizontal, 12)
-            .frame(minHeight: 30)
-            .background(shape.fill(role == .primary ? palette.fg : palette.page))
-            .overlay(shape.strokeBorder(role == .primary ? .clear : palette.lineStrong, lineWidth: 1))
-            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.5)
-            .contentShape(shape)
-    }
-}

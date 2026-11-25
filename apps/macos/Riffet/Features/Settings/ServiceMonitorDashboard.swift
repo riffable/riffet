@@ -329,12 +329,10 @@ struct ServiceReclaimSection: View {
             Picker("空闲后停止 CLI", selection: binding(current: idle) { SettingsPatch.make(idleReclaimMinutes: $0) }) {
                 ForEach(presetsWithCurrent(idleReclaimPresets, idle), id: \.self) { Text(idleReclaimLabel($0)).tag($0) }
             }
-            .formPicker()
             .disabled(busy)
             Picker("CLI 内存上限", selection: binding(current: memoryMb) { SettingsPatch.make(maxAgentMemoryMb: $0) }) {
                 ForEach(presetsWithCurrent(agentMemoryPresets, memoryMb), id: \.self) { Text(agentMemoryLabel($0)).tag($0) }
             }
-            .formPicker()
             .disabled(busy)
             SettingsErrorText(message: error)
         }

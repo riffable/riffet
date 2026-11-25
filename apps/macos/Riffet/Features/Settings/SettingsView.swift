@@ -50,7 +50,7 @@ struct SettingsView: View {
                 }
             }
             .listStyle(.sidebar)
-            .background(SidebarListAppearance(refusesFocus: false))
+            .background(SidebarListAppearance())
             .navigationSplitViewColumnWidth(min: 200, ideal: 228, max: 270)
             .toolbar(removing: .sidebarToggle)
             .modifier(SettingsSearch(query: $query))
@@ -109,18 +109,16 @@ struct SettingsView: View {
     }
 
     private func rowLabel(symbol: String, title: String) -> some View {
-        // A lined form's sidebar is outline too: the icon alone, in the text's colour.
-        let lined = DisplayPreferences.shared.style.form == .lined
-        return HStack(spacing: Space.sm) {
+        HStack(spacing: Space.sm) {
             ZStack {
                 RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .fill(lined ? .clear : palette.bgMuted)
+                    .fill(palette.bgMuted)
                     .frame(width: 22, height: 22)
                 Image(icon: symbol)
-                    .font(.riffet(size: S(lined ? 14 : 11), weight: lined ? .regular : .medium))
-                    .foregroundStyle(lined ? palette.fg2 : palette.accent)
+                    .font(.riffet(size: S(11), weight: .medium))
+                    .foregroundStyle(palette.accent)
             }
-            .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(lined ? .clear : palette.lineSoft))
+            .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
             Text(title)
                 .lineLimit(1)
         }
@@ -304,34 +302,11 @@ final class SettingsPaneController: NSViewController {
     }
 }
 
-/// The sidebar's search: the system's field, or under a lined form one drawn as a hairline like the
-/// form's own fields. Only the sidebar column changes with it; the pane beside it keeps its state.
+/// The sidebar's search: the system's field.
 private struct SettingsSearch: ViewModifier {
     @Binding var query: String
-    @Environment(\.palette) private var palette
 
-    @ViewBuilder
     func body(content: Content) -> some View {
-        switch DisplayPreferences.shared.style.form {
-        case .grouped:
-            content.searchable(text: $query, placement: .sidebar, prompt: "搜索设置")
-        case .lined:
-            content.safeAreaInset(edge: .top, spacing: 0) {
-                HStack(spacing: Space.sm) {
-                    Image(icon: "magnifyingglass")
-                        .font(.riffet(size: S(13)))
-                        .foregroundStyle(palette.fg3)
-                    TextField("搜索设置", text: $query, prompt: Text("搜索设置"))
-                        .textFieldStyle(.plain)
-                        .font(.riffet(size: S(13)))
-                        .onExitCommand { query = "" }
-                }
-                .padding(.horizontal, Space.sm + Space.xxs)
-                .frame(height: 30)
-                .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line))
-                .padding(.horizontal, Space.sm + Space.xxs)
-                .padding(.vertical, Space.sm)
-            }
-        }
+        content.searchable(text: $query, placement: .sidebar, prompt: "搜索设置")
     }
 }

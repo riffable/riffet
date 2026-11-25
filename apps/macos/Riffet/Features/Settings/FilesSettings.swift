@@ -33,7 +33,6 @@ struct FilesSettings: View {
                         ForEach(installed) { Text($0.name).tag($0.id) }
                     }
                     .labelsHidden()
-                    .formPicker()
                     .fixedSize()
                 }
             }

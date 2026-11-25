@@ -97,11 +97,7 @@ struct JobRowView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .background {
                             let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                            if DisplayPreferences.shared.style.block == .outlined {
-                                shape.strokeBorder(palette.line)
-                            } else {
-                                shape.fill(palette.bgSubtle)
-                            }
+                            shape.fill(palette.bgSubtle)
                         }
                     } else {
                         Text(job.status == .running ? "还没有输出…" : "没有输出").font(.riffet(size: S(12))).foregroundStyle(palette.fg4)

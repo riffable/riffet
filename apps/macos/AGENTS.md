@@ -11,7 +11,7 @@
 ## 界面
 
 - 先看 macOS 文档 §1 的分工：交互跟平台（sheet、系统菜单、`.help`、菜单栏快捷键），外观跟风格。
-- 代码读风格配方的字段（`style.menu`、`style.form`、`style.tabs`……），不判断风格名。`style.backend == .native` 只用来选整套外壳。
+- Mac 只有 Riffet 一种风格（DECISIONS 2026-11-25），不再加风格分支或风格开关。尺寸、字体、默认图标包读 `DisplayPreferences.shared.style`（由 `interface-styles.ts` 生成），不在业务代码里另写。
 - 取值只用主题层：颜色 `palette.*`，文字 `RiffetFont` 的角色，间距 `Space.*`，圆角 `Radius.*`（一律 `.continuous`），阴影 `.elevation(_:)` 或 `Elevation.apply(to:dark:)`，动效 `Motion.*`。数字只在 `Theme/` 和画内容的文件里出现。
 - `pnpm check:design` 按文件给数字内边距、圆角、字号记了基线（`scripts/design-rules-baseline.json`），只降不升；新文件从 0 开始。改完一个文件，运行 `node scripts/check-design-rules.mjs --update` 降低基线。
 - 字重只用 `.regular` 和 `.medium`，`.semibold` 只给品牌名；不用半档字号。

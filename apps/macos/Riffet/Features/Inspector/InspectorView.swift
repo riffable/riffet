@@ -26,66 +26,27 @@ struct InspectorView: View {
         let maximize = PanelMaximize(on: maximized, toggle: toggleMaximized)
         let float = PanelFloat(on: floating, toggle: toggleFloating)
         VStack(spacing: 0) {
-            // One panel per header icon has no bar of its own: the header's icons pick it, and the
-            // view's own top bar carries the full-screen toggle.
-            if style.rightPanel != .panels {
-                HStack(spacing: Space.sm) {
-                    // The segmented views sit in the middle, balanced against the toggle.
-                    if style.rightPanel == .inspector {
-                        Color.clear.frame(width: PanelMaximizeButton.width * (floating ? 1 : 2))
-                        Spacer(minLength: 0)
-                    }
-                    if !views.isEmpty {
-                        switch style.rightPanel {
-                        case .outline:
-                            if style.tabs == .pill {
-                                HStack(spacing: 2) {
-                                    ForEach(views) { view in
-                                        PillTab(title: view.title, symbol: view.symbol, selected: view.tab == shown, style: style) { tab = view.tab }
-                                    }
-                                }
-                            } else {
-                                HStack(spacing: Space.lg) {
-                                    ForEach(views) { view in
-                                        UnderlineTab(title: view.title, selected: view.tab == shown, style: style) { tab = view.tab }
-                                    }
-                                }
-                            }
-                        case .inspector, .panels:
-                            // Plugins add tabs: the track tightens, then turns into a menu, rather than overflow.
-                            ViewThatFits(in: .horizontal) {
-                                tabTrack(inset: Space.md)
-                                tabTrack(inset: Space.sm - 2)
-                                ChoiceMenu(options: views.map { view in ChoiceOption(title: view.title, selected: view.tab == shown) { tab = view.tab } }) {
-                                    HStack(spacing: Space.xs) {
-                                        Text(views.first { $0.tab == shown }?.title ?? "").font(.riffet(size: S(13), weight: .semibold)).foregroundStyle(palette.fg)
-                                        Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
-                                    }
-                                    .padding(.horizontal, Space.sm)
-                                    .frame(height: 28)
-                                }
-                                .fixedSize()
-                            }
-                            .accessibilityLabel("面板")
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    // One run of buttons, spaced as one: float, full screen, close.
-                    HStack(spacing: 0) {
-                        PanelMaximizeButton().environment(\.panelMaximize, maximize).environment(\.panelFloat, float)
-                        if style.rightPanel == .outline {
-                            Button { workbench.setInspectorOpen(false) } label: { Image(icon: "xmark").font(.riffet(size: S(style.tabs == .pill ? 13 : 12))) }
-                                .buttonStyle(IconButtonStyle(size: PanelMaximizeButton.width))
-                                .help("关闭")
+            HStack(spacing: Space.sm) {
+                if !views.isEmpty {
+                    HStack(spacing: 2) {
+                        ForEach(views) { view in
+                            PillTab(title: view.title, symbol: view.symbol, selected: view.tab == shown, style: style) { tab = view.tab }
                         }
                     }
                 }
-                .padding(.horizontal, style.tabs == .pill ? Space.sm : Space.md)
-                .frame(height: style.rightPanel == .outline ? style.layout.header : InspectorMetrics.headerHeight)
-                .panelDragHandle()
-                PanelRule()
+                Spacer(minLength: 0)
+                // One run of buttons, spaced as one: float, full screen, close.
+                HStack(spacing: 0) {
+                    PanelMaximizeButton(maximize: maximize, float: float)
+                    Button { workbench.setInspectorOpen(false) } label: { Image(icon: "xmark").font(.riffet(size: S(13))) }
+                        .buttonStyle(IconButtonStyle(size: PanelMaximizeButton.width))
+                        .help("关闭")
+                }
             }
-            if floating && style.rightPanel == .panels { PanelGrip() }
+            .padding(.horizontal, Space.sm)
+            .frame(height: style.layout.header)
+            .panelDragHandle()
+            PanelRule()
             Group {
                 if views.isEmpty {
                     // Every view is turned off in settings.
@@ -112,22 +73,12 @@ struct InspectorView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .environment(\.conversationProjectId, project?.id)
-            .environment(\.panelMaximize, style.rightPanel == .panels ? maximize : nil)
-            .environment(\.panelFloat, style.rightPanel == .panels ? float : nil)
         }
-        .background(floating ? palette.page : Color.clear)
-    }
-
-    private func tabTrack(inset: CGFloat) -> some View {
-        let views = workbench.inspectorViews
-        let shown = views.contains { $0.tab == tab } ? tab : (views.first?.tab ?? tab)
-        return SegmentedTrack(selection: Binding(get: { shown }, set: { tab = $0 }), inset: inset) {
-            ForEach(views) { Text($0.title).tag($0.tab) }
-        }
+        .background(floating ? palette.bg : Color.clear)
     }
 }
 
-/// A tab in a `.pill` row (`StyleSpec.Tabs`): a filled pill when current. With a symbol it is the
+/// A tab in a row of pills: a filled pill when current. With a symbol it is the
 /// icon alone, a 28pt square, and the current one adds its name; without one, the name alone.
 struct PillTab: View {
     let title: String
@@ -194,31 +145,22 @@ struct PanelMaximize {
     let toggle: () -> Void
 }
 
-extension EnvironmentValues {
-    /// Set where a view's own top bar carries the panel's full-screen toggle: in a panel without a
-    /// bar of its own (`StyleSpec.RightPanel.panels`).
-    @Entry var panelMaximize: PanelMaximize?
-}
-
-/// The panel's full-screen toggle, at the trailing end of the bar it sits in; nothing where
-/// `panelMaximize` is not set.
+/// The panel's float and full-screen toggles, at the trailing end of its bar.
 struct PanelMaximizeButton: View {
     static let width: CGFloat = 26
-    @Environment(\.panelMaximize) private var maximize
-    @Environment(\.panelFloat) private var float
+    let maximize: PanelMaximize
+    let float: PanelFloat
 
     var body: some View {
         // Beside pill tabs the controls take the window header's 13pt symbol, as the tabs do.
-        let glyph = S(DisplayPreferences.shared.style.tabs == .pill ? 13 : 12), box = Self.width
+        let glyph = S(13), box = Self.width
         HStack(spacing: 0) {
-            if let float {
-                Button(action: float.toggle) {
-                    Image(icon: float.on ? "sidebar.right" : "pip").font(.riffet(size: glyph))
-                }
-                .buttonStyle(IconButtonStyle(size: box))
-                .help(float.on ? "停靠到侧边" : "悬浮")
+            Button(action: float.toggle) {
+                Image(icon: float.on ? "sidebar.right" : "pip").font(.riffet(size: glyph))
             }
-            if let maximize, float?.on != true {
+            .buttonStyle(IconButtonStyle(size: box))
+            .help(float.on ? "停靠到侧边" : "悬浮")
+            if !float.on {
                 Button(action: maximize.toggle) {
                     Image(icon: maximize.on ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                         .font(.riffet(size: glyph))

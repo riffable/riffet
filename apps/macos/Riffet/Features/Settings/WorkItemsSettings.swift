@@ -50,7 +50,6 @@ struct WorkItemsSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .formPicker()
                     .fixedSize()
                     .disabled(save.busy)
                 }

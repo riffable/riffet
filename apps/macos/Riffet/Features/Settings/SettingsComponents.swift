@@ -92,20 +92,18 @@ struct SettingsSectionHeader: View {
     @Environment(\.settingsPaneScope) private var paneScope
 
     var body: some View {
-        // A lined form has no boxes to caption: the title is the section's heading.
-        let lined = DisplayPreferences.shared.style.form == .lined
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 5) {
                 Text(title)
-                    .font(.riffet(size: S(lined ? 15 : 11.5), weight: .semibold))
-                    .foregroundStyle(lined ? palette.fg : palette.fg3)
+                    .font(.riffet(size: S(DisplayPreferences.shared.style.text.label), weight: .semibold))
+                    .foregroundStyle(palette.fg3)
                 Spacer(minLength: Space.sm)
                 if let scope, scope != paneScope { SettingsScopeBadge(scope: scope) }
             }
             if let detail {
                 Text(detail)
-                    .font(.riffet(size: S(lined ? 12 : 11.5)))
-                    .foregroundStyle(lined ? palette.fg3 : palette.fg4)
+                    .font(.riffet(size: S(DisplayPreferences.shared.style.text.label)))
+                    .foregroundStyle(palette.fg4)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.trailing, 4)
             }
@@ -390,7 +388,7 @@ struct SettingsCallout: View {
 
     private var background: Color {
         switch tone {
-        case .info: palette.formFill(palette.bgSubtle)
+        case .info: palette.bgSubtle
         case .success: palette.successSoft.opacity(0.5)
         case .warning: palette.warningSoft.opacity(0.5)
         case .danger: palette.dangerSoft.opacity(0.5)

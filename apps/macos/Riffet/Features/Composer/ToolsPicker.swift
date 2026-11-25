@@ -147,7 +147,6 @@ struct ToolsPicker: View {
     let setOff: ([String]) -> Void
 
     @Environment(\.palette) private var palette
-    @Environment(\.composerEnvRow) private var envRow
     @Environment(\.composerToolsSlot) private var slot
     @State private var open = false
     @State private var slotOwner = UUID()
@@ -270,13 +269,9 @@ struct ToolsPicker: View {
 
     private var button: some View {
         Button { open.toggle() } label: {
-            if envRow {
-                Image(icon: "puzzlepiece.extension").font(.riffet(size: S(16))).foregroundStyle(palette.fg2)
-            } else {
-                Image(icon: "puzzlepiece.extension")
-            }
+            Image(icon: "puzzlepiece.extension")
         }
-        .buttonStyle(IconButtonStyle(size: envRow ? 32 : 26, active: open))
+        .buttonStyle(IconButtonStyle(size: 26, active: open))
         .help(Text("技能与工具") + Text(verbatim: " · \(summary)"))
         .accessibilityLabel("技能与工具")
         .accessibilityValue(summary)

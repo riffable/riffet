@@ -81,7 +81,6 @@ struct DisclosureSpec {
 
     /// Something in the header that changes with the clock.
     enum Clock {
-        case process(TimelineRowProcess)
         case job(NativeJob)
         case activity(NativeActivity, stopping: Bool)
     }
@@ -121,27 +120,10 @@ struct DisclosureSpec {
     /// A coloured dot before the trailing pieces (a shell's state).
     var dot: NSColor?
     var chevron: Chevron
-    var shimmer = false
     var clock: Clock?
     var truncateMiddle = false
     var action: TranscriptAction
     var help: String?
-    /// How the Claude style draws it; every other header is `.plain`.
-    var variant = Variant.plain
-    /// Room kept free at the right edge for a control drawn over the row, so the row's own hover wash spans the full width.
-    var reserve: CGFloat = 0
-
-    /// The line over a run's lists, or one call's row in a bordered list and where in it.
-    enum Variant: Equatable {
-        case plain
-        case listSummary
-        case listRow(Place)
-    }
-
-    /// A row's place in its list, which decides the corners its hover wash shares with the border.
-    enum Place: Equatable {
-        case only, first, middle, last
-    }
 }
 
 /// Delivery progress, time, speed and a copy action under a message; all but the progress show only

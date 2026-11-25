@@ -194,7 +194,7 @@ struct HomeView: View {
             }
     }
 
-    /// The project menu's data and actions: the chip above the composer and the docked home's host row open the same one.
+    /// The project menu's data and actions, for the chip above the composer.
     private func directoryChoices(_ project: Project?) -> DirectoryChoices {
         let projects = workbench.projectsByRecentUse
         let projectPaths = Set(projects.map(\.cwd))
@@ -211,34 +211,31 @@ struct HomeView: View {
         )
     }
 
-    /// The pickers, the composer and what it is waiting for. The docked home keeps its pickers in the
-    /// option cards, so the chip row is not drawn; the composer below stays the one call site.
+    /// The pickers, the composer and what it is waiting for.
     /// While a server, an Agent or a project is missing, the setup card stands where the composer will be.
     private var setup: SetupProgress { SetupProgress(model: app, workbench: workbench) }
     private var setupIncomplete: Bool { !quickChat && !setup.complete }
 
     @ViewBuilder
-    private func composerSection(_ project: Project?, choices: DirectoryChoices, docked: Bool) -> some View {
+    private func composerSection(_ project: Project?, choices: DirectoryChoices) -> some View {
         if setupIncomplete {
             SetupCard(workbench: workbench, progress: setup).transition(.opacity)
         } else {
-            composerBlock(project, choices: choices, docked: docked).transition(.opacity)
+            composerBlock(project, choices: choices).transition(.opacity)
         }
     }
 
-    private func composerBlock(_ project: Project?, choices: DirectoryChoices, docked: Bool) -> some View {
+    private func composerBlock(_ project: Project?, choices: DirectoryChoices) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !docked {
-                HStack(spacing: Space.xxs) {
-                    DirectoryMenu(choices: choices)
-                    Spacer(minLength: 0)
-                }
-                .opacity(quickChat ? 0 : 1)
-                .allowsHitTesting(!quickChat)
-                .accessibilityHidden(quickChat)
-                .padding(.leading, -Space.sm)
-                .padding(.bottom, Space.sm)
+            HStack(spacing: Space.xxs) {
+                DirectoryMenu(choices: choices)
+                Spacer(minLength: 0)
             }
+            .opacity(quickChat ? 0 : 1)
+            .allowsHitTesting(!quickChat)
+            .accessibilityHidden(quickChat)
+            .padding(.leading, -Space.sm)
+            .padding(.bottom, Space.sm)
 
             ComposerView(
                 model: composer,
@@ -246,7 +243,7 @@ struct HomeView: View {
                 working: false,
                 sendState: nil,
                 minLines: 3,
-                features: features(project, menuBelow: !docked),
+                features: features(project),
                 sendEnabled: !creating && (pendingCreation != nil || (project != nil || projectless) && catalogCurrent && currentCatalog?.available != false),
                 busy: creating,
                 onSend: { _ in create() },
@@ -309,83 +306,48 @@ struct HomeView: View {
         }
     }
 
-    /// One tree for every home recipe: the heading, the composer, what follows it. A recipe changes
-    /// their parameters (the heading grows to centre itself above a bottom-docked composer), never
-    /// which of them exist, so the composer's text view and draft survive a style switch.
+    /// The heading, the composer, what follows it.
     private func page(_ project: Project?) -> some View {
-        let docked = DisplayPreferences.shared.style.home == .docked
         let choices = directoryChoices(project)
-        return GeometryReader { viewport in
-            ScrollView {
-                VStack(alignment: docked ? .center : .leading, spacing: 0) {
-                    heading(project, choices: choices, docked: docked)
-                    composerSection(project, choices: choices, docked: docked)
-                        .padding(.horizontal, docked ? 32 : 0)
-                        .frame(maxWidth: docked ? 744 : .infinity, alignment: .leading)
-                        .animation(Motion.expressive, value: setupIncomplete)
-                    tail(project, docked: docked)
-                }
-                .frame(maxWidth: docked ? .infinity : 720)
-                .padding(.horizontal, docked ? 0 : Column.gutter)
-                .padding(.top, docked ? 0 : 64)
-                .padding(.bottom, docked ? 8 : Space.xxl)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: docked ? viewport.size.height : nil)
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                heading
+                composerSection(project, choices: choices)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .animation(Motion.expressive, value: setupIncomplete)
+                tail(project)
             }
-            .scrollBounceBehavior(.basedOnSize)
-        }
-    }
-
-    /// The mark and greeting. The docked home adds the option cards under them (or, in a quick chat,
-    /// the history) and centres the lot in the room above the composer.
-    private func heading(_ project: Project?, choices: DirectoryChoices, docked: Bool) -> some View {
-        let history = docked && quickChat
-        return VStack(spacing: 0) {
-            VStack(spacing: docked ? 14 : Space.lg) {
-                LiveBrandMark(front: palette.fg, back: docked ? palette.accent : palette.fg4)
-                    .frame(width: docked ? 44 : 52, height: docked ? 44 : 52)
-                Text(taskProject.map { "要在 \($0.name) 做什么？" } ?? "要做点什么？")
-                    .font(.riffet(size: S(22), weight: docked ? .regular : .semibold))
-                    .foregroundStyle(palette.fg)
-                    .frame(minHeight: S(docked ? 30 : 27))
-                    .multilineTextAlignment(.center)
-                    .opacity(setupIncomplete ? 0 : 1)
-            }
+            .frame(maxWidth: 720)
+            .padding(.horizontal, Column.gutter)
+            .padding(.top, 64)
+            .padding(.bottom, Space.xxl)
             .frame(maxWidth: .infinity)
-            .frame(height: history ? 0 : nil)
-            .opacity(quickChat ? 0 : 1)
-            .accessibilityHidden(quickChat)
-
-            if docked {
-                if quickChat {
-                    QuickChatHistory(workbench: workbench)
-                        .frame(maxWidth: 720)
-                        .padding(.horizontal, Column.gutter)
-                } else if !setupIncomplete {
-                    DockedOptions(
-                        projects: dockedProjects(choices.projects, selected: choices.selected), selected: choices.selected,
-                        choices: choices, hostName: SidebarFooterSupport.hostName(workbench), hostSymbol: workbench.local ? "laptopcomputer" : "network",
-                        showsTools: project != nil, attemptsEnabled: !(creating || project?.isTaskWorkspace == true),
-                        openShell: { Task { await openShell() } }, startAttempts: { attempting = true }
-                    )
-                    .padding(.top, 28)
-                    if let project {
-                        AttemptsHistorySection(workbench: workbench, projectId: project.id)
-                            .frame(width: 360)
-                            .padding(.top, Space.xl)
-                    }
-                }
-            }
         }
-        .padding(.bottom, docked ? 28 : Space.xl)
-        .frame(maxHeight: docked ? .infinity : nil, alignment: history ? .top : .center)
-        .padding(.top, history ? 64 : 0)
+        .scrollBounceBehavior(.basedOnSize)
     }
 
-    /// What the native recipes list under the composer; the docked home has it above.
-    private func tail(_ project: Project?, docked: Bool) -> some View {
+    /// The mark and greeting.
+    private var heading: some View {
+        VStack(spacing: Space.lg) {
+            LiveBrandMark(front: palette.fg, back: palette.fg4)
+                .frame(width: 52, height: 52)
+            Text(taskProject.map { "要在 \($0.name) 做什么？" } ?? "要做点什么？")
+                .font(.riffet(size: S(22), weight: .semibold))
+                .foregroundStyle(palette.fg)
+                .frame(minHeight: S(27))
+                .multilineTextAlignment(.center)
+                .opacity(setupIncomplete ? 0 : 1)
+        }
+        .frame(maxWidth: .infinity)
+        .opacity(quickChat ? 0 : 1)
+        .accessibilityHidden(quickChat)
+        .padding(.bottom, Space.xl)
+    }
+
+    /// What follows the composer: quick actions and attempts, or a quick chat's history.
+    private func tail(_ project: Project?) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if !docked, !setupIncomplete {
+            if !setupIncomplete {
                 if quickChat {
                     QuickChatHistory(workbench: workbench)
                 } else {
@@ -399,22 +361,13 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// The first few projects by recent use, the chosen one always among them.
-    private func dockedProjects(_ all: [Project], selected: Project?) -> [Project] {
-        var shown = Array(all.prefix(4))
-        if let selected, !shown.contains(where: { $0.id == selected.id }) {
-            if shown.isEmpty { shown = [selected] } else { shown[shown.count - 1] = selected }
-        }
-        return shown
-    }
-
     /// What to warm up for the current choice; nil when the backend does not warm up.
     private func prewarmRequest(_ project: Project?) -> PrewarmWatcher.Request? {
         guard !quickChat, let project, currentCatalog?.capabilities.supportsPrewarm?.boolValue == true else { return nil }
         return PrewarmWatcher.Request(projectId: project.id, backend: backend, profileId: profileId, model: effectiveModel, mode: effectiveMode, approval: approval)
     }
 
-    private func features(_ project: Project?, menuBelow: Bool) -> ComposerFeatures {
+    private func features(_ project: Project?) -> ComposerFeatures {
         ComposerFeatures(
             slash: quickChat ? nil : slash,
             unknownCommandHint: String(localized: "发送给 \(currentCatalog?.label ?? backendLabel(backend))"),
@@ -428,7 +381,7 @@ struct HomeView: View {
             addSessionReference: currentCatalog?.capabilities.supportsSessionReferences == true ? { workbench.addSessionReference($0) } : nil,
             openSessionReference: { workbench.open(sessionId: $0) },
             enterSends: workbench.settings?.composerEnterBehavior != "newline",
-            menuBelow: menuBelow
+            menuBelow: true
         )
     }
 
@@ -887,93 +840,6 @@ private struct DirectoryMenu: View {
         .background(MenuAnchorView(anchor: anchor))
         .fixedSize()
         .help(selected?.cwd ?? String(localized: "选择项目"))
-    }
-}
-
-/// The docked home's two cards: recent projects over the host, then the tools. The host row opens
-/// the full project menu (other directories, worktree, favorites).
-private struct DockedOptions: View {
-    let projects: [Project]
-    let selected: Project?
-    let choices: DirectoryChoices
-    let hostName: String
-    let hostSymbol: String
-    let showsTools: Bool
-    let attemptsEnabled: Bool
-    let openShell: () -> Void
-    let startAttempts: () -> Void
-    @Environment(\.palette) private var palette
-    @State private var anchor = MenuAnchor()
-
-    var body: some View {
-        VStack(spacing: 12) {
-            card {
-                VStack(spacing: 0) {
-                    ForEach(projects, id: \.id) { project in
-                        let id = project.id
-                        DockedRow(symbol: project.worktree != nil ? "arrow.triangle.branch" : "folder", title: project.worktree?.branch ?? project.name, checked: id == selected?.id) {
-                            choices.select(id)
-                        }
-                        .help(project.cwd)
-                    }
-                }
-                .padding(4)
-                palette.line.frame(height: 1)
-                DockedRow(symbol: hostSymbol, title: hostName, chevron: true) { anchor.popUp(choices.menu()) }
-                    .background(MenuAnchorView(anchor: anchor))
-                    .padding(4)
-            }
-            if showsTools {
-                card {
-                    VStack(spacing: 0) {
-                        DockedRow(symbol: "terminal", title: String(localized: "Shell 终端"), action: openShell)
-                        DockedRow(symbol: "square.split.2x1", title: String(localized: "并行尝试"), action: startAttempts)
-                            .disabled(!attemptsEnabled)
-                    }
-                    .padding(4)
-                }
-            }
-        }
-        .frame(width: 360)
-    }
-
-    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        VStack(spacing: 0, content: content)
-            .background(palette.page, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.lineStrong, lineWidth: 1))
-    }
-}
-
-private struct DockedRow: View {
-    let symbol: String
-    let title: String
-    var checked = false
-    var chevron = false
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-    @Environment(\.isEnabled) private var enabled
-    @State private var hovering = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(icon: symbol).font(.riffet(size: S(14))).foregroundStyle(palette.fg3).frame(width: S(16))
-                Text(title).font(.riffet(size: S(14))).foregroundStyle(checked ? palette.fg : palette.fg2).lineLimit(1).truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if checked {
-                    Image(icon: "checkmark").font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg)
-                } else if chevron {
-                    Image(icon: "chevron.down").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.fg3)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 36)
-            .background(hovering ? palette.bgHover : .clear, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .opacity(enabled ? 1 : 0.5)
-        .onHover { hovering = $0 }
     }
 }
 

@@ -1,17 +1,17 @@
 import { useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { DESKTOP_STYLES } from '@contracts';
+import { DESKTOP_STYLE } from '@contracts';
 import { cn } from '@/lib/utils';
 import { Chapter, display, Frame, Plate, Scrubber, Token, useRootValue, Value } from '../specimen';
 
-export const RADII = DESKTOP_STYLES.find((style) => style.id === 'riffet')?.tokens.radii;
-export type Tier = keyof NonNullable<typeof RADII>;
+export const RADII = DESKTOP_STYLE.radii;
+export type Tier = keyof typeof RADII;
 const cssOf = (value: string | number | undefined) => typeof value === 'string' ? `var(${value})` : `${value ?? 0}px`;
 const tokenOf = (value: string | number | undefined) => typeof value === 'string' ? value.replace(/^--/, '') : String(value ?? '');
 
 /** A tier's radius in px, as painted. */
 export function useRadius(tier: Tier): number {
-  const value = RADII?.[tier];
+  const value = RADII[tier];
   const painted = useRootValue(typeof value === 'string' ? value : '--radius-none');
   return typeof value === 'number' ? value : Number.parseFloat(painted) || 0;
 }
@@ -74,12 +74,12 @@ function RadiusTier({ tier, name, use }: { tier: Tier; name: string; use: string
   const radius = useRadius(tier);
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid aspect-[4/3] place-items-center border border-fg-3" style={{ borderRadius: cssOf(RADII?.[tier]) }}>
+      <div className="grid aspect-[4/3] place-items-center border border-fg-3" style={{ borderRadius: cssOf(RADII[tier]) }}>
         <span className="font-medium tabular-nums text-fg-2" style={display(24, '2.6vw', 36)}>{radius}</span>
       </div>
       <div className="flex flex-col gap-0.5">
         <span className="text-sm text-fg">{name}</span>
-        <Token className="text-fg-3">{tokenOf(RADII?.[tier])}</Token>
+        <Token className="text-fg-3">{tokenOf(RADII[tier])}</Token>
         <span className="mt-1 text-xs text-fg-3">{use}</span>
       </div>
     </div>
@@ -115,7 +115,7 @@ export function RadiusChapter() {
   ];
   return (
     <Chapter title={t`圆角`} lede={t`圆角分 ${tiers.length} 档，胶囊另取高度的一半；嵌套时内圆角随内边距递减。`} source="packages/contracts/src/interface-styles.ts">
-      <Plate number={1} title={t`档位`} note={t`数值读自当前风格的配方。`}>
+      <Plate number={1} title={t`档位`}>
         <div className="grid grid-cols-6 gap-5 max-md:grid-cols-2">
           {tiers.map(([tier, name, use]) => <RadiusTier key={tier} tier={tier} name={name} use={use} />)}
           <PillTier name={t`胶囊`} use={t`胶囊、圆形按钮、开关`} />

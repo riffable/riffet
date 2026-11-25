@@ -140,7 +140,7 @@ export function useDesignCatalog(platform: DesignPlatform): CatalogGroup[] {
   const macos: Record<DesignGroup, Entry[]> = {
     overview: [
       ['platform', t`平台分工`, t`跟平台与跟 Web`, MacPlatformChapter],
-      ['styles', t`风格`, t`各风格的数值、配方与窗口`, MacStylesChapter],
+      ['styles', t`数值`, t`圆角、布局、文字与窗口缩样`, MacStylesChapter],
     ],
     foundations: [['type', t`文字角色`, t`RiffetFont 的角色`, MacTypeChapter]],
     components: [['mapping', t`组件对照`, t`Web 与 Mac 一一对应`, MacComponentChapter]],

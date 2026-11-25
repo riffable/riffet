@@ -121,11 +121,10 @@ struct CursorCliPage: View {
                         Text("用户").tag("")
                         ForEach(workbench.projects, id: \.id) { Text($0.name).tag($0.id) }
                     }
-                    .formPicker()
                     TextField("命令", text: $operation)
-                        .formField(label: "命令")
+                        .formField()
                     TextField("参数（空格分隔，或以 JSON 字符串数组）", text: $args)
-                        .formField(label: "参数（空格分隔，或以 JSON 字符串数组）")
+                        .formField()
                     HStack(spacing: Space.sm) {
                         SettingsActionButton("运行", symbol: "play.fill") { Task { await run(workbench) } }
                             .disabled(running || operation.trimmingCharacters(in: .whitespaces).isEmpty)

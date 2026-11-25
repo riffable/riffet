@@ -3,8 +3,7 @@ import { Kbd } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 import { Widths } from '../patterns/OverlayChapter';
 import { Chapter, Frame, Plate, Token } from '../specimen';
-import { useFamilyNotes, useStyleNote } from './notes';
-import { fontStack, MAC, points, STYLES } from './values';
+import { fontStack, MAC, points, STYLE } from './values';
 
 function Choice() {
   const { t } = useLingui();
@@ -58,36 +57,20 @@ function SheetAnatomy() {
   );
 }
 
-/** Each style's menu: drawn on the paper, or the system's, at its own radius and type. */
+/** The menu, drawn on the paper at its radius and type. */
 function Menus() {
   const { t } = useLingui();
-  const note = useStyleNote();
-  const familyNote = useFamilyNotes();
+  const radius = points(STYLE.radii.menu);
+  const row = Math.min(points(STYLE.radii.container), Math.max(4, radius - MAC.menu.pad));
   return (
-    <Frame className="grid gap-8 p-8 sm:grid-cols-2 lg:grid-cols-3 max-md:p-4">
-      {STYLES.map((style) => {
-        const radius = points(style.tokens.radii.menu);
-        const row = Math.min(points(style.tokens.radii.container), Math.max(4, radius - MAC.menu.pad));
-        const size = points(style.tokens.text.body);
-        const drawn = style.recipes.menu === 'drawn';
-        return (
-          <div key={style.id} className="flex flex-col items-center gap-3">
-            <div
-              className={cn('flex w-44 flex-col shadow-pop', drawn ? 'bg-popover' : 'bg-popover/75 backdrop-blur-xl')}
-              style={{ padding: MAC.menu.pad, borderRadius: radius, fontFamily: fontStack(style.tokens.fonts.ui), fontSize: size }}
-            >
-              <span className="flex items-end px-2.5 pb-1 text-fg-3" style={{ height: MAC.menu.header, fontSize: points(style.tokens.text.label) }}>{t`会话`}</span>
-              {[t`重命名`, t`复制链接`].map((label, index) => <span key={label} className={cn('flex items-center px-2.5 text-fg', !index && 'bg-hover')} style={{ height: MAC.menu.row, borderRadius: row }}>{label}</span>)}
-              <span className="mx-2.5 my-1 h-px bg-line" />
-              <span className="flex items-center px-2.5 text-danger" style={{ height: MAC.menu.row, borderRadius: row }}>{t`删除`}</span>
-            </div>
-            <span className="flex flex-col items-center gap-0.5 text-center">
-              <span className="text-sm text-fg">{note(style).title}</span>
-              <span className="font-mono text-2xs text-fg-3">{familyNote('menu').options[style.recipes.menu] ?? style.recipes.menu} · {t`圆角 ${radius}`} · {t`行 ${MAC.menu.row}`}</span>
-            </span>
-          </div>
-        );
-      })}
+    <Frame className="flex flex-col items-center gap-3 p-8 max-md:p-4">
+      <div className="flex w-44 flex-col bg-popover shadow-pop" style={{ padding: MAC.menu.pad, borderRadius: radius, fontFamily: fontStack(STYLE.fonts.ui), fontSize: points(STYLE.text.body) }}>
+        <span className="flex items-end px-2.5 pb-1 text-fg-3" style={{ height: MAC.menu.header, fontSize: points(STYLE.text.label) }}>{t`会话`}</span>
+        {[t`重命名`, t`复制链接`].map((label, index) => <span key={label} className={cn('flex items-center px-2.5 text-fg', !index && 'bg-hover')} style={{ height: MAC.menu.row, borderRadius: row }}>{label}</span>)}
+        <span className="mx-2.5 my-1 h-px bg-line" />
+        <span className="flex items-center px-2.5 text-danger" style={{ height: MAC.menu.row, borderRadius: row }}>{t`删除`}</span>
+      </div>
+      <span className="font-mono text-2xs text-fg-3">{t`圆角 ${radius}`} · {t`行 ${MAC.menu.row}`}</span>
     </Frame>
   );
 }
@@ -105,7 +88,7 @@ export function OverlayChapter() {
       <Plate number={3} title={t`sheet 宽度`} note={t`与 Web 弹窗相同的四档；高度随内容，超过窗口高减 64 时正文滚动。`}>
         <Widths />
       </Plate>
-      <Plate number={4} title={t`菜单`} note={t`工作台控件弹出的菜单经 popUpStyled：自绘风格画在纸上，原生风格交给系统。内边距 ${MAC.menu.pad}，行高 ${MAC.menu.row}，宽 ${MAC.menu.minWidth}–${MAC.menu.maxWidth}。`}>
+      <Plate number={4} title={t`菜单`} note={t`工作台控件弹出的菜单经 popUpStyled 画在纸上。内边距 ${MAC.menu.pad}，行高 ${MAC.menu.row}，宽 ${MAC.menu.minWidth}–${MAC.menu.maxWidth}。`}>
         <Menus />
       </Plate>
     </Chapter>

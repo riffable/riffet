@@ -39,9 +39,9 @@ struct MarksPage: View {
         .navigationTitle(WorkbenchPage.marks.title)
         .pageChrome(.marks, workbench: workbench, search: PageSearch(text: $model.query.q, prompt: String(localized: "搜索收藏的内容、备注或会话"))) {
             if selecting {
-                PageActionButton(title: chosen.isEmpty ? String(localized: "删除") : String(localized: "删除 \(chosen.count) 条"), symbol: "trash", titled: true) { confirmDelete = true }
+                PageActionButton(title: chosen.isEmpty ? String(localized: "删除") : String(localized: "删除 \(chosen.count) 条"), symbol: "trash") { confirmDelete = true }
                     .disabled(chosen.isEmpty)
-                PageActionButton(title: String(localized: "完成"), symbol: "checkmark", titled: true) { selecting = false; chosen = [] }
+                PageActionButton(title: String(localized: "完成"), symbol: "checkmark") { selecting = false; chosen = [] }
             } else {
                 PageMenuButton(symbol: filtered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease", help: String(localized: "筛选"), build: filterMenu)
                 PageActionButton(title: String(localized: "选择"), symbol: "checkmark.circle") { selecting = true }

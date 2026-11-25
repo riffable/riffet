@@ -80,7 +80,7 @@ struct BackupSettings: View {
                             CopyButton(text: command, help: String(localized: "复制恢复命令"))
                         }
                         .padding(Space.sm)
-                        .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                        .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                         .overlay(
                             RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                                 .strokeBorder(palette.lineSoft)

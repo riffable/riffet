@@ -12,7 +12,6 @@ struct TerminalHoldBar: View {
     @State private var error: String?
 
     var body: some View {
-        let line = DisplayPreferences.shared.style.composer == .line
         HStack(spacing: Space.sm) {
             Image(icon: "terminal")
                 .font(.riffet(size: S(14)))
@@ -32,10 +31,10 @@ struct TerminalHoldBar: View {
         .frame(minHeight: 52)
         .background(
             RoundedRectangle(cornerRadius: Radius.floating, style: .continuous)
-                .fill(line ? palette.page : palette.bgElevated)
-                .elevation(DisplayPreferences.shared.style.surface == .outlined ? nil : .float)
+                .fill(palette.bgElevated)
+                .elevation(.float)
         )
-        .overlay(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous).strokeBorder(line ? palette.lineStrong : palette.line, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
         .onChange(of: session.id) { _, _ in error = nil }
         .confirmationDialog("结束终端中的进程？", isPresented: $confirming) {
             Button("结束进程", role: .destructive) { Task { await release(force: true) } }

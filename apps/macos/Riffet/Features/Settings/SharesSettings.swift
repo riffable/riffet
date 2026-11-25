@@ -87,7 +87,6 @@ struct SharesSettings: View {
                         ForEach(publishers, id: \.id) { Text($0.label).tag($0.id) }
                     }
                     .labelsHidden()
-                    .formPicker()
                     .fixedSize()
                 }
             }

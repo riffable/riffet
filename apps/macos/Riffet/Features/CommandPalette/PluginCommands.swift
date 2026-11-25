@@ -388,7 +388,6 @@ private struct PluginCommandForm: View {
                             Picker(label, selection: text(field.key)) {
                                 ForEach(field.options ?? [], id: \.self) { Text($0).tag($0) }
                             }
-                            .formPicker()
                         }
                     default:
                         SettingsFieldRow(label) { TextField(label, text: text(field.key)).formField() }

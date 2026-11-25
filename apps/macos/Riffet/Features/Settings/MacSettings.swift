@@ -905,7 +905,7 @@ struct AboutSettings: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .padding(Space.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                        .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
                     HStack(spacing: Space.sm) {
                         SettingsActionButton("复制 App 更新命令", symbol: "doc.on.doc") {

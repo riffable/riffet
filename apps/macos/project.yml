@@ -54,10 +54,6 @@ targets:
       - path: Riffet/Resources/Licenses
         type: folder
         buildPhase: resources
-      # The drawn interface styles' drafts, opened from the Help menu (InterfaceStyleDrafts.swift).
-      - path: ../../docs/design/interface-styles/pages
-        type: folder
-        buildPhase: resources
       # Riffet's own Apache-2.0 license and NOTICE, at Contents/Resources/.
       - path: ../../LICENSE
         type: file

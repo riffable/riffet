@@ -12,8 +12,6 @@ import { useNav, useStores } from '../state/stores';
 import { useDesignCatalog, type CatalogChapter, type CatalogGroup } from './catalog';
 import { useAndroidStyleNote } from './android/notes';
 import { ANDROID_STYLES } from './android/values';
-import { useStyleNote } from './mac/notes';
-import { STYLES as MAC_STYLES } from './mac/values';
 import { PlatformCover } from './platform';
 import { Cover } from './overview/Opening';
 import { Contents } from './overview/Contents';
@@ -119,10 +117,9 @@ function Pager({ previous, next, onGo }: { previous?: CatalogChapter; next?: Cat
 /** A platform part's title page, with its styles' names. */
 function PlatformTitle({ platform }: { platform: Exclude<DesignPlatform, 'web'> }) {
   const { t } = useLingui();
-  const mac = useStyleNote();
   const android = useAndroidStyleNote();
   return platform === 'macos'
-    ? <PlatformCover name="macOS" styles={MAC_STYLES.map((style) => mac(style).title)} lines={[t`共用的基础与模式在 Mac 上的写法：用哪个组件、取什么值、哪里跟平台。`, t`风格各有一节，数值与配方读自同一份定义。`]} />
+    ? <PlatformCover name="macOS" styles={['Riffet']} lines={[t`共用的基础与模式在 Mac 上的写法：用哪个组件、取什么值、哪里跟平台。`, t`数值读自同一份定义。`]} />
     : <PlatformCover name="Android" styles={ANDROID_STYLES.map((style) => android(style).title)} lines={[t`共用的基础与模式在 Android 上的写法：用哪个组件、取什么值、哪里跟平台。`, t`风格各有一节，尺寸与动效读自同一份定义。`]} />;
 }
 

@@ -2,10 +2,9 @@ import AppKit
 import SwiftUI
 import RiffetKit
 
-/// The drawn title bar of the content (`StyleSpec.header`), in place of the system toolbar:
-/// `sessionTabs` lists the conversations kept as tabs (or names the open one, with tabs off), `titleMenu` names the open one and
-/// opens its menu. The controls are the toolbar's own (counts, panel, terminal, ⋯ menu); only the
-/// arrangement differs. Its gaps move the window.
+/// The drawn title bar of the content, in place of the system toolbar: the conversations kept as
+/// tabs, or the open one's title with tabs off; then 会话信息, the side panel and the conversation's
+/// menu. Its gaps move the window.
 struct CustomHeader<Status: View>: View {
     let workbench: Workbench
     /// With the sidebar hidden the traffic lights sit over the header, and the sidebar's toggle comes here.
@@ -24,18 +23,10 @@ struct CustomHeader<Status: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: Space.xs) {
                 CustomHeaderLeading(workbench: workbench, sidebarShown: sidebarShown, style: style)
-                switch style.header {
-                case .sessionTabs:
-                    if SessionTabsPreferences.shared.style == .titleBar {
-                        SessionTabsBar(workbench: workbench, style: style)
-                    } else {
-                        title(style, conversation: conversation)
-                        Spacer(minLength: Space.sm)
-                    }
-                case .titleMenu:
+                if SessionTabsPreferences.shared.style == .titleBar {
+                    SessionTabsBar(workbench: workbench, style: style)
+                } else {
                     title(style, conversation: conversation)
-                    Spacer(minLength: Space.sm)
-                case .toolbar:
                     Spacer(minLength: Space.sm)
                 }
                 trailing(style, conversation: conversation)
@@ -46,12 +37,7 @@ struct CustomHeader<Status: View>: View {
             .allowsHitTesting(page == nil)
             .accessibilityHidden(page != nil)
             .background { WindowDragArea() }
-            if style.header == .titleMenu {
-                Rectangle().fill(palette.headerRule).frame(height: 1)
-            }
         }
-        // Above the content a title bar paints its own; inside a card or a column it has their colour.
-        .background(style.header == .titleMenu && style.window != .insetCard ? palette.page.opacity(DisplayPreferences.shared.contentTint) : .clear)
     }
 
     /// A conversation is the page (not the home page, a one-level page or an attempt group).
@@ -115,106 +101,32 @@ struct CustomHeader<Status: View>: View {
 
     // MARK: Controls
 
-    /// What comes and goes stays on the leading side, so the panel buttons and ⋯ keep their place.
+    /// What comes and goes stays on the leading side, so the panel button and ⋯ keep their place.
     @ViewBuilder
     private func trailing(_ style: StyleSpec, conversation: Session?) -> some View {
         let quickChat = workbench.quickChatContext
         HStack(spacing: 2) {
-            // The work running in the conversation is in 会话信息, or in ⋯ beside a title menu.
+            // The work running in the conversation is in 会话信息.
             if conversation != nil, !quickChat { status }
             if workbench.page == nil, !quickChat {
-                switch style.header {
-                case .titleMenu:
-                    panelButtons(conversation: conversation, style: style)
-                    // The header keeps the panels of the app's own; the rest waits behind ⋯.
-                    SessionWorkActions(workbench: workbench, more: moreItems(conversation: conversation), size: CustomChrome.control(style))
-                case .sessionTabs, .toolbar:
-                    if let conversation { SessionInfoButton(workbench: workbench, session: conversation, size: CustomChrome.control(style)) }
-                    if !workbench.inspectorUnavailable { inspectorButton(style) }
-                }
-            } else if workbench.page == nil, home, style.header != .titleMenu {
+                if let conversation { SessionInfoButton(workbench: workbench, session: conversation, size: CustomChrome.control(style)) }
+                if !workbench.inspectorUnavailable { inspectorButton(style) }
+            } else if workbench.page == nil, home {
                 // The quick chat home keeps it, unusable: switching 新建任务 / 快速对话 does not move the tabs.
                 inspectorButton(style).disabled(true)
             }
-            // The title menu's own title opens this menu; one instance, one set of its sheets and reads.
-            if let conversation, style.header != .titleMenu {
+            if let conversation {
                 SessionMenu(workbench: workbench, session: conversation, inspectorTab: inspectorTab, inspectorOpen: inspectorOpen, infoInHeader: true)
             }
         }
         .fixedSize()
     }
 
-    /// The view the panel shows: the stored one, or the first on offer when that one is not.
-    private func shownPanel(_ views: [InspectorViewEntry]) -> InspectorTab? {
-        let tab = workbench.inspector.tab
-        return views.contains { $0.tab == tab } ? tab : views.first?.tab
-    }
-
     private func inspectorButton(_ style: StyleSpec) -> some View {
-        // With one icon per panel, each icon lights up for its own panel.
-        let state = workbench.inspector
-        let own = style.header == .titleMenu && shownPanel(workbench.inspectorViews) != nil
-        return Button { workbench.toggleInspector() } label: { Image(icon: "sidebar.right") }
-            .buttonStyle(IconButtonStyle(size: CustomChrome.control(style), active: state.open && !own))
+        Button { workbench.toggleInspector() } label: { Image(icon: "sidebar.right") }
+            .buttonStyle(IconButtonStyle(size: CustomChrome.control(style), active: workbench.inspector.open))
             .help("变更与文件 (⌥⌘I)")
             .accessibilityLabel("变更与文件 (⌥⌘I)")
-    }
-
-    /// The terminal and the built-in panel views (changes, files), one icon each: the panels Claude
-    /// Desktop also opens from its header. Plugin views and the panel's own toggles are in ⋯.
-    @ViewBuilder
-    private func panelButtons(conversation: Session?, style: StyleSpec) -> some View {
-        let state = workbench.inspector
-        let size = CustomChrome.control(style)
-        let shown = shownPanel(workbench.inspectorViews)
-        if workbench.currentProject != nil, !workbench.assistantContext {
-            Button { workbench.terminalDock.toggle() } label: { Image(icon: "terminal") }
-                .buttonStyle(IconButtonStyle(size: size, active: workbench.terminalDock.shown))
-                .help("显示/隐藏终端")
-                .accessibilityLabel("显示/隐藏终端")
-        }
-        ForEach(headerViews(conversation: conversation)) { view in
-            Button { togglePanel(view.tab) } label: { Image(icon: panelSymbol(view)) }
-                .buttonStyle(IconButtonStyle(size: size, active: state.open && view.tab == shown))
-                .help(view.title)
-                .accessibilityLabel(view.title)
-        }
-    }
-
-    /// The panel views with an icon of their own in the header.
-    private func headerViews(conversation: Session?) -> [InspectorViewEntry] {
-        workbench.inspectorViews.filter { $0.tab == .files || ($0.tab == .changes && conversation != nil) }
-    }
-
-    /// ⋯ after the conversation's work: the plugin views, then the panel and a plugin view's full-screen toggle.
-    private func moreItems(conversation: Session?) -> [HeaderMoreItem] {
-        let state = workbench.inspector
-        let shown = shownPanel(workbench.inspectorViews)
-        let builtIn = Set(headerViews(conversation: conversation).map(\.tab))
-        var items = workbench.inspectorViews.filter { !builtIn.contains($0.tab) && $0.tab != .changes }.map { view in
-            HeaderMoreItem(title: view.title, symbol: panelSymbol(view), on: state.open && view.tab == shown) { togglePanel(view.tab) }
-        }
-        if conversation != nil, !workbench.inspectorUnavailable {
-            items.append(HeaderMoreItem(title: String(localized: "面板"), symbol: "sidebar.right", on: state.open, shortcut: ("i", [.option, .command])) {
-                workbench.toggleInspector()
-            })
-        }
-        // The changes and files panels carry the toggle in their own bar; a plugin's view has none.
-        if state.open, let shown, shown != .changes, shown != .files {
-            items.append(HeaderMoreItem(title: String(localized: "全屏"), symbol: "arrow.up.left.and.arrow.down.right", on: workbench.inspectorMaximized, shortcut: ("f", [.option, .command])) {
-                workbench.toggleInspectorMaximized()
-            })
-        }
-        return items
-    }
-
-    /// The built-in views keep the icons this header drew for them; a plugin's is its declared one.
-    private func panelSymbol(_ view: InspectorViewEntry) -> String {
-        switch view.tab {
-        case .changes: "plus.forwardslash.minus"
-        case .files: "folder"
-        default: view.symbol
-        }
     }
 }
 
@@ -227,7 +139,7 @@ struct CustomHeaderLeading: View {
 
     var body: some View {
         if !sidebarShown {
-            Color.clear.frame(width: CustomChrome.trafficLights(style) - Space.sm - (style.window == .insetCard ? Space.sm : 0))
+            Color.clear.frame(width: CustomChrome.trafficLights - 2 * Space.sm)
             Button { NotificationCenter.default.post(name: .riffetToggleSidebar, object: workbench) } label: {
                 Image(icon: "sidebar.left")
             }
@@ -263,20 +175,9 @@ struct CustomPageBar<Actions: View>: View {
             .padding(.horizontal, Space.sm)
             .frame(height: style.layout.header)
             .background { WindowDragArea() }
-            if style.header == .titleMenu {
-                Rectangle().fill(palette.headerRule).frame(height: 1)
-            }
             // The page rose past the workbench's own (`WorkbenchView.coverRise`).
             ServiceAlertBanner()
         }
-    }
-}
-
-extension CustomHeader {
-    /// A panel's icon opens its panel, and closes it when it is the one on screen.
-    fileprivate func togglePanel(_ tab: InspectorTab) {
-        let state = workbench.inspector
-        if state.open && state.tab == tab { workbench.setInspectorOpen(false) } else { workbench.showInspector(tab) }
     }
 }
 
@@ -445,7 +346,7 @@ private struct SessionTab: View, Equatable {
                     // Only until the failure is seen, as the sidebar (docs/design/DECISIONS.md 2026-11-17).
                     Circle().fill(palette.danger).frame(width: 6, height: 6)
                 } else if unread {
-                    Circle().fill(style.ink == .quiet ? palette.fg : palette.accent).frame(width: 6, height: 6)
+                    Circle().fill(palette.fg).frame(width: 6, height: 6)
                 }
             }
             .frame(width: 18, height: 18)

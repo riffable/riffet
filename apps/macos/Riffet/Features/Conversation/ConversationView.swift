@@ -154,8 +154,8 @@ struct ConversationView: View {
             banner: shownBanner, providerMissing: missingBar,
             unknownAttention: state.unknownAttention, catalogStatus: status, notices: notices
         )
-        // The column is the style's right-hand recipe; whether it fits is decided by width alone.
-        let asideAllowed = DisplayPreferences.shared.style.rightPanel == .outline && DisplayPreferences.shared.sessionOverview && !quickChat && !fullscreen && !workbench.showsCanvas
+        // Whether the column fits is decided by width alone.
+        let asideAllowed = DisplayPreferences.shared.sessionOverview && !quickChat && !fullscreen && !workbench.showsCanvas
         let asideShown = asideAllowed && asideFits
         return ChatMotion(workbench: workbench, composer: composer, sessionId: session.id, layout: layout) {
             VStack(spacing: 0) {
@@ -828,7 +828,6 @@ struct NoticeBar<Actions: View>: View {
 
     var body: some View {
         let bare = tone == .neutral && !floating
-        let raised = DisplayPreferences.shared.style.surface == .raised
         HStack(spacing: Space.sm + 2) {
             Image(icon: symbol).font(.riffet(size: S(12))).foregroundStyle(color)
             Text(text).font(.riffet(size: S(13))).foregroundStyle(palette.fg2)
@@ -869,10 +868,10 @@ struct NoticeBar<Actions: View>: View {
         .background {
             if floating {
                 RoundedRectangle(cornerRadius: Radius.card, style: .continuous).fill(palette.bgElevated)
-                    .elevation(raised ? .raised : nil)
+                    .elevation(.raised)
             }
         }
-        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(bare ? Color.clear : raised ? palette.line : palette.lineStrong, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(bare ? Color.clear : palette.line, lineWidth: 1))
     }
 
     private var color: Color {
@@ -1043,13 +1042,11 @@ struct DockCard<Content: View>: View {
 extension View {
     /// The web's `dockSurface`: an elevated card with a strong hairline, so it stands off the
     /// transcript scrolling behind it.
-    /// An outlined style (`StyleSpec.Surface.outlined`) draws it by a stronger hairline, no shadow.
     @MainActor
     func dockSurface(_ palette: Palette) -> some View {
-        let raised = DisplayPreferences.shared.style.surface == .raised
-        return background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(raised ? palette.line : palette.lineStrong, lineWidth: 1))
-            .elevation(raised ? .raised : nil)
+        background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
+            .elevation(.raised)
     }
 }
 

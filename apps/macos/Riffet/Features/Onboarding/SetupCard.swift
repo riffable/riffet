@@ -73,7 +73,7 @@ struct SetupCard: View {
         .background(
             shape
                 .fill(palette.bgElevated)
-                .elevation(DisplayPreferences.shared.style.surface == .outlined ? nil : .float)
+                .elevation(.float)
         )
         .overlay(shape.strokeBorder(palette.line, lineWidth: 1))
         .overlay(shape.strokeBorder(palette.fg3, lineWidth: 1.5).opacity(pulse ? 1 : 0).allowsHitTesting(false))

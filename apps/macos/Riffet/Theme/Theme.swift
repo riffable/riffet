@@ -308,16 +308,11 @@ struct Palette: Sendable {
     }
 
     /// What our own drawing marks with: a checked box, a running step, a chosen card, a link, a
-    /// chart's single series. The theme's accent in the drawn styles; ink in the native one, where
-    /// the accent belongs to the system's own controls (docs/design/macos-native.md 1.1).
-    @MainActor static var markRole: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable {
-        DisplayPreferences.shared.style.backend == .native ? \.fg2 : \.accent
-    }
+    /// chart's single series.
+    static let markRole: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.accent
 
-    /// The fill behind a marked thing: the accent's wash, or the muted fill in the native style.
-    @MainActor static var markSoftRole: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable {
-        DisplayPreferences.shared.style.backend == .native ? \.bgMuted : \.accentSoft
-    }
+    /// The fill behind a marked thing.
+    static let markSoftRole: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.accentSoft
 
     @MainActor var mark: Color { self[dynamicMember: Palette.markRole] }
     @MainActor var markSoft: Color { self[dynamicMember: Palette.markSoftRole] }

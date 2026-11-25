@@ -15,8 +15,8 @@ export interface CompareRow {
   keys?: Array<string | number>;
 }
 
-/** One column per style, rows grouped under small headings, ruled like a table in a book. */
-export function CompareTable({ columns, groups }: { columns: readonly CompareColumn[]; groups: Array<{ title?: string; note?: ReactNode; rows: CompareRow[] }> }) {
+/** One column per style, rows grouped under small headings, ruled like a table in a book. With one style, `head` false leaves out the row naming it. */
+export function CompareTable({ columns, groups, head = true }: { columns: readonly CompareColumn[]; groups: Array<{ title?: string; note?: ReactNode; rows: CompareRow[] }>; head?: boolean }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[600px] table-fixed border-collapse text-sm">
@@ -24,7 +24,7 @@ export function CompareTable({ columns, groups }: { columns: readonly CompareCol
           <col className={columns.length > 4 ? 'w-[24%]' : 'w-[34%]'} />
           {columns.map((column) => <col key={column.id} />)}
         </colgroup>
-        <thead>
+        {head && <thead>
           <tr>
             <th />
             {columns.map((column) => (
@@ -34,7 +34,7 @@ export function CompareTable({ columns, groups }: { columns: readonly CompareCol
               </th>
             ))}
           </tr>
-        </thead>
+        </thead>}
         <tbody>
           {groups.map((group, groupIndex) => (
             <Fragment key={groupIndex}>

@@ -79,7 +79,6 @@ struct ProjectConfigSettings: View {
                     ForEach(projects, id: \.id) { Text($0.name).tag($0.id) }
                 }
                 .labelsHidden()
-                .formPicker()
                 configList
             }
         }
@@ -120,7 +119,7 @@ struct ProjectConfigSettings: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.line))
     }
 
@@ -220,7 +219,7 @@ struct ProjectConfigSettings: View {
                 .disabled(readOnly || busy)
                 .scrollContentBackground(.hidden)
                 .padding(Space.sm)
-                .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             SettingsErrorText(message: error)
@@ -232,7 +231,7 @@ struct ProjectConfigSettings: View {
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.line))
     }
 
@@ -262,7 +261,7 @@ struct ProjectConfigSettings: View {
                     .font(.riffet(size: S(13), design: .monospaced))
                     .padding(.horizontal, Space.sm)
                     .padding(.vertical, 6)
-                    .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                    .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
             }
             VStack(alignment: .leading, spacing: Space.sm) {
@@ -273,7 +272,7 @@ struct ProjectConfigSettings: View {
                     .font(.riffet(size: S(13), design: .monospaced))
                     .scrollContentBackground(.hidden)
                     .padding(Space.sm)
-                    .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                    .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
                     .frame(minHeight: 180, maxHeight: .infinity)
             }
@@ -289,7 +288,7 @@ struct ProjectConfigSettings: View {
         }
         .padding(Space.lg)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(palette.line))
     }
 

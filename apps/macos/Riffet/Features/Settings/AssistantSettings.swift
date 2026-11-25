@@ -88,7 +88,6 @@ struct AssistantSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .formPicker()
                     .fixedSize()
                     .disabled(save.busy)
                 }

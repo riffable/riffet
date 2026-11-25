@@ -150,9 +150,9 @@ struct ThemeEditorView: View {
                 }
                 Section {
                     TextField("名称", text: nameBinding)
-                        .formField(label: "名称")
+                        .formField()
                     TextField("说明（可选）", text: summaryBinding)
-                        .formField(label: "说明（可选）")
+                        .formField()
                 }
                 // The light/dark switch picks the half being previewed and edited below.
                 Section {

@@ -216,8 +216,7 @@ struct CommandResultSpec: Equatable, Sendable {
 enum RowSource {
     /// A command's result under the answer row before it.
     case commandResult(CommandResultSpec)
-    /// [past]: a row before the latest user message (native style only), whose prose reads in fg2.
-    case timeline(any TimelineRow, gap: RowGap, speed: SpeedTag?, past: Bool)
+    case timeline(any TimelineRow, gap: RowGap, speed: SpeedTag?)
     case lineage(LineageSpec)
     case handedOff(HandedOffSpec)
     /// Shown only when an older page keeps failing; paging otherwise happens unseen.
@@ -259,7 +258,6 @@ struct RowBuilder {
     /// The Markdown block being laid out may still grow: the last block of a streaming row's text.
     private var growing = false
     private var markdownDepth = 0
-    private var past = false
 
     init(style: TranscriptStyle, width: CGFloat, ui: TranscriptUIStore, root: String?, projectId: String?, stale: Bool, suppressesHeldFooter: Bool = false, supportsRecovery: Bool = false) {
         self.style = style
@@ -286,7 +284,6 @@ struct RowBuilder {
         chapters = []
         answerBody = nil
         collectsChapters = false
-        past = false
         pending = []
         ticking = false
         codeIndex = 0
@@ -388,8 +385,7 @@ struct RowBuilder {
         case let .working(spec):
             fragments.append(Fragment(frame: CGRect(x: x, y: 12, width: w, height: 28), kind: .working(spec)))
             return RowLayout(height: 40, fragments: fragments, ticking: true)
-        case let .timeline(row, gap, speed, past):
-            self.past = past
+        case let .timeline(row, gap, speed):
             let top = style.rhythm.gap(gap)
             let height: CGFloat
             var message: String?
@@ -617,7 +613,7 @@ struct RowBuilder {
 
     private mutating func assistantMessage(_ item: TimelineItemAssistant, footer: TurnFooter, runId: String? = nil, speed: SpeedTag?, stopped: Bool = false, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let source = item.text
-        var cursor = y + markdown(source, x: x, y: y, width: width, muted: false, compact: false, bodyColor: past ? style.color(\.fg2) : nil)
+        var cursor = y + markdown(source, x: x, y: y, width: width, muted: false, compact: false, bodyColor: nil)
         if collectsChapters { answerBody = CGRect(x: x, y: y, width: width, height: cursor - y) }
         if footer != .none, footer != .held || !suppressesHeldFooter {
             cursor += style.rhythm.footer
@@ -646,22 +642,15 @@ struct RowBuilder {
     private mutating func processBlock(_ row: TimelineRowProcess, key: String, runId: String?, speed: SpeedTag?, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let open = ui.processOpen(row, key: key)
         let running = row.running
-        // The list form's summaries are text alone, as its tool runs' are.
-        let list = style.toolRun == .list
-        // Quiet, the header names the process without its clock: the working line under the turn
-        // already counts the time, and one turn shows one running state.
-        let live = running && style.ink != .quiet
+        // The header names the process without its clock: the working line under the turn already
+        // counts the time, and one turn shows one running state.
         let header = DisclosureSpec(
-            icon: .symbol("sparkles", size: 12, color: live ? style.color(style.mark) : style.color(\.fg4)),
-            title: running && !live ? "Working" : processHeaderLabel(row: row, nowMillis: Int64(Date().timeIntervalSince1970 * 1000)),
-            titleFont: style.figures(list ? 14 : 13),
+            icon: .symbol("sparkles", size: 12, color: style.color(\.fg4)),
+            title: running ? "Working" : processHeaderLabel(row: row, nowMillis: Int64(Date().timeIntervalSince1970 * 1000)),
+            titleFont: style.figures(13),
             chevron: .always(open: open),
-            shimmer: live,
-            clock: live ? .process(row) : nil,
-            action: .toggleProcess,
-            variant: list ? .listSummary : .plain
+            action: .toggleProcess
         )
-        if live { ticking = true }
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(header)))
         var cursor = y + style.row
         if open {
@@ -757,47 +746,15 @@ struct RowBuilder {
         var runInline: [DisclosureSpec.Piece] = []
         if summary.totalAdded > 0 { runInline.append(.init(text: "+\(summary.totalAdded)", font: style.mono(12), color: style.color(\.success))) }
         if summary.totalRemoved > 0 { runInline.append(.init(text: "−\(summary.totalRemoved)", font: style.mono(12), color: style.color(\.danger))) }
-        let list = style.toolRun == .list
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(DisclosureSpec(
             icon: .symbol(ToolSymbols.symbol(summary.primaryIcon), size: 12, color: style.color(\.fg4)),
             title: title,
-            titleFont: list ? style.font(14) : style.font(13),
+            titleFont: style.font(13),
             inline: runInline,
-            chevron: list ? .always(open: effectiveOpen) : .hover(open: effectiveOpen),
-            action: .toggleToolRun(id: id, open: effectiveOpen),
-            variant: list ? .listSummary : .plain
+            chevron: .hover(open: effectiveOpen),
+            action: .toggleToolRun(id: id, open: effectiveOpen)
         ))))
         guard effectiveOpen else { return style.row }
-        if list {
-            // The calls sit in bordered lists under the line; reasoning between them stands on its own row.
-            var cursor = y + style.row + 10
-            var index = 0
-            while index < grouped.count {
-                var end = index
-                while end < grouped.count {
-                    let isToolEntry: Bool = switch onEnum(of: grouped[end]) {
-                    case .merged: true
-                    case let .single(single): single.item is TimelineItemTool
-                    }
-                    if !isToolEntry { break }
-                    end += 1
-                }
-                if end > index {
-                    if index > 0 { cursor += Self.listGap }
-                    cursor += toolBoxEntries(Array(grouped[index..<end]), turnActive: turnActive, x: x, y: cursor, width: width)
-                    if end < grouped.count { cursor += Self.listGap }
-                    index = end
-                } else {
-                    if case let .single(single) = onEnum(of: grouped[index]) {
-                        let start = fragments.count
-                        cursor += processItem(single.item, running: running, turnActive: turnActive, x: x, y: cursor, width: width)
-                        noteItem(single.item, from: start)
-                    }
-                    index += 1
-                }
-            }
-            return cursor + 4 - y
-        }
         // The calls hang off a hairline under the run's icon, so they read as its contents.
         var cursor = y + style.row + 2
         let indent: CGFloat = 16
@@ -819,57 +776,8 @@ struct RowBuilder {
         return cursor + 4 - y
     }
 
-    /// The room between a bordered list and the line or list next to it.
-    private static let listGap: CGFloat = 8
-
-    /// Calls in one bordered list (the Claude style): a row each, a hairline between them. The rows
-    /// are inset by the border, so their hover wash and the box share the corners.
-    private mutating func toolBox(_ tools: [TimelineItemTool], turnActive: Bool, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
-        toolBoxEntries(tools.enumerated().map { ToolRunGroupEntrySingle(item: $0.element, index: Int32($0.offset)) }, turnActive: turnActive, x: x, y: y, width: width)
-    }
-
-    private mutating func toolBoxEntries(_ entries: [any ToolRunGroupEntry], turnActive: Bool, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
-        let box = fragments.count
-        fragments.append(Fragment(frame: .zero, kind: .box(BoxSpec(stroke: style.color(\.lineStrong), radius: style.radii.card))))
-        var cursor = y + 1
-        for (index, entry) in entries.enumerated() {
-            if index > 0 {
-                fragments.append(Fragment(frame: CGRect(x: x + 1, y: cursor, width: width - 2, height: 1), kind: .box(BoxSpec(fill: style.color(\.line)))))
-                cursor += 1
-            }
-            let start = fragments.count
-            listPlace = entries.count == 1 ? .only : index == 0 ? .first : index == entries.count - 1 ? .last : .middle
-            switch onEnum(of: entry) {
-            case let .single(single):
-                if let tool = single.item as? TimelineItemTool {
-                    cursor += toolCall(tool, turnActive: turnActive, x: x + 1, y: cursor, width: width - 2)
-                    items.append(RowLayout.ItemSpan(item: tool, fragments: start..<fragments.count))
-                }
-            case let .merged(merged):
-                cursor += mergedTools(merged, x: x + 1, y: cursor, width: width - 2)
-                if let first = merged.items.first {
-                    items.append(RowLayout.ItemSpan(item: first, fragments: start..<fragments.count))
-                }
-            }
-            listPlace = nil
-        }
-        cursor += 1
-        fragments[box].frame = CGRect(x: x, y: y, width: width, height: cursor - y)
-        return cursor - y
-    }
-
-    /// A call's one-line height: the Claude list gives it more air.
-    private var callRow: CGFloat { style.toolRun == .list ? (32 * style.scale).rounded() : style.row }
-
-    /// The place of the call being laid out in its list; `.plain` outside one.
-    private var listPlace: DisclosureSpec.Place?
-
-    /// The variant of a call's row: a row whose call opens below it no longer ends the list at its own bottom.
-    private func callVariant(extended: Bool) -> DisclosureSpec.Variant {
-        guard let place = listPlace else { return .plain }
-        guard extended else { return .listRow(place) }
-        return .listRow(place == .only || place == .first ? .first : .middle)
-    }
+    /// A call's one-line height.
+    private var callRow: CGFloat { style.row }
 
     /// The web's `toolRunSummary` wording with counts, one category at a time.
     private static func toolRunCountLabel(_ entry: ToolRunCount) -> String {
@@ -885,9 +793,9 @@ struct RowBuilder {
     }
 
     /// Left-dark / right-muted core object piece for a unified 4-slot tool row.
-    private func toolDetailPiece(_ row: ToolRowPresentation, secondaryOverride: String? = nil, list: Bool) -> DisclosureSpec.Piece {
+    private func toolDetailPiece(_ row: ToolRowPresentation, secondaryOverride: String? = nil) -> DisclosureSpec.Piece {
         let secondary = secondaryOverride ?? row.secondary
-        let primaryColor = list ? style.color(\.fg) : style.color(\.fg2)
+        let primaryColor = style.color(\.fg2)
         let quietColor = style.color(\.fg4)
         let prefixLead = row.prefix.flatMap { $0.isEmpty ? nil : "\($0) " } ?? ""
         let quietPrefix = prefixLead.utf16.count
@@ -897,19 +805,19 @@ struct RowBuilder {
             let tail = (secondary?.isEmpty == false) ? "  " + secondary! : ""
             let full = prefixLead + parts.name + tail
             let quietFrom = tail.isEmpty ? nil : (prefixLead.utf16.count + parts.name.utf16.count)
-            let font = list ? style.font(14) : style.mono(12)
+            let font = style.mono(12)
             return .init(text: full, font: font, color: primaryColor, quiet: quietPrefix, quietFrom: quietFrom, quietColor: quietColor)
         case "prose":
             let tail = (secondary?.isEmpty == false) ? "  " + secondary! : ""
             let full = prefixLead + row.primary + tail
             let quietFrom = tail.isEmpty ? nil : (prefixLead.utf16.count + row.primary.utf16.count)
-            let font = list ? style.font(14) : style.font(13)
+            let font = style.font(13)
             return .init(text: full, font: font, color: primaryColor, quiet: quietPrefix, quietFrom: quietFrom, quietColor: quietColor)
         default:
             let tail = (secondary?.isEmpty == false) ? "  " + secondary! : ""
             let full = prefixLead + row.primary + tail
             let quietFrom = tail.isEmpty ? nil : (prefixLead.utf16.count + row.primary.utf16.count)
-            let font = list ? style.mono(13) : style.mono(12)
+            let font = style.mono(12)
             return .init(text: full, font: font, color: primaryColor, quiet: quietPrefix, quietFrom: quietFrom, quietColor: quietColor)
         }
     }
@@ -937,9 +845,6 @@ struct RowBuilder {
         case let .thought(thought):
             return self.thought(thought, running: running, x: x, y: y, width: width)
         case let .tool(tool):
-            // In the Claude style a call lives in a bordered list, a lone one in a list of its own.
-            // The box keeps the room a summary line has around it, so it never touches its neighbours.
-            if style.toolRun == .list { return toolBox([tool], turnActive: turnActive, x: x, y: y + Self.listGap, width: width) + 2 * Self.listGap }
             return toolCall(tool, turnActive: turnActive, x: x, y: y, width: width)
         case let .plan(plan):
             return self.plan(todoEntries(plan: plan), x: x + 24, y: y + 4, width: width - 24) + 8
@@ -1011,20 +916,17 @@ struct RowBuilder {
 
     private mutating func tool(_ presentation: ToolPresentation, key: String, activity: NativeActivity?, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let id = "tool:\(key)"
-        let list = style.toolRun == .list
         let rowH = callRow
-        // Where the row's content starts and stops: the Claude list pads 16 from the border.
-        let lead: CGFloat = list ? 15 : 24
-        let tail: CGFloat = list ? 15 : 0
+        let lead: CGFloat = 24
+        let tail: CGFloat = 0
         let open = ui.isOpen(id) && !presentation.opensSubagent
         let stopping = activity.map { ui.isStopping($0.id) } ?? false
         let activityState = activity.map { activityView(activity: $0, stopping: stopping, nowMillis: Int64(Date().timeIntervalSince1970 * 1000)) }
         let background = activity?.kind == .backgroundTask
         let stop = activity.flatMap { task in activityState?.canStop == true ? ButtonSpec(title: String(localized: "停止"), action: .stopActivity(id: task.id, warning: activityState?.stopWarning), loading: false) : nil }
         let stopSize = stop.map(buttonSize)
-        // The list's row spans the full width, its hover wash with it; the call's own row keeps clear of the button.
-        let reserve = stopSize.map { $0.width + 6 + tail } ?? 0
-        let headerWidth = list ? width : width - reserve
+        // The call's own row keeps clear of the button.
+        let headerWidth = width - (stopSize.map { $0.width + 6 + tail } ?? 0)
         if activityState?.running == true { ticking = true }
         let row: ToolRowPresentation = if presentation.opensSubagent {
             ToolRowPresentation(icon: "agent", verb: "Agent", prefix: nil, primary: presentation.title, primaryKind: "prose", secondary: presentation.detail, lineRange: nil, lineCount: nil, extraCommands: nil, extraFiles: nil, mergeKey: nil, mergedSecondary: nil)
@@ -1044,20 +946,18 @@ struct RowBuilder {
         let header = DisclosureSpec(
             icon: presentation.running ? .spinner : .symbol(ToolSymbols.symbol(row.icon), size: 12, color: presentation.failed ? style.color(\.danger) : style.color(\.fg4)),
             title: row.verb,
-            titleFont: list ? style.mono(13, .medium) : style.mono(12, .medium),
+            titleFont: style.mono(12, .medium),
             titleMinWidth: style.s(48),
-            detail: toolDetailPiece(row, list: list),
+            detail: toolDetailPiece(row),
             inline: inline,
             trailing: trailing,
-            chevron: presentation.opensSubagent ? .arrow : list ? .always(open: open) : .hover(open: open),
+            chevron: presentation.opensSubagent ? .arrow : .hover(open: open),
             action: presentation.opensSubagent ? .openSubagent(id: presentation.id, title: presentation.title) : .toggle(id),
-            help: row.primaryKind == "path" ? row.primary : nil,
-            variant: callVariant(extended: open || !presentation.images.isEmpty),
-            reserve: list ? reserve : 0
+            help: row.primaryKind == "path" ? row.primary : nil
         )
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: headerWidth, height: rowH), kind: .disclosure(header)))
         if let stop, let stopSize {
-            fragments.append(Fragment(frame: CGRect(x: x + width - tail - stopSize.width, y: list ? y + (rowH - stopSize.height) / 2 : y, width: stopSize.width, height: stopSize.height), kind: .button(stop)))
+            fragments.append(Fragment(frame: CGRect(x: x + width - tail - stopSize.width, y: y, width: stopSize.width, height: stopSize.height), kind: .button(stop)))
         }
         var cursor = y + rowH
         let images = Array(presentation.images)
@@ -1085,10 +985,9 @@ struct RowBuilder {
 
     private mutating func mergedTools(_ group: ToolRunGroupEntryMerged, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let id = "merged:\(group.key)"
-        let list = style.toolRun == .list
         let rowH = callRow
-        let lead: CGFloat = list ? 15 : 24
-        let tail: CGFloat = list ? 15 : 0
+        let lead: CGFloat = 24
+        let tail: CGFloat = 0
         let open = ui.isOpen(id)
         let row = group.presentation
         let secondary = row.mergedSecondary ?? row.secondary
@@ -1096,14 +995,13 @@ struct RowBuilder {
         let header = DisclosureSpec(
             icon: .symbol(ToolSymbols.symbol(row.icon), size: 12, color: group.failed ? style.color(\.danger) : style.color(\.fg4)),
             title: row.verb,
-            titleFont: list ? style.mono(13, .medium) : style.mono(12, .medium),
+            titleFont: style.mono(12, .medium),
             titleMinWidth: style.s(48),
-            detail: toolDetailPiece(row, secondaryOverride: secondary, list: list),
+            detail: toolDetailPiece(row, secondaryOverride: secondary),
             inline: inline,
-            chevron: list ? .always(open: open) : .hover(open: open),
+            chevron: .hover(open: open),
             action: .toggle(id),
-            help: row.primaryKind == "path" ? row.primary : nil,
-            variant: callVariant(extended: open)
+            help: row.primaryKind == "path" ? row.primary : nil
         )
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: rowH), kind: .disclosure(header)))
         guard open else { return rowH }
@@ -1198,10 +1096,9 @@ struct RowBuilder {
 
     private mutating func job(_ job: NativeJob, key: String, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let id = "job:\(job.id ?? key)"
-        let list = style.toolRun == .list
         let rowH = callRow
-        let lead: CGFloat = list ? 15 : 24
-        let tail: CGFloat = list ? 15 : 0
+        let lead: CGFloat = 24
+        let tail: CGFloat = 0
         let open = ui.isOpen(id)
         let running = job.status == .running
         let failed = job.status == .failed
@@ -1212,13 +1109,12 @@ struct RowBuilder {
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: rowH), kind: .disclosure(DisclosureSpec(
             icon: running ? .spinner : .symbol(ToolSymbols.symbol(row.icon), size: 12, color: failed ? style.color(\.danger) : style.color(\.fg4)),
             title: row.verb,
-            titleFont: list ? style.mono(13, .medium) : style.mono(12, .medium),
+            titleFont: style.mono(12, .medium),
             titleMinWidth: style.s(48),
-            detail: toolDetailPiece(row, list: list),
+            detail: toolDetailPiece(row),
             inline: inline,
-            chevron: list ? .always(open: open) : .hover(open: open),
-            action: .toggle(id),
-            variant: callVariant(extended: open)
+            chevron: .hover(open: open),
+            action: .toggle(id)
         ))))
         guard open else { return rowH }
         var cursor = y + rowH + 4
@@ -1623,7 +1519,7 @@ struct RowBuilder {
         // Only the block still streaming waits; a finished fence above it renders now rather than
         // all at once when the reply ends.
         if isDiagram && wantsRendered && !growing {
-            let request = MermaidRequest(source: code, dark: style.dark, scale: style.scale, color: style.hex(\.fg), background: style.hex(style.block == .filled ? \.bgSubtle : style.paper), line: style.hex(\.lineStrong), accent: style.hex(\.accent), language: language?.lowercased() ?? "mermaid")
+            let request = MermaidRequest(source: code, dark: style.dark, scale: style.scale, color: style.hex(\.fg), background: style.hex(\.bgSubtle), line: style.hex(\.lineStrong), accent: style.hex(\.accent), language: language?.lowercased() ?? "mermaid")
             switch MermaidImages.image(request) {
             case let .image(image): diagram = image
             case let .pending(token):

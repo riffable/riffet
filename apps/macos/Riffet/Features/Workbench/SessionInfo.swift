@@ -42,7 +42,7 @@ private struct RunningDot: View {
 
     var body: some View {
         Circle().fill(palette.fg2).frame(width: 5, height: 5)
-            .overlay(Circle().strokeBorder(palette.page, lineWidth: 1).padding(-1))
+            .overlay(Circle().strokeBorder(palette.bg, lineWidth: 1).padding(-1))
     }
 }
 
@@ -72,7 +72,7 @@ private struct SessionInfoView: View {
                     assistantRows
                 }
                 SessionMarksSection(workbench: workbench, session: session, close: close)
-                SessionWorkActions(workbench: workbench, inline: true, onOpen: close)
+                SessionWorkActions(workbench: workbench, onOpen: close)
             }
         }
         .frame(width: 320)

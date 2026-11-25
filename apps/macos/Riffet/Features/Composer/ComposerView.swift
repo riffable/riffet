@@ -59,8 +59,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     private var isFullscreen: Bool { fullscreen?.wrappedValue == true }
 
     private var editorHeight: CGFloat {
-        // One line is the line composer's whole shape, wherever it sits.
-        let minimum = lineHeight * (line ? 1 : minLines) + 4
+        let minimum = lineHeight * minLines + 4
         return min(max(textHeight, minimum), 260)
     }
 
@@ -126,45 +125,32 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         }
     }
 
-    /// The Claude-style recipe: a flat box with the attach and send buttons on its row, the controls under it.
-    private var line: Bool { DisplayPreferences.shared.style.composer == .line }
-
-    private var rowInset: CGFloat { line ? 7 : 0 }
-
     var body: some View {
-        let line = line
-        return VStack(alignment: .leading, spacing: 0) {
-            box(line: line)
-            if line {
-                envRow
+        box
+            .frame(maxHeight: isFullscreen ? .infinity : nil)
+            .animation(motion, value: LayoutKey(items: model.items.map(\.id), references: features.references.map { $0.sessionId ?? $0.path }, status: statusMessage))
+            // A conversation kept under the home page or a page takes the keyboard only once it is back.
+            .onAppear {
+                shownDraft = ObjectIdentifier(model)
+                if !covered { model.focus() }
             }
-        }
-        .frame(maxHeight: isFullscreen ? .infinity : nil)
-        .animation(motion, value: LayoutKey(items: model.items.map(\.id), references: features.references.map { $0.sessionId ?? $0.path }, status: statusMessage))
-        // A conversation kept under the home page or a page takes the keyboard only once it is back.
-        .onAppear {
-            shownDraft = ObjectIdentifier(model)
-            if !covered { model.focus() }
-        }
-        .onChange(of: ObjectIdentifier(model)) { _, draft in shownDraft = draft }
-        .onChange(of: covered) { _, covered in if !covered { model.focus() } }
-        .onReceive(NotificationCenter.default.publisher(for: .riffetFocusComposer)) { note in
-            if note.targets(scope), !covered { model.focus() }
-        }
-        .onChange(of: trigger) { old, new in
-            highlight = 0
-            if case .slash? = new, old == nil || { if case .slash? = old { return false } else { return true } }() {
-                features.onSlashOpen?()
+            .onChange(of: ObjectIdentifier(model)) { _, draft in shownDraft = draft }
+            .onChange(of: covered) { _, covered in if !covered { model.focus() } }
+            .onReceive(NotificationCenter.default.publisher(for: .riffetFocusComposer)) { note in
+                if note.targets(scope), !covered { model.focus() }
             }
-        }
-        .task(id: mentionQuery) { await searchFiles() }
-        .zIndex(menuOpen ? 10 : 0)
+            .onChange(of: trigger) { old, new in
+                highlight = 0
+                if case .slash? = new, old == nil || { if case .slash? = old { return false } else { return true } }() {
+                    features.onSlashOpen?()
+                }
+            }
+            .task(id: mentionQuery) { await searchFiles() }
+            .zIndex(menuOpen ? 10 : 0)
     }
 
-    /// The input surface. Both recipes share this one tree (attachments, the row holding the single text
-    /// view, the status line): the recipe changes parameters and which neighbours sit on the row, so the
-    /// text view is never rebuilt by a switch.
-    private func box(line: Bool) -> some View {
+    /// The input surface: attachments, the text view, the status line and the toolbar.
+    private var box: some View {
         VStack(alignment: .leading, spacing: 0) {
             if !model.items.isEmpty || !features.references.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -184,52 +170,35 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                 .padding(.top, Space.sm)
                 .transition(.opacity)
             }
-            HStack(alignment: .bottom, spacing: line ? 4 : 0) {
-                if line {
-                    attachButton(line: true).padding(.bottom, rowInset)
-                    sendLaterButton(line: true).padding(.bottom, rowInset)
+            ZStack(alignment: .topLeading) {
+                if model.text.isEmpty && !composing {
+                    Text(placeholder)
+                        .font(.riffet(size: S(14)))
+                        .foregroundStyle(palette.fg4)
+                        .padding(.top, 2)
+                        .allowsHitTesting(false)
                 }
-                ZStack(alignment: .topLeading) {
-                    if model.text.isEmpty && !composing {
-                        Text(placeholder)
-                            .font(.riffet(size: S(line ? 15 : 14)))
-                            .foregroundStyle(line ? palette.fg3 : palette.fg4)
-                            .padding(.top, 2)
-                            .allowsHitTesting(false)
-                    }
-                    ComposerTextView(
-                        text: $model.text,
-                        height: $textHeight,
-                        caret: $model.caret,
-                        focusToken: model.focusToken,
-                        caretRequest: model.caretRequest,
-                        enterSends: features.enterSends,
-                        fontSize: S(line ? 15 : 14),
-                        resize: motion,
-                        onSubmit: { interrupt in if sendEnabled && !model.schedulingLater { onSend(interrupt) } },
-                        onPasteFiles: { _ in model.paste(upload: upload) },
-                        onKey: handle,
-                        onComposing: { composing = $0 }
-                    )
-                    .frame(height: isFullscreen ? nil : editorHeight)
-                    .frame(maxHeight: isFullscreen ? .infinity : nil)
-                }
-                .padding(.horizontal, line ? 4 : Space.lg)
-                .padding(.top, line ? 10 : Space.md + 2)
-                .padding(.bottom, line ? 10 : 0)
-                .contentShape(Rectangle())
-                .onTapGesture { model.focus() }
-                if line {
-                    if showsFullscreenControl, let fullscreen {
-                        fullscreenButton(fullscreen).padding(.bottom, 10).transition(.opacity)
-                    }
-                    actionButton.padding(.bottom, rowInset)
-                }
+                ComposerTextView(
+                    text: $model.text,
+                    height: $textHeight,
+                    caret: $model.caret,
+                    focusToken: model.focusToken,
+                    caretRequest: model.caretRequest,
+                    enterSends: features.enterSends,
+                    fontSize: S(14),
+                    resize: motion,
+                    onSubmit: { interrupt in if sendEnabled && !model.schedulingLater { onSend(interrupt) } },
+                    onPasteFiles: { _ in model.paste(upload: upload) },
+                    onKey: handle,
+                    onComposing: { composing = $0 }
+                )
+                .frame(height: isFullscreen ? nil : editorHeight)
+                .frame(maxHeight: isFullscreen ? .infinity : nil)
             }
-            .frame(minHeight: line ? 46 : 0)
-            .padding(.leading, line ? 6 : 0)
-            .padding(.trailing, line ? 8 : 0)
-            .animation(motion, value: line && showsFullscreenControl)
+            .padding(.horizontal, Space.lg)
+            .padding(.top, Space.md + 2)
+            .contentShape(Rectangle())
+            .onTapGesture { model.focus() }
 
             FeedbackRegion(value: statusMessage.map { StatusFeedback(text: $0, error: statusError != nil) }) { message, live in
                 HStack {
@@ -242,31 +211,27 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                 }
                 .padding(.horizontal, Space.lg)
                 .padding(.top, Space.xs)
-                .padding(.bottom, line ? Space.sm : 0)
                 .transition(.opacity)
             }
             .id(ObjectIdentifier(model))
-            if !line {
-                HStack(spacing: Space.xxs) {
-                    attachButton(line: false)
-                    sendLaterButton(line: false)
-                    barView(line: false)
-                    actionButton.padding(.leading, Space.xs)
-                }
-                .padding(.horizontal, Space.sm)
-                .padding(.top, Space.xs)
-                .padding(.bottom, Space.sm)
+            HStack(spacing: Space.xxs) {
+                attachButton
+                sendLaterButton
+                barView
+                actionButton.padding(.leading, Space.xs)
             }
+            .padding(.horizontal, Space.sm)
+            .padding(.top, Space.xs)
+            .padding(.bottom, Space.sm)
         }
         .frame(maxHeight: isFullscreen ? .infinity : nil)
-        // The user bubble's radius: what is typed and what was sent share one shape. Same modifier chain
-        // in both recipes (`View.card` for the card); only the colours and the shadow differ.
+        // The user bubble's radius: what is typed and what was sent share one shape.
         .background(
             RoundedRectangle(cornerRadius: Radius.floating, style: .continuous)
-                .fill(line ? palette.page : palette.bgElevated)
-                .elevation(DisplayPreferences.shared.style.surface == .outlined ? nil : .float)
+                .fill(palette.bgElevated)
+                .elevation(.float)
         )
-        .overlay(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous).strokeBorder(line ? palette.lineStrong : palette.line, lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }
         .overlay(alignment: .topLeading) {
             if menuOpen, let trigger {
@@ -286,17 +251,9 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         .animation(Motion.fast, value: menuOpen)
     }
 
-    /// The controls that sit in the card's toolbar, under the box: right-aligned, outside it.
-    private var envRow: some View {
-        barView(line: true)
-            .environment(\.chipMetrics, .row)
-            .padding(.horizontal, 4)
-            .frame(height: 40)
-    }
-
     /// The clock beside the attach button: the draft, with its attachments and references, goes to this conversation at a later time.
     @ViewBuilder
-    private func sendLaterButton(line: Bool) -> some View {
+    private var sendLaterButton: some View {
         if let sendLater = features.sendLater {
             NativeMenuButton(entries: {
                 var entries: [NativeMenuEntry] = TimePreset.moments.compactMap { preset in
@@ -306,13 +263,9 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                 entries.append(.item(String(localized: "自定义时间…")) { laterDate = Date.now.addingTimeInterval(3600); pickingLater = true })
                 return entries
             }) {
-                if line {
-                    Image(icon: "clock").font(.riffet(size: S(16))).foregroundStyle(palette.fg2)
-                } else {
-                    Image(icon: "clock")
-                }
+                Image(icon: "clock")
             }
-            .buttonStyle(IconButtonStyle(size: line ? 32 : 26))
+            .buttonStyle(IconButtonStyle(size: 26))
             .disabled(!sendEnabled || !model.canSend || model.schedulingLater)
             .help("稍后发送")
             .accessibilityLabel("稍后发送")
@@ -329,7 +282,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         }
     }
 
-    private func attachButton(line: Bool) -> some View {
+    private var attachButton: some View {
         Button {
             // As on the web: files, then a session reference (an @ the mention menu picks up), then the tools.
             var entries: [NativeMenuEntry] = [.item(String(localized: "添加图片或文件"), symbol: "paperclip") { model.pickFiles(upload: upload) }]
@@ -343,13 +296,9 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             guard entries.count > 1 else { model.pickFiles(upload: upload); return }
             attachAnchor.popUp(entries: entries)
         } label: {
-            if line {
-                Image(icon: "plus").font(.riffet(size: S(16))).foregroundStyle(palette.fg2)
-            } else {
-                Image(icon: "plus")
-            }
+            Image(icon: "plus")
         }
-        .buttonStyle(IconButtonStyle(size: line ? 32 : 26))
+        .buttonStyle(IconButtonStyle(size: 26))
         .background(MenuAnchorView(anchor: attachAnchor))
         .help("添加附件（也可以拖入或粘贴）")
     }
@@ -374,8 +323,8 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         .accessibilityLabel(isFullscreen ? "退出全屏编辑 (esc)" : "全屏编辑")
     }
 
-    private func barView(line: Bool) -> some View {
-        bar(line: line)
+    private var barView: some View {
+        bar
             .frame(maxWidth: .infinity)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
                 barSpace = width
@@ -395,15 +344,14 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         guard let space = barSpace ?? ComposerBarWidths.space[barKind], space > 0 else { return true }
         // Never shown regular yet: show it once to measure it.
         guard let controls = controlsWidth, let trailing = trailingWidth else { return false }
-        let fullscreenWidth = showsFullscreenControl && !line ? fullscreenButtonSize + Space.xxs : 0
+        let fullscreenWidth = showsFullscreenControl ? fullscreenButtonSize + Space.xxs : 0
         return controls + trailing + fullscreenWidth + Space.sm + Space.xxs * 2 > space
     }
 
     /// One entry per composer surface: each passes its own kinds of controls.
-    /// The card's toolbar and the line recipe's row are different widths, so they keep separate figures.
-    private var barKind: ComposerBarWidths.Kind { .init(composer: ObjectIdentifier(Self.self), line: line) }
+    private var barKind: ComposerBarWidths.Kind { .init(composer: ObjectIdentifier(Self.self)) }
 
-    private func bar(line: Bool) -> some View {
+    private var bar: some View {
         let compact = compactBar
         // Each group in its own row: a modifier on a bare list of views would stack them vertically.
         return HStack(spacing: Space.xxs) {
@@ -413,14 +361,10 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                     guard !compactBar else { return }
                     controlsWidth = width
                 }
-            if !line {
-                Spacer(minLength: Space.sm)
-                if showsFullscreenControl, let fullscreen {
-                    fullscreenButton(fullscreen).transition(.opacity)
-                }
+            Spacer(minLength: Space.sm)
+            if showsFullscreenControl, let fullscreen {
+                fullscreenButton(fullscreen).transition(.opacity)
             }
-            // A line composer's row: the mode on its own at the leading edge, the model and its context at the trailing one.
-            if line { Spacer(minLength: Space.sm) }
             HStack(spacing: Space.xxs) { trailing }
                 .fixedSize(horizontal: !compact, vertical: false)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
@@ -429,7 +373,6 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                 }
         }
         .environment(\.compactControls, compact)
-        .environment(\.composerEnvRow, line)
         .environment(\.composerToolsSlot, toolsSlot)
         .animation(motion, value: showsFullscreenControl)
     }
@@ -524,7 +467,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             }
             .animation(reduceMotion ? nil : Motion.fast, value: stopping)
         }
-        .buttonStyle(ComposerActionButtonStyle(line: line))
+        .buttonStyle(ComposerActionButtonStyle())
         .disabled(stopping
             ? sendState?.sending == true || interrupting
             : !sendEnabled || !model.canSend || model.schedulingLater || sendState?.sending == true || interrupting)
@@ -561,28 +504,21 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     }
 }
 
-/// The send / stop button: the card's solid circle, or the line recipe's rounded square in the text colour.
+/// The send / stop button: a solid circle.
 private struct ComposerActionButtonStyle: ButtonStyle {
-    let line: Bool
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.riffet(size: S(13), weight: .bold))
-            .foregroundStyle(line ? (enabled ? palette.page : palette.fg4) : (enabled ? palette.primaryFg : palette.fg4))
-            .frame(width: line ? 32 : 30, height: line ? 32 : 30)
-            .background {
-                if line {
-                    RoundedRectangle(cornerRadius: Radius.container, style: .continuous).fill(enabled ? palette.fg : palette.bgActive)
-                } else {
-                    Circle().fill(enabled ? palette.primary : palette.bgMuted)
-                }
-            }
+            .foregroundStyle(enabled ? palette.primaryFg : palette.fg4)
+            .frame(width: 30, height: 30)
+            .background(Circle().fill(enabled ? palette.primary : palette.bgMuted))
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
             .animation(Motion.fast, value: configuration.isPressed)
-            .contentShape(RoundedRectangle(cornerRadius: line ? Radius.container : 15))
+            .contentShape(Circle())
     }
 }
 
@@ -598,7 +534,6 @@ enum ComposerMotion {
 private enum ComposerBarWidths {
     struct Kind: Hashable {
         let composer: ObjectIdentifier
-        let line: Bool
     }
     static var space: [Kind: CGFloat] = [:]
 }
@@ -768,7 +703,6 @@ struct SessionModelControls: View {
     /// Re-reads the session's catalog as the list opens.
     var refresh: (() async -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.composerEnvRow) private var envRow
 
     /// The current provider and those the conversation can move to, in the catalog's order. Empty
     /// (a flat list, fixed provider) when nothing qualifies.
@@ -788,8 +722,7 @@ struct SessionModelControls: View {
 
     var body: some View {
         HStack(spacing: Space.xxs) {
-            // The card's toolbar puts the meter before the model; a line composer's row after it.
-            if showsMeter, !envRow, let context = workbench.context {
+            if showsMeter, let context = workbench.context {
                 ContextMeter(context: context).transition(.opacity)
             }
             if let catalog, catalog.capabilities.supportsModelSelection {
@@ -807,9 +740,6 @@ struct SessionModelControls: View {
             } else if loading, catalog == nil {
                 ModelControls(catalog: [], selection: session.model, loading: true) { _ in }
                     .transition(.opacity)
-            }
-            if showsMeter, envRow, let context = workbench.context {
-                ContextMeter(context: context).transition(.opacity)
             }
         }
         // The meter and the model chip arrive after the bar (the first usage, the catalog): they fade in.
@@ -1300,8 +1230,6 @@ enum TouchID {
 }
 
 extension EnvironmentValues {
-    /// The controls sit in a line composer's environment row rather than in the card's toolbar.
-    @Entry var composerEnvRow = false
     /// What Escape does in a composer with no menu open, when its host has a use for it.
     @Entry var composerEscape: (() -> Void)?
 }

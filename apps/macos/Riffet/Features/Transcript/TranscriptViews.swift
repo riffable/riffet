@@ -376,8 +376,6 @@ final class DisclosureView: FragmentView, HoverTarget {
     private let title = LabelView()
     private var spinner: NSProgressIndicator?
     private var elapsed: String?
-    /// The Claude list's padding from its border, less the border the row is inset by.
-    private static let listPad: CGFloat = 15
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -442,9 +440,6 @@ final class DisclosureView: FragmentView, HoverTarget {
     func tick() {
         guard let spec else { return }
         switch spec.clock {
-        case let .process(row):
-            let label = processHeaderLabel(row: row, nowMillis: Int64(Date().timeIntervalSince1970 * 1000))
-            if label != self.spec?.title { self.spec?.title = label; cached = nil; needsLayout = true }
         case let .job(job):
             let started = ServerTime.date(job.startedAt)
             let running = job.status == .running && started != nil ? Int64(Date().timeIntervalSince(started!) * 1000) : 0
@@ -464,11 +459,7 @@ final class DisclosureView: FragmentView, HoverTarget {
 
     private var titleColor: NSColor {
         guard let style = host?.style, let spec else { return .labelColor }
-        switch spec.variant {
-        case .listRow: return spec.danger ? style.color(\.danger) : style.color(\.fg3)
-        case .listSummary: return style.color(hovering ? \.fg : \.fg2)
-        case .plain: return spec.danger ? style.color(\.danger) : hovering ? style.color(\.fg2) : style.color(\.fg3)
-        }
+        return spec.danger ? style.color(\.danger) : hovering ? style.color(\.fg2) : style.color(\.fg3)
     }
 
     private var trailingPieces: [DisclosureSpec.Piece] {
@@ -486,7 +477,6 @@ final class DisclosureView: FragmentView, HoverTarget {
         var dot = NSRect.zero
         var trailing: [NSRect] = []
         var chevron = NSRect.zero
-        var spinner = NSRect.zero
     }
 
     private var cached: (size: NSSize, metrics: Metrics)?
@@ -502,23 +492,15 @@ final class DisclosureView: FragmentView, HoverTarget {
         var result = Metrics()
         guard let spec, let style = host?.style else { return result }
         let h = bounds.height
-        // A list's rows and the line over it have no icon column; a running call's spinner ends the row instead.
-        let iconless = spec.variant != .plain
-        let listRow: Bool = if case .listRow = spec.variant { true } else { false }
-        let pad = listRow ? Self.listPad : 0
-        result.icon = iconless ? .zero : NSRect(x: 0, y: 0, width: 16, height: h)
-        var x: CGFloat = iconless ? pad : 16 + 8
+        result.icon = NSRect(x: 0, y: 0, width: 16, height: h)
+        var x: CGFloat = 16 + 8
         func width(of piece: DisclosureSpec.Piece) -> CGFloat {
             ceil(NSAttributedString(string: piece.text, attributes: [.font: piece.font]).lineWidth)
         }
         // The trailing pieces are the row's state and keep the right edge; the chevron is not
         // among them. It only appears under the pointer (or while open), so it follows the
         // content — title, detail, inline pieces — the way the arrow follows a diff's counts.
-        var right = bounds.width - pad - spec.reserve
-        if listRow, case .spinner = spec.icon {
-            result.spinner = NSRect(x: right - 14, y: (h - 14) / 2, width: 14, height: 14)
-            right -= 14 + 8
-        }
+        var right = bounds.width
         var trailing: [NSRect] = []
         for piece in trailingPieces.reversed() {
             let pieceWidth = width(of: piece)
@@ -569,20 +551,13 @@ final class DisclosureView: FragmentView, HoverTarget {
         let metrics = metrics()
         title.frame = metrics.title
         title.text = NSAttributedString(string: spec.title, attributes: [.font: spec.titleFont, .foregroundColor: titleColor])
-        applyShimmer(title.layer, on: spec.shimmer)
-        spinner?.frame = spec.variant.isListRow ? metrics.spinner : NSRect(x: 1, y: (bounds.height - 14) / 2, width: 14, height: 14)
+        spinner?.frame = NSRect(x: 1, y: (bounds.height - 14) / 2, width: 14, height: 14)
     }
 
     override func draw(_ dirtyRect: NSRect) {
         guard let spec, let style = host?.style else { return }
         let metrics = metrics()
-        if case let .listRow(place) = spec.variant, hovering {
-            // The first and last rows share the border's corners, one point inside it.
-            let radius = max(0, style.radii.card - 1)
-            style.color(\.bgHover).setFill()
-            Self.washPath(in: bounds, corners: (place == .first || place == .only ? radius : 0, place == .last || place == .only ? radius : 0)).fill()
-        }
-        if spec.variant == .plain, case let .symbol(name, size, color) = spec.icon, let image = symbolImage(name, size: style.s(size), color: color) {
+        if case let .symbol(name, size, color) = spec.icon, let image = symbolImage(name, size: style.s(size), color: color) {
             image.drawSymbol(in: NSRect(x: (16 - image.size.width) / 2, y: (bounds.height - image.size.height) / 2, width: image.size.width, height: image.size.height), of: self)
         }
         if let detail = spec.detail, metrics.detail.width > 0 {
@@ -630,27 +605,7 @@ final class DisclosureView: FragmentView, HoverTarget {
         }
     }
 
-
     func cursor(at point: NSPoint) -> NSCursor { .arrow }
-
-    /// The row's rectangle with the corners that touch the list's border rounded to it.
-    private static func washPath(in rect: NSRect, corners: (top: CGFloat, bottom: CGFloat)) -> NSBezierPath {
-        guard corners.top > 0 || corners.bottom > 0 else { return NSBezierPath(rect: rect) }
-        // The view is flipped: its top is minY.
-        let path = NSBezierPath()
-        let (t, b) = corners
-        path.move(to: NSPoint(x: rect.minX + t, y: rect.minY))
-        path.line(to: NSPoint(x: rect.maxX - t, y: rect.minY))
-        if t > 0 { path.appendArc(from: NSPoint(x: rect.maxX, y: rect.minY), to: NSPoint(x: rect.maxX, y: rect.minY + t), radius: t) }
-        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - b))
-        if b > 0 { path.appendArc(from: NSPoint(x: rect.maxX, y: rect.maxY), to: NSPoint(x: rect.maxX - b, y: rect.maxY), radius: b) }
-        path.line(to: NSPoint(x: rect.minX + b, y: rect.maxY))
-        if b > 0 { path.appendArc(from: NSPoint(x: rect.minX, y: rect.maxY), to: NSPoint(x: rect.minX, y: rect.maxY - b), radius: b) }
-        path.line(to: NSPoint(x: rect.minX, y: rect.minY + t))
-        if t > 0 { path.appendArc(from: NSPoint(x: rect.minX, y: rect.minY), to: NSPoint(x: rect.minX + t, y: rect.minY), radius: t) }
-        path.close()
-        return path
-    }
 
     func setHovered(_ on: Bool) {
         guard hovering != on else { return }
@@ -678,14 +633,10 @@ final class DisclosureView: FragmentView, HoverTarget {
     }
 }
 
-extension DisclosureSpec.Variant {
-    var isListRow: Bool { if case .listRow = self { true } else { false } }
-}
-
 extension DisclosureSpec {
     /// Draws the same: everything but the action and the clock's source.
     func looksLike(_ other: DisclosureSpec) -> Bool {
-        guard variant == other.variant, title == other.title, titleMinWidth == other.titleMinWidth, danger == other.danger, shimmer == other.shimmer, truncateMiddle == other.truncateMiddle,
+        guard title == other.title, titleMinWidth == other.titleMinWidth, danger == other.danger, truncateMiddle == other.truncateMiddle,
               titleFont == other.titleFont, help == other.help, dot === other.dot,
               detail?.text == other.detail?.text, detail?.color === other.detail?.color, detail?.quiet == other.detail?.quiet, detail?.quietFrom == other.detail?.quietFrom,
               inline.map(\.text) == other.inline.map(\.text), zip(inline, other.inline).allSatisfy({ $0.color === $1.color }),
@@ -808,8 +759,6 @@ final class FooterView: FragmentView {
             let running = job.status == .running ? started.map { Int64(Date().timeIntervalSince($0) * 1000) } ?? 0 : 0
             let millis = max(job.runningMs?.int64Value ?? 0, running)
             value = millis >= 1000 ? formatDurationMs(millis: millis) : nil
-        case let .process(row):
-            value = processHeaderLabel(row: row, nowMillis: Int64(Date().timeIntervalSince1970 * 1000))
         case nil:
             value = nil
         }
@@ -1052,14 +1001,8 @@ final class DiffHeaderView: FragmentView, HoverTarget {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let spec, let style = host?.style else { return }
-        if let fill = style.blockFill {
-            fill.setFill()
-            bounds.fill()
-        } else {
-            // Without a tint the header needs a rule to part it from the lines under it.
-            style.color(\.line).setFill()
-            NSRect(x: 0, y: bounds.height - 1, width: bounds.width, height: 1).fill()
-        }
+        style.blockFill.setFill()
+        bounds.fill()
         var right = bounds.width - 10
         var stats: [(String, NSColor)] = []
         if spec.removed > 0 { stats.append(("−\(spec.removed)", style.color(\.danger))) }
@@ -1234,10 +1177,8 @@ final class TableBlockView: FragmentView {
 
         override func draw(_ dirtyRect: NSRect) {
             guard let spec, let style = host?.style else { return }
-            if let fill = style.blockFill {
-                fill.setFill()
-                NSRect(x: 0, y: 0, width: bounds.width, height: spec.headerHeight).fill()
-            }
+            style.blockFill.setFill()
+            NSRect(x: 0, y: 0, width: bounds.width, height: spec.headerHeight).fill()
             style.color(\.line).setFill()
             var y = spec.headerHeight
             for height in spec.rowHeights {
@@ -1364,8 +1305,8 @@ final class ImageFragmentView: FragmentView, NSDraggingSource, HoverTarget {
         layer.masksToBounds = true
         layer.contentsGravity = spec.crop ? .resizeAspectFill : .resizeAspect
         layer.contents = shown
-        layer.backgroundColor = shown == nil ? style.blockFill?.cgColor : nil
-        layer.borderWidth = shown == nil && style.block == .filled ? 0 : 1
+        layer.backgroundColor = shown == nil ? style.blockFill.cgColor : nil
+        layer.borderWidth = shown == nil ? 0 : 1
         layer.borderColor = style.color(\.lineSoft).cgColor
     }
 
@@ -1459,17 +1400,13 @@ final class CardView: FragmentView, HoverTarget {
     override func draw(_ dirtyRect: NSRect) {
         guard let spec, let style = host?.style else { return }
         let box = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: style.radii.card, yRadius: style.radii.card)
-        if let fill = hovering ? style.color(\.bgHover) : style.blockFill {
-            fill.setFill()
-            box.fill()
-        }
+        (hovering ? style.color(\.bgHover) : style.blockFill).setFill()
+        box.fill()
         style.color(\.lineSoft).setStroke()
         box.stroke()
         let icon = NSRect(x: 12, y: (bounds.height - 34) / 2, width: 34, height: 34)
-        if style.block == .filled {
-            style.color(\.bgHover).setFill()
-            NSBezierPath(roundedRect: icon, xRadius: min(8, style.radii.container), yRadius: min(8, style.radii.container)).fill()
-        }
+        style.color(\.bgHover).setFill()
+        NSBezierPath(roundedRect: icon, xRadius: min(8, style.radii.container), yRadius: min(8, style.radii.container)).fill()
         if let image = symbolImage("rectangle.on.rectangle", size: style.s(15), weight: .medium, color: style.color(\.fg2)) {
             image.drawSymbol(in: NSRect(x: icon.midX - image.size.width / 2, y: icon.midY - image.size.height / 2, width: image.size.width, height: image.size.height), of: self)
         }
@@ -1519,11 +1456,9 @@ final class ChipView: FragmentView, HoverTarget {
         let attachment = spec.action == nil
         let radius = attachment ? min(8, style.radii.container) : style.radii.control
         let box = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: radius, yRadius: radius)
-        if let fill = style.blockFill {
-            fill.setFill()
-            box.fill()
-        }
-        if !attachment || style.block == .outlined {
+        style.blockFill.setFill()
+        box.fill()
+        if !attachment {
             style.color(\.lineSoft).setStroke()
             box.stroke()
         }

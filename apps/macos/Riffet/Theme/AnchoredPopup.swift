@@ -37,8 +37,8 @@ extension View {
         background(PopupAnchor(isPresented: isPresented, edge: edge, inset: inset, content: content()).allowsHitTesting(false))
     }
 
-    /// A system `.popover` under the system menu recipe; under the drawn one, a non-glass anchored
-    /// popup with the drawn menu's surface. The arrow edge only picks above or below.
+    /// A non-glass anchored popup with the drawn menu's surface, in place of a system `.popover`. The
+    /// arrow edge only picks above or below.
     func stylePopover<Content: View>(isPresented: Binding<Bool>, arrowEdge: Edge? = nil, @ViewBuilder content: @escaping () -> Content) -> some View {
         modifier(StylePopover(isPresented: isPresented, arrowEdge: arrowEdge, popup: content))
     }
@@ -50,14 +50,8 @@ private struct StylePopover<Popup: View>: ViewModifier {
     let popup: () -> Popup
 
     func body(content: Content) -> some View {
-        if DisplayPreferences.shared.style.menu == .drawn {
-            content.anchoredPopup(isPresented: $isPresented, edge: arrowEdge == .top ? .above : .below, inset: PopoverSurface<Popup>.inset) {
-                PopoverSurface(content: popup)
-            }
-        } else if let arrowEdge {
-            content.popover(isPresented: $isPresented, arrowEdge: arrowEdge, content: popup)
-        } else {
-            content.popover(isPresented: $isPresented, content: popup)
+        content.anchoredPopup(isPresented: $isPresented, edge: arrowEdge == .top ? .above : .below, inset: PopoverSurface<Popup>.inset) {
+            PopoverSurface(content: popup)
         }
     }
 }
@@ -82,29 +76,12 @@ private struct FloatingSurface: ViewModifier {
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
-        let style = DisplayPreferences.shared.style
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
             .background(palette.bgPopover, in: shape)
             .clipShape(shape)
-            .overlay(shape.strokeBorder(style.surface == .outlined ? palette.lineStrong : palette.line, lineWidth: 1))
-            .modifier(FloatingShadow(raised: style.surface == .raised, dark: scheme == .dark))
-    }
-}
-
-/// The shadow under a floating card. Raised, the web's `--shadow-pop` (`Elevation.pop`); outlined
-/// (the line style), one warm shadow under the hairline, the line style's own. The drawn menu's card
-/// layer matches it.
-struct FloatingShadow: ViewModifier {
-    let raised: Bool
-    let dark: Bool
-
-    func body(content: Content) -> some View {
-        if raised {
-            content.modifier(ElevationShadow(tier: .pop, dark: dark))
-        } else {
-            content.shadow(color: dark ? .black.opacity(0.5) : Color(red: 60 / 255, green: 50 / 255, blue: 40 / 255).opacity(0.16), radius: 20, y: 12)
-        }
+            .overlay(shape.strokeBorder(palette.line, lineWidth: 1))
+            .modifier(ElevationShadow(tier: .pop, dark: scheme == .dark))
     }
 }
 

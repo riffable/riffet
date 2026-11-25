@@ -50,7 +50,7 @@ export function ArchitectureChapter() {
     { name: t({ message: '模式', context: 'design-system-layer' }), holds: t`页面骨架、设置行、弹窗结构、确认与通知`, paths: ['docs/design/system/patterns.md', 'app/settings/SettingsLayout.tsx', 'lib/dialogs.ts · lib/toast.ts'] },
     { name: t`组件`, holds: t`每种组件每端一个实现`, paths: ['apps/web/src/components/ui/', 'apps/macos/Riffet/Theme/', 'apps/mobile/shared/…/riffet/ui/design/', 'apps/mobile/iosApp/Riffet/Design/'] },
     { name: t`生成文件`, holds: t`各端直接引用的常量，由生成器写入`, paths: ['Theme/Controls.swift · RiffetTheme.swift', 'MobileStyles.generated.kt', 'RiffetDesign.swift'] },
-    { name: t`源`, holds: t`颜色角色与主题取值；间距、字号、圆角、动效；风格配方`, paths: ['apps/web/src/styles/index.css', 'packages/contracts/src/design-tokens.ts', 'mobile-styles.ts · interface-styles.ts · theme.ts'] },
+    { name: t`源`, holds: t`颜色角色与主题取值；间距、字号、圆角、动效；桌面端尺寸`, paths: ['apps/web/src/styles/index.css', 'packages/contracts/src/design-tokens.ts', 'mobile-styles.ts · interface-styles.ts · theme.ts'] },
     { name: t`原则`, holds: t`三条原则与设计决定`, paths: ['docs/design/system/README.md', 'docs/design/DECISIONS.md'] },
   ];
   const steps: Array<{ title: string; items: string[] }> = [
@@ -72,7 +72,7 @@ export function ArchitectureChapter() {
           <Commands title={t`生成`} rows={[
             ['pnpm gen:theme', t`主题颜色写入 Mac、Android、iOS 与 Web 的主题文件`],
             ['pnpm gen:tokens', t`间距、字号、圆角、动效写入四端`],
-            ['pnpm gen:styles', t`风格配方写入 Mac 的 InterfaceStyles.swift`],
+            ['pnpm gen:styles', t`桌面端尺寸写入 Mac 的 InterfaceStyles.swift`],
           ]} />
           <Commands title={t({ message: '检查', context: 'design-system-checks' })} rows={[
             ['pnpm check:design', t`手写的字号、圆角、层级、色值与无说明的循环动画`],

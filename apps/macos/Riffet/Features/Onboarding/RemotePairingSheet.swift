@@ -22,10 +22,10 @@ struct RemotePairingSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             Form {
                 TextField("地址", text: $address, prompt: Text(verbatim: "192.168.1.10:4337"))
-                    .formField(label: "地址")
+                    .formField()
                     .onChange(of: address) { _, value in applyPayload(value) }
                 TextField("配对码", text: $code)
-                    .formField(label: "配对码")
+                    .formField()
             }
             .riffetForm()
             if let error { Text(error).font(RiffetFont.caption).foregroundStyle(palette.danger) }

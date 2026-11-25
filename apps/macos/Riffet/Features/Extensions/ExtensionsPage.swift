@@ -54,7 +54,7 @@ struct ExtensionsPage: View {
             }
         }
         .navigationTitle(WorkbenchPage.extensions.title)
-        .pageChrome(.extensions, workbench: workbench, hasActions: workbench.host.api != nil) { toolbarActions }
+        .pageChrome(.extensions, workbench: workbench) { toolbarActions }
         .task(id: signature) {
             store.configure(
                 api: workbench.host.api,

@@ -1,26 +1,24 @@
 # macOS
 
-本文把[基础](foundations.md)、[模式](patterns.md)和组件落到 Mac：每条语义在 Mac 上用哪个组件或 API、取什么值、哪里按平台而与 Web 不同。视觉取值来自风格配方：Riffet 风格见 [Riffet 风格](../riffet-style.md)，原生风格见 [macOS 原生](../macos-native.md)。本文规定三种风格共同遵守的结构与行为。
+本文把[基础](foundations.md)、[模式](patterns.md)和组件落到 Mac：每条语义在 Mac 上用哪个组件或 API、取什么值、哪里按平台而与 Web 不同。Mac 只画一种风格：视觉规则见 [Riffet 风格](../riffet-style.md)，主张、平台行为与动效见 [macOS 设计语言](../macos-native.md)（[决定](../DECISIONS.md) 2026-11-25）。
 
 每节末尾的「现状」是 2026-11-14 盘点时与规则不符的实现，迁移后删掉对应条目。路径相对 `apps/macos/Riffet/`。
 
 ## 1. 分工
 
-行为跟 [HIG](https://developer.apple.com/design/human-interface-guidelines/)，外观跟风格配方。桌面的数值 Mac 与 Web 相同（Mac 为 pt，Web 为 px）。
+行为跟 [HIG](https://developer.apple.com/design/human-interface-guidelines/)，外观跟 Riffet 风格。桌面的数值 Mac 与 Web 相同（Mac 为 pt，Web 为 px）。
 
 | 跟平台 | 跟 Web |
 |---|---|
 | 设置是独立窗口，⌘, 打开 | 文字、间距、圆角、阴影、动效的档位 |
 | 弹窗是附着在窗口上的 sheet | 弹窗的四档宽度、页脚按钮的顺序与文案 |
-| 右键菜单、设置表单里的选择用系统控件 | 应用菜单的浮层（绘制风格下） |
+| 右键菜单、设置表单里的选择用系统控件 | 应用菜单的浮层 |
 | 提示气泡用系统的 `.help` | 页面骨架的内容列档位与内边距 |
 | 每个工具栏命令在菜单栏都有对应项，带 ⌘ 快捷键 | 选择控件的选用规则（[模式](patterns.md) §3） |
 | 窗口失焦时选中态变淡（`appearsActive`） | 状态集合（[基础](foundations.md) §9） |
 
-- 代码读配方字段（`style.menu`、`style.form`、`style.tabs`……），不判断风格名。配方由 `packages/contracts/src/interface-styles.ts` 定义，`pnpm gen:styles` 生成 `Theme/InterfaceStyles.swift`。
-- `style.backend == .native` 只用于选择整套外壳：系统的 `NavigationSplitView` 与工具栏，或者绘制的侧栏与页头。单个组件的画法改读具体字段。
-
-**现状**：`backend == .native` 另被 `Theme.swift` 的 `markRole` 和 `TranscriptStyle.swift` 用来决定颜色与排版，应改读 `style.ink` 等字段。
+- 尺寸、字体与默认图标包由 `packages/contracts/src/interface-styles.ts` 定义，`pnpm gen:styles` 生成 `Theme/InterfaceStyles.swift` 的 `StyleSpec`，代码经 `DisplayPreferences.shared.style` 读取。写成 Web 变量名的取值在生成时从 Web 样式表读出。
+- 主窗口的侧栏、页头和主区卡片是绘制的（`CustomWorkbench`）；单独打开的会话窗口用系统工具栏。
 
 ## 2. 基础的 Mac 写法
 
@@ -31,7 +29,7 @@
 | 间距 | `Space.xxs`（2）· `xs`（4）· `sm`（8）· `md`（12）· `lg`（16）· `xl`（24）· `xxl`（32） | 28 只用于 `Column.gutter` |
 | 圆角 | `Radius.control` · `container` · `card` · `floating` · `menu`，取自 `style.radii` | 一律 `.continuous`；嵌套时内圆角 = 外圆角 − 内边距，最小 4 |
 | 阴影 | `.elevation(.raised / .float / .floatFocus / .pop / .peek)`；AppKit 图层用 `Elevation.apply(to:dark:)` | 只有浮在内容上的东西有阴影 |
-| 动效 | `Motion.fast` · `standard` · `expressive` | 页面与会话切换用 `ColumnCrossfade`（`CATransition`），见 [macOS 原生](../macos-native.md) §3.2 |
+| 动效 | `Motion.fast` · `standard` · `expressive` | 页面与会话切换用 `ColumnCrossfade`（`CATransition`），见 [macOS 设计语言](../macos-native.md) §3.2 |
 | 图标 | `Image(icon:)`：SF Symbol 名，经 `IconPack` 换成所选图标包 | 尺寸按 [基础](foundations.md) §8 的 Mac 一列：主导航 12.5、按钮与页签 13、行内 12、元信息 11 |
 | 字号缩放 | `S(_:)` | 角色内部已经乘过，调用处不再乘 |
 
@@ -82,12 +80,12 @@
 | 区域 | Mac | 来源 |
 |---|---|---|
 | 侧栏 | 210–400，默认 `style.layout.sidebarWidth`（Riffet 236）；窗口放不下侧栏 + 主区 420 + 面板时自动收起，宽度够了再展开；双击边缘恢复默认宽度 | `Features/Workbench/WorkbenchView.swift`、`CustomWorkbench.swift` |
-| 主区 | `style.window == .insetCard` 时是内缩 8 的卡片，其余满铺（[决定](../DECISIONS.md) 2026-11-04） | `Features/Workbench/CustomWorkbench.swift` 的 `CustomCard` |
+| 主区 | 内缩 8 的卡片；会话窗口满铺 | `Features/Workbench/CustomWorkbench.swift` 的 `CustomCard` |
 | 右侧面板 | 300 到窗口宽 − 420，默认 `style.layout.rightPanel`（Riffet 320）；停靠、悬浮、全屏由用户切换 | `WorkbenchView.swift`、`InspectorFloat` |
 | 终端 | 140 到 min(详情高 × 0.6，详情高 − 240)，默认 240 | `WorkbenchView.swift` |
 | 阅读列 | 640–1600，默认 760（[决定](../DECISIONS.md) 2026-11-13） | `Column.width`、`Preferences.swift` |
 
-**现状**：Web 的右侧面板是 320–720、默认 380，终端 160–560、默认 280，这两处与 Mac 不同，也没有决定说明原因。宽度归入配方 `layout` 后，两端读同一个值；Web 目前还没有接入配方。
+**现状**：Web 的右侧面板是 320–720、默认 380，终端 160–560、默认 280，这两处与 Mac 不同，也没有决定说明原因。宽度归入 `interface-styles.ts` 的 `layout` 后，两端读同一个值；Web 目前还没有接入。
 
 ### 3.2 页面骨架
 
@@ -101,11 +99,11 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 }
 ```
 
-- **页头**交给现有的 `pageChrome`。原生风格下标题在窗口工具栏，操作是 `.primaryAction` 里各自独立的 `ToolbarItem`，页面搜索用工具栏的 `.searchable`。自绘风格下是 `CustomPageBar`，高 `style.layout.header`。操作排在右侧，图标按钮在前，主操作在最后。
+- **页头**交给现有的 `pageChrome`，画成 `CustomPageBar`，高 `style.layout.header`，页面搜索框在操作左侧。操作排在右侧，图标按钮在前，主操作在最后。
 - **内容列**的档位与 Web 相同：`.document` 768，`.board` 1200，`.none` 由页面自己排。
 - **内边距**左右 32，顶部 40，底部 64（底部给最后一项留出滚动余量）；内容列宽度不含内边距。
 - 一页只有一个 `ScrollView`。
-- **一级视图**（2–5 个）：原生风格放在工具栏中间，用系统分段控件；自绘风格按 `style.tabs` 画页签，放在内容列顶部。视图内的筛选用 `SegmentedTrack`。
+- **一级视图**（2–5 个）：胶囊页签（`PillTab`），放在内容列顶部。视图内的筛选用 `SegmentedTrack`。
 - **例外**与 Web 相同：扩展管理是目录加检查器的双栏页，只用 `pageChrome`，宽度上限 1080；新会话主页的输入框居中，宽度跟输入框走。
 
 **现状**：每页自己写宽度和内边距。
@@ -118,14 +116,14 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 | 统计 | `Features/Stats/StatsView.swift` | 1180，左右 16、上 12、下 32 | `.board` |
 | 扩展概览 | `Features/Extensions/ExtensionsOverview.swift` | 1180 | `.board` |
 | 并行尝试 | `Features/Orchestration/AttemptGroupView.swift` | 1080，左右 32、上下 24 | `.board` |
-| 新会话主页 | `Features/Home/HomeView.swift` | 720（停靠时 744） | 例外 |
+| 新会话主页 | `Features/Home/HomeView.swift` | 720 | 例外 |
 
 ### 3.3 设置窗口
 
-- 设置在所有风格下都是独立窗口（`Settings` 场景），⌘, 打开。配方的 `settings` 字段只对 Web 生效：Web 的 Riffet 风格把设置做成大弹窗，Mac 不读这个字段。
+- 设置是独立窗口（`Settings` 场景），⌘, 打开。
 - 结构：`NavigationSplitView`，左侧分类 200–270（默认 228），窗口最小 820 × 600、默认 880 × 780，顶部的搜索按分类和设置项筛选。分类保持原样（[决定](../DECISIONS.md) 2026-11-12）。
-- 表单用 `.riffetForm()`：分组式（`style.form == .grouped`）用系统的 grouped `Form`，线条式（`.lined`）用 `LinedFormStyle`。行用 `Features/Settings/SettingsComponents.swift` 里的 `SettingsRow`、`SettingsFieldRow`、`SettingsStatusRow`，空状态用 `SettingsEmptyState`，保存反馈用 `SettingsFeedback`。
-- 设置窗口里的控件跟平台：开关用 `.switch`，分组列表里用 `.controlSize(.mini)`；选择用 `.formPicker()`；分段用 `FormSegmented`。
+- 表单用 `.riffetForm()`，即系统的 grouped `Form`。行用 `Features/Settings/SettingsComponents.swift` 里的 `SettingsRow`、`SettingsFieldRow`、`SettingsStatusRow`，空状态用 `SettingsEmptyState`，保存反馈用 `SettingsFeedback`。
+- 设置窗口里的控件跟平台：开关用 `.switch`，分组列表里用 `.controlSize(.mini)`；选择用系统 `Picker`；分段用 `FormSegmented`。
 
 ## 4. 浮层
 
@@ -134,9 +132,9 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 | 需要（[模式](patterns.md) §2.1） | Mac |
 |---|---|
 | 纯图标按钮的名称和快捷键 | `.help("名称")`，同时写 `accessibilityLabel` |
-| 从一个触发点执行操作，或在一组命令里选一个 | 工作台里的控件（工具栏、胶囊、行尾按钮）弹出的菜单经 `NSMenu.popUpStyled(at:in:)`：`style.menu == .drawn` 时画成应用的浮层，否则是系统菜单。SwiftUI 里用 `ChoiceMenu`、`PageMenuButton`、`ToolbarMenuButton` |
-| 右键菜单 | `.contextMenu`，所有风格都用系统菜单 |
-| 锚定在触发点旁、改动即时生效的小块内容 | `StylePopover`（`Theme/AnchoredPopup.swift`）；原生风格用 `.popover` |
+| 从一个触发点执行操作，或在一组命令里选一个 | 工作台里的控件（工具栏、胶囊、行尾按钮）弹出的菜单经 `NSMenu.popUpStyled(at:in:)`，画成应用的浮层（`DrawnMenu`）。SwiftUI 里用 `ChoiceMenu`、`PageMenuButton`；会话窗口的系统工具栏里用 `ToolbarMenuButton` |
+| 右键菜单 | `.contextMenu`，用系统菜单 |
+| 锚定在触发点旁、改动即时生效的小块内容 | `StylePopover`（`Theme/AnchoredPopup.swift`） |
 | 需要集中处理、有提交和取消的任务 | `.sheet` 加 `SheetScaffold`（§4.2） |
 | 确认一次不可逆的操作 | `.confirmationDialog`；需要等待请求结果、在弹窗里显示错误的确认用 `SheetScaffold` 的确认档 |
 | 报告一次操作的结果 | `Toast`（新增，§4.4） |
@@ -171,7 +169,7 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 
 ### 4.3 菜单与弹出层
 
-- 绘制风格下的菜单就是 `DrawnMenu`，取值与 Web 的菜单浮层一致：
+- 工作台的菜单就是 `DrawnMenu`，取值与 Web 的菜单浮层一致：
   - 内边距 4、行高 32（带副标题的行 44）、分组标题 28；
   - 圆角 `style.radii.menu`，行圆角按嵌套规则取；
   - 宽 176–360，阴影 `.pop`，子菜单延迟 0.2 秒。
@@ -180,7 +178,7 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 
 **现状**：
 
-- 工作台里的 SwiftUI `Menu` 在绘制风格下仍画成系统菜单。`Menu` 共 133 处、分布在 37 个文件，经 `popUpStyled` 的只有 3 个文件；哪些属于工作台、哪些属于设置，还没有逐个区分。
+- 工作台里的 SwiftUI `Menu` 仍画成系统菜单。`Menu` 共 133 处、分布在 37 个文件，经 `popUpStyled` 的只有 3 个文件；哪些属于工作台、哪些属于设置，还没有逐个区分。
 - `DrawnMenu` 的行内图标是 14，按 [基础](foundations.md) §8 应为 13。
 
 ### 4.4 提示与通知
@@ -195,18 +193,18 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 
 选用规则与 [模式](patterns.md) §3 相同，Mac 的对应如下：
 
-| Web | 工作台（绘制风格） | 设置窗口与表单 |
+| Web | 工作台 | 设置窗口与表单 |
 |---|---|---|
-| `Segmented` | `SegmentedTrack` | `FormSegmented`（分组式表单下是系统分段控件） |
-| `Select` | `ChoiceMenu`，经 `popUpStyled` | `.formPicker()`（`Picker` 的菜单样式） |
+| `Segmented` | `SegmentedTrack` | `FormSegmented`（系统分段控件） |
+| `Select` | `ChoiceMenu`，经 `popUpStyled` | `Picker` 的菜单样式 |
 | 标题式 `Select` | `ChoiceMenu` 的标题外观（新增参数）：对象名用 `.barTitle`，无边框，后跟下拉箭头 | 同左 |
-| `Switch` | `Toggle` 加 `.switch`；`style.ink == .quiet` 时是墨色 | 同左；分组列表里用 `.controlSize(.mini)` |
-| `UnderlineTabs` | 按 `style.tabs` 画的页签（§3.2） | Agent 与模型提供商页的对象导航，横向滚动 |
+| `Switch` | `Toggle` 加 `.switch`，墨色 | 同左；分组列表里用 `.controlSize(.mini)` |
+| `UnderlineTabs` | 胶囊页签 `PillTab`（§3.2） | Agent 与模型提供商页的对象导航，横向滚动 |
 
-- 系统的 `.pickerStyle(.segmented)` 只用在设置窗口和工具栏里（[macOS 原生](../macos-native.md) §2.1）。
+- 系统的 `.pickerStyle(.segmented)` 只用在设置窗口和工具栏里（[macOS 设计语言](../macos-native.md) §2.1）。
 - 不用 `.radioGroup`。选项需要看描述或预览才能选时，用带缩略图的单选卡片。
 
-Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 Agent」仍用 `.formPicker()`，分别表达配置对象与默认值。
+Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 Agent」仍用 `Picker`，分别表达配置对象与默认值。
 
 ## 6. 组件对照
 
@@ -242,7 +240,7 @@ Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 
 
 - 快捷键：⌘, 打开设置；⌘K 打开搜索；⌘W 关闭标签或窗口。Esc 关闭最上层的浮层，焦点回到打开它的控件。Return 触发默认按钮。
 - 菜单栏：工具栏和 ⋯ 菜单里的每个命令在菜单栏都有对应项，快捷键写在菜单项上，定义在 `Features/Workbench/WorkbenchView.swift` 的 `RiffetCommands`。
-- 窗口失焦时，侧栏选中态退到悬停色，状态胶囊褪色，呼吸标记停住（[macOS 原生](../macos-native.md) §2.1）。
+- 窗口失焦时，侧栏选中态退到悬停色，状态胶囊褪色，呼吸标记停住（[macOS 设计语言](../macos-native.md) §2.1）。
 - 只有图标的按钮必须有 `accessibilityLabel`；装饰性的图形加 `accessibilityHidden`。
 - 系统「减弱动态效果」开启时，循环动画停下，位移和缩放换成淡入淡出。
 
@@ -252,14 +250,14 @@ Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 
 
 Mac 的规范分两处看，内容不重复：
 
-- **Web 设计规范页的 macOS 部分**（`/design?platform=macos`，代码在 `apps/web/src/app/design/mac/`）讲规范：平台分工、各风格的数值与配方、文字角色、组件对照、窗口与页面、浮层。数值和配方直接读 `DESKTOP_STYLES`，每种风格一节，并按它的配方用网页画一个窗口缩样。
+- **Web 设计规范页的 macOS 部分**（`/design?platform=macos`，代码在 `apps/web/src/app/design/mac/`）讲规范：平台分工、数值、文字角色、组件对照、窗口与页面、浮层。数值直接读 `DESKTOP_STYLE`，并用网页画一个窗口缩样。
 - **Mac 原生的设计规范页**用来验收组件。它是一个 SwiftUI 窗口，入口在设置的「外观」组：
   - 只放组件和它们的状态（默认、悬停、按下、选中、禁用、加载），每个组件旁标出读到的字号、圆角、高度；
-  - 顶部三个切换：风格、明暗、字号缩放；
+  - 顶部两个切换：明暗、字号缩放；
   - 原则和基础不画，链接到文档；
   - 随第 9 节的迁移逐节加入：每迁完一种组件，加一节。引导页的栏（`OnboardingColumn`）、主按钮、单选卡片和设置卡片的三步状态（空环、当前环、转圈、勾）是新增的可复用部件，加页时画在这一节；页尚未建，部件已在 §6 登记。
 
-新增一种风格：在 `packages/contracts/src/interface-styles.ts` 加一条，运行 `pnpm gen:styles`，Web 页面会自动出现它的数值、配方和缩样。再在 `apps/web/src/app/design/mac/notes.ts` 的 `useStyleNote` 里补上名称、一句说明、规则文档和规则要点；没有补的风格显示 id 和数值。新增配方取值时，在同一个文件的 `useFamilyNotes` 里补上取值的名称，并在 `StyleMiniature.tsx` 里画出它；没有画的取值按同类里最朴素的画法显示。
+改一项数值：改 `packages/contracts/src/interface-styles.ts`，运行 `pnpm gen:styles`，Web 页面跟着更新。
 
 ## 9. 落地顺序
 
@@ -272,4 +270,4 @@ Mac 的规范分两处看，内容不重复：
 5. **菜单**：工作台里的 SwiftUI `Menu` 改走 `popUpStyled`，设置窗口里的保持系统控件。
 6. **通知**：建 `Toast`，替换 `ShareSheet` 和输入框里的单独写法。
 7. **设计规范页**：Mac 原生页随第 1–6 步逐节加入（§8）。
-8. **尺寸归入配方**：右侧面板与终端的宽高归入配方 `layout`，Web 改读配方。
+8. **尺寸归入 `layout`**：右侧面板与终端的宽高归入 `interface-styles.ts` 的 `layout`，Web 改读它。

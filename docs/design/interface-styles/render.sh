@@ -1,10 +1,10 @@
 #!/bin/zsh
 # Render every [data-frame] of each draft page to out/<draft>-<frame>.png at 2x.
-# Usage: ./render.sh [riffet claude]. A frame declares its size: data-frame="main" data-size="1440x900".
+# Usage: ./render.sh [riffet riffet-next]. A frame declares its size: data-frame="main" data-size="1440x900".
 cd "${0:A:h}"
 mkdir -p out
 CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-(( $# )) || set -- riffet claude
+(( $# )) || set -- riffet riffet-next
 for d in "$@"; do
   grep -o 'data-frame="[^"]*" data-size="[0-9x]*"' "pages/$d/index.html" | while read -r line; do
     name=$(echo $line | sed -E 's/.*data-frame="([^"]*)".*/\1/')

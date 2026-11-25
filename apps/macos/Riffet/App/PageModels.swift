@@ -21,7 +21,7 @@ final class PageModels {
     /// The host's favorite folders for the home page.
     private(set) lazy var composers = ComposerPool()
     /// The conversations' composers, kept here rather than in the conversation view so a rebuilt view
-    /// (another 界面风格) finds its drafts, attachments and uploads in flight where it left them.
+    /// finds its drafts, attachments and uploads in flight where it left them.
     private(set) lazy var sessionComposers = ComposerPool()
     private(set) lazy var homeFavorites = FolderFavoritesModel()
     /// The home page's attempt groups per project.

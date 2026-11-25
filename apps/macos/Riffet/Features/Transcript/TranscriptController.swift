@@ -182,7 +182,6 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         let stale: Bool
         let resources: Int
         let supportsRecovery: Bool
-        let past: Bool
     }
 
     private final class Entry: @unchecked Sendable {
@@ -493,7 +492,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// What the style is made of besides appearance; reading it inside the tracking registers it.
     private static func styleSignature() -> String {
         let preferences = DisplayPreferences.shared
-        return "\(ThemeStore.shared.entry.id)|\(ThemeStore.shared.revision)|\(preferences.codeTheme)|\(ThemeStore.shared.codeThemeRevision)|\(AppearanceStore.shared.fonts.key)|\(preferences.textScale)|\(preferences.density)|\(preferences.contentWidth)|\(preferences.style.radii.control),\(preferences.style.radii.container),\(preferences.style.radii.floating),\(preferences.style.radii.card),\(preferences.style.toolRun.rawValue),\(preferences.style.block.rawValue),\(preferences.style.window.rawValue),\(preferences.style.inlineCode.rawValue),\(preferences.style.ink.rawValue),\(preferences.style.text.readingLine)|\(preferences.style.fonts.ui),\(preferences.style.fonts.mono)|\(IconPack.shared.effective)"
+        return "\(ThemeStore.shared.entry.id)|\(ThemeStore.shared.revision)|\(preferences.codeTheme)|\(ThemeStore.shared.codeThemeRevision)|\(AppearanceStore.shared.fonts.key)|\(preferences.textScale)|\(preferences.density)|\(preferences.contentWidth)|\(preferences.style.radii.control),\(preferences.style.radii.container),\(preferences.style.radii.floating),\(preferences.style.radii.card),\(preferences.style.text.readingLine)|\(preferences.style.fonts.ui),\(preferences.style.fonts.mono)|\(IconPack.shared.effective)"
     }
 
     /// The style changed (appearance, theme, text size, column width): every row lays out again.
@@ -638,7 +637,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         let preferences = DisplayPreferences.shared
         let resolvedCodeTheme = ThemeStore.shared.codeTheme
         let resolvedCodeRevision = ThemeStore.shared.codeThemeRevision
-        if preferences.textScale != style.scale || preferences.contentWidth != style.column || preferences.density != style.density || ThemeStore.shared.entry.id != style.palette.values.id || ThemeStore.shared.revision != style.palette.revision || resolvedCodeTheme.id != style.codeTheme.id || resolvedCodeRevision != style.codeThemeRevision || AppearanceStore.shared.fonts != style.fonts || preferences.style.radii != style.radii || preferences.style.toolRun != style.toolRun || preferences.style.inlineCode != style.inlineCode || preferences.style.text.readingLine != style.bodyLineHeight || preferences.style.fonts != style.styleFonts || IconPack.shared.effective != style.iconPack {
+        if preferences.textScale != style.scale || preferences.contentWidth != style.column || preferences.density != style.density || ThemeStore.shared.entry.id != style.palette.values.id || ThemeStore.shared.revision != style.palette.revision || resolvedCodeTheme.id != style.codeTheme.id || resolvedCodeRevision != style.codeThemeRevision || AppearanceStore.shared.fonts != style.fonts || preferences.style.radii != style.radii || preferences.style.text.readingLine != style.bodyLineHeight || preferences.style.fonts != style.styleFonts || IconPack.shared.effective != style.iconPack {
             style = TranscriptStyle.current(dark: style.dark)
             applyChromeStyle()
         }
@@ -669,14 +668,12 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         // The origin line belongs to the start of the history: while older pages remain it would
         // sit above rows it does not precede, so it waits until the reader can reach the beginning.
         if feed.older == nil, let lineage = feed.lineage { sources.append(("§lineage", .lineage(lineage), nil)) }
-        // Native style: what came before the latest user message is read back, so its prose recedes to fg2.
-        let latestUser = input.style.native ? data.rows.lastIndex { ($0 as? TimelineRowSingle)?.item is TimelineItemUser } ?? -1 : -1
         for (index, row) in data.rows.enumerated() {
             let identity = row as AnyObject
             let key = input.byIdentity[ObjectIdentifier(identity)]?.key ?? nativeString(row.key)
             let compact = index < data.compact.count && data.compact[index]
             let gap = RowGap.between(index > 0 ? data.rows[index - 1] : nil, row, compact: compact)
-            sources.append((key, .timeline(row, gap: gap, speed: speeds[key], past: index < latestUser), identity))
+            sources.append((key, .timeline(row, gap: gap, speed: speeds[key]), identity))
             if !feed.commandResults.isEmpty, let answer = Self.answer(of: row) {
                 let match = CommandResultSpec.match(sessionId: feed.sessionId ?? "", runId: answer.runId, text: answer.text)
                 for result in feed.commandResults where result.match == match { sources.append(("\(key)§result§\(result.id)", .commandResult(result), nil)) }
@@ -738,15 +735,15 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     }
 
     nonisolated private static func layoutKey(key: String, source: RowSource, identity: AnyObject?, width: CGFloat, style: TranscriptStyle, ui: TranscriptUIStore, stale: Bool, suppressesHeldFooter: Bool, supportsRecovery: Bool, refresh: [String: Int]) -> LayoutKey {
-        var gap: RowGap?, speed: String?, past = false
+        var gap: RowGap?, speed: String?
         // Only a lone tool row reads whether the session is running (a pending call shows as stopped
         // once it is not); every other row keeps its layout when a turn starts or ends. Process blocks
         // read their own `turnActive`, which is part of the Kotlin row.
         var readsStale = false
         var hidesFooter = false
         switch source {
-        case let .timeline(row, g, s, p):
-            gap = g; speed = s?.label; past = p
+        case let .timeline(row, g, s):
+            gap = g; speed = s?.label
             hidesFooter = suppressesHeldFooter && row.footer == .held
             readsStale = (row as? TimelineRowSingle)?.item is TimelineItemTool
         case let .working(spec): speed = "\(spec.step ?? "")|\(spec.since?.timeIntervalSince1970 ?? 0)|\(spec.speed?.label ?? "")|\(spec.stopping)|\(spec.background ?? "")"
@@ -757,7 +754,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         }
         return LayoutKey(
             source: identity.map(ObjectIdentifier.init), width: width, style: style.key, version: ui.version(key),
-            gap: gap, suppressesHeldFooter: hidesFooter, speed: speed, stale: readsStale && stale, resources: refresh[key] ?? 0, supportsRecovery: supportsRecovery, past: past
+            gap: gap, suppressesHeldFooter: hidesFooter, speed: speed, stale: readsStale && stale, resources: refresh[key] ?? 0, supportsRecovery: supportsRecovery
         )
     }
 
@@ -971,7 +968,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     // MARK: Marks
 
     private static func assistant(_ entry: Entry) -> TimelineItemAssistant? {
-        guard case let .timeline(row, _, _, _) = entry.source, let single = row as? TimelineRowSingle else { return nil }
+        guard case let .timeline(row, _, _) = entry.source, let single = row as? TimelineRowSingle else { return nil }
         return single.item as? TimelineItemAssistant
     }
 
@@ -994,7 +991,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     func topItemKey() -> String? {
         guard let row = table.rows(in: scrollView.contentView.bounds).location as Int?, row != NSNotFound, row < entries.count,
               table.rows(in: scrollView.contentView.bounds).length > 0,
-              case let .timeline(source, _, _, _) = entries[row].source else { return nil }
+              case let .timeline(source, _, _) = entries[row].source else { return nil }
         if let process = source as? TimelineRowProcess { return process.items.first?.key }
         if let trigger = source as? TimelineRowTrigger { return trigger.notices.first?.key }
         return entries[row].key
@@ -1105,7 +1102,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             return shareSource(row: key, kind: .message, text: item.text)
         }
         // A turn without a final answer keeps its prose on the process or result carrying its footer.
-        if case let .timeline(row, _, _, _) = entry.source,
+        if case let .timeline(row, _, _) = entry.source,
            let answer = (row as? TimelineRowSingle)?.answerText ?? (row as? TimelineRowProcess)?.answerText, !answer.isEmpty {
             return shareSource(row: key, kind: .message, text: answer)
         }
@@ -1117,13 +1114,13 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     func shareSource(row key: String, kind: ShareSource.Kind, text: String) -> ShareSource? {
         guard actions.exportImage != nil, let index = entries.firstIndex(where: { $0.key == key }) else { return nil }
         var at: Date?
-        if case let .timeline(row, _, _, _) = entries[index].source {
+        if case let .timeline(row, _, _) = entries[index].source {
             if let single = row as? TimelineRowSingle { at = ServerTime.date(single.item.event.createdAt) }
             else if let process = row as? TimelineRowProcess { at = process.endedAt.flatMap(ServerTime.date) }
         }
         var runId: String?
         var fullText: String?
-        if case let .timeline(row, _, _, _) = entries[index].source {
+        if case let .timeline(row, _, _) = entries[index].source {
             let turnKey = (row as? TimelineRowSingle)?.turnKey ?? (row as? TimelineRowProcess)?.turnKey
             runId = turnKey.flatMap { runIdFromTurnKey(turnKey: $0) }
             if kind == .span { fullText = Self.assistant(entries[index])?.text ?? Self.answer(of: row)?.text }
@@ -1131,7 +1128,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         var question: String?
         if kind == .message {
             for entry in entries[..<index].reversed() {
-                guard case let .timeline(row, _, _, _) = entry.source, let single = row as? TimelineRowSingle,
+                guard case let .timeline(row, _, _) = entry.source, let single = row as? TimelineRowSingle,
                       let user = single.item as? TimelineItemUser else { continue }
                 question = user.text
                 break
@@ -1157,14 +1154,14 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
 
     /// Runs the message command [id] on the answer of row [key], when it has one a command can take.
     func runMessageCommand(_ id: String, row key: String) {
-        guard let entry = entries.first(where: { $0.key == key }), case let .timeline(row, _, _, _) = entry.source,
+        guard let entry = entries.first(where: { $0.key == key }), case let .timeline(row, _, _) = entry.source,
               let answer = Self.answer(of: row) else { return }
         actions.runMessageCommand(id, answer.text, answer.runId)
     }
 
     /// Whether the answer of row [key] can take a message command: settled, not empty, within the budget.
     func takesMessageCommands(row key: String) -> Bool {
-        guard !actions.messageCommands.isEmpty, let entry = entries.first(where: { $0.key == key }), case let .timeline(row, _, _, _) = entry.source,
+        guard !actions.messageCommands.isEmpty, let entry = entries.first(where: { $0.key == key }), case let .timeline(row, _, _) = entry.source,
               let answer = Self.answer(of: row) else { return false }
         return !answer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && answer.text.utf16.count <= Int(BudgetsKt.PLUGIN_COMMAND_BUDGET_MESSAGE_CHARS)
     }
@@ -1177,7 +1174,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     func restoreInput(row key: String) -> (() -> Void)? {
         guard let restore = actions.restoreInput,
               let entry = entries.first(where: { $0.key == key }),
-              case let .timeline(row, _, _, _) = entry.source,
+              case let .timeline(row, _, _) = entry.source,
               let single = row as? TimelineRowSingle, let user = single.item as? TimelineItemUser,
               let run = user.run, SessionComposerKt.canRestoreUnsentMessage(run: run) else { return nil }
         return { restore(run) }
@@ -1237,7 +1234,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             relayout(index)
         case .toggleProcess, .toggle, .toggleWrap, .toggleRendered:
             guard let index = entries.firstIndex(where: { $0.key == key }) else { return }
-            if case .toggleProcess = action, case let .timeline(row, _, _, _) = entries[index].source, let process = row as? TimelineRowProcess {
+            if case .toggleProcess = action, case let .timeline(row, _, _) = entries[index].source, let process = row as? TimelineRowProcess {
                 ui.toggleProcess(process, key: key)
             } else {
                 ui.toggle(action, row: key)
@@ -1416,7 +1413,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// A prompt on the turn rail, or the notices that woke a turn.
     private func startsTurn(_ entry: Entry) -> Bool {
         if turnKeys[entry.key] != nil { return true }
-        if case let .timeline(row, _, _, _) = entry.source { return row is TimelineRowTrigger }
+        if case let .timeline(row, _, _) = entry.source { return row is TimelineRowTrigger }
         return false
     }
 
@@ -1686,7 +1683,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             scrollingAway = false
         }
         // An item inside a folded process block: open the block so the item is drawn.
-        if let item, let index = entries.firstIndex(where: { $0.key == key }), case let .timeline(row, _, _, _) = entries[index].source,
+        if let item, let index = entries.firstIndex(where: { $0.key == key }), case let .timeline(row, _, _) = entries[index].source,
            let process = row as? TimelineRowProcess, !ui.processOpen(process, key: key),
            entries[index].layout?.items.contains(where: { $0.item.key == item }) != true {
             ui.toggleProcess(process, key: key)
@@ -1976,7 +1973,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
 
     fileprivate var benchEvent: ProjectedEvent? {
         for entry in entries.reversed() {
-            if case let .timeline(row, _, _, _) = entry.source, let single = row as? TimelineRowSingle { return single.item.event }
+            if case let .timeline(row, _, _) = entry.source, let single = row as? TimelineRowSingle { return single.item.event }
         }
         return nil
     }

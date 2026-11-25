@@ -123,29 +123,25 @@ final class AppModel {
         if let themeId, !theme.catalog.contains(where: { $0.id == themeId }) { return nil }
         let modes = ["system", "light", "dark"]
         if let mode, !modes.contains(mode) { return nil }
-        let interfaceStyle = style.flatMap(InterfaceStyle.init(rawValue:))
-        if style != nil && interfaceStyle == nil { return nil }
+        // The Mac draws one interface style; a request to switch it cannot be met.
+        if style != nil { return nil }
         let preferences = DisplayPreferences.shared
         let defaults = UserDefaults.standard
         // Reject managed preference conflicts before any part of the change is applied.
         if let themeId, theme.themeIdIsForced, theme.savedThemeId != themeId { return nil }
         if let mode, defaults.objectIsForced(forKey: PreferenceKey.appearance),
            defaults.string(forKey: PreferenceKey.appearance) != mode { return nil }
-        if let style, defaults.objectIsForced(forKey: PreferenceKey.interfaceStyle),
-           defaults.string(forKey: PreferenceKey.interfaceStyle) != style { return nil }
         if let themeId { theme.themeId = themeId }
         if let mode { preferences.appearance = mode }
-        if let interfaceStyle { preferences.interfaceStyle = interfaceStyle }
         if let themeId, theme.savedThemeId != themeId || theme.entry.id != themeId { return nil }
         if let mode, defaults.string(forKey: PreferenceKey.appearance) != mode { return nil }
-        if let style, defaults.string(forKey: PreferenceKey.interfaceStyle) != style { return nil }
         return DeviceAppearanceSnapshot(
             themeId: theme.themeId,
             mode: modes.contains(preferences.appearance) ? preferences.appearance : "system",
             themes: theme.catalog.map { DeviceAppearanceOption(id: $0.id, name: $0.name) },
             activePaletteId: theme.entry.id == theme.themeId ? nil : theme.entry.id,
-            interfaceStyle: preferences.interfaceStyle.rawValue,
-            interfaceStyles: InterfaceStyle.allCases.map { DeviceAppearanceOption(id: $0.rawValue, name: $0.title) }
+            interfaceStyle: nil,
+            interfaceStyles: nil
         )
     }
 

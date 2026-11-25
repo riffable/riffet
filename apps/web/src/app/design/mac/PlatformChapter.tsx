@@ -30,7 +30,7 @@ export function PlatformChapter() {
     ['pnpm gen:mac-icons', 'icon-map.json', 'apps/macos/Riffet/Theme/IconSymbols.generated.swift'],
   ];
   return (
-    <Chapter title={t`平台分工`} lede={t`行为跟 macOS 的人机界面指南，外观跟风格配方；桌面的数值 Mac 与 Web 相同，单位是 pt。`} source="docs/design/system/macos.md">
+    <Chapter title={t`平台分工`} lede={t`行为跟 macOS 的人机界面指南，外观跟 Riffet 风格；桌面的数值 Mac 与 Web 相同，单位是 pt。`} source="docs/design/system/macos.md">
       <Plate number={1} title={t`跟平台，还是跟 Web`} note={t`用户在 Mac 上已有的预期：窗口、sheet、右键菜单和快捷键，照系统的做。其余取 Web 的同一组值。`}>
         <div className="grid gap-10 md:grid-cols-2">
           <SplitColumn title={t`跟平台`} items={platform} />

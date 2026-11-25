@@ -2,11 +2,6 @@ import AppKit
 import Foundation
 import RiffetKit
 
-extension Notification.Name {
-    /// The interface style changed; the sidebars regroup for the arrangement it brings.
-    static let riffetInterfaceStyleChanged = Notification.Name("riffet.interface-style-changed")
-}
-
 /// The sidebar of a workbench: its rows (grouped by Kotlin's `visibleGroups` / `timeBuckets`), the
 /// reader's filters remembered in `UserDefaults`, and the message search merged from this Mac's
 /// cached transcripts and the server's index.
@@ -19,30 +14,13 @@ final class WorkbenchSidebar {
     /// The sidebar's rows, recomputed only when the list or the reader's filters change.
     private(set) var groups: [ProjectGroup] = []
     private(set) var buckets: [TimeBucket] = []
-    /// How the reader arranged the native list and the project tree (`PROJECT` or `TIME`).
-    var preferredLayout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout") ?? "TIME" {
-        didSet { UserDefaults.standard.set(preferredLayout, forKey: "riffet.sidebar-layout"); rebuild() }
-    }
-    /// How the reader arranged the time-grouped sidebar: by time, as it opens, or by project.
-    var timeGroupsLayout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout.time-groups") ?? "TIME" {
-        didSet { UserDefaults.standard.set(timeGroupsLayout, forKey: "riffet.sidebar-layout.time-groups"); rebuild() }
-    }
-    /// The arrangement on screen, as the reader picked it for the style's sidebar. Derived from the
-    /// style, so it is never stale.
-    var layout: String {
-        switch DisplayPreferences.shared.style.sidebar {
-        case .timeGroups: timeGroupsLayout
-        case .projectTree, .systemList: preferredLayout
-        }
+    /// How the reader arranged the sidebar (`PROJECT` or `TIME`).
+    var layout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout") ?? "TIME" {
+        didSet { UserDefaults.standard.set(layout, forKey: "riffet.sidebar-layout"); rebuild() }
     }
 
-    /// Picks the arrangement of the sidebar on screen.
-    func choose(layout: String) {
-        switch DisplayPreferences.shared.style.sidebar {
-        case .timeGroups: timeGroupsLayout = layout
-        case .projectTree, .systemList: preferredLayout = layout
-        }
-    }
+    /// Picks the arrangement of the sidebar.
+    func choose(layout: String) { self.layout = layout }
 
     /// 按标签页顺序: the pinned conversations in the tab bar's order rather than newest pin first.
     var pinsInTabOrder: Bool = UserDefaults.standard.string(forKey: "riffet.sidebar-sort") == "tabs" {
@@ -51,7 +29,7 @@ final class WorkbenchSidebar {
 
     /// Without tabs there is no tab order to follow.
     var tabsShown: Bool {
-        DisplayPreferences.shared.style.header == .sessionTabs && SessionTabsPreferences.shared.style == .titleBar
+        SessionTabsPreferences.shared.style == .titleBar
     }
     var showArchived: Bool = UserDefaults.standard.bool(forKey: "riffet.show-archived") {
         didSet { UserDefaults.standard.set(showArchived, forKey: "riffet.show-archived"); rebuild() }
@@ -118,18 +96,6 @@ final class WorkbenchSidebar {
 
     static let projectLimit = 5
 
-    @ObservationIgnored private var styleObserver: NSObjectProtocol?
-
-    init() {
-        // Synchronous, so the first frame of the new style already draws its own grouping.
-        styleObserver = NotificationCenter.default.addObserver(forName: .riffetInterfaceStyleChanged, object: nil, queue: nil) { [weak self] _ in
-            MainActor.assumeIsolated { self?.rebuild() }
-        }
-    }
-
-    deinit {
-        if let styleObserver { NotificationCenter.default.removeObserver(styleObserver) }
-    }
 
     private var list: SessionListState? { workbench?.list }
 
@@ -224,66 +190,12 @@ final class WorkbenchSidebar {
         return (visible, all.count - visible.count, false)
     }
 
-    // MARK: Time bands
-
-    /// The time-grouped sidebar's bands, which the drawn sidebar folds by their `rawValue`.
-    enum TimeBand: String { case pinned, recent, earlier }
-
-    struct TimeSection: Identifiable {
-        let band: TimeBand
-        let title: String
-        let sessions: [Session]
-        var id: String { band.rawValue }
-    }
-
     static let collapsedProjectsKey = "riffet.collapsed-projects"
-    static let collapsedTimeGroupsKey = "riffet.collapsed-time-groups"
-    /// The oldest band shows this many conversations until 显示更多.
-    static let earlierLimit = 8
-    /// The oldest band is unfolded past its first few conversations.
-    var showAllEarlier = false
 
-    /// The layout's buckets in three bands: pinned, recent (active or today) and earlier. A bucket is
-    /// one label, so its first conversation says which band it joins.
-    var timeSections: [TimeSection] {
-        let dayStart = Int64(Calendar.current.startOfDay(for: .now).timeIntervalSince1970 * 1000)
-        var pinned: [Session] = [], recent: [Session] = [], earlier: [Session] = []
-        for bucket in buckets {
-            let sessions = bucket.sessions
-            guard let first = sessions.first else { continue }
-            if first.pinnedAt != nil {
-                pinned += sessions
-            } else {
-                let key = timeBucketKey(session: first, dayStartMillis: dayStart)
-                if key == "sidebar.bucket.active" || key == "sidebar.bucket.today" { recent += sessions } else { earlier += sessions }
-            }
-        }
-        return [
-            TimeSection(band: .pinned, title: String(localized: "置顶"), sessions: pinned),
-            TimeSection(band: .recent, title: String(localized: "最近"), sessions: recent),
-            TimeSection(band: .earlier, title: String(localized: "更早"), sessions: earlier),
-        ].filter { !$0.sessions.isEmpty }
-    }
-
-    /// What a band lists: a few of the oldest until 显示更多, and the open one wherever it is.
-    func shown(_ section: TimeSection) -> (sessions: [Session], more: Bool) {
-        guard section.band == .earlier, !showAllEarlier, section.sessions.count > Self.earlierLimit else { return (section.sessions, false) }
-        var visible = Array(section.sessions.prefix(Self.earlierLimit))
-        if let workbench, !workbench.showingHome, let id = workbench.selected?.id, !visible.contains(where: { $0.id == id }),
-           let open = section.sessions.first(where: { $0.id == id }) {
-            visible.append(open)
-        }
-        return (visible, section.sessions.count > visible.count)
-    }
-
-    /// The conversations the sidebar shows, top to bottom: folded bands and projects and the hidden
-    /// tail of long ones left out.
+    /// The conversations the sidebar shows, top to bottom: folded projects and the hidden tail of
+    /// long ones left out.
     var visibleOrder: [Session] {
-        if layout == "TIME" {
-            guard DisplayPreferences.shared.style.sidebar == .timeGroups else { return buckets.flatMap(\.sessions) }
-            let folded = (UserDefaults.standard.string(forKey: Self.collapsedTimeGroupsKey) ?? "").split(separator: ",")
-            return timeSections.filter { !folded.contains(Substring($0.id)) }.flatMap { shown($0).sessions }
-        }
+        if layout == "TIME" { return buckets.flatMap(\.sessions) }
         let collapsed = (UserDefaults.standard.string(forKey: Self.collapsedProjectsKey) ?? "").split(separator: ",")
         return groups.flatMap { group in
             group.forceOpen || !collapsed.contains(Substring(group.project.id)) ? slice(for: group).sessions : []
