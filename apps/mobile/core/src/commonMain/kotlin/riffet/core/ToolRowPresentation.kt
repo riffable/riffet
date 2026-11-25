@@ -182,17 +182,26 @@ fun compactSearchScope(path: String?, root: String? = null): String? {
     return parts.takeLast(2).joinToString("/")
 }
 
+/*
+ * Shell scanning keeps quote and look-ahead state as plain `Char`, never `Char?`: Kotlin/Native 2.4.20
+ * release builds devirtualize `==` on a boxed `Char` wrongly and abort with "Unexpected receiver
+ * type: kotlin.Char" (debug builds and the JVM are unaffected).
+ */
+private const val NO_QUOTE = '\u0000'
+
+private fun CharSequence.charOr(index: Int): Char = if (index in indices) this[index] else NO_QUOTE
+
 private fun splitChainedCommands(headline: String): List<String> {
     val parts = ArrayList<String>()
     val current = StringBuilder()
-    var quote: Char? = null
+    var quote = NO_QUOTE
     var parenDepth = 0
     var i = 0
     while (i < headline.length) {
         val ch = headline[i]
         if (quote == '\'') {
             current.append(ch)
-            if (ch == '\'') quote = null
+            if (ch == '\'') quote = NO_QUOTE
             i += 1
             continue
         }
@@ -203,7 +212,7 @@ private fun splitChainedCommands(headline: String): List<String> {
         }
         if (quote == '"') {
             current.append(ch)
-            if (ch == '"') quote = null
+            if (ch == '"') quote = NO_QUOTE
             i += 1
             continue
         }
@@ -216,7 +225,7 @@ private fun splitChainedCommands(headline: String): List<String> {
         if (ch == '(') parenDepth += 1
         else if (ch == ')' && parenDepth > 0) parenDepth -= 1
         if (parenDepth == 0) {
-            val next = headline.getOrNull(i + 1)
+            val next = headline.charOr(i + 1)
             if (ch == ';') {
                 val seg = current.toString().trim()
                 if (seg.isNotEmpty()) parts += seg
@@ -243,13 +252,13 @@ private fun splitChainedCommands(headline: String): List<String> {
 private fun shellWords(segment: String): List<String> {
     val words = ArrayList<String>()
     val current = StringBuilder()
-    var quote: Char? = null
+    var quote = NO_QUOTE
     var hasWord = false
     var i = 0
     while (i < segment.length) {
         val ch = segment[i]
         if (quote == '\'') {
-            if (ch == '\'') quote = null else current.append(ch)
+            if (ch == '\'') quote = NO_QUOTE else current.append(ch)
             i += 1
             continue
         }
@@ -259,7 +268,7 @@ private fun shellWords(segment: String): List<String> {
                 i += 2
                 continue
             }
-            if (ch == '"') quote = null else current.append(ch)
+            if (ch == '"') quote = NO_QUOTE else current.append(ch)
             i += 1
             continue
         }
@@ -293,18 +302,18 @@ private fun shellWords(segment: String): List<String> {
 }
 
 private fun findTopLevelPipe(text: String): Int {
-    var quote: Char? = null
+    var quote = NO_QUOTE
     var depth = 0
     var i = 0
     while (i < text.length) {
         val ch = text[i]
-        if (quote == '\'') { if (ch == '\'') quote = null; i += 1; continue }
+        if (quote == '\'') { if (ch == '\'') quote = NO_QUOTE; i += 1; continue }
         if (ch == '\\') { i += 2; continue }
-        if (quote == '"') { if (ch == '"') quote = null; i += 1; continue }
+        if (quote == '"') { if (ch == '"') quote = NO_QUOTE; i += 1; continue }
         if (ch == '\'' || ch == '"') { quote = ch; i += 1; continue }
         if (ch == '(') depth += 1
         else if (ch == ')' && depth > 0) depth -= 1
-        if (depth == 0 && ch == '|' && text.getOrNull(i + 1) != '|' && text.getOrNull(i - 1) != '|') return i
+        if (depth == 0 && ch == '|' && text.charOr(i + 1) != '|' && text.charOr(i - 1) != '|') return i
         i += 1
     }
     return -1
@@ -313,13 +322,13 @@ private fun findTopLevelPipe(text: String): Int {
 /** Strip output redirections (`> file`, `2>/dev/null`, `2>&1`, `&>log`) only outside quotes. */
 private fun stripRedirections(segment: String): String {
     val out = StringBuilder(segment.length)
-    var quote: Char? = null
+    var quote = NO_QUOTE
     var i = 0
     while (i < segment.length) {
         val ch = segment[i]
         if (quote == '\'') {
             out.append(ch)
-            if (ch == '\'') quote = null
+            if (ch == '\'') quote = NO_QUOTE
             i += 1
             continue
         }
@@ -330,7 +339,7 @@ private fun stripRedirections(segment: String): String {
         }
         if (quote == '"') {
             out.append(ch)
-            if (ch == '"') quote = null
+            if (ch == '"') quote = NO_QUOTE
             i += 1
             continue
         }
@@ -345,17 +354,17 @@ private fun stripRedirections(segment: String): String {
             val op = REDIR_OP_RE.find(segment.substring(i))
             if (op != null) {
                 var j = i + op.value.length
-                if (segment.getOrNull(j) == '&' && segment.getOrNull(j + 1)?.isDigit() == true) {
+                if (segment.charOr(j) == '&' && segment.charOr(j + 1).isDigit()) {
                     j += 1
                     while (j < segment.length && segment[j].isDigit()) j += 1
                 } else {
                     while (j < segment.length && (segment[j] == ' ' || segment[j] == '\t')) j += 1
-                    var targetQuote: Char? = null
+                    var targetQuote = NO_QUOTE
                     while (j < segment.length) {
                         val c = segment[j]
-                        if (targetQuote == '\'') { j += 1; if (c == '\'') targetQuote = null; continue }
+                        if (targetQuote == '\'') { j += 1; if (c == '\'') targetQuote = NO_QUOTE; continue }
                         if (c == '\\' && j + 1 < segment.length) { j += 2; continue }
-                        if (targetQuote == '"') { j += 1; if (c == '"') targetQuote = null; continue }
+                        if (targetQuote == '"') { j += 1; if (c == '"') targetQuote = NO_QUOTE; continue }
                         if (c == '\'' || c == '"') { targetQuote = c; j += 1; continue }
                         if (c.isWhitespace()) break
                         j += 1
@@ -504,15 +513,15 @@ private fun extractScriptComment(body: String): String? {
 private data class HeredocRef(val marker: String, val raw: String)
 
 private fun findUnquotedHeredoc(segment: String): HeredocRef? {
-    var quote: Char? = null
+    var quote = NO_QUOTE
     var i = 0
     while (i < segment.length) {
         val ch = segment[i]
-        if (quote == '\'') { if (ch == '\'') quote = null; i += 1; continue }
+        if (quote == '\'') { if (ch == '\'') quote = NO_QUOTE; i += 1; continue }
         if (ch == '\\') { i += 2; continue }
-        if (quote == '"') { if (ch == '"') quote = null; i += 1; continue }
+        if (quote == '"') { if (ch == '"') quote = NO_QUOTE; i += 1; continue }
         if (ch == '\'' || ch == '"') { quote = ch; i += 1; continue }
-        if (ch == '<' && segment.getOrNull(i + 1) == '<' && segment.getOrNull(i + 2) != '<') {
+        if (ch == '<' && segment.charOr(i + 1) == '<' && segment.charOr(i + 2) != '<') {
             val match = HEREDOC_OP_RE.find(segment.substring(i))
             if (match != null) return HeredocRef(match.groupValues[1], match.value)
         }

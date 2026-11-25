@@ -39,6 +39,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The Mac app no longer quits on launch or when opening a conversation whose tool calls include chained shell commands.
 - On the web, the fullscreen side panel now spans the full width beside the sidebar again, keeps the open file preview and view state when switching between docked, fullscreen, and floating modes, and opens single-clicked files in a reusable preview tab instead of leaving every viewed file pinned in the tab bar.
 - On the web, folding a tool group or tool call near the end of a conversation no longer leaves blank space above the composer or blocks returning to follow the bottom.
 - Antigravity conversations now show user-facing notices and errors while keeping internal restart reminders out of the timeline.
