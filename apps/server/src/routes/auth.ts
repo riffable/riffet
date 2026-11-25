@@ -6,6 +6,7 @@ import { connectionAddresses } from '../connection-addresses.js';
 import { AppError } from '../errors.js';
 import { requireDeviceName } from '../auth.js';
 import { createPairingCode, redeemPairingCode } from '../pairing.js';
+import { peerCertificateFingerprint } from '../access/tls.js';
 import { PROTOCOL_INFO, summarizeWorkItem } from '../../../../packages/contracts/src/index.js';
 import type { ServerInfo } from '../../../../packages/contracts/src/index.js';
 import { withoutQuickChats } from '../chat/quick-chat.js';
@@ -50,7 +51,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
       throw new AppError('INVALID_PAIRING_CODE','The pairing code is incorrect or has expired',401);
     }
     pairAttempts.delete(key);
-    const issued=auth.issueDevice(label);
+    // Paired over TLS with a certificate of its own, the device's token works only with that certificate (docs/TRANSPORT-SECURITY.md §2).
+    const issued=auth.issueDevice(label,peerCertificateFingerprint(request.raw.socket));
     deps.recordSecurity(request,'device-paired',{subject:issued.device.name,subjectId:issued.device.id});
     return issued;
   };
@@ -90,10 +92,11 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     const pairing=createPairingCode();
     // `hosts` lists every address on this listener, `host` first: a network can isolate one interface
     // (wireless clients from each other) while another is reachable, and the phone tries them all.
-    const payload=JSON.stringify({v:1,scheme:connection.scheme,host:connection.host,...(connection.hosts.length>1?{hosts:connection.hosts}:{}),port:connection.port,code:pairing.code,name:request.body?.name?.trim()||hostname()});
+    // `fp` is this server's TLS certificate: an app that knows it connects over TLS on the same port and pins it (docs/TRANSPORT-SECURITY.md §5).
+    const payload=JSON.stringify({v:1,scheme:connection.scheme,host:connection.host,...(connection.hosts.length>1?{hosts:connection.hosts}:{}),port:connection.port,code:pairing.code,name:request.body?.name?.trim()||hostname(),fp:deps.tlsFingerprint});
     // Only the short-lived code travels in the QR; the master access token is never handed out here.
     // `payload` is the exact string `qr` encodes, so a native client can draw its own QR instead of parsing the SVG.
-    return {code:pairing.code,expiresAt:pairing.expiresAt,qr:await QRCode.toString(payload,{type:'svg'}),payload,...connection};
+    return {code:pairing.code,expiresAt:pairing.expiresAt,qr:await QRCode.toString(payload,{type:'svg'}),payload,tlsFingerprint:deps.tlsFingerprint,...connection};
   });
   app.post<{Body:{code:unknown;name:unknown}}>('/api/devices/pair',{bodyLimit:PUBLIC_BODY_LIMIT},async(request)=>{
     return pairDevice(request,request.body?.code,request.body?.name);

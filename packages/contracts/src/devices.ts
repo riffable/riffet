@@ -69,6 +69,8 @@ export interface DeviceInfo {
   online: boolean; capabilities: DeviceCapability[]; allowControl: boolean;
   /** Present for iOS devices and any device that registered for push. */
   push?: DevicePushRoute;
+  /** Six digits from this server's and the device's certificates, for a device paired over TLS; the app shows the same. */
+  verificationCode?: string;
 }
 /**
  * `GET /api/settings/push`: the APNs auth key this server pushes with. The key itself is never returned.

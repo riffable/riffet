@@ -8210,6 +8210,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.platform=ios": {
@@ -8230,6 +8231,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.platform=mac": {
@@ -8250,6 +8252,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=clipboard.read": {
@@ -8270,6 +8273,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=clipboard.write": {
@@ -8290,6 +8294,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=location": {
@@ -8310,6 +8315,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=photo": {
@@ -8330,6 +8336,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=open_url": {
@@ -8350,6 +8357,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=alarm": {
@@ -8370,6 +8378,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=screen.observe": {
@@ -8390,6 +8399,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=screen.act": {
@@ -8410,6 +8420,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=app.launch": {
@@ -8430,6 +8441,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=riffet.appearance": {
@@ -8450,6 +8462,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=window.capture": {
@@ -8470,6 +8483,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.push.route=none": {
@@ -8490,6 +8504,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.push.reason=no_token": {
@@ -8510,6 +8525,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceInfo#$.push.reason=failed": {
@@ -8530,6 +8546,7 @@
       "detail": "text",
       "futureField": 4
     },
+    "verificationCode": "text",
     "futureField": 4
   },
   "DeviceCall": {
@@ -10335,7 +10352,8 @@
       "route": "future-value",
       "reason": "future-value",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceCall#unknown-enum": {
     "callId": "text",

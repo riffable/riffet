@@ -152,6 +152,7 @@ import { RoutePatterns, routeAccess, type Capability } from './access/capabiliti
 import { grantsFor } from './access/grants.js';
 import { secureTransport, trustedNetworks } from './access/transport.js';
 import { SecurityAudit } from './access/audit.js';
+import { acceptTlsOnSamePort, loadServerTlsIdentity } from './access/tls.js';
 import { peerPath } from './links/forward.js';
 import { linkOfRequest } from './links/socket.js';
 import { LINK_TUNNEL_ROUTE, SERVER_FORWARD_ROUTE, registerLinkRoutes } from './routes/links.js';
@@ -235,6 +236,8 @@ export async function createApp(options: AppOptions = {}) {
   const recordAuxiliaryCall=(entry:import('./auxiliary/telemetry.js').AuxiliaryCallRecord)=>auxiliaryStats.record(entry);
   const auth=new Auth(stateDir,options);
   const securityAudit=new SecurityAudit(stateDir);
+  // This server's TLS identity (docs/TRANSPORT-SECURITY.md §2); apps pin its fingerprint from the pairing code.
+  const serverTls=loadServerTlsIdentity(stateDir,hostname().replace(/\.local$/i,'').slice(0,64)||'Riffet');
   // Each conversation's Riffet MCP server (docs/DEVICES.md §2): built before the backends, whose launches carry it.
   const riffetMcpCredentials=new RiffetMcpCredentials(store,stateDir);
   const notices=new NoticeLog(store);
@@ -244,7 +247,7 @@ export async function createApp(options: AppOptions = {}) {
   const workspace=new WorkspaceService({stateDir,noteWrite:file=>workspaceObserver(stateDir).noteEdit(file)});
   void workspace.writes.prune().catch(()=>undefined);
   // Paired devices' calls and leases (docs/DEVICES.md §3); leases follow the scheduler's wake-ups.
-  const devices=new DeviceChannel({store,auth,workspace,pendingWakeups:()=>orchestrationRef?.pendingWakeups()??[]});
+  const devices=new DeviceChannel({store,auth,workspace,pendingWakeups:()=>orchestrationRef?.pendingWakeups()??[],tlsFingerprint:serverTls.fingerprint});
   const adb=new DeviceAdb(options.adbRunner?{runner:options.adbRunner,locate:()=>'adb'}:{});
   let workItemsRef:WorkItemService|undefined;
   let assistantRef:AssistantBoard|undefined;
@@ -386,6 +389,8 @@ export async function createApp(options: AppOptions = {}) {
   const orchestration=new OrchestrationService({store,settings,nativeBackends,git,dispatch,sessionCommands,notices,recordAuxiliaryCall,onWakeup:wakeup=>devices.wakeupChanged(wakeup)});
   orchestrationRef=orchestration;
   const app=Fastify({logger:options.logger??false,bodyLimit:36*1024*1024,requestTimeout:60_000});
+  // Apps reach this port over TLS with the certificate pinned from the pairing code; browsers keep plain HTTP (docs/TRANSPORT-SECURITY.md §3).
+  acceptTlsOnSamePort(app.server,serverTls);
   // Every route as registered, so `links/links.test.ts` can check that the link policy classifies each one.
   const registeredRoutes:Array<{method:string;url:string}>=[];
   // The same routes by pattern, so a request forwarded to a linked server is judged by the route it reaches there.
@@ -634,7 +639,7 @@ export async function createApp(options: AppOptions = {}) {
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
-  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,clientAccess:(request:FastifyRequest)=>{const {secure,granted}=accessOf(request);return {secure,capabilities:[...granted]};},recordSecurity,securityAudit,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,clientAccess:(request:FastifyRequest)=>{const {secure,granted}=accessOf(request);return {secure,capabilities:[...granted]};},recordSecurity,securityAudit,tlsFingerprint:serverTls.fingerprint,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.

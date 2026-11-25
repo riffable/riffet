@@ -7357,7 +7357,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.platform=ios": {
     "id": "text",
@@ -7375,7 +7376,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.platform=mac": {
     "id": "text",
@@ -7393,7 +7395,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=clipboard.read": {
     "id": "text",
@@ -7411,7 +7414,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=clipboard.write": {
     "id": "text",
@@ -7429,7 +7433,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=location": {
     "id": "text",
@@ -7447,7 +7452,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=photo": {
     "id": "text",
@@ -7465,7 +7471,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=open_url": {
     "id": "text",
@@ -7483,7 +7490,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=alarm": {
     "id": "text",
@@ -7501,7 +7509,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=screen.observe": {
     "id": "text",
@@ -7519,7 +7528,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=screen.act": {
     "id": "text",
@@ -7537,7 +7547,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=app.launch": {
     "id": "text",
@@ -7555,7 +7566,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=riffet.appearance": {
     "id": "text",
@@ -7573,7 +7585,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.capabilities[]=window.capture": {
     "id": "text",
@@ -7591,7 +7604,8 @@
       "route": "direct",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.push.route=none": {
     "id": "text",
@@ -7609,7 +7623,8 @@
       "route": "none",
       "reason": "no_key",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.push.reason=no_token": {
     "id": "text",
@@ -7627,7 +7642,8 @@
       "route": "direct",
       "reason": "no_token",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceInfo#$.push.reason=failed": {
     "id": "text",
@@ -7645,7 +7661,8 @@
       "route": "direct",
       "reason": "failed",
       "detail": "text"
-    }
+    },
+    "verificationCode": "text"
   },
   "DeviceCall": {
     "callId": "text",

@@ -42,6 +42,7 @@
 - 设备的证书不经 CA 签发：服务器在配对时登记它的指纹，之后靠双向 TLS（mTLS）认证，不再传 bearer 令牌。复制出来的凭据文件不能用。
 - 换密钥：服务器用旧密钥签一条轮换声明，把新证书推给所有对端和设备，对方更新指纹，不用重新配对。设备换密钥同理。SERVER-LINKS.md §6 写了互联的轮换，目前没有实现。
 - iOS 上，Secure Enclave 的密钥要和证书一起组成 `SecIdentity`，才能在 URLSession 的客户端证书质询里使用。这一步要在 P1 先做小样验证。
+- 实现（服务器端）：TLS 身份在 `access/tls.ts`，`server-tls-key.pem`、`server-tls-cert.pem`（0600），证书由 `links/identity.ts` 自己编码。经 TLS 并出示证书完成配对的设备，记下证书指纹（`DeviceRecord.certFingerprint`），它的令牌只在出示同一证书的 TLS 连接上有效，否则答 `DEVICE_CERTIFICATE_REQUIRED`。没有证书的旧设备照旧（§11）。
 
 ## 3. 各段传输
 
@@ -53,7 +54,7 @@
 | Mac 浏览器 ↔ 互联的对端 | 本机转发（见下） |
 | 浏览器 ↔ 非回环的服务器 | 有浏览器信任的 HTTPS 时（Tailscale、反向代理、用户自己的域名）正常使用；手机浏览器长期走 §9；都没有时按 §4 限权 |
 
-**同一端口**：服务器按连接的首字节分流 TLS 和明文 HTTP。非回环来源的明文 HTTP 只服务三种请求：互联隧道的入口（`/api/links/tunnel`，隧道内自带 TLS）、§4 的限权浏览器会话、TLS 配对之前的服务发现。原生客户端升级到 TLS 以后，服务器不再接受它经明文 HTTP 发来的凭据。
+**同一端口**：服务器按连接的首字节分流 TLS 和明文 HTTP（`acceptTlsOnSamePort`，首字节和握手限 `TRANSPORT_BUDGET.handshakeMs`）。TLS 上请求客户端证书但不强制；浏览器直接经 TLS 打开这个端口时，若系统里装有客户端证书，可能弹出选择证书的对话框，这条路径不是给浏览器用的。非回环来源的明文 HTTP 只服务三种请求：互联隧道的入口（`/api/links/tunnel`，隧道内自带 TLS）、§4 的限权浏览器会话、TLS 配对之前的服务发现。原生客户端升级到 TLS 以后，服务器不再接受它经明文 HTTP 发来的凭据。
 
 **Mac 浏览器经本机转发访问对端**：Mac 上的服务器在回环地址开一个端口，经已加密的互联隧道把连接原样转到对端。浏览器打开 `localhost:<端口>`，使用对端自己的网页和登录。
 

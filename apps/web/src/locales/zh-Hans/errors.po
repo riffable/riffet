@@ -113,6 +113,11 @@ msgid "error.DELETE_UNRECOVERABLE"
 msgstr "它太大，删除后无法撤销"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.DEVICE_CERTIFICATE_REQUIRED"
+msgstr "这台设备需要用自己的证书经加密连接登录，请更新 App 或重新配对"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/discussions.json
 msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
 msgstr "侧边聊天的上下文快照已不可用"

@@ -2474,6 +2474,43 @@ describe('API authentication boundary', () => {
     expect(new SecurityAudit(stateDir).list().map(event => event.id)).toEqual(events.map(event => event.id));
   });
 
+  it('speaks TLS on its own port and binds a device paired over it to its certificate', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-tls-'));
+    const { app } = await createApp({ stateDir, host: '127.0.0.1', token: 't'.repeat(32), cliPath: '/nonexistent/cursor-agent' });
+    cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const { port } = app.server.address() as import('node:net').AddressInfo;
+    const { request: httpsRequest } = await import('node:https');
+    const { createIdentity, verificationCode } = await import('./links/identity.js');
+    const phone = createIdentity('phone', 'p256');
+    const call = (path: string, options: { method?: string; body?: unknown; bearer?: string; cert?: boolean }) => new Promise<{ status: number; json: Record<string, any>; server: string }>((resolve, reject) => {
+      const request = httpsRequest({ host: '127.0.0.1', port, path, method: options.method ?? 'GET', rejectUnauthorized: false, ...(options.cert ? { key: phone.key, cert: phone.cert } : {}),
+        headers: { host: `127.0.0.1:${port}`, ...(options.body ? { 'content-type': 'application/json' } : {}), ...(options.bearer ? { authorization: `Bearer ${options.bearer}` } : {}) } }, response => {
+        const server = (response.socket as import('node:tls').TLSSocket).getPeerCertificate().fingerprint256;
+        let text = ''; response.on('data', chunk => { text += chunk; }); response.on('end', () => resolve({ status: response.statusCode!, json: JSON.parse(text || '{}'), server }));
+      });
+      request.on('error', reject);
+      request.end(options.body ? JSON.stringify(options.body) : undefined);
+    });
+    // The pairing code names the certificate the TLS connection then presents.
+    const local = await app.inject({ method: 'POST', url: '/api/auth/login', headers: { host: '127.0.0.1' }, payload: { token: 't'.repeat(32) } });
+    const cookie = String(local.headers['set-cookie']).split(';')[0]!;
+    const pairing = (await app.inject({ method: 'POST', url: '/api/pairing/code', headers: { host: '127.0.0.1', cookie, 'x-csrf-token': local.json().csrfToken }, payload: {} })).json() as { payload: string; tlsFingerprint: string };
+    const { code, fp } = JSON.parse(pairing.payload) as { code: string; fp: string };
+    const paired = await call('/api/devices/pair', { method: 'POST', body: { code, name: 'Phone' }, cert: true });
+    expect(paired.status).toBe(200);
+    expect(paired.server).toBe(fp);
+    const token = paired.json.token as string;
+    // Its token works over TLS with its certificate, and nowhere else.
+    expect((await call('/api/sessions', { bearer: token, cert: true })).status).toBe(200);
+    expect((await call('/api/sessions', { bearer: token })).json.error.code).toBe('DEVICE_CERTIFICATE_REQUIRED');
+    const plain = await app.inject({ method: 'GET', url: '/api/sessions', headers: { host: '127.0.0.1', authorization: `Bearer ${token}` } });
+    expect(plain.json().error.code).toBe('DEVICE_CERTIFICATE_REQUIRED');
+    // Both ends show the same comparison code.
+    const listed = (await call('/api/devices', { bearer: token, cert: true })).json.devices as Array<{ id: string; verificationCode?: string }>;
+    expect(listed.find(device => device.id === paired.json.device.id)?.verificationCode).toBe(verificationCode('riffet-device-sas', fp, phone.fingerprint));
+  });
+
   it('rejects absolute-form request targets before any handler, including WebSocket upgrades', async () => {
     const app = await bootGuarded();
     await app.listen({ host: '127.0.0.1', port: 0 });

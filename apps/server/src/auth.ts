@@ -8,6 +8,8 @@ import { mdnsNames } from './mdns-name.js';
 import { linkOfRequest } from './links/socket.js';
 import { SESSION_COOKIE_BUDGET, type DevicePushRegistration, type DeviceReport } from '../../../packages/contracts/src/index.js';
 import { secureTransport, trustedNetworks } from './access/transport.js';
+import { peerCertificateFingerprint } from './access/tls.js';
+import { sameFingerprint } from './links/identity.js';
 
 /**
  * A request a proxy relayed: a reverse proxy, an SSH-less front door or `tailscale serve` reaches a
@@ -37,6 +39,11 @@ export interface DeviceRecord extends Partial<DeviceReport> {
   id: string; name: string; hash: string; createdAt: string; lastSeenAt?: string;
   /** The `X-Riffet-Features` the device sent with its last report: what its lists show, so what may be pushed to it. */
   features?: string[];
+  /**
+   * The SHA-256 of the client certificate the device paired with over TLS (docs/TRANSPORT-SECURITY.md §2). Its token
+   * then counts only on a TLS connection that presents that certificate, so a copied token is of no use alone.
+   */
+  certFingerprint?: string;
 }
 export type PublicDevice = Omit<DeviceRecord, 'hash' | 'installationId' | 'push' | 'features'>;
 export interface IssuedDevice { device: PublicDevice; token: string }
@@ -272,11 +279,12 @@ export class Auth {
   }
 
   /** Mints a long-lived device credential. The plaintext token is returned exactly once. */
-  issueDevice(name: string): IssuedDevice {
+  /** [certFingerprint] is the client certificate a device paired with over TLS; its token is then bound to it. */
+  issueDevice(name: string, certFingerprint?: string): IssuedDevice {
     const label=requireDeviceName(name);
     const id=randomBytes(8).toString('hex');
     const token=`wkn_${id}_${randomBytes(32).toString('base64url')}`;
-    const device: DeviceRecord={id,name:label,hash:hashToken(token),createdAt:new Date().toISOString()};
+    const device: DeviceRecord={id,name:label,hash:hashToken(token),createdAt:new Date().toISOString(),...(certFingerprint?{certFingerprint}:{})};
     this.devices.push(device);
     this.flushDevices(true);
     return {device:publicDevice(device),token};
@@ -428,7 +436,9 @@ export class Auth {
     const parsed=DEVICE_TOKEN.exec(header.slice(7).trim());
     if (!parsed) return;
     const device=this.devices.find(candidate=>candidate.id===parsed[1]);
-    return device && equal(device.hash,hashToken(header.slice(7).trim())) ? device : undefined;
+    if (!device || !equal(device.hash,hashToken(header.slice(7).trim()))) return undefined;
+    if (device.certFingerprint && !sameFingerprint(peerCertificateFingerprint(request.raw.socket),device.certFingerprint)) throw new AppError('DEVICE_CERTIFICATE_REQUIRED','This device signs in with its certificate over TLS',401);
+    return device;
   }
   private touchDevice(device: DeviceRecord) {
     device.lastSeenAt=new Date().toISOString();

@@ -98,6 +98,8 @@ export interface RouteDeps {
   effectiveSettings(headers?: IncomingHttpHeaders): Promise<AppSettings>;
   /** The caller's own access: whether its connection is encrypted and what it may do over it (docs/TRANSPORT-SECURITY.md §6). */
   clientAccess(request: FastifyRequest): ClientAccess;
+  /** This server's TLS certificate fingerprint, which apps pin (docs/TRANSPORT-SECURITY.md §2). */
+  tlsFingerprint: string;
   /** Adds to the security record (docs/TRANSPORT-SECURITY.md §7), with [request]'s caller as the actor. */
   recordSecurity(request: FastifyRequest, kind: SecurityEventKind, fields?: { subject?: string; subjectId?: string; detail?: string; once?: string }): void;
   securityAudit: { list(options?: { before?: string; limit?: number }): SecurityEvent[]; subscribe(listener: (event: SecurityEvent) => void): () => void };

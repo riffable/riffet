@@ -1,4 +1,5 @@
 {
   "CAPABILITY_REQUIRED": { "zh": "这台设备没有权限做这项操作", "en": "This device isn't allowed to do this" },
+  "DEVICE_CERTIFICATE_REQUIRED": { "zh": "这台设备需要用自己的证书经加密连接登录，请更新 App 或重新配对", "en": "This device signs in with its own certificate over an encrypted connection. Update the app or pair it again" },
   "INSECURE_CONNECTION_READ_ONLY": { "zh": "连接未加密，只能查看。请用 App、本机网页或 HTTPS 地址操作", "en": "This connection isn't encrypted, so it can only read. Use the app, this computer's own page, or an HTTPS address" }
 }

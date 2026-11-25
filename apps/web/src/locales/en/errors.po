@@ -113,6 +113,11 @@ msgid "error.DELETE_UNRECOVERABLE"
 msgstr "It is too large to keep for undo"
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.DEVICE_CERTIFICATE_REQUIRED"
+msgstr "This device signs in with its own certificate over an encrypted connection. Update the app or pair it again"
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/discussions.json
 msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
 msgstr "The side chat context snapshot is unavailable"

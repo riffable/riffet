@@ -649,6 +649,12 @@ export const LINK_BUDGET = {
   searchWaitMs: 8_000,
 } as const;
 
+/** TLS on the server's own port (docs/TRANSPORT-SECURITY.md §3). */
+export const TRANSPORT_BUDGET = {
+  /** A new connection must send its first byte, and a TLS one finish its handshake, within this. */
+  handshakeMs: 10_000,
+} as const;
+
 /** A browser's sign-in (docs/TRANSPORT-SECURITY.md §4). */
 export const SESSION_COOKIE_BUDGET = {
   /** Over an encrypted connection. */

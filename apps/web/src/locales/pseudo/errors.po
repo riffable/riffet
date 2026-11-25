@@ -113,6 +113,11 @@ msgid "error.DELETE_UNRECOVERABLE"
 msgstr ""
 
 #. js-lingui-explicit-id
+#: ../../i18n/errors/access.json
+msgid "error.DEVICE_CERTIFICATE_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
 #: ../../i18n/errors/discussions.json
 msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
 msgstr ""

@@ -6,6 +6,8 @@ import { AppError, parseInput } from '../errors.js';
 import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';
 import { DeviceAuditLog } from './audit.js';
+import { DEVICE_SAS_LABEL } from '../access/tls.js';
+import { verificationCode } from '../links/identity.js';
 
 /** One JSON map in the settings table: a handful of calls, written by one process. */
 const CALLS = 'riffet-mcp:device-calls';
@@ -37,6 +39,8 @@ export interface DeviceChannelDeps {
   workspace: WorkspaceService;
   /** Every conversation's pending wake-ups; read lazily, the scheduler is built later. */
   pendingWakeups: () => RiffetWakeup[];
+  /** This server's TLS certificate fingerprint (docs/TRANSPORT-SECURITY.md §2). */
+  tlsFingerprint?: string;
 }
 
 const deviceCall = ({ callId, sessionId, capability, args, deadline, createdAt }: StoredDeviceCall): DeviceCall => ({ callId, sessionId, capability, args, deadline, createdAt });
@@ -114,6 +118,7 @@ export class DeviceChannel {
       createdAt: device.createdAt, ...(device.lastSeenAt ? { lastSeenAt: device.lastSeenAt } : {}),
       online: this.online(device.id), capabilities: device.capabilities ?? [], allowControl: device.allowControl === true,
       ...(push ? { push } : {}),
+      ...(device.certFingerprint && this.deps.tlsFingerprint ? { verificationCode: verificationCode(DEVICE_SAS_LABEL, this.deps.tlsFingerprint, device.certFingerprint) } : {}),
     };
   }
 

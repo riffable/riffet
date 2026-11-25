@@ -51,7 +51,7 @@ export const DeviceInfoSchema = z.object({
   id: z.string(), name: z.string(), platform: DevicePlatformSchema.optional(), appVersion: z.string().optional(),
   createdAt: z.string(), lastSeenAt: z.string().optional(),
   online: z.boolean(), capabilities: z.array(DeviceCapabilitySchema), allowControl: z.boolean(),
-  push: DevicePushRouteSchema.optional(),
+  push: DevicePushRouteSchema.optional(), verificationCode: z.string().optional(),
 });
 export const DeviceCallSchema = z.object({
   callId: z.string(), sessionId: z.string(), capability: DeviceCapabilitySchema,
