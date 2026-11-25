@@ -55,6 +55,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- On iPhone, the setup card on New session is laid out like the rest of the app: saved and nearby servers are plain rows with one action each, an expired pairing shows Pair again on its row, and Skip next to Choose project is no longer squeezed out.
 - On Android, switching to the assistant or opening a conversation no longer shows a still, closed ring first; a spinner appears only if loading takes longer than 0.4 s.
 - On Android, the new-session page no longer flashes the server · agent · project setup card and "Loading projects" at launch.
 - On Android, the hold-to-talk bubble is centred over the dome below it instead of leaning to one side with the composer (on the assistant page). On Android and iPhone, before any words are recognised the level meter and timer sit in the middle of the bubble.

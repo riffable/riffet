@@ -519,7 +519,7 @@ struct NewTaskView: View {
 /// The mark, the line with the card, and what hangs below, in a page at least one viewport tall. The
 /// line and the card are centred on their own, so what is below them never moves them; the room
 /// above holds the mark, up to 104pt, hidden when under 56pt or while folded away.
-private struct NewTaskLayout: Layout {
+struct NewTaskLayout: Layout {
     var minHeight: CGFloat
     var markShown: Bool
     private func heights(_ width: CGFloat, _ subviews: Subviews) -> (anchor: CGFloat, below: CGFloat) {

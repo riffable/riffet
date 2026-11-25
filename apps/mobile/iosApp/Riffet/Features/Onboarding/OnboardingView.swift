@@ -129,7 +129,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     heading(String(localized: "连接你的电脑", bundle: .riffet),
                             String(localized: "二维码在电脑上 Riffet 设置的「设备管理」里", bundle: .riffet))
-                    VStack(spacing: 0) {
+                    ServerRowList {
                         ForEach(discovery.servers) { found in
                             LanServerRow(found: found) { target = PairingPrefill(address: found.baseURL, name: found.name) }
                         }

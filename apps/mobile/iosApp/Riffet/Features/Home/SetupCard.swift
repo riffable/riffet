@@ -56,9 +56,9 @@ private struct SetupGlyph: View {
         ZStack {
             switch state {
             case .pending:
-                Circle().strokeBorder(palette.fg4, lineWidth: 1.5)
+                Circle().strokeBorder(palette.fg4, lineWidth: 1.25)
             case .current:
-                Circle().strokeBorder(palette.fg, lineWidth: 1.5)
+                Circle().strokeBorder(palette.fg, lineWidth: 1.25)
                 Circle().fill(palette.fg).frame(width: 6, height: 6)
             case .busy:
                 ProgressView().controlSize(.mini)
@@ -71,27 +71,31 @@ private struct SetupGlyph: View {
     }
 }
 
-/// The composer's shape and material with the three steps on top and the current step's body below.
+/// The composer's shape and material: the three steps in a row on top, the current step's body below,
+/// both on the card's one text edge. Nothing in the body draws a box of its own: the card is the only one.
 struct SetupCard<Content: View>: View {
     let steps: [SetupStep]
     @ViewBuilder var content: Content
     @Environment(\.palette) private var palette
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 8) {
-                ForEach(steps) { step in
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                    if index > 0 { palette.line.frame(minWidth: 8, maxWidth: 16, maxHeight: 1) }
                     HStack(spacing: 6) {
                         SetupGlyph(state: step.state)
-                        Text(label(step)).riffetFont(.caption, weight: .medium).foregroundStyle(color(step)).lineLimit(1)
+                        Text(label(step)).riffetFont(.label, weight: weight(step)).foregroundStyle(color(step)).lineLimit(1)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityElement(children: .combine)
                 }
+                Spacer(minLength: 0)
             }
-            content
+            .frame(height: RiffetMetrics.settingsRowHeight)
+            VStack(alignment: .leading, spacing: RiffetMetrics.groupGap) { content }
+                .padding(.bottom, RiffetMetrics.groupInset)
         }
-        .padding(RiffetMetrics.groupInset)
+        .padding(.horizontal, RiffetMetrics.groupInset)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.composerRadius, style: .continuous))
     }
@@ -102,82 +106,124 @@ struct SetupCard<Content: View>: View {
     }
     private func color(_ step: SetupStep) -> Color {
         switch step.state {
-        case .pending: palette.fg3
+        case .pending: palette.fg4
+        case .done: palette.fg2
         default: palette.fg
         }
+    }
+    private func weight(_ step: SetupStep) -> Font.Weight {
+        if case .done = step.state { return .regular }
+        return .medium
     }
 }
 
 // MARK: - Server step
 
-/// One Mac found on the network: its name and address, 连接 opens pairing with the address filled in
-/// (the pairing code is still asked for).
-struct LanServerRow: View {
-    let found: DiscoveredRiffetServer
-    let connect: () -> Void
+/// A server to connect to, saved or found on the network: the settings tile, its name, its address when the
+/// name is not already the address, and the verb at the end in the accent colour. The row is the button.
+struct SetupServerRow: View {
+    let symbol: String
+    let name: String
+    var detail: String? = nil
+    let verb: String
+    var busy = false
+    let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "wifi").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(found.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-                Text(found.host).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
+        Button(action: action) {
+            HStack(spacing: RiffetMetrics.groupGap) {
+                SettingsIcon(symbol: symbol)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                    if let detail { Text(detail).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.middle) }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if busy { ProgressView() }
+                else { Text(verb).riffetFont(.label).foregroundStyle(palette.accent) }
             }
-            Spacer(minLength: 8)
-            Button(String(localized: "连接", bundle: .riffet), action: connect).buttonStyle(.bordered).controlSize(.small)
+            .frame(minHeight: RiffetMetrics.settingsRowHeight)
         }
-        .frame(minHeight: RiffetMetrics.hitTarget)
+        .buttonStyle(RiffetRowPressStyle())
+        .accessibilityElement(children: .combine)
     }
 }
 
-/// The server step's body: scanning, the Macs found on the network, typing an address.
-struct ServerStepBody: View {
+/// One Mac found on the network: 连接 opens pairing with the address filled in (the pairing code is still asked for).
+struct LanServerRow: View {
+    let found: DiscoveredRiffetServer
+    let connect: () -> Void
+
+    var body: some View {
+        SetupServerRow(symbol: "wifi", name: found.name, detail: found.host, verb: String(localized: "连接", bundle: .riffet), action: connect)
+    }
+}
+
+/// The server step's body: the servers to pick from, then scanning, then typing an address.
+struct ServerStepBody<Rows: View>: View {
     let discovery: BonjourDiscovery
     let scan: () -> Void
     let connect: (DiscoveredRiffetServer) -> Void
     let manual: () -> Void
+    @ViewBuilder var saved: Rows
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        ServerRowList {
+            saved
+            ForEach(discovery.servers) { found in LanServerRow(found: found) { connect(found) } }
+        }
+        VStack(spacing: 0) {
             Button(action: scan) {
                 Label(String(localized: "扫码配对", bundle: .riffet), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent).controlSize(.large)
             .accessibilityIdentifier("pairNew")
-            ForEach(discovery.servers) { found in LanServerRow(found: found) { connect(found) } }
             Button(String(localized: "输入地址", bundle: .riffet), action: manual)
                 .buttonStyle(.borderless).frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget)
         }
     }
 }
 
+/// Server rows with a hairline between them, inset to the text so the tiles stand clear.
+struct ServerRowList<Content: View>: View {
+    @ViewBuilder var content: Content
+    @Environment(\.palette) private var palette
+    @ScaledMetric(relativeTo: .body) private var tile = RiffetMetrics.iconSlot
+
+    var body: some View {
+        Group(subviews: content) { rows in
+            if !rows.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(rows) { row in
+                        if row.id != rows.first?.id {
+                            palette.line.frame(height: 1).padding(.leading, tile + RiffetMetrics.groupGap)
+                        }
+                        row
+                    }
+                }
+            }
+        }
+    }
+}
+
 /// Servers this phone already holds a pairing for, shown while none is connected (the last one is
-/// offline, or its pairing expired): a row connects, or pairs again when the pairing is gone.
+/// offline, or its pairing expired): 连接 tries it again, 重新配对 pairs again when the pairing is gone.
 struct SavedServerRows: View {
     @Bindable var model: AppModel
     let pair: (PairedServer) -> Void
-    @Environment(\.palette) private var palette
 
     var body: some View {
         ForEach(model.pairedServers.sorted { $0.lastUsedAt > $1.lastUsedAt }, id: \.origin) { server in
-            Button {
-                if model.serverFailures[server.origin] == String(localized: "需重新配对", bundle: .riffet) { pair(server) }
-                else { Task { await model.switchServer(server) } }
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "server.rack").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(server.displayName).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-                        Text(server.baseUrl).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
-                    }
-                    Spacer(minLength: 8)
-                    if model.switchingOrigin == server.origin { ProgressView() }
-                    else if let failure = model.serverFailures[server.origin] { Text(failure).riffetFont(.caption).foregroundStyle(palette.fg3) }
-                }
-                .frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+            let failure = model.serverFailures[server.origin]
+            let expired = failure == String(localized: "需重新配对", bundle: .riffet)
+            let address = server.baseUrl.replacingOccurrences(of: #"^[a-z]+://"#, with: "", options: .regularExpression)
+            SetupServerRow(symbol: "desktopcomputer", name: server.displayName,
+                           detail: failure.flatMap { expired ? nil : $0 } ?? (address == server.displayName ? nil : address),
+                           verb: expired ? String(localized: "重新配对", bundle: .riffet) : String(localized: "连接", bundle: .riffet),
+                           busy: model.switchingOrigin == server.origin) {
+                if expired { pair(server) } else { Task { await model.switchServer(server) } }
             }
-            .buttonStyle(.plain).disabled(model.connectionBusy)
+            .disabled(model.connectionBusy)
         }
     }
 }
@@ -215,24 +261,25 @@ struct ConnectedSetupCard: View {
     var body: some View {
         SetupCard(steps: steps) {
             if agentReady {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(String(localized: "Agent 会在所选目录里读写文件", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg)
+                VStack(alignment: .leading, spacing: RiffetMetrics.groupGap) {
+                    Text(String(localized: "Agent 会在所选目录里读写文件", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg2)
+                        
                     HStack(spacing: 8) {
-                        Button(action: skip) { Text(String(localized: "跳过", bundle: .riffet)).frame(maxWidth: .infinity) }
-                            .buttonStyle(.bordered).controlSize(.large)
+                        Button(String(localized: "跳过", bundle: .riffet), action: skip)
+                            .buttonStyle(.bordered).tint(palette.fg).controlSize(.large).fixedSize()
                         Button(action: pickProject) { Text(String(localized: "选择项目", bundle: .riffet)).frame(maxWidth: .infinity) }
-                            .buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
-                            .layoutPriority(1)
+                            .buttonStyle(.borderedProminent).controlSize(.large)
                             .accessibilityIdentifier("newTaskProject")
                     }
                 }
             } else if workbench.backendsLoaded {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(workbench.backendError ?? String(localized: "没有找到可用的 Agent", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg)
+                VStack(alignment: .leading, spacing: RiffetMetrics.groupGap) {
+                    Text(workbench.backendError ?? String(localized: "没有找到可用的 Agent", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg2)
+                        
                     Button {
                         Task { workbench.store.invalidateBackendCatalog(); await workbench.loadBackends() }
                     } label: { Text(String(localized: "重新读取 Agent", bundle: .riffet)).frame(maxWidth: .infinity) }
-                        .buttonStyle(.bordered).controlSize(.large)
+                        .buttonStyle(.bordered).tint(palette.fg).controlSize(.large)
                 }
             }
         }
@@ -249,7 +296,7 @@ struct ConnectedSetupCard: View {
 
 // MARK: - Unconnected
 
-/// 新会话 with no server: the mark, and the setup card at the server step.
+/// 新会话 with no server: the mark, and the setup card at the server step where the composer will be.
 struct UnconnectedNewTaskView: View {
     @Bindable var model: AppModel
     @Environment(\.palette) private var palette
@@ -259,27 +306,22 @@ struct UnconnectedNewTaskView: View {
     var body: some View {
         GeometryReader { viewport in
             ScrollView {
-                VStack(spacing: 24) {
-                    LiveBrandMark(front: palette.fg, back: palette.accent).frame(width: 96, height: 96)
-                    VStack(alignment: .leading, spacing: 8) {
-                        SetupCard(steps: steps) {
-                            VStack(alignment: .leading, spacing: 8) {
-                                SavedServerRows(model: model) { target = PairingPrefill(address: $0.baseUrl, name: $0.name) }
-                                ServerStepBody(discovery: discovery,
-                                               scan: { target = PairingPrefill(scan: true) },
-                                               connect: { target = PairingPrefill(address: $0.baseURL, name: $0.name) },
-                                               manual: { target = PairingPrefill(address: model.address) })
-                            }
-                        }
-                        .riffetTypeBoundary()
-                        if let error = model.error { RiffetNotice(kind: .error, message: error, boxed: true) }
-                        else if let failure = discovery.failure {
-                            RiffetNotice(kind: .warning, message: failure, actionTitle: String(localized: "重新查找", bundle: .riffet), action: { discovery.stop(); discovery.start() }, boxed: true)
+                NewTaskLayout(minHeight: viewport.size.height, markShown: true) {
+                    LiveBrandMark(front: palette.fg, back: palette.accent)
+                    SetupCard(steps: steps) {
+                        notice
+                        ServerStepBody(discovery: discovery,
+                                       scan: { target = PairingPrefill(scan: true) },
+                                       connect: { target = PairingPrefill(address: $0.baseURL, name: $0.name) },
+                                       manual: { target = PairingPrefill(address: model.address) }) {
+                            SavedServerRows(model: model) { target = PairingPrefill(address: $0.baseUrl, name: $0.name) }
                         }
                     }
+                    .riffetTypeBoundary()
+                    .padding(.horizontal, RiffetMetrics.pageInset)
+                    Color.clear.frame(height: 0)
                 }
-                .padding(.horizontal, RiffetMetrics.pageInset)
-                .frame(maxWidth: .infinity, minHeight: viewport.size.height)
+                .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
         }
@@ -293,6 +335,14 @@ struct UnconnectedNewTaskView: View {
             discovery.start()
         }
         .onDisappear { discovery.stop() }
+    }
+
+    /// The step's one sentence: why the last connection failed, or why nothing was found on the network.
+    @ViewBuilder private var notice: some View {
+        if let error = model.error { RiffetNotice(kind: .error, message: error) }
+        else if let failure = discovery.failure {
+            RiffetNotice(kind: .warning, message: failure, actionTitle: String(localized: "重新查找", bundle: .riffet), action: { discovery.stop(); discovery.start() })
+        }
     }
 
     private var steps: [SetupStep] {
