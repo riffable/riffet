@@ -145,7 +145,11 @@ export function ensureStatsSchema(db: DatabaseSync): void {
   for (const name of ['native_session_id', 'observation_id', 'suppressed_by']) {
     if (!columns.has(name)) db.exec(`ALTER TABLE usage_steps ADD COLUMN ${name} TEXT`);
   }
-  db.exec('CREATE INDEX IF NOT EXISTS usage_steps_observation ON usage_steps(observation_id)');
+  // Partial index so `WHERE observation_id IS NULL` queries (e.g. `sessionMetrics`) stay on
+  // `usage_steps_session_agent_at` instead of scanning every non-observation row in the table.
+  const obsIndex = db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='usage_steps_observation'").get() as { sql: string | null } | undefined;
+  if (obsIndex?.sql && !/\bwhere\b/i.test(obsIndex.sql)) db.exec('DROP INDEX usage_steps_observation');
+  db.exec('CREATE INDEX IF NOT EXISTS usage_steps_observation ON usage_steps(observation_id) WHERE observation_id IS NOT NULL');
   const facts = new Set((db.prepare('PRAGMA table_info(run_facts)').all() as Array<{ name: string }>).map(column => column.name));
   if (!facts.has('speed_output_tokens')) db.exec('ALTER TABLE run_facts ADD COLUMN speed_output_tokens INTEGER');
   if (!facts.has('speed_estimated_output_tokens')) db.exec('ALTER TABLE run_facts ADD COLUMN speed_estimated_output_tokens INTEGER');

@@ -199,6 +199,12 @@ export const ASSISTANT_QUERY_BUDGET = { pageItems: 50, settingConfirmationMs: 5 
 export const SERVER_BUDGET = {
   /** Timeline rows of a session idle this long, and not held open, are dropped; they refold from the journal on open. */
   coldTimelineDays: 7,
+  /** Exited unreferenced terminal records older than this (days) are pruned during periodic maintenance. */
+  exitedTerminalRetentionDays: 7,
+  /** Folded lanes kept hot in memory by `TimelineService`; older idle lanes refold their open turn on demand. */
+  timelineHotLanes: 16,
+  /** Bounded LRU cap for subagent summaries and file-change digests cached in `TimelineService`. */
+  timelineSummaryEntries: 256,
   /** Largest single native transcript a background job (usage backfill) reads; larger ones are skipped. */
   backgroundReadBytes: 32 * MIB,
   /** Native transcripts kept parsed in memory for reuse, counted by file size. */
@@ -287,6 +293,16 @@ export const CURSOR_API_CACHE_BUDGET = {
   maxStaleMs: 24 * 60 * 60_000,
   /** An access token with more than this left is handed out again; above the CLI's own five-minute renewal. */
   tokenReuseMarginMs: 15 * 60_000,
+} as const;
+
+/** Shared decoded-message cache and idle SQLite handle lifetime across Cursor `ChatReader` instances. */
+export const CURSOR_CHAT_CACHE_BUDGET = {
+  maxEntries: 512,
+  maxBytes: 16 * MIB,
+  /** Close a shared read-only `store.db` handle after this long without reads even if a caller did not close it. */
+  idleDbCloseMs: 60_000,
+  /** SQLite page cache ceiling (KiB) per shared Cursor `store.db` handle. */
+  dbCacheKiB: 2_048,
 } as const;
 
 /** Extra tmux rows read only when a visible Cursor approval needs its preview or batch header. */

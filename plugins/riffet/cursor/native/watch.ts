@@ -120,6 +120,8 @@ export class Watch {
   idleTimer: NodeJS.Timeout | undefined;
   passiveUntil = 0;
   lastAccessAt = Date.now();
+  /** When the watch was last active (non-idle, live event, prompt or new listener), for idle poll backoff. */
+  lastBusyAt = Date.now();
   lastTickAt = 0;
   ticking = false;
   tickPromise: Promise<void> | undefined;
@@ -170,7 +172,7 @@ export class Watch {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    if (this.timer) clearInterval(this.timer);
+    if (this.timer) clearTimeout(this.timer);
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.chat?.close();
     for (const item of this.subagents.values()) item.transcript.close();
@@ -188,9 +190,12 @@ export class Watch {
 
 export const SCAN_INTERVAL_MS = 2500;
 /** How long a conversation's watch outlives its last browser stream. */
-export const LEFT_WATCH_MS = 30 * 60_000;
+export const LEFT_WATCH_MS = 5 * 60_000;
 /** Nobody is reading a passive watch; poll just often enough that a returning reader catches up quickly. */
 export const PASSIVE_POLL_MS = 15_000;
+/** Poll cadence for a watched conversation that has been idle with no subagents/jobs for `IDLE_WATCH_AFTER_MS`. */
+export const IDLE_WATCH_POLL_MS = 4_000;
+export const IDLE_WATCH_AFTER_MS = 30_000;
 /** Child stores are quieter than the parent; poll their root less often and release handles when idle. */
 export const SUBAGENT_POLL_MS = 2500;
 /** How long a subagent's store must stay quiet before its reader is released. */

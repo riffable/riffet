@@ -44,6 +44,8 @@ export interface AgentReclaimDeps {
 interface LiveAgent {
   session: Session; terminal?: TerminalInfo; appServer?: WorkbenchAppServer;
   lastUsed: number; retainedBy: AgentRetention[]; rssBytes: number;
+  /** True when the live tmux server confirmed this terminal's pane no longer exists. */
+  paneMissing?: boolean;
 }
 
 /** What persists per conversation: when it was last used, and its pane as last captured. */
@@ -166,9 +168,10 @@ export class AgentReclaimer {
       if (!terminal && !appServer) continue;
       const record = this.record(session.id);
       if (this.subscribed(session, terminal)) this.touch(record, now);
-      const screen = terminal ? await this.observe(record, terminal.id, drawn.get(terminal.id), now) : 'same';
+      const paneMissing = Boolean(terminal && panes.serverPid !== undefined && !panePids.has(terminal.id) && !drawn.has(terminal.id));
+      const screen = terminal ? (paneMissing ? 'same' : await this.observe(record, terminal.id, drawn.get(terminal.id), now)) : 'same';
       const lastUsed = Math.max(Date.parse(session.lastActivityAt ?? session.createdAt) || 0, record.lastUsedAt, terminal ? Date.parse(terminal.createdAt) || 0 : 0);
-      live.push({ session, ...(terminal ? { terminal } : {}), ...(appServer ? { appServer } : {}), lastUsed, retainedBy: this.retention(session, terminal, screen, now), rssBytes: 0 });
+      live.push({ session, ...(terminal ? { terminal } : {}), ...(appServer ? { appServer } : {}), lastUsed, retainedBy: this.retention(session, terminal, screen, now), rssBytes: 0, ...(paneMissing ? { paneMissing: true } : {}) });
     }
     const liveIds = new Set(live.map(entry => entry.session.id));
     for (const id of [...this.usage.keys()]) if (!liveIds.has(id)) { this.usage.delete(id); this.dirty = true; }
@@ -224,8 +227,10 @@ export class AgentReclaimer {
       if (session.archivedAt || session.lastActivityAt !== picked.lastActivityAt) return false;
       const terminal = this.liveTerminal(session);
       // Nor may its screen have moved on since, or be unreadable: the CLI may have taken up a turn of its
-      // own while the pass was deciding.
-      const screen = terminal ? await this.observe(this.record(sessionId), terminal.id, Number.MAX_SAFE_INTEGER, now) : 'same';
+      // own while the pass was deciding. If the live tmux server already confirmed this exact pane is gone,
+      // skip the pane read so the stale `detached` record can transition to `exited`.
+      const paneMissing = Boolean(entry.paneMissing && terminal && terminal.id === entry.terminal?.id);
+      const screen = terminal && !paneMissing ? await this.observe(this.record(sessionId), terminal.id, Number.MAX_SAFE_INTEGER, now) : 'same';
       if (screen !== 'same' || this.retention(session, terminal, screen, now).length) return false;
       // The same order as closing a native terminal by hand: the provider runtime (and its app-server)
       // first, then the CLI itself.

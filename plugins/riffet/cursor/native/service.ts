@@ -15,7 +15,7 @@ import { MODEL_ID, parseModelList, describeModelListFailure } from './model-list
 import { Transcript, visible } from './transcript.js';
 import type { CursorLive } from './live.js';
 import {
-  Watch, SCAN_INTERVAL_MS, LEFT_WATCH_MS, PASSIVE_POLL_MS, SUBAGENT_POLL_MS, SUBAGENT_IDLE_MS, OPEN_STORES_GRACE_MS, subagentWorking,
+  Watch, SCAN_INTERVAL_MS, LEFT_WATCH_MS, PASSIVE_POLL_MS, IDLE_WATCH_POLL_MS, IDLE_WATCH_AFTER_MS, SUBAGENT_POLL_MS, SUBAGENT_IDLE_MS, OPEN_STORES_GRACE_MS, subagentWorking,
   STATE_SWEEP_MS, transcriptWorking, subviewPhase, stateForPhase, JOB_LOG_MS, jobPayload, latestTranscriptActivity, type Listener, type SubagentWatch,
   type ParentTranscriptBatch, type JobWatch, type WatchMessage,
 } from './watch.js';
@@ -199,6 +199,8 @@ export class NativeService {
       }
       if (watchChatId !== chatId) continue;
       watch.metrics.observeLiveStep(step);
+      watch.lastBusyAt = Date.now();
+      if (!step.sealed) this.scheduleWatchTick(watch);
       if (!step.sealed && step.turn && this.stoppedLiveSteps.get(watch.sessionId) !== step.step) {
         this.turnObserver?.requestStarted?.(watch.sessionId, chatId, step.turn, false);
       }
@@ -271,6 +273,7 @@ export class NativeService {
   notifyTurnChanged(sessionId: string): void {
     const watch = this.watches.get(sessionId);
     if (!watch || watch.closed) return;
+    watch.lastBusyAt = Date.now();
     const activeTurn = this.turnObserver?.activeTurn(this.port.getSession(sessionId));
     const { activeTurn: _previous, ...status } = watch.status;
     const next = { ...status, ...(activeTurn ? { activeTurn } : {}) };
@@ -278,6 +281,7 @@ export class NativeService {
       watch.status = next;
       watch.emit({ type: 'status', status: watch.status });
     }
+    this.scheduleWatchTick(watch);
     if (!activeTurn && watch.status.phase === 'busy') void this.tick(watch);
   }
 
@@ -287,6 +291,8 @@ export class NativeService {
     const watch = this.watches.get(sessionId);
     if (!watch || watch.closed) return;
     watch.paneBusyAt = Date.now();
+    watch.lastBusyAt = watch.paneBusyAt;
+    this.scheduleWatchTick(watch);
     if (watch.status.phase === 'busy' || watch.status.phase === 'attention') return;
     let session: AgentSessionView;
     try { session = this.port.getSession(sessionId); } catch { return; }
@@ -309,6 +315,7 @@ export class NativeService {
     const existed = this.watches.has(sessionId);
     const watch = this.ensureWatch(sessionId);
     watch.lastAccessAt = Date.now();
+    watch.lastBusyAt = watch.lastAccessAt;
     watch.passiveUntil = 0;
     if (watch.idleTimer) { clearTimeout(watch.idleTimer); watch.idleTimer = undefined; }
     if (existed) {
@@ -318,8 +325,11 @@ export class NativeService {
       for (const job of watch.jobs.values()) listener({ type: 'job', job: jobPayload(job) });
     }
     watch.listeners.add(listener);
-    // A watch that was passive polled slowly; catch up now rather than at its next slow tick.
-    if (existed) void this.tick(watch);
+    // A watch that was passive or dormant polled slowly; catch up now and restore fast cadence.
+    if (existed) {
+      this.scheduleWatchTick(watch);
+      void this.tick(watch);
+    }
     const target = watch;
     return () => {
       target.listeners.delete(listener);
@@ -341,16 +351,38 @@ export class NativeService {
       // answers from what an earlier ask found, and the decoder asks again with its next batch.
       created.onResolveRun = nativeMessageId => this.port.runIdForMessage(sessionId, nativeMessageId);
       created.onPromptSentAt = runId => this.port.inputSentAt(runId);
-      watch.timer = setInterval(() => {
-        if (!created.listeners.size && created.passiveUntil > 0 && Date.now() - created.lastTickAt < PASSIVE_POLL_MS) return;
-        void this.tick(created);
-      }, this.pollMs);
-      watch.timer.unref();
       this.watches.set(sessionId, watch);
-      void this.tick(watch);
+      void this.tick(watch).finally(() => this.scheduleWatchTick(created));
     }
     if (passive && !watch.listeners.size) this.keepPassiveWatch(watch);
     return watch;
+  }
+
+  private nextWatchPollMs(watch: Watch, now = Date.now()): number {
+    if (!watch.listeners.size && watch.passiveUntil > 0) return PASSIVE_POLL_MS;
+    const busy = (watch.status.phase !== 'idle' && watch.status.phase !== 'offline')
+      || Boolean(watch.status.interaction)
+      || Boolean(watch.status.activeTurn)
+      || [...watch.subagents.values()].some(item => this.subagentRunning(watch, item))
+      || [...watch.jobs.values()].some(job => job.status === 'running');
+    if (busy) {
+      watch.lastBusyAt = now;
+      return this.pollMs;
+    }
+    if (now - watch.lastBusyAt >= IDLE_WATCH_AFTER_MS) return Math.max(this.pollMs, IDLE_WATCH_POLL_MS);
+    return this.pollMs;
+  }
+
+  private scheduleWatchTick(watch: Watch): void {
+    if (watch.closed) return;
+    if (watch.timer) { clearTimeout(watch.timer); watch.timer = undefined; }
+    const delay = this.nextWatchPollMs(watch);
+    watch.timer = setTimeout(() => {
+      watch.timer = undefined;
+      if (watch.closed) return;
+      void this.tick(watch).finally(() => this.scheduleWatchTick(watch));
+    }, delay);
+    watch.timer.unref();
   }
 
   private keepPassiveWatch(watch: Watch, ms = 30_000): void {
@@ -361,8 +393,9 @@ export class NativeService {
     if (watch.idleTimer) clearTimeout(watch.idleTimer);
     watch.idleTimer = setTimeout(() => this.disposeWatch(watch), until - Date.now());
     watch.idleTimer.unref();
+    this.scheduleWatchTick(watch);
     const passive = [...this.watches.values()].filter((item) => !item.listeners.size && item.passiveUntil > 0).sort((a, b) => a.lastAccessAt - b.lastAccessAt);
-    while (passive.length > 8) this.disposeWatch(passive.shift()!);
+    while (passive.length > 4) this.disposeWatch(passive.shift()!);
   }
 
   private disposeWatch(watch: Watch): void {
@@ -417,6 +450,8 @@ export class NativeService {
   private async deliveryTarget(sessionId: string, info: { id: string; epoch: number }): Promise<DeliveryTarget> {
     this.configBootTerminals.delete(sessionId);
     const watch = this.ensureWatch(sessionId);
+    watch.lastBusyAt = Date.now();
+    this.scheduleWatchTick(watch);
     await this.tick(watch);
     return { terminalId: info.id, epoch: info.epoch, ...(watch.chat ? { chatId: watch.chat.chatId } : {}) };
   }
@@ -935,6 +970,8 @@ export class NativeService {
         watch.notice = undefined;
         watch.booted = undefined;
         watch.unrecognized = undefined;
+        watch.lastBusyAt = Date.now();
+        this.scheduleWatchTick(watch);
       }
       return this.port.updateSession(session.id, { terminalId: info.id, state: 'running', ...normalizedPatch, configPending: false });
     } finally {

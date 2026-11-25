@@ -200,6 +200,24 @@ describe('chat store', () => {
     expect(snap.compactions).toMatchObject([{ summaryId: blobId(opening.summary), boundary: 4 }]);
   });
 
+  it('shares the underlying read-only store safely across concurrent readers and after one closes', () => {
+    dir = mkdtempSync(join(tmpdir(), 'chat-store-'));
+    const path = join(dir, 'store.db');
+    writeChat(path, conversation);
+    const first = new ChatReader(path);
+    const second = new ChatReader(path);
+    try {
+      const snap1 = first.snapshot()!;
+      expect(snap1.messageIds.map(id => first.message(id))).toHaveLength(conversation.length);
+      first.close();
+      const snap2 = second.snapshot()!;
+      expect(snap2.messageIds.map(id => second.message(id))).toEqual(conversation);
+    } finally {
+      first.close();
+      second.close();
+    }
+  });
+
   describe('the step in flight', () => {
     const asking = { id: 'step-1', role: 'assistant', content: [{ type: 'text', text: 'Two ways to go.' }, { type: 'tool-call', toolCallId: 'q1', toolName: 'AskQuestion', args: { questions: [] } }] };
     const answer: ChatMessage = { role: 'tool', content: [{ type: 'tool-result', toolCallId: 'q1', toolName: 'AskQuestion', result: 'A' }] };

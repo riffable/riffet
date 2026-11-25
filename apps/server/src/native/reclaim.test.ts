@@ -160,4 +160,42 @@ describe('AgentReclaimer', () => {
     expect(stopped).toEqual([oldest.terminalId, older.terminalId]);
     expect(reclaimer.report()).toMatchObject({ memoryBytes: 2 * GIB, memoryLimitBytes: 2 * GIB, idleMinutes: 0 });
   });
+
+  it('reclaims a detached terminal whose tmux pane is already gone instead of sticking as unobserved', async () => {
+    const store = new Store(':memory:');
+    const project = store.createProject('/tmp/reclaim-missing-pane', 'Reclaim missing pane');
+    const session = store.createSession({ projectId: project.id, kind: 'native', mode: 'agent', backendId: 'claude', nativeSessionId: randomUUID() });
+    const terminalId = `terminal-${session.id}`;
+    store.saveTerminal({ id: terminalId, projectId: project.id, sessionId: session.id, title: 'claude', kind: 'native', state: 'detached', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: ago(48 * HOUR) });
+    store.updateSession(session.id, { terminalId, lastActivityAt: ago(7 * HOUR) });
+
+    const stopped: string[] = [];
+    const disposed: string[] = [];
+    const reclaimer = new AgentReclaimer({
+      store,
+      terminal: {
+        hasViewer: () => false,
+        paneActivity: async () => new Map(),
+        paneProcesses: async () => ({ serverPid: 4242, panes: [] }),
+        paneText: async () => undefined,
+        reapStraySessions: async () => [],
+        stop: async (id: string) => { stopped.push(id); store.updateTerminal(id, { state: 'exited' }); },
+      } as unknown as AgentReclaimDeps['terminal'],
+      nativeBackends: {
+        catalog: { traits: () => ({ resumesByNativeId: true }) },
+        hasListeners: () => false,
+        status: () => ({ phase: 'offline' }),
+        dispose: async (id: string) => { disposed.push(id); },
+      } as unknown as AgentReclaimDeps['nativeBackends'],
+      runtime: { withDetachedSession: (_id: string, fn: () => Promise<unknown>) => fn() } as unknown as AgentReclaimDeps['runtime'],
+      settings: () => ({ idleReclaimMinutes: 360, maxAgentMemoryMb: 0 }),
+      log: () => undefined,
+      memory: async () => new Map(),
+      pressure: async () => 'normal',
+    });
+
+    expect((await reclaimer.tick(NOW)).reclaimed).toEqual([session.id]);
+    expect(stopped).toEqual([terminalId]);
+    expect(disposed).toEqual([session.id]);
+  });
 });

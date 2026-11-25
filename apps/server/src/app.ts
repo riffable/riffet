@@ -131,7 +131,7 @@ import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerTraceRoutes } from './routes/trace.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, CODE_INDEX_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, CODE_INDEX_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -774,11 +774,15 @@ export async function createApp(options: AppOptions = {}) {
   quickChats.start();
   statsBackfill.start();
   titles.start();
+  const pruneOldExitedTerminals=()=>{
+    const terminalCutoff=new Date(Date.now()-SERVER_BUDGET.exitedTerminalRetentionDays*86_400_000).toISOString();
+    try{store.pruneExitedTerminals(terminalCutoff);}catch(error){app.log.warn({err:error},'terminal pruning failed');}
+  };
   // Low-priority housekeeping, once the server is up: old attachments nothing recent refers to,
   // and exited terminal records nothing points at. Failures wait for the next start.
   const maintenance=setTimeout(()=>{
+    pruneOldExitedTerminals();
     const cutoff=new Date(Date.now()-RETENTION_MS).toISOString();
-    try{store.pruneExitedTerminals(cutoff);}catch(error){app.log.warn({err:error},'terminal pruning failed');}
     let keep:Set<string>;
     try{keep=store.referencedAttachmentIds(cutoff);}catch(error){app.log.warn({err:error},'attachment pruning failed');return;}
     void workspace.pruneAttachments({olderThan:Date.now()-RETENTION_MS,keep}).catch(error=>app.log.warn({err:error},'attachment pruning failed'));
@@ -786,6 +790,7 @@ export async function createApp(options: AppOptions = {}) {
   maintenance.unref();
   // The log's own housekeeping (superseded revisions, unreferenced blobs, cold archived trimming & incremental vacuum): once after start-up, then now and then.
   const sweepJournal=()=>{
+    pruneOldExitedTerminals();
     void deletion.resumeCleanup();
     void contextReferences.sweep().catch(error=>app.log.warn({err:error},'context file pruning failed'));
     try{

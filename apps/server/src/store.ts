@@ -114,6 +114,13 @@ export class Store {
    */
   private sessionCache: IdentifiedSession[] | undefined;
   /**
+   * Every terminal, parsed once and kept until a terminal write (`terminalsChanged`) or a rollback;
+   * docs/guide/performance.md §3.3. Callers get top-level copies with frozen nested values.
+   */
+  private terminalCache: TerminalInfo[] | undefined;
+  /** Every project indexed by id, parsed once and kept until a project write (`projectsChanged`) or rollback. */
+  private projectCache: Map<string, Project> | undefined;
+  /**
    * 会话标题规则 (docs/SESSION-TITLES.md), read on every session write. `displayTitle` is derived: whatever a
    * writer passes for it is dropped and recomputed here, so no caller can store a stale one.
    */
@@ -254,6 +261,18 @@ export class Store {
     });
     return this.sessionCache.map(session => ({ ...session }));
   }
+  private allProjects(): Map<string, Project> {
+    if (!this.projectCache) {
+      const map = new Map<string, Project>();
+      for (const row of this.sql('SELECT json FROM projects ORDER BY rowid').all() as { json: string }[]) {
+        const project = JSON.parse(row.json) as Project;
+        for (const value of Object.values(project)) if (value && typeof value === 'object') deepFreeze(value);
+        map.set(project.id, project);
+      }
+      this.projectCache = map;
+    }
+    return this.projectCache;
+  }
   private ownerBackendId(sessionId: string): NativeBackendId | undefined {
     const row = this.sql("SELECT json_extract(json,'$.backendId') AS backendId FROM sessions WHERE id=?").get(sessionId) as { backendId: NativeBackendId | null } | undefined;
     return row?.backendId ?? undefined;
@@ -297,6 +316,8 @@ export class Store {
     }
     catch (error) {
       this.sessionCache = undefined;
+      this.terminalCache = undefined;
+      this.projectCache = undefined;
       this.db.exec('ROLLBACK'); this.depth--; this.pending.length = 0; this.pendingRuns.clear(); this.listsDirty = false;
       for (const coord of this.txCoordinators.splice(0)) { try { coord(false); } catch (coordError) { console.error('[riffet] transaction rollback coordinator failed:', coordError); } }
       for (const hook of this.settleHooks.splice(0)) { try { hook(false); } catch (hookError) { console.error('[riffet] afterTransaction rollback hook failed:', hookError); } }
@@ -331,8 +352,9 @@ export class Store {
     for (const id of ids) this.sessionRevisions.set(id, this.listRevisionValue);
     this.notifyLists();
   }
-  private terminalsChanged() { this.terminalsRevisionValue += 1; this.notifyLists(); }
+  private terminalsChanged() { this.terminalCache = undefined; this.terminalsRevisionValue += 1; this.notifyLists(); }
   private projectsChanged(classified?: string) {
+    this.projectCache = undefined;
     this.projectRevisionValue += 1;
     if (classified === undefined) { this.notifyLists(); return; }
     this.sessionsChanged((this.sql('SELECT id FROM sessions WHERE project_id=?').all(classified) as Array<{ id: string }>).map(row => row.id));
@@ -349,12 +371,16 @@ export class Store {
   private emitRun(run: Run) { for (const listener of this.runListeners) { try { listener(run); } catch { /* derived views must not fail a committed write */ } } }
 
   createProject(cwd: string, name: string, worktree?: Project['worktree']): Project { return workspaceRecords.createProject(this.port, cwd, name, worktree); }
-  getProject(id: string): Project { const item = this.get<Project>('projects', id); if (!item) throw new AppError('PROJECT_NOT_FOUND', 'Project does not exist', 404); return item; }
+  getProject(id: string): Project {
+    const item = this.allProjects().get(id);
+    if (!item) throw new AppError('PROJECT_NOT_FOUND', 'Project does not exist', 404);
+    return { ...item };
+  }
   createTaskWorkspaceSubmission(project: Project, clientSessionId: string, sessionInput: NativeSessionInput, commandId: string, input: NativeRunInput, contextSnapshots?: CapturedSessionReference[]): { project: Project; session: Session; run: Run } {
     return workspaceRecords.createTaskWorkspaceSubmission(this.port, project, clientSessionId, sessionInput, commandId, input, contextSnapshots);
   }
   promoteTaskWorkspace(id: string, name: string): Project { return workspaceRecords.promoteTaskWorkspace(this.port, id, name); }
-  listProjects(): Project[] { return this.all<Project>('projects'); }
+  listProjects(): Project[] { return [...this.allProjects().values()].map(project => ({ ...project })); }
   updateProject(id: string, patch: Partial<Project>): Project { return workspaceRecords.updateProject(this.port, id, patch); }
   originChain(projectId: string): string[] { return workspaceRecords.originChain(this.port, projectId); }
   deleteProject(id: string) { workspaceRecords.deleteProject(this.port, id); }
@@ -378,8 +404,9 @@ export class Store {
     return rules?.length ? matchTitleRule(rules, session, this.titleRuleContext(session)) : undefined;
   }
   private titleRuleContext(session: Pick<Session, 'projectId'>): TitleRuleContext {
-    const project = this.get<Project>('projects', session.projectId);
-    const originProject = project?.worktree ? this.get<Project>('projects', project.worktree.originProjectId) : undefined;
+    const projects = this.allProjects();
+    const project = projects.get(session.projectId);
+    const originProject = project?.worktree ? projects.get(project.worktree.originProjectId) : undefined;
     const { timeZone } = this.titleRules();
     return { ...(project ? { project } : {}), ...(originProject ? { originProject } : {}), ...(timeZone ? { timeZone } : {}) };
   }
@@ -634,7 +661,13 @@ export class Store {
   saveTerminal(item: TerminalInfo): TerminalInfo { this.sql('INSERT INTO terminals(id,json) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(item.id, JSON.stringify(item)); this.terminalsChanged(); return item; }
   getTerminal(id: string): TerminalInfo { const item = this.get<TerminalInfo>('terminals', id); if (!item) throw new AppError('TERMINAL_NOT_FOUND', 'Terminal does not exist', 404); return item; }
   findTerminal(id: string): TerminalInfo | undefined { return this.get<TerminalInfo>('terminals', id); }
-  listTerminals(): TerminalInfo[] { return this.all<TerminalInfo>('terminals'); }
+  listTerminals(): TerminalInfo[] {
+    this.terminalCache ??= this.all<TerminalInfo>('terminals').map(terminal => {
+      for (const value of Object.values(terminal)) if (value && typeof value === 'object') deepFreeze(value);
+      return terminal;
+    });
+    return this.terminalCache.map(terminal => ({ ...terminal }));
+  }
   updateTerminal(id: string, patch: Partial<TerminalInfo>): TerminalInfo { return this.saveTerminal({ ...this.getTerminal(id), ...patch, id }); }
   sessionsWithMarks(): Set<string> { return new Set((this.sql('SELECT DISTINCT session_id FROM marks').all() as Array<{ session_id: string }>).map(row => row.session_id)); }
   getSetting<T>(key: string, fallback: T): T { const row = this.sql('SELECT json FROM settings WHERE key=?').get(key) as { json: string } | undefined; return row ? JSON.parse(row.json) : fallback; }

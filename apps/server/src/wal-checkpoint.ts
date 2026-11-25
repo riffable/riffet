@@ -22,6 +22,7 @@ const { statSync } = require('node:fs');
 const { DatabaseSync } = require('node:sqlite');
 const targets = workerData.paths.map(path => {
   const db = new DatabaseSync(path, { timeout: 0 });
+  try { db.exec('PRAGMA cache_size=-256; PRAGMA mmap_size=0;'); } catch {}
   return { path, db, checkpoint: db.prepare('PRAGMA wal_checkpoint(PASSIVE)'), seen: -1 };
 });
 const timer = setInterval(() => {

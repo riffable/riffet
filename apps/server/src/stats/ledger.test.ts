@@ -417,4 +417,20 @@ describe('StatsLedger', () => {
     expect(() => ledger.recordUsage('missing-session', undefined, { stepId: 'x', tokenSource: 'provider' })).not.toThrow();
     expect(() => ledger.observeEvents('missing-session', [{ sequence: 1, sessionId: 'missing-session', type: 'tool_call', data: { toolCallId: 'a' }, createdAt: '', nativeId: 'n' }])).not.toThrow();
   });
+
+  it('upgrades a legacy non-partial usage_steps_observation index so sessionMetrics avoids scanning NULL rows', () => {
+    const { store, session } = setup();
+    new StatsLedger(store);
+    store.db.exec('DROP INDEX usage_steps_observation; CREATE INDEX usage_steps_observation ON usage_steps(observation_id);');
+    new StatsLedger(store);
+    const indexRow = store.db.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='usage_steps_observation'").get() as { sql?: string } | undefined;
+    expect(indexRow?.sql).toContain('WHERE observation_id IS NOT NULL');
+    const plan = store.db.prepare(
+      `EXPLAIN QUERY PLAN SELECT output_tokens, duration_ms, token_source, window, at
+       FROM usage_steps
+       WHERE session_id=? AND agent_kind='main' AND observation_id IS NULL
+       ORDER BY at`,
+    ).all(session.id) as Array<{ detail?: string }>;
+    expect(plan.map(row => row.detail ?? '').join('\n')).toContain('usage_steps_session_agent_at');
+  });
 });

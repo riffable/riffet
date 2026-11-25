@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, lstatSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-import type { NativeContext } from '@contracts';
+import { DatabaseSync, type StatementSync } from 'node:sqlite';
+import { CURSOR_CHAT_CACHE_BUDGET, type NativeContext } from '@contracts';
 import { isJobLogPath } from './job-log.js';
 import { RIFFET_TOOLS_PLUGIN } from '../backend/riffet-tools.js';
 import { announcedImagePaths, imagePathFields, isImagePath, parseSteerContexts, toolImageContent } from '@riffet/plugin-api/kit';
@@ -228,22 +228,88 @@ export function decodeRoot(buffer: Uint8Array): { messageIds: string[]; compacti
   return { messageIds, ...(compactionIds.length ? { compactionIds } : {}), ...(context ? { context } : {}), ...(contextIncomplete ? { contextIncomplete: true } : {}), ...(pending ? { pending } : {}) };
 }
 
+interface SharedChatDb {
+  readonly path: string;
+  readonly db: DatabaseSync;
+  metaStmt: StatementSync | undefined;
+  blobStmt: StatementSync | undefined;
+  readonly refs: Set<ChatReader>;
+  idleTimer: NodeJS.Timeout | undefined;
+}
+
+// perf-rules: allow ref-counted read-only SQLite handles closed on last release or CURSOR_CHAT_CACHE_BUDGET.idleDbCloseMs
+const sharedChatDbs = new Map<string, SharedChatDb>();
+// perf-rules: allow global LRU bounded by CURSOR_CHAT_CACHE_BUDGET.maxEntries and maxBytes
+const sharedMessageCache = new Map<string, { value: ChatMessage | null; bytes: number }>();
+let sharedMessageCacheBytes = 0;
+
+function dropSharedChatDb(entry: SharedChatDb): void {
+  if (entry.idleTimer) { clearTimeout(entry.idleTimer); entry.idleTimer = undefined; }
+  if (sharedChatDbs.get(entry.path) === entry) sharedChatDbs.delete(entry.path);
+  for (const reader of entry.refs) reader.detachSharedDb(entry);
+  entry.refs.clear();
+  try { entry.db.close(); } catch { /* already closed */ }
+}
+
+function touchSharedChatDb(entry: SharedChatDb): void {
+  if (entry.idleTimer) clearTimeout(entry.idleTimer);
+  entry.idleTimer = setTimeout(() => dropSharedChatDb(entry), CURSOR_CHAT_CACHE_BUDGET.idleDbCloseMs);
+  entry.idleTimer.unref();
+}
+
+function acquireSharedChatDb(path: string, reader: ChatReader): SharedChatDb | undefined {
+  const existing = sharedChatDbs.get(path);
+  if (existing) {
+    existing.refs.add(reader);
+    touchSharedChatDb(existing);
+    return existing;
+  }
+  if (!existsSync(path)) return undefined;
+  let db: DatabaseSync;
+  try { db = new DatabaseSync(path, { readOnly: true, timeout: 2000 }); }
+  catch { return undefined; }
+  try {
+    try { db.exec(`PRAGMA cache_size=-${CURSOR_CHAT_CACHE_BUDGET.dbCacheKiB};`); } catch { /* read-only pragma is best-effort */ }
+    const entry: SharedChatDb = {
+      path,
+      db,
+      metaStmt: undefined,
+      blobStmt: undefined,
+      refs: new Set([reader]),
+      idleTimer: undefined,
+    };
+    sharedChatDbs.set(path, entry);
+    touchSharedChatDb(entry);
+    return entry;
+  } catch {
+    try { db.close(); } catch { /* already closed */ }
+    return undefined;
+  }
+}
+
+function releaseSharedChatDb(entry: SharedChatDb, reader: ChatReader): void {
+  entry.refs.delete(reader);
+  if (entry.refs.size === 0) dropSharedChatDb(entry);
+}
+
 export class ChatReader {
-  private db: DatabaseSync | undefined;
-  private readonly messages = new Map<string, { value: ChatMessage | null; bytes: number }>();
-  private cachedBytes = 0;
-  private readonly maxCachedMessages = 512;
-  private readonly maxCachedBytes = 16 * 1024 * 1024;
+  private shared: SharedChatDb | undefined;
   readonly metrics = { rootDecodes: 0, messageReads: 0, messageParses: 0 };
 
   constructor(readonly path: string) {}
 
-  private open(): DatabaseSync | undefined {
-    if (this.db) return this.db;
-    if (!existsSync(this.path)) return undefined;
-    try { this.db = new DatabaseSync(this.path, { readOnly: true, timeout: 2000 }); }
-    catch { return undefined; }
-    return this.db;
+  /** @internal Detaches a shared SQLite handle closed on idle or error. */
+  detachSharedDb(entry: SharedChatDb): void {
+    if (this.shared === entry) this.shared = undefined;
+  }
+
+  private open(): SharedChatDb | undefined {
+    if (this.shared) {
+      touchSharedChatDb(this.shared);
+      return this.shared;
+    }
+    this.shared = acquireSharedChatDb(this.path, this);
+    return this.shared;
   }
 
   /** Whether the CLI has created this chat's store at all (it may not exist before the first turn). */
@@ -252,15 +318,19 @@ export class ChatReader {
   }
 
   meta(): ChatMeta | undefined {
-    const db = this.open();
-    if (!db) return undefined;
+    const entry = this.open();
+    if (!entry) return undefined;
     try {
-      const row = db.prepare("SELECT value FROM meta WHERE key='0'").get() as { value?: string } | undefined;
+      entry.metaStmt ??= entry.db.prepare("SELECT value FROM meta WHERE key='0'");
+      const row = entry.metaStmt.get() as { value?: string } | undefined;
       if (!row?.value) return undefined;
       const text = /^[0-9a-f]+$/i.test(row.value) ? Buffer.from(row.value, 'hex').toString('utf8') : row.value;
       const parsed = JSON.parse(text) as ChatMeta;
       return typeof parsed.agentId === 'string' ? parsed : undefined;
-    } catch { return undefined; }
+    } catch {
+      dropSharedChatDb(entry);
+      return undefined;
+    }
   }
 
   snapshot(meta = this.meta()): ChatSnapshot | undefined {
@@ -403,10 +473,11 @@ export class ChatReader {
 
   /** `bytes` is the size of the stored blob, for a reader that bounds how much it reads at once. */
   readMessage(id: string): { status: 'ok'; message: ChatMessage; bytes: number } | { status: 'missing' | 'invalid' } {
-    const cached = this.messages.get(id);
+    const cacheKey = `${this.path}\0${id}`;
+    const cached = sharedMessageCache.get(cacheKey);
     if (cached !== undefined) {
-      this.messages.delete(id);
-      this.messages.set(id, cached);
+      sharedMessageCache.delete(cacheKey);
+      sharedMessageCache.set(cacheKey, cached);
       return cached.value ? { status: 'ok', message: cached.value, bytes: cached.bytes } : { status: 'invalid' };
     }
     this.metrics.messageReads += 1;
@@ -414,16 +485,21 @@ export class ChatReader {
     if (data && data[0] === 0x7b) this.metrics.messageParses += 1;
     const parsed = parseMessage(data) ?? null;
     // Blobs are content-addressed, so a missing blob may still arrive later; only cache hits and parse failures.
-    // The LRU is byte-bounded because one cached message may contain a large tool result.
-    if (data && data.byteLength <= this.maxCachedBytes) {
-      this.messages.set(id, { value: parsed, bytes: data.byteLength });
-      this.cachedBytes += data.byteLength;
-      while (this.messages.size > this.maxCachedMessages || this.cachedBytes > this.maxCachedBytes) {
-        const oldest = this.messages.keys().next().value as string | undefined;
+    // The LRU is globally byte-bounded across all ChatReader instances so concurrent chats share one ceiling.
+    if (data && data.byteLength <= CURSOR_CHAT_CACHE_BUDGET.maxBytes) {
+      const previous = sharedMessageCache.get(cacheKey);
+      if (previous) {
+        sharedMessageCacheBytes -= previous.bytes;
+        sharedMessageCache.delete(cacheKey);
+      }
+      sharedMessageCache.set(cacheKey, { value: parsed, bytes: data.byteLength });
+      sharedMessageCacheBytes += data.byteLength;
+      while (sharedMessageCache.size > CURSOR_CHAT_CACHE_BUDGET.maxEntries || sharedMessageCacheBytes > CURSOR_CHAT_CACHE_BUDGET.maxBytes) {
+        const oldest = sharedMessageCache.keys().next().value as string | undefined;
         if (!oldest) break;
-        const removed = this.messages.get(oldest);
-        if (removed) this.cachedBytes -= removed.bytes;
-        this.messages.delete(oldest);
+        const removed = sharedMessageCache.get(oldest);
+        if (removed) sharedMessageCacheBytes -= removed.bytes;
+        sharedMessageCache.delete(oldest);
       }
     }
     if (!data) return { status: 'missing' };
@@ -436,19 +512,22 @@ export class ChatReader {
   }
 
   private blob(id: string): Uint8Array | undefined {
-    const db = this.open();
-    if (!db) return undefined;
+    const entry = this.open();
+    if (!entry) return undefined;
     try {
-      const row = db.prepare('SELECT data FROM blobs WHERE id=?').get(id) as { data?: Uint8Array } | undefined;
+      entry.blobStmt ??= entry.db.prepare('SELECT data FROM blobs WHERE id=?');
+      const row = entry.blobStmt.get(id) as { data?: Uint8Array } | undefined;
       return row?.data;
-    } catch { return undefined; }
+    } catch {
+      dropSharedChatDb(entry);
+      return undefined;
+    }
   }
 
   close(): void {
-    try { this.db?.close(); } catch { /* already closed */ }
-    this.db = undefined;
-    this.messages.clear();
-    this.cachedBytes = 0;
+    const entry = this.shared;
+    this.shared = undefined;
+    if (entry) releaseSharedChatDb(entry, this);
   }
 }
 

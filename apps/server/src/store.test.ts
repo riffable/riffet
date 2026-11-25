@@ -627,4 +627,50 @@ describe('native backend session identity', () => {
       expect(store.assistantMainForTrimming(now)).toBeUndefined();
     } finally { store.close(); }
   });
+
+  it('keeps listTerminals cache consistent across writes and rolled-back transactions', () => {
+    const store = new Store(':memory:');
+    try {
+      const project = store.createProject('/tmp/terminal-cache', 'Terminal cache');
+      const now = new Date().toISOString();
+      store.saveTerminal({ id: 'term-1', projectId: project.id, title: 't1', kind: 'shell', state: 'running', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: now });
+      expect(store.listTerminals().map(t => t.id)).toEqual(['term-1']);
+
+      store.updateTerminal('term-1', { state: 'exited', title: 'done' });
+      expect(store.listTerminals()[0]).toMatchObject({ id: 'term-1', state: 'exited', title: 'done' });
+
+      expect(() => store.transaction(() => {
+        store.saveTerminal({ id: 'term-2', projectId: project.id, title: 't2', kind: 'shell', state: 'running', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: now });
+        expect(store.listTerminals().map(t => t.id)).toContain('term-2');
+        throw new Error('rollback');
+      })).toThrow('rollback');
+      expect(store.listTerminals().map(t => t.id)).toEqual(['term-1']);
+
+      store.deleteTerminal('term-1');
+      expect(store.listTerminals()).toEqual([]);
+    } finally { store.close(); }
+  });
+
+  it('keeps project cache consistent across writes and rolled-back transactions', () => {
+    const store = new Store(':memory:');
+    try {
+      const created = store.createProject('/tmp/project-cache-1', 'One');
+      expect(store.getProject(created.id)).toMatchObject({ id: created.id, name: 'One' });
+      expect(store.listProjects().map(p => p.id)).toEqual([created.id]);
+
+      store.updateProject(created.id, { name: 'One-Updated' });
+      expect(store.getProject(created.id).name).toBe('One-Updated');
+
+      expect(() => store.transaction(() => {
+        const temp = store.createProject('/tmp/project-cache-2', 'Two');
+        expect(store.getProject(temp.id).name).toBe('Two');
+        throw new Error('rollback');
+      })).toThrow('rollback');
+      expect(store.listProjects().map(p => p.id)).toEqual([created.id]);
+
+      store.deleteProject(created.id);
+      expect(store.listProjects()).toEqual([]);
+      expect(() => store.getProject(created.id)).toThrow();
+    } finally { store.close(); }
+  });
 });

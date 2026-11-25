@@ -641,6 +641,9 @@ export class TimelineService {
     this.hot.clear();
     this.pendingResets.clear();
     this.listeners.clear();
+    this.summaries.clear();
+    this.staleSummaries.clear();
+    this.laneFileChanges.clear();
   }
 
   // ---- scheduling --------------------------------------------------------------------------
@@ -787,9 +790,10 @@ export class TimelineService {
     const next = this.readSubagentProgress(sessionId, lane, fold.liveRows);
     const persisted: StoredSubagentSummary = { rows: next.rows, changes: next.changes ?? [] };
     this.tables.putSummary(sessionId, lane, persisted);
-    const previous = this.summaries.get(laneId(sessionId, lane));
-    this.summaries.set(laneId(sessionId, lane), next);
-    this.staleSummaries.delete(laneId(sessionId, lane));
+    const id = laneId(sessionId, lane);
+    const previous = this.summaries.get(id);
+    this.putSummaryCache(id, next);
+    this.staleSummaries.delete(id);
     if (previous && JSON.stringify(previous) === JSON.stringify(next)) return;
     for (const [id, hot] of this.hot) {
       if (!id.startsWith(`${sessionId}\n`) || hot.fold === fold || ![...hot.fold.subagentIds].includes(toolCallId)) continue;
@@ -802,11 +806,26 @@ export class TimelineService {
     const lane: SyncLane = `sub:${toolCallId}`;
     const id = laneId(sessionId, lane);
     const known = this.summaries.get(id);
-    if (known && !this.staleSummaries.has(id)) return known;
+    if (known && !this.staleSummaries.has(id)) {
+      this.summaries.delete(id);
+      this.summaries.set(id, known);
+      return known;
+    }
     const summary = this.readSubagentProgress(sessionId, lane, this.tables.countLive(sessionId, lane));
-    this.summaries.set(id, summary);
+    this.putSummaryCache(id, summary);
     this.staleSummaries.delete(id);
     return summary;
+  }
+
+  private putSummaryCache(id: string, summary: SubagentProgress): void {
+    this.summaries.delete(id);
+    this.summaries.set(id, summary);
+    while (this.summaries.size > SERVER_BUDGET.timelineSummaryEntries) {
+      const oldest = this.summaries.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.summaries.delete(oldest);
+      this.staleSummaries.delete(oldest);
+    }
   }
 
   /** The child's newest execution, rather than a terminal notification from an earlier round. */
@@ -859,12 +878,18 @@ export class TimelineService {
         byPath.set(change.path, current ? { ...current, added: current.added + change.added, removed: current.removed + change.removed } : change);
       }
     }
+    this.laneFileChanges.delete(id);
     this.laneFileChanges.set(id, read);
+    while (this.laneFileChanges.size > SERVER_BUDGET.timelineSummaryEntries) {
+      const oldest = this.laneFileChanges.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.laneFileChanges.delete(oldest);
+    }
     return [...byPath.values()].slice(-MAX_SUBAGENT_CHANGES);
   }
 
   private evict(): void {
-    const limit = this.deps.hotLanes ?? 32;
+    const limit = this.deps.hotLanes ?? SERVER_BUDGET.timelineHotLanes;
     for (const id of this.hot.keys()) {
       if (this.hot.size <= limit) return;
       if (this.listeners.has(id) || this.work.has(id) || this.pendingResets.has(id)) continue;
