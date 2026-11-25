@@ -1424,6 +1424,14 @@ msgstr "新建会话时可以换"
 msgid "新版本 {version} 可用"
 msgstr "新版本 {version} 可用"
 
+#: src/app/use-security-alerts.ts
+msgid "新的互联服务器：{name}"
+msgstr "新的互联服务器：{name}"
+
+#: src/app/use-security-alerts.ts
+msgid "新设备已配对：{name}"
+msgstr "新设备已配对：{name}"
+
 #: src/app/ImportSessionDialog.tsx
 msgid "新项目"
 msgstr "新项目"
@@ -1846,6 +1854,7 @@ msgstr "来源"
 msgid "来自 {0}"
 msgstr "来自 {0}"
 
+#: src/app/use-security-alerts.ts
 #: src/app/use-session-actions.ts
 msgid "查看"
 msgstr "查看"

@@ -38,6 +38,7 @@ import { SessionFrame } from './session/sessionFrame';
 import { SidebarPeekTrigger, useSidebarPeek } from './use-sidebar-peek';
 import { useWorkbenchBootstrap } from './use-workbench-bootstrap';
 import { useGlobalShortcuts } from './use-global-shortcuts';
+import { useSecurityAlerts } from './use-security-alerts';
 import { usePluginCommands } from './usePluginCommands';
 import { clearContext, useSessionActions } from './use-session-actions';
 import { useProjectActions } from './use-project-actions';
@@ -336,6 +337,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     if (nav.get().settingsOpen && section && section === nav.get().settingsSection) { ui.setMobileSidebar(false); return; }
     void nav.navigate(() => { ui.clearProviderTarget(); nav.openSettings(section); ui.setMobileSidebar(false); }, { keepUnderlying: true });
   }, [nav, ui, openPage]);
+  useSecurityAlerts(openSettingsAt);
   const selectSettingsSection = useCallback(async (next: SettingsSection) => {
     const current = nav.get().settingsSection;
     if (next === current) return;

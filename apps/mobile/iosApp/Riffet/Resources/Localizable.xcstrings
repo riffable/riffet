@@ -11370,6 +11370,20 @@
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "任务已停止" } }
       }
     },
+    "push.device-paired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New device paired" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "新设备已配对" } }
+      }
+    },
+    "push.link-added" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New linked server" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "新的互联服务器" } }
+      }
+    },
     "push.activity.title" : {
       "extractionState" : "manual",
       "localizations" : {

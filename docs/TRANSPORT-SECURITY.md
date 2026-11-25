@@ -108,6 +108,9 @@
 - 模型源密钥、APNs 密钥、链接私钥、服务器 TLS 私钥、Cookie 签名密钥放进 Keychain 或 libsecret。只能用文件时用 0600，并由 `riffet doctor` 检查数据目录是否在云盘同步目录里。
 - 推送只带 id 和必要的标题，正文由客户端拉取。
 - 单独的安全审计流记录：配对、撤销、能力变更、互联变更、开终端、远程执行、经链接的写操作、登录失败、指纹核对失败。只追加，条数上限进 `budgets.ts`。
+- 实现：`access/audit.ts` 写数据目录里的 `security-audit.jsonl`（0600），上限 `SECURITY_AUDIT_BUDGET`；`GET /api/security/events` 读，「设置 › 设备」底部的「安全记录」展示。同一来源反复被拒、终端重连只记一次（`repeatWindowMs`）；本机自己开终端不记；经链接的写操作仍记在各链接的记录里（`LinkService.record`）。
+- 新设备配对、新的互联服务器：推给其他已配对的 iPhone（前台也显示，标题由 App 本地化，正文是名字），打开着的 Web 弹出提示。
+- 现状：Android 没有后台推送，前台也还没有处理列表流的 `security` 事件；Mac 原生客户端同样未处理。
 
 ## 8. 跨网络
 

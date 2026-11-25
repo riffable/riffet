@@ -45,9 +45,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     const key=clientKey(request);
     if (countAttempt(pairAttempts,key)>10) throw new AppError('PAIRING_RATE_LIMIT','Too many pairing attempts; retry in one minute',429);
     const label=requireDeviceName(name);
-    if (!redeemPairingCode(code)) throw new AppError('INVALID_PAIRING_CODE','The pairing code is incorrect or has expired',401);
+    if (!redeemPairingCode(code)) {
+      deps.recordSecurity(request,'pairing-failed',{subject:label});
+      throw new AppError('INVALID_PAIRING_CODE','The pairing code is incorrect or has expired',401);
+    }
     pairAttempts.delete(key);
-    return auth.issueDevice(label);
+    const issued=auth.issueDevice(label);
+    deps.recordSecurity(request,'device-paired',{subject:issued.device.name,subjectId:issued.device.id});
+    return issued;
   };
   app.get('/api/auth/status',async(request,reply)=>{
     try { if(auth.authenticate(request).kind==='device')return {authenticated:true,tokenRequired:auth.tokenRequired,kind:'device'}; } catch {}
@@ -64,7 +69,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     if(!auth.tokenRequired)return {authenticated:true,tokenRequired:false,csrfToken:auth.login(reply,request)};
     const key=clientKey(request);
     if (countAttempt(attempts,key)>10) throw new AppError('LOGIN_RATE_LIMIT','Too many login attempts; retry in one minute',429);
-    if (!auth.verifyToken(request.body?.token)) throw new AppError('INVALID_TOKEN','Access token is incorrect',401);
+    if (!auth.verifyToken(request.body?.token)) {
+      deps.recordSecurity(request,'login-failed');
+      throw new AppError('INVALID_TOKEN','Access token is incorrect',401);
+    }
     attempts.delete(key); return {authenticated:true,tokenRequired:true,csrfToken:auth.login(reply,request)};
   });
   app.post('/api/auth/logout',async(request,reply)=>{auth.require(request,true);auth.logout(reply,request);return {authenticated:false};});
@@ -72,7 +80,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
   app.post('/api/auth/revoke-sessions',async(request)=>{
     // A device bearer must not be able to sign out every browser; only a signed-in cookie may.
     if(auth.authenticate(request,true).kind!=='cookie')throw new AppError('COOKIE_SESSION_REQUIRED','Sign in from a browser session to revoke all sessions',403);
-    auth.revokeAllSessions();return {ok:true};
+    auth.revokeAllSessions();deps.recordSecurity(request,'sessions-revoked');return {ok:true};
   });
   app.post<{Body:{name?:string}}>('/api/pairing/code',async(request)=>{
     auth.authenticate(request,true);
@@ -101,8 +109,15 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
   // `currentId` is the caller's own record (a paired browser or phone), so a list can say which one removing would sign out.
   app.get('/api/devices',async(request)=>{const {deviceId}=auth.authenticate(request);return {devices:deps.devices.list(),...(deviceId?{currentId:deviceId}:{})};});
   app.delete<{Params:{id:string}}>('/api/devices/:id',async(request)=>{
+    const name=auth.device(request.params.id)?.name;
+    // Recorded before the revocation, while the caller (perhaps this very device) is still who it says.
+    if(name!==undefined)deps.recordSecurity(request,'device-revoked',{subject:name,subjectId:request.params.id});
     if(!auth.revokeDevice(request.params.id))throw new AppError('DEVICE_NOT_FOUND','No such paired device',404);
     return {ok:true};
+  });
+  app.get<{Querystring:{before?:string;limit?:string}}>('/api/security/events',async(request)=>{
+    const limit=request.query.limit===undefined?undefined:Number(request.query.limit);
+    return {events:deps.securityAudit.list({...(request.query.before?{before:request.query.before}:{}),...(limit!==undefined&&Number.isFinite(limit)?{limit}:{})})};
   });
   app.get('/api/bootstrap',async(request)=>{
     const context=auth.authenticate(request);

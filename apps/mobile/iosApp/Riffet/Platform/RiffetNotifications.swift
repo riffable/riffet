@@ -120,6 +120,8 @@ final class RiffetNotifications: NSObject, UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         let server = notification.request.content.userInfo["server"] as? String
         guard notification.request.trigger is UNPushNotificationTrigger else { return [.banner, .list, .sound] }
+        // A new device or linked server is shown even from the open server: the app posts nothing of its own for it.
+        if notification.request.content.userInfo["kind"] as? String == "security" { return [.banner, .list, .sound] }
         // The open server's events already reach the app, which posts its own; only another server's push shows.
         let fromOpenServer = await MainActor.run {
             AppModel.shared.workbench.map { RiffetPush.shared.isOpen(server: server, baseURL: $0.baseURL) } ?? false

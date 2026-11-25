@@ -1424,6 +1424,14 @@ msgstr "You can switch it when starting a session"
 msgid "新版本 {version} 可用"
 msgstr "Version {version} is available"
 
+#: src/app/use-security-alerts.ts
+msgid "新的互联服务器：{name}"
+msgstr "New linked server: {name}"
+
+#: src/app/use-security-alerts.ts
+msgid "新设备已配对：{name}"
+msgstr "New device paired: {name}"
+
 #: src/app/ImportSessionDialog.tsx
 msgid "新项目"
 msgstr "New project"
@@ -1846,6 +1854,7 @@ msgstr "Source"
 msgid "来自 {0}"
 msgstr "From {0}"
 
+#: src/app/use-security-alerts.ts
 #: src/app/use-session-actions.ts
 msgid "查看"
 msgstr "View"

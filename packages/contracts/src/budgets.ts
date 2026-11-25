@@ -649,6 +649,22 @@ export const LINK_BUDGET = {
   searchWaitMs: 8_000,
 } as const;
 
+/** The security record (docs/TRANSPORT-SECURITY.md §7), kept in `security-audit.jsonl` in the state directory. */
+export const SECURITY_AUDIT_BUDGET = {
+  /** Entries kept; past it the oldest drop when the file is next compacted. */
+  entries: 2_000,
+  /** The file is rewritten down to `entries` once it holds this many lines. */
+  compactAt: 2_500,
+  /** Entries one read returns. */
+  pageEntries: 200,
+  /** The same refusal (address, capability, route) is recorded once in this window. */
+  repeatWindowMs: 60_000,
+  /** Refusals remembered for `repeatWindowMs`; the oldest is forgotten beyond this. */
+  repeatKeys: 512,
+  /** A recorded command or value is cut to this many characters. */
+  detailChars: 300,
+} as const;
+
 /** The session trace view (docs/TRACE.md): journal rows read as an index, and one row's whole payload on demand. */
 export const TRACE_BUDGET = {
   /** Index rows one request answers by default, and at most. */

@@ -76,6 +76,10 @@ describe('server links', () => {
     const code = (await a.call<{ links: Array<{ verificationCode: string }> }>('GET', '/api/links')).body.links[0]?.verificationCode;
     expect(code).toMatch(/^\d{3} \d{3}$/);
     expect((fromB[0] as { verificationCode?: string }).verificationCode).toBe(code);
+    // Both security records hold the link: B's names A as the server that joined.
+    const events = (await b.call<{ events: Array<{ kind: string; subjectId?: string; actor: { kind?: string } }> }>('GET', '/api/security/events')).body.events;
+    expect(events).toContainEqual(expect.objectContaining({ kind: 'link-added', subjectId: a.serverId, actor: expect.objectContaining({ kind: 'link' }) }));
+    expect((await a.call<{ events: Array<{ kind: string }> }>('GET', '/api/security/events')).body.events.map(event => event.kind)).toContain('link-added');
   });
 
   it('names the linked servers in its own bootstrap, not in one read through the link', async () => {

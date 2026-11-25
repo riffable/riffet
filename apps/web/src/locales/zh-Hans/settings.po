@@ -236,6 +236,10 @@ msgstr "{recognizer} · 不可用"
 msgid "{sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。"
 msgstr "{sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "{subject} 的证书与配对时不同"
+msgstr "{subject} 的证书与配对时不同"
+
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
@@ -853,6 +857,10 @@ msgstr "下载"
 msgid "不使用"
 msgstr "不使用"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "不再允许 {subject} 操作这台电脑"
+msgstr "不再允许 {subject} 操作这台电脑"
+
 #: src/app/settings/StorageSection.tsx
 msgid "不再引用时回收"
 msgstr "不再引用时回收"
@@ -922,6 +930,14 @@ msgstr "不限额"
 #: src/app/settings/LinksSection.tsx
 msgid "与 {0} 断开互联？"
 msgstr "与 {0} 断开互联？"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "与 {subject} 互联"
+msgstr "与 {subject} 互联"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "与 {subject} 断开互联"
+msgstr "与 {subject} 断开互联"
 
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "与 Web 弹窗相同的四档；高度随内容，超过窗口高减 64 时正文滚动。"
@@ -1745,6 +1761,10 @@ msgstr "允许"
 msgid "允许 {0} 操作这台电脑"
 msgstr "允许 {0} 操作这台电脑"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "允许 {subject} 操作这台电脑"
+msgstr "允许 {subject} 操作这台电脑"
+
 #: src/app/settings/DevicesSection.tsx
 msgid "允许 Agent 操作"
 msgstr "允许 Agent 操作"
@@ -1762,6 +1782,7 @@ msgid "允许对话"
 msgstr "允许对话"
 
 #: src/app/settings/DevicesSection.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "允许未加密连接对话"
 msgstr "允许未加密连接对话"
 
@@ -1770,6 +1791,7 @@ msgid "允许远端操作发起命令的机器"
 msgstr "允许远端操作发起命令的机器"
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "允许预览项目外的文件"
 msgstr "允许预览项目外的文件"
 
@@ -3719,6 +3741,10 @@ msgstr "它所在的会话"
 msgid "它的文件夹会删除，可以从个人助理目录的提交历史找回"
 msgstr "它的文件夹会删除，可以从个人助理目录的提交历史找回"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "安全记录"
+msgstr "安全记录"
+
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4975,6 +5001,14 @@ msgstr "打开 · 读取中"
 msgid "打开 {0} 的网页"
 msgstr "打开 {0} 的网页"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "打开了终端"
+msgstr "打开了终端"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "打开了远程终端"
+msgstr "打开了远程终端"
+
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
 msgid "打开会话时"
@@ -5085,6 +5119,10 @@ msgstr "抽屉"
 #: src/app/settings/PreferencesSections.tsx
 msgid "拒绝"
 msgstr "拒绝"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "拒绝了 {subject}"
+msgstr "拒绝了 {subject}"
 
 #: src/app/design/components/NavigationChapter.tsx
 msgid "拖把手排序，或聚焦把手后按 ↑ ↓；拖动中 Esc 取消。"
@@ -7153,6 +7191,7 @@ msgstr "没有符合条件的收藏"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "没有记录"
 msgstr "没有记录"
 
@@ -7860,6 +7899,14 @@ msgstr "视图"
 msgid "视图切换"
 msgstr "视图切换"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "禁止未加密连接对话"
+msgstr "禁止未加密连接对话"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "禁止预览项目外的文件"
+msgstr "禁止预览项目外的文件"
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -7931,6 +7978,10 @@ msgstr "移除 {0}？"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "移除 {name}？"
 msgstr "移除 {name}？"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "移除了 {subject}"
+msgstr "移除了 {subject}"
 
 #: src/app/settings/DevicesSection.tsx
 msgid "移除后需要重新配对"
@@ -8943,6 +8994,10 @@ msgstr "设计规范页的组、文档和代码目录一一对应。"
 msgid "访问"
 msgstr "访问"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "访问令牌错误"
+msgstr "访问令牌错误"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "评估衡量的对象由注意力机制做出来，E 排在 A 之后"
 msgstr "评估衡量的对象由注意力机制做出来，E 排在 A 之后"
@@ -9618,6 +9673,11 @@ msgstr "进行中 {0}"
 msgid "进行中的按钮宽度不变，Spinner 叠在原位。"
 msgstr "进行中的按钮宽度不变，Spinner 叠在原位。"
 
+#. placeholder {0}: event.detail ?? ''
+#: src/app/settings/SecurityLog.tsx
+msgid "远程执行 {0}"
+msgstr "远程执行 {0}"
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "远程服务器"
 msgstr "远程服务器"
@@ -9678,6 +9738,10 @@ msgstr "连续合并"
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出"
 msgstr "退出"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "退出了所有浏览器"
+msgstr "退出了所有浏览器"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出登录"
@@ -9831,6 +9895,10 @@ msgstr "避免"
 msgid "都先问我"
 msgstr "都先问我"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "配对了 {subject}"
+msgstr "配对了 {subject}"
+
 #. placeholder {0}: formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })
 #: src/app/settings/DevicesSection.tsx
 msgid "配对于 {0}"
@@ -9844,6 +9912,10 @@ msgstr "配对新设备"
 #: src/app/settings/PairingDialogs.tsx
 msgid "配对码"
 msgstr "配对码"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "配对码错误"
+msgstr "配对码错误"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "配方"

@@ -30,6 +30,7 @@ const RULES: readonly Rule[] = [
   { path: '/api/auth', prefix: true, policy: 'deny' },
   { path: '/api/pairing', prefix: true, policy: 'deny' },
   { path: '/api/devices', prefix: true, policy: 'deny' },
+  { path: '/api/security', prefix: true, policy: 'deny' },
   { path: '/api/links', prefix: true, policy: 'deny' },
   { path: '/api/servers', prefix: true, policy: 'deny' },
   { path: '/api/riffet-mcp', prefix: true, policy: 'deny' },

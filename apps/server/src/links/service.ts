@@ -10,7 +10,7 @@ import { AppError } from '../errors.js';
 import { linkVerificationCode, loadLinkIdentity, sameFingerprint, type LinkIdentity } from './identity.js';
 import { decodeInvite, encodeInvite, inviteProof, newInviteSecret, proofMatches, type LinkInvite } from './invite.js';
 import { LINK_SOCKET } from './socket.js';
-import { boundedWrites, plain, secure } from './tunnel.js';
+import { PinMismatchError, boundedWrites, plain, secure } from './tunnel.js';
 import { sshTransport } from './ssh.js';
 
 /**
@@ -91,6 +91,8 @@ export interface LinkServiceOptions {
   /** The `riffet` command the SSH transport runs on the other machine when none was given. */
   remoteCommand?: string;
   log?: (message: string) => void;
+  /** What a peer did, or what went wrong with one, that belongs in the security record (docs/TRANSPORT-SECURITY.md §7). */
+  onSecurityEvent?: (event: { kind: 'link-added' | 'link-removed' | 'link-mismatch'; serverId: string; name: string; detail?: string }) => void;
 }
 
 type Listener = () => void;
@@ -524,6 +526,7 @@ export class LinkService {
         if (error instanceof AppError && error.code === 'LINK_REMOVED' && current()) {
           record.removedByPeer = true;
           this.save();
+          this.options.onSecurityEvent?.({ kind: 'link-removed', serverId, name: this.displayName(record) });
           this.teardown(serverId);
           return;
         }
@@ -541,6 +544,7 @@ export class LinkService {
       live.backoffMs = 0;
       delete live.lastError;
     } catch (error) {
+      if (error instanceof PinMismatchError) this.options.onSecurityEvent?.({ kind: 'link-mismatch', serverId, name: this.displayName(record) });
       if (current()) {
         live.lastError = error instanceof Error ? error.message : String(error);
         this.options.log?.(`[riffet] link ${record.name}: ${live.lastError}`);
@@ -731,6 +735,7 @@ export class LinkService {
     this.records.set(record.serverId, record);
     this.save();
     this.changed();
+    this.options.onSecurityEvent?.({ kind: 'link-added', serverId: record.serverId, name: record.name, detail: record.inbound ? 'inbound' : 'no-inbound' });
     return { serverId: record.serverId, reply: this.hello(record) };
   }
 
@@ -762,6 +767,7 @@ export class LinkService {
       record.removedByPeer = true;
       record.outbound = false;
       this.save();
+      this.options.onSecurityEvent?.({ kind: 'link-removed', serverId, name: this.displayName(record) });
       setImmediate(() => { this.teardown(serverId); this.changed(); });
       return {};
     }

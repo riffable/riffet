@@ -236,6 +236,10 @@ msgstr "{recognizer} · Unavailable"
 msgid "{sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。"
 msgstr "{sendKey} sends; physical keyboards only, phone keyboards always insert a newline."
 
+#: src/app/settings/SecurityLog.tsx
+msgid "{subject} 的证书与配对时不同"
+msgstr "{subject} presented a different certificate than at pairing"
+
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}, last 30 minutes. Use the arrow keys to step through 10-second intervals."
@@ -853,6 +857,10 @@ msgstr "Download"
 msgid "不使用"
 msgstr "Off"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "不再允许 {subject} 操作这台电脑"
+msgstr "Stopped letting {subject} operate this computer"
+
 #: src/app/settings/StorageSection.tsx
 msgid "不再引用时回收"
 msgstr "Reclaimed once nothing refers to it"
@@ -922,6 +930,14 @@ msgstr "Unlimited"
 #: src/app/settings/LinksSection.tsx
 msgid "与 {0} 断开互联？"
 msgstr "End the link with {0}?"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "与 {subject} 互联"
+msgstr "Linked with {subject}"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "与 {subject} 断开互联"
+msgstr "Unlinked from {subject}"
 
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "与 Web 弹窗相同的四档；高度随内容，超过窗口高减 64 时正文滚动。"
@@ -1745,6 +1761,10 @@ msgstr "Allow"
 msgid "允许 {0} 操作这台电脑"
 msgstr "Let {0} operate this computer"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "允许 {subject} 操作这台电脑"
+msgstr "Let {subject} operate this computer"
+
 #: src/app/settings/DevicesSection.tsx
 msgid "允许 Agent 操作"
 msgstr "Agent control allowed"
@@ -1762,6 +1782,7 @@ msgid "允许对话"
 msgstr "Allow chat"
 
 #: src/app/settings/DevicesSection.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "允许未加密连接对话"
 msgstr "Allow chat over unencrypted connections"
 
@@ -1770,6 +1791,7 @@ msgid "允许远端操作发起命令的机器"
 msgstr "Let the remote server operate the machine running this command"
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "允许预览项目外的文件"
 msgstr "Allow previewing files outside the project"
 
@@ -3719,6 +3741,10 @@ msgstr "its session"
 msgid "它的文件夹会删除，可以从个人助理目录的提交历史找回"
 msgstr "Its folder is deleted; the assistant directory's commit history keeps it"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "安全记录"
+msgstr "Security log"
+
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4975,6 +5001,14 @@ msgstr "Opening · loading"
 msgid "打开 {0} 的网页"
 msgstr "Open {0}"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "打开了终端"
+msgstr "Opened a terminal"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "打开了远程终端"
+msgstr "Opened a remote shell"
+
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
 msgid "打开会话时"
@@ -5085,6 +5119,10 @@ msgstr "Drawer"
 #: src/app/settings/PreferencesSections.tsx
 msgid "拒绝"
 msgstr "Deny"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "拒绝了 {subject}"
+msgstr "Refused {subject}"
 
 #: src/app/design/components/NavigationChapter.tsx
 msgid "拖把手排序，或聚焦把手后按 ↑ ↓；拖动中 Esc 取消。"
@@ -7153,6 +7191,7 @@ msgstr "No matching favorites"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "没有记录"
 msgstr "No records"
 
@@ -7860,6 +7899,14 @@ msgstr "Views"
 msgid "视图切换"
 msgstr "View switch"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "禁止未加密连接对话"
+msgstr "Stopped chat over unencrypted connections"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "禁止预览项目外的文件"
+msgstr "Stopped previewing files outside the project"
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -7931,6 +7978,10 @@ msgstr "Remove {0}?"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "移除 {name}？"
 msgstr "Remove {name}?"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "移除了 {subject}"
+msgstr "Removed {subject}"
 
 #: src/app/settings/DevicesSection.tsx
 msgid "移除后需要重新配对"
@@ -8943,6 +8994,10 @@ msgstr "Groups, docs and code directories of the design system page correspond o
 msgid "访问"
 msgstr "Access"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "访问令牌错误"
+msgstr "Wrong access token"
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "评估衡量的对象由注意力机制做出来，E 排在 A 之后"
 msgstr "What evaluation measures is built by attention, so E comes after A"
@@ -9618,6 +9673,11 @@ msgstr "{0} in flight"
 msgid "进行中的按钮宽度不变，Spinner 叠在原位。"
 msgstr "A busy button keeps its width; the spinner sits in place."
 
+#. placeholder {0}: event.detail ?? ''
+#: src/app/settings/SecurityLog.tsx
+msgid "远程执行 {0}"
+msgstr "Ran remotely: {0}"
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "远程服务器"
 msgstr "Remote server"
@@ -9678,6 +9738,10 @@ msgstr "Merged repeats"
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出"
 msgstr "Sign out"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "退出了所有浏览器"
+msgstr "Signed out every browser"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出登录"
@@ -9831,6 +9895,10 @@ msgstr "Avoid"
 msgid "都先问我"
 msgstr "Always ask"
 
+#: src/app/settings/SecurityLog.tsx
+msgid "配对了 {subject}"
+msgstr "Paired {subject}"
+
 #. placeholder {0}: formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })
 #: src/app/settings/DevicesSection.tsx
 msgid "配对于 {0}"
@@ -9844,6 +9912,10 @@ msgstr "Pair a new device"
 #: src/app/settings/PairingDialogs.tsx
 msgid "配对码"
 msgstr "Pairing code"
+
+#: src/app/settings/SecurityLog.tsx
+msgid "配对码错误"
+msgstr "Wrong pairing code"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "配方"

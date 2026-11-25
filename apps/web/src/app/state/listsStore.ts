@@ -1,6 +1,6 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { SYNC_BUDGET, type ClientAccess, type OwnerInfo, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
+import { SYNC_BUDGET, type ClientAccess, type OwnerInfo, type SecurityEvent, type Session, type SessionListDelta, type TaskEvent, type TerminalInfo, type WorkItemSummary } from '@contracts';
 import { apiFor, etagRevision, isUnreachable, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { entryListCache, type ListCache } from '@/lib/list-cache';
 import { emitPluginData } from '@/lib/plugin-data-events';
@@ -147,6 +147,13 @@ export function createListsStore(deps: ListsDeps) {
   /** Told when a linked server was added or removed, or came up or went down (`server-links-v1`), and after a reconnect. */
   const serverListeners = new Set<() => void>();
   const announceServers = () => { for (const listener of [...serverListeners]) listener(); };
+  /** Told when a device was paired or a server linked (docs/TRANSPORT-SECURITY.md §7). */
+  const securityListeners = new Set<(event: SecurityEvent) => void>();
+  const announceSecurity = (event: Event) => {
+    let parsed: SecurityEvent;
+    try { parsed = JSON.parse((event as MessageEvent<string>).data) as SecurityEvent; } catch { return; }
+    for (const listener of [...securityListeners]) listener(parsed);
+  };
 
   const mutate = (update: (current: ListsState) => Partial<ListsState>) => {
     revision += 1;
@@ -296,6 +303,11 @@ export function createListsStore(deps: ListsDeps) {
     onServers(listener: () => void): () => void {
       serverListeners.add(listener);
       return () => { serverListeners.delete(listener); };
+    },
+    /** Calls [listener] with each device paired and server linked while the stream is open; one missed while away is not replayed. */
+    onSecurity(listener: (event: SecurityEvent) => void): () => void {
+      securityListeners.add(listener);
+      return () => { securityListeners.delete(listener); };
     },
     /** Adopts the owner a write answered with, unless a newer one has already arrived over the stream. */
     setOwner(owner: OwnerInfo) {
@@ -608,7 +620,7 @@ export function createListsStore(deps: ListsDeps) {
       };
       // A linked server's stream says only that its lists moved; everything else on it belongs to that server's own workbench.
       const events: Record<string, (event: Event) => void> = linked ? { changed } : {
-        changed, task, owner, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, council: announceCouncil, servers: announceServers,
+        changed, task, owner, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, council: announceCouncil, servers: announceServers, security: announceSecurity,
       };
       const retry = () => {
         pushed = false;

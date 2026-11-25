@@ -236,6 +236,10 @@ msgstr ""
 msgid "{sendKey} 发送；仅影响物理键盘，手机软键盘始终换行。"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "{subject} 的证书与配对时不同"
+msgstr ""
+
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr ""
@@ -853,6 +857,10 @@ msgstr ""
 msgid "不使用"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "不再允许 {subject} 操作这台电脑"
+msgstr ""
+
 #: src/app/settings/StorageSection.tsx
 msgid "不再引用时回收"
 msgstr ""
@@ -921,6 +929,14 @@ msgstr ""
 #. placeholder {0}: link.name
 #: src/app/settings/LinksSection.tsx
 msgid "与 {0} 断开互联？"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "与 {subject} 互联"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "与 {subject} 断开互联"
 msgstr ""
 
 #: src/app/design/mac/OverlayChapter.tsx
@@ -1745,6 +1761,10 @@ msgstr ""
 msgid "允许 {0} 操作这台电脑"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "允许 {subject} 操作这台电脑"
+msgstr ""
+
 #: src/app/settings/DevicesSection.tsx
 msgid "允许 Agent 操作"
 msgstr ""
@@ -1762,6 +1782,7 @@ msgid "允许对话"
 msgstr ""
 
 #: src/app/settings/DevicesSection.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "允许未加密连接对话"
 msgstr ""
 
@@ -1770,6 +1791,7 @@ msgid "允许远端操作发起命令的机器"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "允许预览项目外的文件"
 msgstr ""
 
@@ -3719,6 +3741,10 @@ msgstr ""
 msgid "它的文件夹会删除，可以从个人助理目录的提交历史找回"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "安全记录"
+msgstr ""
+
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4975,6 +5001,14 @@ msgstr ""
 msgid "打开 {0} 的网页"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "打开了终端"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "打开了远程终端"
+msgstr ""
+
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
 msgid "打开会话时"
@@ -5084,6 +5118,10 @@ msgstr ""
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "拒绝"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "拒绝了 {subject}"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -7153,6 +7191,7 @@ msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/settings/LinksSection.tsx
+#: src/app/settings/SecurityLog.tsx
 msgid "没有记录"
 msgstr ""
 
@@ -7860,6 +7899,14 @@ msgstr ""
 msgid "视图切换"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "禁止未加密连接对话"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "禁止预览项目外的文件"
+msgstr ""
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -7930,6 +7977,10 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "移除 {name}？"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "移除了 {subject}"
 msgstr ""
 
 #: src/app/settings/DevicesSection.tsx
@@ -8943,6 +8994,10 @@ msgstr ""
 msgid "访问"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "访问令牌错误"
+msgstr ""
+
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "评估衡量的对象由注意力机制做出来，E 排在 A 之后"
 msgstr ""
@@ -9618,6 +9673,11 @@ msgstr ""
 msgid "进行中的按钮宽度不变，Spinner 叠在原位。"
 msgstr ""
 
+#. placeholder {0}: event.detail ?? ''
+#: src/app/settings/SecurityLog.tsx
+msgid "远程执行 {0}"
+msgstr ""
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "远程服务器"
 msgstr ""
@@ -9677,6 +9737,10 @@ msgstr ""
 #: src/app/design/foundations/MotionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "退出了所有浏览器"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -9831,6 +9895,10 @@ msgstr ""
 msgid "都先问我"
 msgstr ""
 
+#: src/app/settings/SecurityLog.tsx
+msgid "配对了 {subject}"
+msgstr ""
+
 #. placeholder {0}: formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })
 #: src/app/settings/DevicesSection.tsx
 msgid "配对于 {0}"
@@ -9843,6 +9911,10 @@ msgstr ""
 
 #: src/app/settings/PairingDialogs.tsx
 msgid "配对码"
+msgstr ""
+
+#: src/app/settings/SecurityLog.tsx
+msgid "配对码错误"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx

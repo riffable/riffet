@@ -353,6 +353,26 @@ export class PushService {
     return results.length === 0 || results.some(Boolean);
   }
 
+  /**
+   * A device was paired or a server linked (docs/TRANSPORT-SECURITY.md §7). Every registered device hears of it, in the
+   * foreground too, so one the owner did not add is noticed; [except] is the new device itself. The name is the body,
+   * the app words the title (`push.device-paired`, `push.link-added`).
+   */
+  async security(event: { kind: 'device-paired' | 'link-added'; name: string; except?: string }): Promise<void> {
+    if (this.closed || !this.deps.apns.configured()) return;
+    const devices = this.deps.auth.listDevices().flatMap(device => {
+      const push = device.id === event.except ? undefined : this.deps.auth.devicePush(device.id);
+      return push ? [{ id: device.id, push }] : [];
+    });
+    await Promise.all(devices.map(device => this.deliver(device, 'token', {
+      topic: device.push.topic, pushType: 'alert', priority: 10, expiration: this.dayAhead(),
+      payload: {
+        aps: { alert: { 'title-loc-key': `push.${event.kind}`, body: event.name }, sound: 'default', 'thread-id': 'riffet.security' },
+        server: this.deps.serverId, kind: 'security',
+      },
+    })));
+  }
+
   private dayAhead(): number { return Math.floor(Date.now() / 1000) + 24 * 60 * 60; }
 
   private async alert(session: Session, kind: SessionAlertKind, options: { category?: string; body?: string; timeSensitive?: boolean; expiration: number; info: Record<string, unknown> }): Promise<{ attempted: number; delivered: boolean }> {

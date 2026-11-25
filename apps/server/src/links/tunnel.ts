@@ -12,6 +12,9 @@ import { sameFingerprint, type LinkIdentity } from './identity.js';
  * Runs TLS over `stream` and resolves with the socket and the peer's certificate fingerprint. `pinned` refuses any
  * other certificate; without it the caller decides from the fingerprint (an acceptor looks it up among its links).
  */
+/** The other end's certificate is not the one pinned at pairing: someone else answered for that server. */
+export class PinMismatchError extends Error {}
+
 export function secure(stream: Duplex, own: LinkIdentity, role: 'client' | 'server', pinned?: string): Promise<{ socket: tls.TLSSocket; fingerprint: string }> {
   const options = { key: own.key, cert: own.cert, minVersion: 'TLSv1.3' as const, rejectUnauthorized: false };
   const socket = role === 'server'
@@ -26,7 +29,7 @@ export function secure(stream: Duplex, own: LinkIdentity, role: 'client' | 'serv
       clearTimeout(timer);
       const fingerprint = socket.getPeerCertificate()?.fingerprint256;
       if (!fingerprint) { fail(new Error('The other server presented no certificate')); return; }
-      if (pinned && !sameFingerprint(fingerprint, pinned)) { fail(new Error('The other server\'s certificate does not match the one recorded at pairing')); return; }
+      if (pinned && !sameFingerprint(fingerprint, pinned)) { fail(new PinMismatchError('The other server\'s certificate does not match the one recorded at pairing')); return; }
       resolve({ socket, fingerprint });
     });
     socket.once('error', error => fail(error));

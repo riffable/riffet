@@ -9,7 +9,7 @@ import type {
   ApiError,
   BuildInfo,
   DeviceInfo, PushKeyInput, PushKeyStatus,
-  LinkAuditEntry, LinkInfo, LinkInviteRequest, LinkInviteResult, LinkJoinRequest, LinkSelfInfo, LinkUpdateRequest, ServerInfo,
+  LinkAuditEntry, LinkInfo, LinkInviteRequest, LinkInviteResult, LinkJoinRequest, LinkSelfInfo, LinkUpdateRequest, ServerInfo, SecurityEventsResponse,
   CouncilContinueRequest, CouncilCreateRequest, CouncilDiscussion, CouncilExportRequest, CouncilExportResult, CouncilPatchRequest, CouncilPrompts, CouncilSpeechRows, CouncilSummary, CouncilSupplementRequest,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
@@ -946,6 +946,8 @@ export const api = {
   /** Ends the link on both servers. */
   removeLink: (serverId: string) => request<{ removed: true }>(`/api/links/${encodeURIComponent(serverId)}`, { method: 'DELETE' }),
   linkAudit: (serverId: string, signal?: AbortSignal) => request<{ entries: LinkAuditEntry[] }>(`/api/links/${encodeURIComponent(serverId)}/audit`, { signal }),
+  /** The security record (docs/TRANSPORT-SECURITY.md §7), newest first. */
+  securityEvents: (signal?: AbortSignal) => request<SecurityEventsResponse>('/api/security/events', { signal }),
   /** The APNs key this server pushes to iPhones with; the key text is accepted, never returned. */
   pushKey: (signal?: AbortSignal) => request<PushKeyStatus>('/api/settings/push', { signal }),
   savePushKey: (input: PushKeyInput) => request<PushKeyStatus>('/api/settings/push', json('PUT', input)),

@@ -191,6 +191,7 @@ export function createServerLists(deps: ListsDeps) {
     onPluginApprovals: entry.onPluginApprovals,
     onCouncil: entry.onCouncil,
     onServers: entry.onServers,
+    onSecurity: entry.onSecurity,
   };
 }
 

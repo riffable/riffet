@@ -84,6 +84,9 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
         throw new AppError('INVALID_SETTINGS',`${field}.${purpose}.profileId must name a provider with a gateway address`);
     }
     settings.setSettings(body);
+    // Who may do what over which connection (docs/TRANSPORT-SECURITY.md §7).
+    const after=settings.getSettings();
+    for(const key of ['allowInsecureChat','allowOutsideRead'] as const)if(Boolean(stored[key])!==Boolean(after[key]))deps.recordSecurity(request,'setting-changed',{subject:key,detail:String(Boolean(after[key]))});
     if(auxiliary.title||auxiliary.default)void titles.backfill().catch(()=>undefined);
     return effectiveSettings(request.headers);
   });

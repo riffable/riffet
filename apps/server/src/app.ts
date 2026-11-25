@@ -21,7 +21,7 @@ import { configureExecWorker, execWorkerStats, trimExecWorker } from './exec.js'
 import { ServerCacheRegistry } from './memory/cache-registry.js';
 import { serverProfileBudget, type ServerProfile } from './memory/profile.js';
 import { startIntegrityCheck } from './storage/integrity.js';
-import { Auth, FILE_SITE_ROUTE, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
+import { Auth, type AuthContext, FILE_SITE_ROUTE, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
 import { AppError, requireString } from './errors.js';
 import { clearAuxiliaryAuthCache, completeForPlugin, resolveAuxiliaryModel, streamForPlugin, type GatewayProfiles } from './auxiliary/models.js';
 import { AuxiliaryStats } from './stats/auxiliary.js';
@@ -134,7 +134,7 @@ import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerTraceRoutes } from './routes/trace.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, CODE_INDEX_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, CODE_INDEX_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -151,6 +151,7 @@ import { linkPolicy } from './links/policy.js';
 import { RoutePatterns, routeAccess, type Capability } from './access/capabilities.js';
 import { grantsFor } from './access/grants.js';
 import { secureTransport, trustedNetworks } from './access/transport.js';
+import { SecurityAudit } from './access/audit.js';
 import { peerPath } from './links/forward.js';
 import { linkOfRequest } from './links/socket.js';
 import { LINK_TUNNEL_ROUTE, SERVER_FORWARD_ROUTE, registerLinkRoutes } from './routes/links.js';
@@ -233,6 +234,7 @@ export async function createApp(options: AppOptions = {}) {
   const auxiliaryStats=new AuxiliaryStats(store.db,{onChanged:()=>stats.notifyChanged()});
   const recordAuxiliaryCall=(entry:import('./auxiliary/telemetry.js').AuxiliaryCallRecord)=>auxiliaryStats.record(entry);
   const auth=new Auth(stateDir,options);
+  const securityAudit=new SecurityAudit(stateDir);
   // Each conversation's Riffet MCP server (docs/DEVICES.md §2): built before the backends, whose launches carry it.
   const riffetMcpCredentials=new RiffetMcpCredentials(store,stateDir);
   const notices=new NoticeLog(store);
@@ -409,6 +411,23 @@ export async function createApp(options: AppOptions = {}) {
     const secure=context.kind==='link'||secureTransport(request,trusted);
     return {secure,granted:grantsFor(context,secure,{allowInsecureChat:settings.getSettings().allowInsecureChat})};
   };
+  /** Who a request is, for the security record: the signed-in kind and name, and the address it came from. */
+  const securityActor=(request:FastifyRequest):SecurityActor=>{
+    let context:AuthContext|undefined;
+    try{context=auth.authenticate(request);}catch{/* not signed in */}
+    const loopback=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(request.ip);
+    const relayed=loopback?String(request.headers['x-forwarded-for']??'').split(',').at(-1)?.trim():undefined;
+    const address=relayed||request.ip;
+    const id=context?.linkServerId??context?.deviceId;
+    const name=context?.linkServerId?linksRef?.list().find(link=>link.serverId===context.linkServerId)?.name:context?.deviceId?auth.device(context.deviceId)?.name:undefined;
+    return {...(context?{kind:context.kind}:{}),...(id?{id}:{}),...(name?{name}:{}),...(address?{address}:{}),secure:context?.kind==='link'||secureTransport(request,trusted)};
+  };
+  /** [once] keys an event that repeats (a reconnecting terminal): it is recorded once per `SECURITY_AUDIT_BUDGET.repeatWindowMs`. */
+  const recordSecurity=(request:FastifyRequest,kind:SecurityEventKind,{once,...fields}:{subject?:string;subjectId?:string;detail?:string;once?:string}={})=>{
+    const actor=securityActor(request);
+    if(once)securityAudit.recordOnce(`${kind}|${actor.id??actor.address??''}|${once}`,kind,actor,fields);
+    else securityAudit.record(kind,actor,fields);
+  };
   /** A forwarded request needs what its target route needs on the linked server, which runs the same table. */
   const requiredAccess=(request:FastifyRequest,route:string|undefined):Capability|'public'=>{
     if(request.method==='OPTIONS')return 'read';
@@ -422,6 +441,8 @@ export async function createApp(options: AppOptions = {}) {
     if(required==='public')return;
     const {secure,granted}=accessOf(request);
     if(granted.has(required))return;
+    const actor=securityActor(request);
+    securityAudit.recordOnce(`${actor.address}|${actor.id??''}|${request.method} ${route}`,'access-denied',actor,{subject:`${request.method} ${route??request.url}`,detail:required});
     if(!secure)throw new AppError('INSECURE_CONNECTION_READ_ONLY','This connection is not encrypted; on it this browser can only read',403,undefined,{capability:required});
     throw new AppError('CAPABILITY_REQUIRED','This device is not allowed to do this',403,undefined,{capability:required});
   };
@@ -613,7 +634,7 @@ export async function createApp(options: AppOptions = {}) {
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
-  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,clientAccess:(request:FastifyRequest)=>{const {secure,granted}=accessOf(request);return {secure,capabilities:[...granted]};},renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
+  },assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,pluginApprovals,council,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,clientAccess:(request:FastifyRequest)=>{const {secure,granted}=accessOf(request);return {secure,capabilities:[...granted]};},recordSecurity,securityAudit,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds,sweepColdTimeline:()=>timeline.sweepCold(),recordAuxiliaryCall};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -679,10 +700,16 @@ export async function createApp(options: AppOptions = {}) {
   registerDeviceRoutes(app,deps);
   registerChannelRoutes(app,deps);
   // Links to other servers (docs/SERVER-LINKS.md). Dialing starts once the server can take forwarded connections.
-  const links=new LinkService({stateDir,serverId,name:()=>hostname().replace(/\.local$/i,'').slice(0,64)||'Riffet',version:SERVER_VERSION,protocol:PROTOCOL_INFO,httpServer:()=>app.server,log:message=>console.warn(message)});
+  const links=new LinkService({stateDir,serverId,name:()=>hostname().replace(/\.local$/i,'').slice(0,64)||'Riffet',version:SERVER_VERSION,protocol:PROTOCOL_INFO,httpServer:()=>app.server,log:message=>console.warn(message),
+    onSecurityEvent:event=>{
+      const actor:SecurityActor={kind:'link',id:event.serverId,name:event.name};
+      // A pinned certificate that does not match is retried with backoff; once a minute in the record is enough.
+      if(event.kind==='link-mismatch')securityAudit.recordOnce(`mismatch|${event.serverId}`,event.kind,actor,{subject:event.name,subjectId:event.serverId});
+      else securityAudit.record(event.kind,actor,{subject:event.name,subjectId:event.serverId,...(event.detail?{detail:event.detail}:{})});
+    }});
   linksRef=links;
   links.onRevoke(id=>auth.revokeLink(id));
-  registerLinkRoutes(app,{links,auth,deviceName:id=>auth.device(id)?.name,secure:request=>accessOf(request).secure});
+  registerLinkRoutes(app,{links,auth,deviceName:id=>auth.device(id)?.name,secure:request=>accessOf(request).secure,recordSecurity});
   app.addHook('onReady',async()=>{links.start();});
   // Background pushes to iOS devices, straight to APNs with the owner's key (docs/DEVICES.md §3「后台推送」).
   const apns=new ApnsClient({stateDir,...(options.push?.transport?{transport:options.push.transport}:{}),...(options.push?.retryDelaysMs?{retryDelaysMs:options.push.retryDelaysMs}:{})});
@@ -690,6 +717,11 @@ export async function createApp(options: AppOptions = {}) {
     interaction:session=>nativeBackends.interaction(session),
     latestReply:async sessionId=>{await timeline.ready(sessionId,'main');const turn=timeline.outline(sessionId,'main',1).turns.at(-1);return turn?timeline.turnText(sessionId,turn.turn)?.answer:undefined;}});
   devices.pushRoute=(deviceId,platform)=>push.route(deviceId,platform);
+  // Every other device hears of a new device or linked server, so one the owner did not add is noticed (docs/TRANSPORT-SECURITY.md §7).
+  const stopSecurityPush=securityAudit.subscribe(event=>{
+    if(event.kind==='device-paired'||event.kind==='link-added')void push.security({kind:event.kind,name:event.subject??'',...(event.subjectId?{except:event.subjectId}:{})}).catch(()=>undefined);
+  });
+  app.addHook('onClose',async()=>{stopSecurityPush();});
   registerPushRoutes(app,{apns,push});
   // The shim reads the server's address from its credential file; it moves on every start.
   app.addHook('onListen',async()=>{

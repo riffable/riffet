@@ -6,6 +6,7 @@ import { AppError } from '../errors.js';
 import { forwardHttp, forwardWebSocket, peerPath } from '../links/forward.js';
 import { attachRemoteShell, runRemoteExec } from '../links/remote-exec.js';
 import type { LinkService } from '../links/service.js';
+import type { RouteDeps } from './deps.js';
 
 /**
  * Server links (docs/SERVER-LINKS.md): managing links, the tunnel endpoint other servers dial, and forwarding
@@ -16,7 +17,7 @@ export const LINK_TUNNEL_ROUTE = '/api/links/tunnel';
 /** Forwards to a linked server (docs/SERVER-LINKS.md §4); judged by the route it reaches there (`app.ts`). */
 export const SERVER_FORWARD_ROUTE = '/api/servers/:serverId/*';
 
-export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkService; auth: Auth; deviceName: (id: string) => string | undefined; secure: (request: FastifyRequest) => boolean }) {
+export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkService; auth: Auth; deviceName: (id: string) => string | undefined; secure: (request: FastifyRequest) => boolean; recordSecurity: RouteDeps['recordSecurity'] }) {
   const { links, auth } = deps;
 
   app.get('/api/servers', async () => ({ servers: links.servers() }));
@@ -56,7 +57,9 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
     };
     const sshHost = optional(body.sshHost, 'sshHost'), remoteCommand = optional(body.remoteCommand, 'remoteCommand');
     if (sshHost !== undefined && (sshHost.startsWith('-') || /\s/.test(sshHost.trim()))) throw new AppError('INVALID_INPUT', 'sshHost must be one SSH destination', 400);
-    return { link: await links.join({ link: body.link, inbound: body.inbound, transport, ...(sshHost ? { sshHost } : {}), ...(remoteCommand ? { remoteCommand } : {}) }) };
+    const link = await links.join({ link: body.link, inbound: body.inbound, transport, ...(sshHost ? { sshHost } : {}), ...(remoteCommand ? { remoteCommand } : {}) });
+    deps.recordSecurity(request, 'link-added', { subject: link.name, subjectId: link.serverId, detail: link.inbound ? 'inbound' : 'no-inbound' });
+    return { link };
   });
 
   app.patch<{ Params: { serverId: string }; Body: Partial<LinkUpdateRequest> }>('/api/links/:serverId', async request => {
@@ -71,11 +74,16 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
       ...(body.alias !== undefined ? { alias: body.alias } : {}),
       ...(body.note !== undefined ? { note: body.note } : {}),
     };
-    return { link: links.update(request.params.serverId, change) };
+    const before = change.inbound === undefined ? undefined : links.list().find(link => link.serverId === request.params.serverId)?.inbound;
+    const link = links.update(request.params.serverId, change);
+    if (before !== undefined && before !== link.inbound) deps.recordSecurity(request, 'link-inbound-changed', { subject: link.name, subjectId: link.serverId, detail: link.inbound ? 'inbound' : 'no-inbound' });
+    return { link };
   });
 
   app.delete<{ Params: { serverId: string } }>('/api/links/:serverId', async request => {
+    const name = links.list().find(link => link.serverId === request.params.serverId)?.name;
     await links.remove(request.params.serverId);
+    deps.recordSecurity(request, 'link-removed', { subjectId: request.params.serverId, ...(name ? { subject: name } : {}) });
     return { removed: true };
   });
 
@@ -87,6 +95,8 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
     const abort = () => controller.abort();
     request.raw.once('close', abort);
     const unwatch = auth.onRevoke(request, abort);
+    const command = (request.body as { command?: unknown } | undefined)?.command;
+    deps.recordSecurity(request, 'remote-exec', { detail: typeof command === 'string' ? command : '' });
     try {
       return await runRemoteExec(request.body ?? {}, controller.signal);
     } finally {
@@ -98,6 +108,7 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
   app.get<{ Querystring: { cwd?: string; cols?: string; rows?: string } }>('/api/remote/shell', { websocket: true }, (socket, request) => {
     const cols = request.query.cols ? Number(request.query.cols) : undefined;
     const rows = request.query.rows ? Number(request.query.rows) : undefined;
+    deps.recordSecurity(request, 'remote-exec', { detail: 'shell' });
     attachRemoteShell(socket, {
       ...(typeof request.query.cwd === 'string' && request.query.cwd ? { cwd: request.query.cwd } : {}),
       ...(cols && Number.isFinite(cols) ? { cols } : {}),

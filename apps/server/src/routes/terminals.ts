@@ -6,6 +6,7 @@ import { AppError, requireString } from '../errors.js';
 import { TERMINAL_BINARY_PROTOCOL, TERMINAL_BUDGET, type TerminalClientMessage } from '../../../../packages/contracts/src/index.js';
 import { revisionedList } from './params.js';
 import type { RouteDeps } from './deps.js';
+import { localRequest } from '../auth.js';
 import { readTerminalAppearance, resolveTerminalAppearance, sameTerminalAppearance } from '../terminal/appearance.js';
 import { decodeClientBinaryFrame, encodeOutputFrame, encodePingFrame, encodePongFrame, encodeSnapshotFrame } from '../terminal/wire.js';
 import { registerTerminalAttachmentRoutes } from './terminal-attachments.js';
@@ -68,7 +69,10 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
     await terminal.stop(request.params.id);return terminal.get(request.params.id);
   });
   app.get<{Params:{id:string};Querystring:{protocol?:string}}>('/api/terminals/:id/ws',{websocket:true},(socket,request)=>{
-    const id=request.params.id;store.getTerminal(id);let clientId:string|undefined,epoch:number|undefined,closed=false;
+    const id=request.params.id;store.getTerminal(id);
+    // This machine's own windows open terminals all day; one from elsewhere is worth a line (docs/TRANSPORT-SECURITY.md §7).
+    if(!localRequest(request))deps.recordSecurity(request,'terminal-opened',{subjectId:id,once:id});
+    let clientId:string|undefined,epoch:number|undefined,closed=false;
     const unwatch=auth.onRevoke(request,()=>{closed=true;stopHeartbeat();socket.terminate();});
     socket.once('close',unwatch);
     let chain=Promise.resolve();

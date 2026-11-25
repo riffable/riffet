@@ -2,7 +2,7 @@ import type { ExternalSessions } from '../native/external-sessions.js';
 import type { TerminalHolds } from '../native/terminal-hold.js';
 import type { IncomingHttpHeaders, ServerResponse } from 'node:http';
 import type { FastifyRequest } from 'fastify';
-import type { AppSettings, ClientAccess, NativeRunInput, Run, Session } from '../../../../packages/contracts/src/index.js';
+import type { AppSettings, ClientAccess, NativeRunInput, Run, SecurityEvent, SecurityEventKind, Session } from '../../../../packages/contracts/src/index.js';
 import type { Auth } from '../auth.js';
 import type { AssistantDelegations } from '../assistant/delegations.js';
 import type { AssistantRuns } from '../assistant/runs.js';
@@ -98,6 +98,9 @@ export interface RouteDeps {
   effectiveSettings(headers?: IncomingHttpHeaders): Promise<AppSettings>;
   /** The caller's own access: whether its connection is encrypted and what it may do over it (docs/TRANSPORT-SECURITY.md §6). */
   clientAccess(request: FastifyRequest): ClientAccess;
+  /** Adds to the security record (docs/TRANSPORT-SECURITY.md §7), with [request]'s caller as the actor. */
+  recordSecurity(request: FastifyRequest, kind: SecurityEventKind, fields?: { subject?: string; subjectId?: string; detail?: string; once?: string }): void;
+  securityAudit: { list(options?: { before?: string; limit?: number }): SecurityEvent[]; subscribe(listener: (event: SecurityEvent) => void): () => void };
   renameNative(session: Session): void;
   readNativeInput(body: NativeMessageBody, options?: { validateAttachments?: boolean }): Promise<NativeRunInput>;
   nativeRuns(id: string): Run[];

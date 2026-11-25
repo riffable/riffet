@@ -12,6 +12,7 @@ import { formatDate } from '@/lib/i18n/format';
 import { cn, errorMessage, timeAgo } from '@/lib/utils';
 import { useStores } from '../state/stores';
 import { PushKeySection } from './PushKeySection';
+import { SecurityLog } from './SecurityLog';
 import { SettingsGroup, SettingsRow } from './SettingsLayout';
 
 const isPhone = (device: DeviceInfo) => device.platform === 'android' || device.platform === 'ios';
@@ -74,7 +75,7 @@ export function DevicesSection({ settings, onSaved }: { settings: AppSettings; o
     </EmptyState>
     : <div className="flex justify-center p-5"><Spinner /></div>;
 
-  if (!devices.length) return <div className="flex flex-col gap-6"><EmptyState icon={<IconSmartphone />} title={t`没有已配对的设备`} />{unencrypted}<PushKeySection /></div>;
+  if (!devices.length) return <div className="flex flex-col gap-6"><EmptyState icon={<IconSmartphone />} title={t`没有已配对的设备`} />{unencrypted}<PushKeySection /><SecurityLog /></div>;
 
   const now = Date.now();
   const idle = (device: DeviceInfo) => device.id !== currentId && !device.online && now - Date.parse(device.lastSeenAt ?? device.createdAt) > IDLE_MS;
@@ -127,5 +128,6 @@ export function DevicesSection({ settings, onSaved }: { settings: AppSettings; o
     </section>}
     {unencrypted}
     <PushKeySection />
+    <SecurityLog />
   </div>;
 }

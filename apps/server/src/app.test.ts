@@ -2457,6 +2457,13 @@ describe('API authentication boundary', () => {
     // A link string admits a server, so it never crosses an unencrypted connection, whoever asks.
     const invite = await app.inject({ method: 'POST', url: '/api/links/invites', remoteAddress: '192.0.2.10', headers: { host: '127.0.0.1', authorization: `Bearer ${deviceToken}` }, payload: { inbound: false } });
     expect(invite.json().error.code).toBe('LINK_INSECURE_TRANSPORT');
+    // Each refusal is in the security record once per window, however often it was retried, and the record survives a restart.
+    const events = (await proxied('GET', '/api/security/events')).json().events as Array<{ id: string; kind: string; subject?: string; actor: { address?: string } }>;
+    const denied = events.filter(event => event.kind === 'access-denied' && event.actor.address === '192.0.2.10');
+    expect(denied.map(event => event.subject)).toContain('POST /api/terminals');
+    expect(new Set(denied.map(event => event.subject)).size).toBe(denied.length);
+    const { SecurityAudit } = await import('./access/audit.js');
+    expect(new SecurityAudit(stateDir).list().map(event => event.id)).toEqual(events.map(event => event.id));
   });
 
   it('rejects absolute-form request targets before any handler, including WebSocket upgrades', async () => {
