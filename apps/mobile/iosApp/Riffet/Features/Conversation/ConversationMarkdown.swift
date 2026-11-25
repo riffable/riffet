@@ -16,9 +16,7 @@ struct ConversationMarkdown: View {
     let projectID: String
     var compact = false
     var stateID: String? = nil
-    @State private var fileTarget: ConversationFileTarget?
-    @State private var mathTarget: ConversationMathTarget?
-    @State private var serverTarget: ConversationServerTarget?
+    @State private var linkTarget: ConversationLinkTarget?
     @Environment(\.palette) private var palette
     @Environment(\.conversationFindHighlight) private var findHighlight
     @ScaledMetric(relativeTo: .body) private var bodySize = 16.0
@@ -82,43 +80,13 @@ struct ConversationMarkdown: View {
         .onAppear { content.update(source) }
         .onDisappear { content.cancel() }
         .environment(\.openURL, OpenURLAction { url in
-            // A server path (`/api/…`) is not a project file: open it against the server, authenticated.
-            if url.scheme == nil, url.path.hasPrefix("/api/"), let resolved = ConversationServerPath.url(url.absoluteString, base: workbench.resources.baseURL) {
-                serverTarget = .init(url: resolved)
-                return .handled
+            switch ConversationLinkTarget.route(url, workbench: workbench, projectID: projectID) {
+            case let .some(.page(target)): linkTarget = target; return .handled
+            case .some(.system): return .systemAction
+            case nil: return .discarded
             }
-            if let target = FileLink.parse(url) {
-                fileTarget = .init(path: resolveMention(target.path), line: target.line)
-                return .handled
-            }
-            if let tex = MathText.tex(url) { mathTarget = .init(tex: tex); return .handled }
-            guard ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "") else { return .discarded }
-            return .systemAction
         })
-        .sheet(item: $mathTarget) { target in
-            NavigationStack {
-                VStack(spacing: 20) { ConversationMath(tex: target.tex, workbench: workbench); Text(target.tex).riffetFont(.mono).textSelection(.enabled) }.padding().navigationTitle(String(localized: "公式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { mathTarget = nil } } }
-            }.presentationDetents([.medium, .large])
-        }
-        .sheet(item: $serverTarget) { target in
-            NavigationStack {
-                ConversationServerFile(workbench: workbench, url: target.url)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { serverTarget = nil } } }
-            }
-        }
-        .sheet(item: $fileTarget) { target in
-            NavigationStack {
-                ConversationFilePage(workbench: workbench, projectID: projectID, path: target.path, targetLine: target.line)
-                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { fileTarget = nil } } }
-            }
-        }
-    }
-
-    /// A bare file name written in prose names the file the conversation's tools touched.
-    private func resolveMention(_ path: String) -> String {
-        let items = workbench.grouping?.items ?? []
-        return FileMentionsKt.resolveFileMention(path: path, files: FileMentionsKt.conversationFiles(items: items, root: workbench.project(projectID)?.cwd))
+        .modifier(ConversationLinkSheets(target: $linkTarget, workbench: workbench, projectID: projectID))
     }
 
     @ViewBuilder private func segmentView(_ segment: MarkdownSegmentModel, statePath: String) -> some View {
@@ -126,11 +94,7 @@ struct ConversationMarkdown: View {
         case let .blocks(parts): partsView(parts, statePath: statePath + ".blocks")
         case let .math(tex): ConversationMath(tex: tex, workbench: workbench)
         case let .image(alt, src): ConversationImage(workbench: workbench, projectID: projectID, source: src, label: alt)
-        case let .visualization(path, title, _):
-            NavigationLink {
-                ConversationVisualization(workbench: workbench, projectID: projectID, path: path)
-                    .navigationTitle(title ?? (path as NSString).lastPathComponent)
-            } label: { Label(title ?? String(localized: "查看交互预览", bundle: .riffet), systemImage: "chart.xyaxis.line").padding(12).frame(maxWidth: .infinity, alignment: .leading).background(palette.press, in: RoundedRectangle(cornerRadius: 12)) }
+        case let .visualization(path, title, _): ConversationVisualizationLink(workbench: workbench, projectID: projectID, path: path, title: title)
         }
     }
 
@@ -184,6 +148,21 @@ struct ConversationMarkdown: View {
             return AnyView(ConversationMarkdownTable(header: header, rows: rows, alignments: alignments, origin: workbench.baseURL))
         case .rule: return AnyView(Divider())
         }
+    }
+}
+
+/// A reply's interactive visualization: a link to its page.
+struct ConversationVisualizationLink: View {
+    let workbench: Workbench
+    let projectID: String
+    let path: String
+    let title: String?
+    @Environment(\.palette) private var palette
+    var body: some View {
+        NavigationLink {
+            ConversationVisualization(workbench: workbench, projectID: projectID, path: path)
+                .navigationTitle(title ?? (path as NSString).lastPathComponent)
+        } label: { Label(title ?? String(localized: "查看交互预览", bundle: .riffet), systemImage: "chart.xyaxis.line").padding(12).frame(maxWidth: .infinity, alignment: .leading).background(palette.press, in: RoundedRectangle(cornerRadius: 12)) }
     }
 }
 
@@ -264,7 +243,7 @@ enum ConversationTableLayout {
 }
 
 /// Some agents cite code as ```12:40:path/to/file.ts — a line range and a file, not a language.
-private struct ConversationCodeCitation {
+struct ConversationCodeCitation {
     let start: Int
     let end: Int
     let path: String
@@ -467,6 +446,67 @@ enum ConversationServerPath {
 }
 
 struct ConversationServerTarget: Identifiable { let id = UUID(); let url: URL }
+
+/// Where a link in a reply leads: a page of the app's own, or the system. Shared by `ConversationMarkdown`
+/// and the transcript's drawn prose (`TranscriptProseActions.open`).
+enum ConversationLinkTarget: Identifiable {
+    case file(ConversationFileTarget)
+    case math(ConversationMathTarget)
+    case server(ConversationServerTarget)
+    var id: UUID {
+        switch self {
+        case let .file(target): target.id
+        case let .math(target): target.id
+        case let .server(target): target.id
+        }
+    }
+    enum Route { case page(ConversationLinkTarget), system }
+
+    /// nil: not a link this app opens.
+    @MainActor static func route(_ url: URL, workbench: Workbench, projectID: String) -> Route? {
+        // A server path (`/api/…`) is not a project file: open it against the server, authenticated.
+        if url.scheme == nil, url.path.hasPrefix("/api/"), let resolved = ConversationServerPath.url(url.absoluteString, base: workbench.resources.baseURL) {
+            return .page(.server(.init(url: resolved)))
+        }
+        if let target = FileLink.parse(url) {
+            // A bare file name written in prose names the file the conversation's tools touched.
+            let items = workbench.grouping?.items ?? []
+            let path = FileMentionsKt.resolveFileMention(path: target.path, files: FileMentionsKt.conversationFiles(items: items, root: workbench.project(projectID)?.cwd))
+            return .page(.file(.init(path: path, line: target.line)))
+        }
+        if let tex = MathText.tex(url) { return .page(.math(.init(tex: tex))) }
+        guard ["https", "http", "mailto"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        return .system
+    }
+}
+
+/// The pages a link in a reply opens.
+struct ConversationLinkSheets: ViewModifier {
+    @Binding var target: ConversationLinkTarget?
+    let workbench: Workbench
+    let projectID: String
+    func body(content: Content) -> some View {
+        content.sheet(item: $target) { target in
+            switch target {
+            case let .math(math):
+                NavigationStack {
+                    VStack(spacing: 20) { ConversationMath(tex: math.tex, workbench: workbench); Text(math.tex).riffetFont(.mono).textSelection(.enabled) }.padding().navigationTitle(String(localized: "公式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { self.target = nil } } }
+                }.presentationDetents([.medium, .large])
+            case let .server(server):
+                NavigationStack {
+                    ConversationServerFile(workbench: workbench, url: server.url)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { self.target = nil } } }
+                }
+            case let .file(file):
+                NavigationStack {
+                    ConversationFilePage(workbench: workbench, projectID: projectID, path: file.path, targetLine: file.line)
+                        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { self.target = nil } } }
+                }
+            }
+        }
+    }
+}
 struct ConversationMathTarget: Identifiable { let id = UUID(); let tex: String }
 struct ConversationFileTarget: Identifiable { let id = UUID(); let path: String; var line: Int? = nil }
 struct ConversationFilePage: View {
@@ -624,6 +664,6 @@ private struct ConversationServerFile: View {
     }
 }
 
-private extension MarkdownBlock {
+extension MarkdownBlock {
     var isList: Bool { if case .list = self { return true }; return false }
 }

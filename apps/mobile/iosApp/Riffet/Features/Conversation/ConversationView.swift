@@ -72,6 +72,9 @@ struct ConversationView: View {
     @State private var renameTitle = ""
     @State private var findState: FindState?
     @State private var probe = ConversationTranscriptProbe()
+    /// What the transcript's drawn prose reaches: links, quoting, and the views of blocks that stay SwiftUI.
+    @State private var proseActions = TranscriptProseActions()
+    @State private var linkTarget: ConversationLinkTarget?
     /// A find target whose cell is not drawn yet, and how many passes it has waited for it.
     @State private var pendingFind: (target: FindTarget, passes: Int)?
     /// How far the find bar reaches below the top bar; rows rest below it.
@@ -344,7 +347,10 @@ struct ConversationView: View {
                     onEndDragging: { followsTail = $0 },
                     onReady: { observeInteraction(); restore() },
                     onFeedbackVisibility: { feedbackRowVisible = $0 },
-                    probe: probe
+                    probe: probe,
+                    proseActions: prepareProseActions(session, draft: draft),
+                    origin: workbench.baseURL,
+                    codeTheme: themeStore.codeTheme
                 )
                 // Under the bars: the system's soft edge fades what scrolls beneath them.
                 .ignoresSafeArea(.container, edges: [.top, .bottom])
@@ -360,6 +366,7 @@ struct ConversationView: View {
         // Rows passing under the bar are blurred, fading out just below it, so the title never sits on bare prose.
         .overlay(alignment: .top) { RiffetBarScrim() }
         .modifier(SessionNoticeLayer(notice: pinnedNotice, feedback: feedback, top: noticeTop, height: $noticeHeight))
+        .modifier(ConversationLinkSheets(target: $linkTarget, workbench: workbench, projectID: session.projectId))
         .modifier(ConversationFindLayer(find: workbench.store.find, state: $findState, land: landFind, topRowKey: { probe.topRowKey() }, window: findWindow, retry: resolveFind, reach: $findReach))
         .onChange(of: lastVersion) { _, _ in
             guard restored else { return }
@@ -481,6 +488,17 @@ struct ConversationView: View {
             rowCache.keep(id, (top, row))
             result.append(row)
         }
+        /// A row drawn as native prose: laid out off the main thread (ios-performance.md §2.16).
+        func appendProse(_ id: String, revision: AnyHashable, highlight: ConversationFindHighlight?, content: TranscriptProseContent) {
+            let revision = highlight.map { rowRevision(revision, environment, $0) } ?? rowRevision(revision, environment)
+            if let kept = rowCache.row(id), kept.top == content.top, kept.row.revision == revision, kept.row.prose != nil {
+                result.append(kept.row)
+                return
+            }
+            let row = ConversationTranscriptList.Row(id: id, revision: revision, content: AnyView(EmptyView()), prose: content)
+            rowCache.keep(id, (content.top, row))
+            result.append(row)
+        }
         let docked = dockedInteraction?.id
         func appendRecords(_ values: [ConversationInteractionLedger.Record]) {
             // The question the agent waits on is docked above the composer; it joins the transcript once answered.
@@ -505,8 +523,13 @@ struct ConversationView: View {
             case let .row(row): row is TimelineRowProcess
             default: false
             }
-            append(entry.id, revision: rowRevision(ConversationRenderPlan.revision(entry, speed: speed), historySensitive ? !nearBottom : false, focusedRow ?? ""), top: entry.topSpacing,
-                   highlight: find.flatMap { found in Self.findHighlight(found, in: entry) }, content: transcriptEntry(entry, session: session, speed: speed))
+            let highlight = find.flatMap { found in Self.findHighlight(found, in: entry) }
+            let revision = rowRevision(ConversationRenderPlan.revision(entry, speed: speed), historySensitive ? !nearBottom : false, focusedRow ?? "")
+            if let prose = Self.proseContent(entry, speed: speed, highlight: highlight) {
+                appendProse(entry.id, revision: revision, highlight: highlight, content: prose)
+            } else {
+                append(entry.id, revision: revision, top: entry.topSpacing, highlight: highlight, content: transcriptEntry(entry, session: session, speed: speed))
+            }
             if entry.isLastInRow { appendRecords(byRow[entry.rowKey] ?? []) }
         }
         if records.contains(where: { $0.afterRow != nil }) {
@@ -545,6 +568,63 @@ struct ConversationView: View {
         append("transcriptEnd", revision: 0, content: Color.clear.frame(height: 18).accessibilityHidden(true))
         rowCache.end(keeping: result)
         return result
+    }
+
+    /// The entries drawn as native prose: a reply, a reply inside a turn's process, and a finished turn's line.
+    /// Everything else (tools, thoughts, user messages, cards) keeps its SwiftUI view.
+    private static func proseContent(_ entry: ConversationRenderPlan.Entry, speed: SpeedTag?, highlight: ConversationFindHighlight?) -> TranscriptProseContent? {
+        switch entry.content {
+        case let .row(row):
+            guard let single = row as? TimelineRowSingle, let assistant = single.item as? TimelineItemAssistant else { return nil }
+            let active = single.footer == .held
+            let footer = single.footer == .shown && !active ? TranscriptProseFooter(text: assistant.text) : nil
+            return TranscriptProseContent(source: assistant.text, stateID: "item." + assistant.key, live: active, footer: footer,
+                                          nested: false, top: entry.topSpacing, highlight: highlight)
+        case let .item(item, process, nested):
+            guard let assistant = item as? TimelineItemAssistant else { return nil }
+            return TranscriptProseContent(source: assistant.text, stateID: "item." + assistant.key, live: process.turnActive, footer: nil,
+                                          nested: nested, top: entry.topSpacing, highlight: highlight)
+        case let .footer(process):
+            guard let answer = process.answerText else { return nil }
+            let parts = [ServerTime.date(process.endedAt)?.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)), speed?.label].compactMap { $0 }
+            return TranscriptProseContent(source: "", stateID: entry.id, live: false, footer: TranscriptProseFooter(text: answer, time: parts.isEmpty ? nil : parts.joined(separator: " · ")),
+                                          nested: false, top: entry.topSpacing, highlight: nil)
+        default:
+            return nil
+        }
+    }
+
+    /// Points the transcript's prose at this page: its links open the page's sheets, quoting fills the draft.
+    private func prepareProseActions(_ session: Session, draft: MessageDraft) -> TranscriptProseActions {
+        let actions = proseActions
+        let projectID = session.projectId
+        actions.open = { [workbench] url in
+            switch ConversationLinkTarget.route(url, workbench: workbench, projectID: projectID) {
+            case let .some(.page(target)): linkTarget = target
+            case .some(.system): UIApplication.shared.open(url)
+            case nil: break
+            }
+        }
+        actions.quote = { quote($0, into: draft) }
+        actions.selectText = { selection = ConversationSelection(text: $0) }
+        actions.block = { [workbench] block in Self.proseBlock(block, workbench: workbench, projectID: projectID) }
+        return actions
+    }
+
+    /// The SwiftUI view of a block inside drawn prose, as `ConversationMarkdown` draws it.
+    @MainActor private static func proseBlock(_ block: TranscriptProseBlock, workbench: Workbench, projectID: String) -> AnyView {
+        switch block.kind {
+        case let .code(language, text, stateID):
+            return AnyView(ConversationCode(text: text, language: language, workbench: workbench, projectID: projectID, stateID: stateID))
+        case let .math(tex):
+            return AnyView(ConversationMath(tex: tex, workbench: workbench))
+        case let .image(alt, src):
+            return AnyView(ConversationImage(workbench: workbench, projectID: projectID, source: src, label: alt))
+        case let .visualization(path, title):
+            return AnyView(ConversationVisualizationLink(workbench: workbench, projectID: projectID, path: path, title: title))
+        case let .table(header, rows, alignments):
+            return AnyView(ConversationMarkdownTable(header: header, rows: rows, alignments: alignments, origin: workbench.baseURL))
+        }
     }
 
     private func rowRevision(_ values: AnyHashable...) -> AnyHashable {

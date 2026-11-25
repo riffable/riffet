@@ -13,6 +13,9 @@
 //       Opens the session in the running app (PerfProbe) and prints the stalls in the next seconds (default 6).
 //   node scripts/ios-perf.mjs type [count,interval-ms]
 //       Types into the composer on screen (default 150 characters, one per 60 ms) and prints the stalls.
+//   node scripts/ios-perf.mjs history
+//       Reads the open conversation's older history until it stops growing (PerfProbe), so a following
+//       `scroll` crosses rows that were never on screen; prints the pages read and the stalls meanwhile.
 //   node scripts/ios-perf.mjs stalls <seconds>
 //       Collects the stalls logged while you drive the app, then prints their count, sum and largest.
 //   node scripts/ios-perf.mjs scroll <speed,distance,cycles>...
@@ -39,11 +42,12 @@ if (command === 'seed') await seed(rest[0], option('--server', 'http://127.0.0.1
 else if (command === 'launch') launch();
 else if (command === 'open') await open(rest[0], Number(rest[1] ?? 6));
 else if (command === 'type') await type(rest[0] ?? '150,60');
+else if (command === 'history') await history();
 else if (command === 'stalls') report(await collect(Number(rest[0] ?? 5) * 1000), 'stalls');
 else if (command === 'scroll') for (const spec of rest) await scroll(spec);
 else if (command === 'sample') sample(Number(rest[0] ?? 5), rest[1]);
 else {
-  console.error('usage: ios-perf.mjs seed <dir> | launch [--open <id>] [--stall-ms n] | open <id> [s] | type [n,ms] | stalls <s> | scroll <speed,distance,cycles>... | sample <s> [filter]');
+  console.error('usage: ios-perf.mjs seed <dir> | launch [--open <id>] [--stall-ms n] | open <id> [s] | type [n,ms] | history | stalls <s> | scroll <speed,distance,cycles>... | sample <s> [filter]');
   process.exit(2);
 }
 
@@ -70,6 +74,15 @@ async function type(spec) {
   simctl('spawn', device, 'notifyutil', '-p', `${bundle}.perf.type`);
   const seen = await lines;
   console.log(seen.find((line) => / typed /.test(line))?.replace(/.* typed /, 'typed ') ?? 'no result (is the composer on screen?)');
+  report(seen, '  stalls');
+}
+
+async function history() {
+  const lines = collect(300_000, / history (pages=|: no)/);
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  simctl('spawn', device, 'notifyutil', '-p', `${bundle}.perf.history`);
+  const seen = await lines;
+  console.log(seen.find((line) => / history /.test(line))?.replace(/.* history/, 'history') ?? 'no result');
   report(seen, '  stalls');
 }
 

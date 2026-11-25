@@ -185,8 +185,15 @@ actor ConversationSyntax {
             return output
         }
     }
-    private let cache: NSCache<NSString, Result> = CacheRegistry.cache("conversation.highlights", bytes: CacheRegistry.Budget.highlights)
+    /// NSCache is thread-safe; `cached` reads it from the transcript's layout queue.
+    nonisolated(unsafe) private let cache: NSCache<NSString, Result> = CacheRegistry.cache("conversation.highlights", bytes: CacheRegistry.Budget.highlights)
     private var function: JSValue?
+
+    /// A result already highlighted, without waiting on the highlighter; nil when it has not run yet.
+    nonisolated func cached(_ text: String, language: String) -> Result? {
+        guard let language = Self.language(language) else { return nil }
+        return cache.object(forKey: "\(language)\0\(text)" as NSString)
+    }
     private var loaded = false
 
     func highlight(_ text: String, language: String) -> Result? {

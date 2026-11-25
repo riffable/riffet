@@ -326,3 +326,57 @@ private struct SearchFold: UIViewControllerRepresentable {
         }
     }
 }
+
+// MARK: - Deferred menu
+
+/// An icon button whose menu is built when it opens. SwiftUI's `Menu` builds the whole menu, resolving
+/// every item's symbol in the asset catalog, each time the row holding it is built; one under every reply
+/// did that for each row scrolled in (ios-performance.md §2.18).
+final class RiffetDeferredMenuButton: UIButton {
+    /// The menu's items, asked for each time it opens.
+    var items: () -> [UIMenuElement] = { [] }
+
+    init() {
+        super.init(frame: .zero)
+        var configuration = UIButton.Configuration.plain()
+        configuration.contentInsets = .zero
+        self.configuration = configuration
+        contentHorizontalAlignment = .leading
+        showsMenuAsPrimaryAction = true
+        menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in completion(self?.items() ?? []) }])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    /// Shows `symbol` in the role's font and `color`; the same image is not set twice.
+    func show(symbol: String, font: UIFont, color: UIColor) {
+        guard symbol != shownSymbol || font != shownFont || color != shownColor else { return }
+        shownSymbol = symbol; shownFont = font; shownColor = color
+        configuration?.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(font: font))
+        configuration?.baseForegroundColor = color
+    }
+    private var shownSymbol: String?
+    private var shownFont: UIFont?
+    private var shownColor: UIColor?
+}
+
+/// `RiffetDeferredMenuButton` in SwiftUI.
+struct RiffetDeferredMenu: UIViewRepresentable {
+    let symbol: String
+    var role: RiffetText = .label
+    var weight: Font.Weight? = nil
+    let color: Color
+    let accessibilityLabel: String
+    let items: () -> [UIMenuElement]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    func makeUIView(context: Context) -> RiffetDeferredMenuButton {
+        let button = RiffetDeferredMenuButton()
+        button.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return button
+    }
+    func updateUIView(_ button: RiffetDeferredMenuButton, context: Context) {
+        button.items = items
+        button.show(symbol: symbol, font: role.uiFont(weight: weight, compatibleWith: button.traitCollection), color: UIColor(color))
+        button.accessibilityLabel = accessibilityLabel
+    }
+}

@@ -31,10 +31,10 @@ final class ConversationTranscriptProbe {
     }
 
     /// Paragraphs drawing find's mark: the one in a cell, and any the list's sizing host measures off screen.
-    let markViews = NSHashTable<UITextView>.weakObjects()
+    let markViews = NSHashTable<UIView>.weakObjects()
     /// Told when a paragraph starts drawing the mark, which it may do after the list scrolled to its cell.
     var markChanged: () -> Void = {}
-    func report(_ view: UITextView, marked: Bool) {
+    @MainActor func report(_ view: some ConversationFindMarking, marked: Bool) {
         if marked {
             markViews.add(view)
             DispatchQueue.main.async { [weak self] in self?.markChanged() }
@@ -55,6 +55,8 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         let id: String
         let revision: AnyHashable
         let content: AnyView
+        /// Laid out off the main thread and drawn natively instead of `content` (ios-performance.md §2.16).
+        var prose: TranscriptProseContent? = nil
     }
 
     /// `find` brings find's mark into view: the line it is drawn on when the cell's paragraph reports it,
@@ -86,6 +88,12 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
     let onReady: () -> Void
     var onFeedbackVisibility: ((Bool) -> Void)? = nil
     var probe: ConversationTranscriptProbe? = nil
+    /// What prose rows reach outside the list; required when any row has `prose`.
+    var proseActions: TranscriptProseActions? = nil
+    /// The server, for inline formulas in prose.
+    var origin: URL? = nil
+    /// The code theme prose rows highlight code blocks with.
+    var codeTheme: RiffetCodeThemeValues? = nil
 
     func makeUIViewController(context: Context) -> Controller { Controller(configuration: self, environment: context.environment) }
     func updateUIViewController(_ controller: Controller, context: Context) { controller.update(self, environment: context.environment) }
@@ -114,6 +122,8 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private var orderedRows: [Row] = []
         private var orderedIDs: [String] = []
         private var appliedRevisions: [String: AnyHashable] = [:]
+        /// Rows of the applied snapshot drawn as prose (`TranscriptProseCell`), the rest by `TranscriptCell`.
+        private var appliedProse: Set<String> = []
         private var viewportHeight: CGFloat?
         /// Rows to refit for a new viewport height, at the next snapshot.
         private var viewportChanged: Set<String> = []
@@ -168,6 +178,23 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private var revealed = false
         private var feedbackRevealed = false
         private var revealDeadline: DispatchWorkItem?
+        private var proseRegistration: UICollectionView.CellRegistration<TranscriptProseCell, String>!
+        /// Prose rows laid out, by row id, with the fingerprint they were laid out for.
+        private var proseLayouts: [String: (fingerprint: String, layout: TranscriptProseLayout, cost: Int)] = [:]
+        private var proseCost = 0
+        /// What was left after the last trim when the rows it may not drop held more than the budget: no trim
+        /// again until the cost grows past it by a quarter of the budget, or every layout stored would sort all rows.
+        private var proseTrimFloor = 0
+        /// Fingerprints on the layout queue.
+        private var proseQueued: Set<String> = []
+        private var proseScheduled = false
+        private var proseStyle: (revision: Int, codeTheme: String?, palette: String, style: TranscriptProseStyle)?
+        /// Inline formulas already asked for, so a formula that fails to render is not asked for on every pass.
+        private var requestedFormulas: Set<ConversationInlineMathRequest> = []
+        /// Code highlighted or being highlighted, by `hashValue`: each is asked for once, so a result too large
+        /// for the highlighter's cache cannot start a highlight and relayout loop.
+        private var requestedHighlights: Set<Int> = []
+        private static let proseQueue = DispatchQueue(label: "io.github.riffable.transcript.prose", qos: .userInitiated)
 
         init(configuration: ConversationTranscriptList, environment: EnvironmentValues) {
             self.configuration = configuration
@@ -233,8 +260,15 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 guard let row = self?.rowsByID[id] else { cell.contentConfiguration = nil; return }
                 self?.configure(cell, row: row)
             }
+            proseRegistration = UICollectionView.CellRegistration<TranscriptProseCell, String> { [weak self] cell, _, id in
+                guard let self, let row = self.rowsByID[id], row.prose != nil else { cell.prose.prepareForReuse(); return }
+                self.configureProse(cell, row: row)
+            }
             dataSource = UICollectionViewDiffableDataSource<Int, String>(collectionView: collection) { [weak self] collection, indexPath, id in
                 guard let self else { return nil }
+                if self.rowsByID[id]?.prose != nil {
+                    return collection.dequeueConfiguredReusableCell(using: self.proseRegistration, for: indexPath, item: id)
+                }
                 return collection.dequeueConfiguredReusableCell(using: self.registration, for: indexPath, item: id)
             }
             update(configuration, environment: pendingParentEnvironment ?? hostingEnvironment.values)
@@ -270,6 +304,227 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 })
             }.margins(.all, 0).minSize(width: 0, height: 0)
             cell.isAccessibilityElement = false
+        }
+
+        // MARK: Prose rows (ios-performance.md §2.16)
+
+        private var proseWidth: CGFloat { TranscriptLayout.columnWidth(collection.bounds.width) }
+
+        private func currentProseStyle() -> TranscriptProseStyle? {
+            guard let origin = configuration.origin else { return nil }
+            let codeTheme = configuration.codeTheme
+            let palette = hostingEnvironment.values.palette
+            if let proseStyle, proseStyle.revision == environmentRevision, proseStyle.codeTheme == codeTheme?.id, proseStyle.palette == palette.id { return proseStyle.style }
+            let style = TranscriptProseStyle(palette: palette, codeTheme: codeTheme ?? RiffetCodeThemeCatalog.resolve(selection: "auto", uiThemeId: palette.id),
+                                             traits: collection.traitCollection, origin: origin, viewportHeight: viewportHeight ?? collection.bounds.height)
+            proseStyle = (environmentRevision, codeTheme?.id, palette.id, style)
+            return style
+        }
+
+        private func proseFingerprint(_ row: Row, width: CGFloat, style: TranscriptProseStyle) -> String {
+            "\(row.revision)|\(row.prose?.top ?? 0)|\(Int(width))|\(style.key)"
+        }
+
+        /// The row's layout at the current width: the one laid out for it, or laid out now (a row the list
+        /// must show at once). `stale` allows the last layout of this row when the current one is on the
+        /// layout queue, so a streaming reply keeps its text until the longer version is ready.
+        private func proseLayout(_ row: Row, allowStale: Bool) -> TranscriptProseLayout? {
+            guard let content = row.prose, let style = currentProseStyle() else { return nil }
+            let width = proseWidth
+            guard width > 0 else { return nil }
+            let fingerprint = proseFingerprint(row, width: width, style: style)
+            if let entry = proseLayouts[row.id] {
+                if entry.fingerprint == fingerprint { return entry.layout }
+                if allowStale, entry.layout.width == width {
+                    queueProse([(row.id, content, fingerprint)], style: style, width: width)
+                    return entry.layout
+                }
+            }
+            let layout = TranscriptProse.layout(content, width: width, style: style)
+            storeProse(row.id, fingerprint: fingerprint, layout: layout)
+            return layout
+        }
+
+        private func storeProse(_ id: String, fingerprint: String, layout: TranscriptProseLayout) {
+            let cost = max(1, layout.copyText.utf16.count * 64)
+            if let old = proseLayouts.updateValue((fingerprint, layout, cost), forKey: id) { proseCost -= old.cost }
+            proseCost += cost
+            self.layout.remember(height: layout.height, width: layout.width, for: id)
+            measuredFingerprints[id] = nil
+            trimProse()
+        }
+
+        /// Keeps laid-out rows within their share of the text budget, dropping those farthest from the reader.
+        /// Rows on screen and within reach of it (`scheduleProse`'s window) stay, over budget if need be:
+        /// dropping them would lay them out again on the next scroll, and again after that.
+        private func trimProse() {
+            let budget = CacheRegistry.Budget.proseLayouts / 2
+            guard proseCost > max(budget, proseTrimFloor + budget / 4) else { return }
+            let around = viewport.insetBy(dx: 0, dy: -3 * max(collection.bounds.height, 1))
+            let kept = Set((layout.layoutAttributesForElements(in: around) ?? []).compactMap { dataSource.itemIdentifier(for: $0.indexPath) })
+            let visible = collection.indexPathsForVisibleItems.map(\.item)
+            let center = visible.isEmpty ? orderedIDs.count : visible.reduce(0, +) / visible.count
+            var index: [String: Int] = [:]
+            for (i, id) in orderedIDs.enumerated() { index[id] = i }
+            let farthest = proseLayouts.keys.sorted { abs((index[$0] ?? Int.max / 2) - center) > abs((index[$1] ?? Int.max / 2) - center) }
+            for id in farthest where proseCost > budget * 3 / 4 && !kept.contains(id) {
+                if let entry = proseLayouts.removeValue(forKey: id) { proseCost -= entry.cost }
+            }
+            proseTrimFloor = proseCost > budget ? proseCost : 0
+        }
+
+        private func configureProse(_ cell: TranscriptProseCell, row: Row) {
+            guard let content = row.prose else { return }
+            cell.backgroundConfiguration = .clear()
+            let prose = cell.prose
+            prose.actions = configuration.proseActions
+            prose.environment = hostingEnvironment
+            prose.probe = configuration.probe
+            prose.onRead = { [weak self] id in self?.beginReading(id) }
+            prose.onResized = { [weak self] id, resized in self?.proseResized(id, resized) }
+            prose.onCodeToggled = { [weak self] id in self?.relayoutProse(id) }
+            guard let layout = proseLayout(row, allowStale: true) else { return }
+            prose.apply(layout, row: row.id, highlight: content.highlight, palette: hostingEnvironment.values.palette)
+            proseShown(row.id, layout)
+        }
+
+        /// A prose layout went on screen: fetch what it drew without (formulas, highlighting).
+        private func proseShown(_ id: String, _ layout: TranscriptProseLayout) {
+            if let pending = layout.pendingFormulas.first(where: { !requestedFormulas.contains($0) }) { renderFormulas(for: id, starting: pending, in: layout) }
+            if layout.pendingHighlights.contains(where: { !requestedHighlights.contains($0.hashValue) }) { renderHighlights(for: id, in: layout) }
+        }
+
+        private func dropProse(_ id: String) {
+            if let entry = proseLayouts.removeValue(forKey: id) { proseCost -= entry.cost }
+        }
+
+        /// Lays a row out again now, in place: a code block was expanded or collapsed, formulas arrived.
+        private func relayoutProse(_ id: String) {
+            guard active else { return }
+            dropProse(id)
+            guard let row = rowsByID[id], let path = dataSource.indexPath(for: id),
+                  let cell = collection.cellForItem(at: path) as? TranscriptProseCell, cell.prose.rowID == id,
+                  let layout = proseLayout(row, allowStale: false) else { return }
+            cell.prose.apply(layout, row: id, highlight: row.prose?.highlight, palette: hostingEnvironment.values.palette)
+            updateVisibleProse(cell)
+            proseShown(id, layout)
+            contentHeightChanged(id, layout.height)
+        }
+
+        /// Highlights a row's code blocks off the main thread, then lays the row out again on the layout
+        /// queue. Waits a moment first, as `ConversationCode` does: a block still streaming is not highlighted
+        /// at every revision.
+        private func renderHighlights(for id: String, in layout: TranscriptProseLayout) {
+            let missing = layout.pendingHighlights.filter { !requestedHighlights.contains($0.hashValue) }
+            requestedHighlights.formUnion(missing.map(\.hashValue))
+            let token = lifetime
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(100))
+                var any = false
+                for request in missing {
+                    guard let self, self.lifetime == token else { return }
+                    // Superseded (the block grew) or scrolled away: let a later layout ask again.
+                    guard self.proseLayouts[id]?.layout.pendingHighlights.contains(request) == true else { self.requestedHighlights.remove(request.hashValue); continue }
+                    if await ConversationSyntax.shared.highlight(request.text, language: request.language) != nil { any = true }
+                }
+                guard any, let self, self.active, self.lifetime == token, let row = self.rowsByID[id], let content = row.prose,
+                      let style = self.currentProseStyle() else { return }
+                let width = self.proseWidth
+                self.queueProse([(id, content, self.proseFingerprint(row, width: width, style: style))], style: style, width: width, replacing: true)
+            }
+        }
+
+        /// A prose cell moved what is below a hosted block that settled to a new height (`TranscriptProseView`).
+        /// The cell has the layout already, including one being prepared and not on screen yet.
+        private func proseResized(_ id: String, _ resized: TranscriptProseLayout) {
+            guard active else { return }
+            if let entry = proseLayouts[id], entry.layout.width == resized.width { proseLayouts[id] = (entry.fingerprint, resized, entry.cost) }
+            contentHeightChanged(id, resized.height)
+        }
+
+        /// Asks for a row's inline formulas once; the row is laid out again when they arrive.
+        private func renderFormulas(for id: String, starting first: ConversationInlineMathRequest, in layout: TranscriptProseLayout) {
+            let missing = layout.pendingFormulas.filter { !requestedFormulas.contains($0) }
+            requestedFormulas.formUnion(missing)
+            let token = lifetime
+            Task { @MainActor [weak self] in
+                var any = false
+                for request in missing where await ConversationInlineMathRenderer.shared.image(request) != nil { any = true }
+                guard any, let self, self.lifetime == token else { return }
+                self.relayoutProse(id)
+            }
+        }
+
+        /// Lays out on the layout queue the prose rows within a few screens of the viewport that have no layout
+        /// at this width yet, nearest first, so a row is ready before it scrolls in.
+        private func scheduleProse() {
+            guard active, !proseScheduled else { return }
+            proseScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.active else { return }
+                self.proseScheduled = false
+                guard let style = self.currentProseStyle() else { return }
+                let width = self.proseWidth
+                guard width > 0 else { return }
+                let screen = max(self.collection.bounds.height, 1)
+                let around = self.viewport.insetBy(dx: 0, dy: -3 * screen)
+                let middle = self.viewport.midY
+                let attributes = (self.layout.layoutAttributesForElements(in: around) ?? []).sorted { abs($0.frame.midY - middle) < abs($1.frame.midY - middle) }
+                var jobs: [(String, TranscriptProseContent, String)] = []
+                for attribute in attributes {
+                    guard let id = self.dataSource.itemIdentifier(for: attribute.indexPath), let row = self.rowsByID[id], let content = row.prose else { continue }
+                    let fingerprint = self.proseFingerprint(row, width: width, style: style)
+                    if self.proseLayouts[id]?.fingerprint == fingerprint { continue }
+                    jobs.append((id, content, fingerprint))
+                }
+                self.queueProse(jobs, style: style, width: width)
+            }
+        }
+
+        /// `replacing` lays out again rows whose layout is current: what they drew without has arrived.
+        private func queueProse(_ jobs: [(String, TranscriptProseContent, String)], style: TranscriptProseStyle, width: CGFloat, replacing: Bool = false) {
+            let fresh = replacing ? jobs : jobs.filter { !proseQueued.contains($0.2) }
+            guard !fresh.isEmpty else { return }
+            proseQueued.formUnion(fresh.map(\.2))
+            let token = lifetime
+            Self.proseQueue.async { [weak self] in
+                for (id, content, fingerprint) in fresh {
+                    let layout = TranscriptProse.layout(content, width: width, style: style)
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.proseQueued.remove(fingerprint)
+                        guard self.active, self.lifetime == token, let row = self.rowsByID[id], row.prose != nil,
+                              replacing || self.proseLayouts[id]?.fingerprint != fingerprint,
+                              let current = self.currentProseStyle(), self.proseFingerprint(row, width: self.proseWidth, style: current) == fingerprint else { return }
+                        let shownHeight = self.layout.knownHeight(id)?.height
+                        self.storeProse(id, fingerprint: fingerprint, layout: layout)
+                        if let path = self.dataSource.indexPath(for: id) {
+                            if let cell = self.collection.cellForItem(at: path) as? TranscriptProseCell {
+                                cell.prose.apply(layout, row: id, highlight: row.prose?.highlight, palette: self.hostingEnvironment.values.palette)
+                                self.updateVisibleProse(cell)
+                                self.proseShown(id, layout)
+                            }
+                            if shownHeight.map({ abs($0 - layout.height) > 0.5 }) ?? true { self.contentHeightChanged(id, layout.height) }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// Tells each prose cell on screen which part of it shows, so it builds views only for that part.
+        /// The row's frame from the layout, not the cell's: a cell being dequeued or prepared is not placed yet.
+        /// The list's whole bounds, insets included: rows under the bars show through them.
+        private func updateVisibleProse(_ only: TranscriptProseCell? = nil) {
+            for path in collection.indexPathsForVisibleItems {
+                guard let cell = collection.cellForItem(at: path) as? TranscriptProseCell, only == nil || only === cell,
+                      let frame = layout.layoutAttributesForItem(at: path)?.frame else { continue }
+                cell.showVisible(of: collection, frame: frame)
+            }
+        }
+
+        func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+            guard let prose = cell as? TranscriptProseCell, let frame = layout.layoutAttributesForItem(at: indexPath)?.frame else { return }
+            prose.showVisible(of: collection, frame: frame)
         }
 
         /// Content that settles after the cell is shown (a loaded image, rendered math, a disclosure)
@@ -369,6 +624,8 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 self.environmentRefreshScheduled = false
                 if let values = self.pendingParentEnvironment {
                     self.pendingParentEnvironment = nil
+                    // Prose rows are drawn with the theme's colours, not observed: another theme lays them out again.
+                    if values.palette.id != self.hostingEnvironment.values.palette.id { self.environmentRevision &+= 1 }
                     self.hostingEnvironment.values = values
                 }
                 if self.hostingEnvironment.viewportHeight != self.viewportHeight { self.hostingEnvironment.viewportHeight = self.viewportHeight }
@@ -525,8 +782,13 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 // no estimate-sized gaps for the rows below to slide across.
                 if readerChanging { let previousSet = Set(previousIDs); measureEntering(orderedIDs.filter { !previousSet.contains($0) }) }
             }
-            if !changedExisting.isEmpty { snapshot.reconfigureItems(changedExisting) }
+            // Reconfiguring keeps the cell, so a row that changes between prose and hosted is reloaded instead.
+            let switched = changedExisting.filter { (rowsByID[$0]?.prose != nil) != appliedProse.contains($0) }
+            if !switched.isEmpty { snapshot.reloadItems(switched) }
+            let reconfigured = switched.isEmpty ? changedExisting : changedExisting.filter { !switched.contains($0) }
+            if !reconfigured.isEmpty { snapshot.reconfigureItems(reconfigured) }
             let revisions = rowsByID.mapValues(\.revision)
+            let prose = Set(rowsByID.compactMap { $0.value.prose != nil ? $0.key : nil })
             let environment = environmentRevision
             let token = lifetime
             viewportChanged.removeAll()
@@ -535,12 +797,14 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             dataSource.apply(snapshot, animatingDifferences: identifiersChanged && animatesReaderChange) { [weak self] in
                 guard let self, self.active, self.lifetime == token else { return }
                 self.appliedRevisions = revisions
+                self.appliedProse = prose
                 self.appliedEnvironmentRevision = environment
                 self.appliedTopKey = topKey
                 if identifiersChanged { self.appliedMembershipGeneration &+= 1 }
                 self.applyingSnapshot = false
                 if self.needsSnapshot && self.readingAnchor == nil { self.needsSnapshot = false; self.applyLatestRows() }
                 self.adoptReportedHeights()
+                self.scheduleProse()
                 self.collection.setNeedsLayout()
             }
         }
@@ -556,6 +820,10 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             var measured: CGFloat = 0
             for id in ids.prefix(64) {
                 guard measured < budget, let row = rowsByID[id] else { break }
+                if row.prose != nil {
+                    if let prose = proseLayout(row, allowStale: false) { measured += prose.height }
+                    continue
+                }
                 let fingerprint = "\(row.revision)|\(environmentRevision)"
                 if let known = layout.knownHeight(id), known.width == width, measuredFingerprints[id] == fingerprint {
                     measured += known.height; continue
@@ -714,7 +982,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private func findMarkRect(at path: IndexPath) -> CGRect? {
             guard let cell = collection.cellForItem(at: path), let views = configuration.probe?.markViews.allObjects else { return nil }
             for view in views where view.window != nil && view.isDescendant(of: cell) {
-                if let rect = view.findMarkRect { return collection.convert(rect, from: view) }
+                if let marking = view as? ConversationFindMarking, let rect = marking.findMarkRect { return collection.convert(rect, from: view) }
             }
             return nil
         }
@@ -821,7 +1089,11 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             }
         }
 
-        func scrollViewDidScroll(_ scrollView: UIScrollView) { if !applyingSnapshot { queuePosition() } }
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            updateVisibleProse()
+            scheduleProse()
+            if !applyingSnapshot { queuePosition() }
+        }
         func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool { readingAnchor = nil; heldRow = nil; findCell = nil; return true }
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             detachedByUser = true
@@ -858,6 +1130,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             collection?.didLayout = nil; collection?.didChangeContentSize = nil; collection?.willScrollForAccessibility = nil
             pendingRequest = nil; pendingAlignment = nil; readingAnchor = nil; heldRow = nil; deferredRows = false
             sizingHost = nil
+            proseLayouts.removeAll(); proseCost = 0; proseTrimFloor = 0; requestedHighlights.removeAll()
             interactionEvents.removeAll(); pendingPosition = nil; reportedHeights.removeAll()
             revealDeadline?.cancel(); revealDeadline = nil
             pendingParentEnvironment = nil
@@ -868,7 +1141,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
 /// A stable observed root forwards the complete parent environment without recreating cell
 /// configurations on every SwiftUI update. Publication happens outside representable updates.
 @MainActor @Observable
-private final class TranscriptHostingEnvironment {
+final class TranscriptHostingEnvironment {
     var values: EnvironmentValues
     var viewportHeight: CGFloat?
     init(values: EnvironmentValues) { self.values = values }

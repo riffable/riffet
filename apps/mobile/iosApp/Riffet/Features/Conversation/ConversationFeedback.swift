@@ -126,9 +126,12 @@ struct ConversationCopyVisibility: ViewModifier {
     private var visible: Bool { active && appeared && fullFrame && scenePhase == .active }
     func body(content: Content) -> some View {
         content
-            .background(ConversationFeedbackProbe { fullFrame = $0 })
+            // Only while the check mark shows: the probe follows the transcript's offset on every frame, and
+            // one under each reply did that for all of them (ios-performance.md §2.19).
+            .background { if feedback.copied { ConversationFeedbackProbe { fullFrame = $0 } } }
             .onAppear { appeared = true }
             .onChange(of: visible, initial: true) { _, value in feedback.visibility(value) }
+            .onChange(of: feedback.copied) { _, copied in if !copied { fullFrame = false } }
             .onDisappear { appeared = false; feedback.visibility(false) }
     }
 }
@@ -181,6 +184,7 @@ private struct ConversationFeedbackProbe: UIViewRepresentable {
         var onVisibility: ((Bool) -> Void)?
         private var reported: Bool?
         private weak var observedScroll: UIScrollView?
+        private var measureQueued = false
         private var scrollObservation: NSKeyValueObservation?
         override func didMoveToWindow() { super.didMoveToWindow(); observeViewport(); measure() }
         override func didMoveToSuperview() { super.didMoveToSuperview(); observeViewport(); measure() }
@@ -194,7 +198,10 @@ private struct ConversationFeedbackProbe: UIViewRepresentable {
             scrollObservation = nil
             observedScroll = scroll
             scrollObservation = scroll?.observe(\.contentOffset, options: [.new]) { [weak self] _, _ in
-                DispatchQueue.main.async { [weak self] in self?.measure() }
+                // One measure per run-loop turn, however many offsets arrived in it.
+                guard let self, !self.measureQueued else { return }
+                self.measureQueued = true
+                DispatchQueue.main.async { [weak self] in self?.measureQueued = false; self?.measure() }
             }
         }
         func measure() {

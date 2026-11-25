@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // The iPhone's design layer: the type scale, metrics, motion and the few drawn
 // components every page shares. The generated regions come from the ios style in
@@ -53,6 +54,31 @@ enum RiffetText {
         case .barTitle: .headline
         case .label: .subheadline
         case .caption, .monoSmall: .footnote
+        }
+    }
+}
+
+extension RiffetText {
+    /// The role as a UIKit font, scaled with Dynamic Type for `traits` the way `riffetFont` scales it.
+    /// For UIKit drawing the transcript does off the main thread (`TranscriptProse`); safe on any thread.
+    func uiFont(weight: Font.Weight? = nil, compatibleWith traits: UITraitCollection? = nil) -> UIFont {
+        let resolved = Self.uiWeight(weight ?? self.weight)
+        let base: UIFont = design == .monospaced ? .monospacedSystemFont(ofSize: size, weight: resolved) : .systemFont(ofSize: size, weight: resolved)
+        let textStyle: UIFont.TextStyle = switch style {
+        case .headline: .headline
+        case .subheadline: .subheadline
+        case .footnote: .footnote
+        default: .body
+        }
+        return UIFontMetrics(forTextStyle: textStyle).scaledFont(for: base, compatibleWith: traits)
+    }
+    private static func uiWeight(_ weight: Font.Weight) -> UIFont.Weight {
+        switch weight {
+        case .medium: .medium
+        case .semibold: .semibold
+        case .bold: .bold
+        case .light: .light
+        default: .regular
         }
     }
 }

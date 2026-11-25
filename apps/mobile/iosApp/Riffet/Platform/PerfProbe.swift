@@ -14,6 +14,8 @@ import UIKit
 ///   the `perf` category, next to `StallMonitor`'s stalls.
 /// - `notifyutil -p io.github.riffable.iphone.perf.type` types into the composer as `riffet.perf.type`
 ///   describes (`count,interval-ms`).
+/// - `notifyutil -p io.github.riffable.iphone.perf.history` reads the open conversation's older history
+///   page by page until it stops growing, so a scroll then crosses rows that were never on screen.
 @MainActor
 enum PerfProbe {
     private static let log = Logger(subsystem: "io.github.riffable.iphone", category: "perf")
@@ -31,6 +33,9 @@ enum PerfProbe {
         CFNotificationCenterAddObserver(center, nil, { _, _, _, _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { PerfProbe.typeText() } }
         }, "io.github.riffable.iphone.perf.type" as CFString, nil, .deliverImmediately)
+        CFNotificationCenterAddObserver(center, nil, { _, _, _, _, _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { PerfProbe.loadHistory() } }
+        }, "io.github.riffable.iphone.perf.history" as CFString, nil, .deliverImmediately)
         // Opening a link from outside asks for confirmation on the simulator; this opens it in place.
         CFNotificationCenterAddObserver(center, nil, { _, _, _, _, _ in
             DispatchQueue.main.async { MainActor.assumeIsolated { PerfProbe.openLink() } }
@@ -40,6 +45,26 @@ enum PerfProbe {
     private static func openLink() {
         guard let link = UserDefaults.standard.string(forKey: "riffet.perf.open"), let url = URL(string: link) else { return }
         model?.open(url)
+    }
+
+    private static var history: Task<Void, Never>?
+    private static func loadHistory() {
+        guard history == nil, let workbench = model?.workbench else { log.info("history: no conversation"); return }
+        history = Task { @MainActor in
+            defer { history = nil }
+            let rows: @MainActor () -> Int = { workbench.presentation?.grouping.rows.count ?? 0 }
+            var pages = 0, stale = 0
+            // A page that adds nothing twice in a row is the start of the transcript (or a failure).
+            while stale < 2 && pages < 200 {
+                let before = rows()
+                workbench.loadOlder()
+                try? await Task.sleep(for: .milliseconds(300))
+                while workbench.loadingHistory { try? await Task.sleep(for: .milliseconds(100)) }
+                try? await Task.sleep(for: .milliseconds(400))
+                if rows() > before { pages += 1; stale = 0 } else { stale += 1 }
+            }
+            log.info("history pages=\(pages) rows=\(rows())")
+        }
     }
 
     private static func scroll() {

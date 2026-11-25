@@ -532,20 +532,28 @@ struct ConversationCopyActions: View {
         if !text.isEmpty || endedAt != nil || speed != nil {
             HStack(spacing: 4) {
                 if !text.isEmpty {
-                    Menu {
-                        Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = text; copyFeedback.copy() }
-                        if let selectText { Button("选择文字", systemImage: "selection.pin.in.out") { selectText(text) } }
-                        if let quote { Button("引用", systemImage: "text.quote") { quote(text) } }
-                    } label: {
-                        Image(systemName: copyFeedback.copied ? "checkmark" : "ellipsis").riffetFont(.label, weight: .medium).foregroundStyle(palette.fg4)
-                            .frame(width: 32, height: 32, alignment: .leading).contentShape(Rectangle().inset(by: -6))
-                    }.menuIndicator(.hidden).accessibilityLabel(copyFeedback.copied ? "已复制消息" : "更多").accessibilityIdentifier("messageCopy")
+                    // Built when it opens: a SwiftUI `Menu` here resolved its symbols for every reply scrolled in.
+                    RiffetDeferredMenu(symbol: copyFeedback.copied ? "checkmark" : "ellipsis", weight: .medium, color: palette.fg4,
+                                       accessibilityLabel: copyFeedback.copied ? String(localized: "已复制消息", bundle: .riffet) : String(localized: "更多", bundle: .riffet)) {
+                        ConversationCopyActions.menu(text: text, copied: copyFeedback.copy, selectText: selectText, quote: quote)
+                    }
+                    .frame(width: 32, height: 32).contentShape(Rectangle().inset(by: -6)).accessibilityIdentifier("messageCopy")
                 }
                 let parts = [endedAt?.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)), speed?.label].compactMap { $0 }
                 if !parts.isEmpty { Text(parts.joined(separator: " · ")).riffetFont(.caption).foregroundStyle(palette.fg4).monospacedDigit() }
             }.frame(maxWidth: .infinity, alignment: .leading)
                 .conversationCopyFeedback(copyFeedback)
         }
+    }
+
+    /// The reply menu, for this view and the transcript's native footer (`TranscriptProseView`).
+    static func menu(text: String, copied: @escaping () -> Void, selectText: ((String) -> Void)?, quote: ((String) -> Void)?) -> [UIMenuElement] {
+        var items: [UIMenuElement] = [UIAction(title: String(localized: "复制消息", bundle: .riffet), image: UIImage(systemName: "doc.on.doc")) { _ in
+            UIPasteboard.general.string = text; copied()
+        }]
+        if let selectText { items.append(UIAction(title: String(localized: "选择文字", bundle: .riffet), image: UIImage(systemName: "selection.pin.in.out")) { _ in selectText(text) }) }
+        if let quote { items.append(UIAction(title: String(localized: "引用", bundle: .riffet), image: UIImage(systemName: "text.quote")) { _ in quote(text) }) }
+        return items
     }
 }
 

@@ -72,16 +72,65 @@ struct ConversationCodePreview: View {
     let language: String
     let workbench: Workbench
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.palette) private var palette
+    @State private var image: UIImage?
+    @State private var failed = false
+    @State private var retry = 0
+    @State private var interactive = false
+
+    /// The transcript shows a picture drawn by the shared renderer after the row appeared: a web view
+    /// per block was created in the middle of scrolling. The live page opens on tap.
+    private var request: ConversationDiagramRequest {
+        ConversationDiagramRequest(origin: workbench.baseURL, source: source, language: language.lowercased(), dark: scheme == .dark, width: Self.pictureWidth)
+    }
+    /// The page width pictures are drawn at; the transcript reserves a picture's room by it.
+    @MainActor static var pictureWidth: Int { Int(min(UIScreen.main.bounds.width, RiffetMetrics.readingWidth).rounded()) }
+
     var body: some View {
-        if let url = Self.url(base: workbench.baseURL, source: source, language: language, dark: scheme == .dark) {
-            ConversationWebPage(workbench: workbench, url: url).frame(height: 320)
+        let request = request
+        let shown = image ?? ConversationDiagramImages.cachedImage(for: request)
+        let size = shown?.size ?? ConversationDiagramImages.size(for: request)
+        Group {
+            if let shown {
+                Button { interactive = true } label: {
+                    Image(uiImage: shown).resizable().aspectRatio(shown.size, contentMode: .fit).frame(maxWidth: shown.size.width)
+                }.buttonStyle(.plain).accessibilityLabel("预览")
+            } else if failed {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("预览加载失败", systemImage: "exclamationmark.triangle").riffetFont(.caption).foregroundStyle(palette.fg3)
+                    Button("重试") { failed = false; retry += 1 }.riffetFont(.caption)
+                }.padding(RiffetMetrics.groupGap).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).background(palette.bgSubtle).frame(height: size?.height ?? 320)
+            } else if let size, size.width > 0, size.height > 0 {
+                palette.bgSubtle.aspectRatio(size, contentMode: .fit).frame(maxWidth: size.width)
+            } else {
+                ProgressView().frame(maxWidth: .infinity).frame(height: 320).background(palette.bgSubtle)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: ConversationDiagramTaskID(request: request, retry: retry)) {
+            if let cached = ConversationDiagramImages.cachedImage(for: request) { image = cached; failed = false; return }
+            image = nil; failed = false
+            let next = await ConversationDiagramImages.image(for: request, workbench: workbench, retrying: retry > 0)
+            guard !Task.isCancelled else { return }
+            image = next; failed = next == nil
+        }
+        .sheet(isPresented: $interactive) {
+            NavigationStack {
+                Group {
+                    if let url = Self.url(base: workbench.baseURL, source: source, language: language, dark: scheme == .dark) {
+                        ConversationWebPage(workbench: workbench, url: url)
+                    }
+                }.toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { interactive = false } } }
+            }
         }
     }
+
+    private struct ConversationDiagramTaskID: Hashable { let request: ConversationDiagramRequest; let retry: Int }
 
     /// The source travels percent-encoded in the fragment, which walks all of it; a block is drawn on
     /// many passes but encoded once per source and theme.
     private static let urls: NSCache<NSString, NSURL> = CacheRegistry.cache("conversation.previewURLs", count: 64)
-    private static func url(base: URL, source: String, language: String, dark: Bool) -> URL? {
+    static func url(base: URL, source: String, language: String, dark: Bool) -> URL? {
         let key = "\(base.absoluteString)|\(dark)|\(language)|\(source)" as NSString
         if let known = urls.object(forKey: key) { return known as URL }
         guard var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
@@ -392,6 +441,8 @@ final class ConversationInlineMathRenderer: NSObject, WKNavigationDelegate {
     private(set) var lastFailure: String?
 
     func cached(_ request: ConversationInlineMathRequest) -> Rendered? { cache.object(forKey: request.cacheKey as NSString)?.rendered }
+    /// The same lookup from any thread (`NSCache` is thread-safe): the transcript lays prose out on a background queue.
+    nonisolated func cachedOffMain(_ request: ConversationInlineMathRequest) -> Rendered? { cache.object(forKey: request.cacheKey as NSString)?.rendered }
     func image(_ request: ConversationInlineMathRequest) async -> Rendered? {
         if let cached = cache.object(forKey: request.cacheKey as NSString) { return cached.rendered }
         guard !Task.isCancelled, request.url != nil, request.tex.utf16.count <= 4_096, waiting.count < 64 || waiting[request] != nil else { return nil }

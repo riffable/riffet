@@ -12,7 +12,9 @@ final class CacheRegistry: @unchecked Sendable {
         static let images = Int(BudgetsKt.IMAGE_CACHE_PHONE_DECODED_BYTES)
         static let text = Int(BudgetsKt.TEXT_CACHE_BYTES_PHONE)
         /// Shares of `text`. `MarkdownModel` takes half (a quarter for each of its two caches); these share the rest.
-        static let toolPresentations = text / 4
+        static let toolPresentations = text / 8
+        /// Laid-out transcript prose (`TranscriptProse`): whole rows and the text blocks they are built from.
+        static let proseLayouts = text / 8
         static let highlights = text * 3 / 16
         static let math = text / 16
     }

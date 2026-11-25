@@ -36,6 +36,7 @@ targets:
       - ../../macos/Riffet/Features/Transcript/BareURLs.swift
       - ../../macos/Riffet/Features/Transcript/MarkdownSource.swift
       - ../../macos/Riffet/Features/Transcript/UnderscoreEmphasis.swift
+      - ../../macos/Riffet/Features/Transcript/TextLayout.swift
       - path: ../../macos/Riffet/Resources/highlight.js
         type: file
         buildPhase: resources

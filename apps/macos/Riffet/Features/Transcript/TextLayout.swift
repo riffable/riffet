@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 
 extension NSAttributedString.Key {
     /// What an attachment run copies as (a formula's TeX, a checkbox's mark).
@@ -9,6 +13,7 @@ extension NSAttributedString.Key {
 
 /// Text laid out once with TextKit 1, on whichever thread builds it, and afterwards only drawn.
 /// Nothing re-lays it out: a different width or content is a different `TextLayout`.
+/// Compiled into the iPhone app too (its transcript prose, `TranscriptProse`); the views below are Mac only.
 final class TextLayout: @unchecked Sendable {
     let storage: NSTextStorage
     let manager: NSLayoutManager
@@ -21,9 +26,13 @@ final class TextLayout: @unchecked Sendable {
     init(_ text: NSAttributedString, width: CGFloat, wraps: Bool = true, maximumLines: Int = 0) {
         storage = NSTextStorage(attributedString: text)
         let manager = NSLayoutManager()
+        #if os(macOS)
         manager.backgroundLayoutEnabled = false
+        #endif
         manager.allowsNonContiguousLayout = false
+        #if os(macOS)
         manager.delegate = OwnLinkStyle.shared
+        #endif
         self.manager = manager
         container = NSTextContainer(size: CGSize(width: wraps ? max(1, width) : 1_000_000, height: 10_000_000))
         container.lineFragmentPadding = 0
@@ -38,7 +47,7 @@ final class TextLayout: @unchecked Sendable {
 
     /// Keep TextKit's selection widths, including selected newlines, without painting the space
     /// between lines or paragraphs. Used rects exclude paragraph spacing but include line spacing.
-    func enumerateHighlightRects(forGlyphRange range: NSRange, using body: @escaping (NSRect) -> Void) {
+    func enumerateHighlightRects(forGlyphRange range: NSRange, using body: @escaping (CGRect) -> Void) {
         let end = NSMaxRange(manager.glyphRange(for: container))
         let hasExtraLine = manager.extraLineFragmentTextContainer === container
         manager.enumerateLineFragments(forGlyphRange: range) { [self] _, used, _, lineGlyphs, _ in
@@ -53,7 +62,7 @@ final class TextLayout: @unchecked Sendable {
                 let top = max(rect.minY, used.minY)
                 let bottom = min(rect.maxY, used.maxY - spacing)
                 guard bottom > top else { return }
-                body(NSRect(x: rect.minX, y: top, width: rect.width, height: bottom - top))
+                body(CGRect(x: rect.minX, y: top, width: rect.width, height: bottom - top))
             }
         }
     }
@@ -62,8 +71,8 @@ final class TextLayout: @unchecked Sendable {
     /// across their line spacing instead of reading as stripes; each line stops where its text does
     /// (plus a sliver for a selected line break) rather than at the container's edge; the space
     /// between paragraphs stays open, so the selection keeps to the text as a highlight does.
-    func enumerateSelectionRects(forGlyphRange range: NSRange, using body: (NSRect) -> Void) {
-        struct Line { let rect: NSRect; let used: NSRect; let shown: NSRange; let glyphs: NSRange; let paragraph: NSRange }
+    func enumerateSelectionRects(forGlyphRange range: NSRange, using body: (CGRect) -> Void) {
+        struct Line { let rect: CGRect; let used: CGRect; let shown: NSRange; let glyphs: NSRange; let paragraph: NSRange }
         let text = storage.string as NSString
         var lines: [Line] = []
         manager.enumerateLineFragments(forGlyphRange: range) { [self] rect, used, _, lineGlyphs, _ in
@@ -98,7 +107,7 @@ final class TextLayout: @unchecked Sendable {
                 bottom = line.used.maxY - spacing
             }
             guard bottom > top else { continue }
-            body(NSRect(x: minX, y: top, width: maxX - minX, height: bottom - top))
+            body(CGRect(x: minX, y: top, width: maxX - minX, height: bottom - top))
         }
     }
 
@@ -117,6 +126,7 @@ final class TextLayout: @unchecked Sendable {
     }
 }
 
+#if os(macOS)
 /// Outside a text view TextKit still paints every `.link` run in the system link blue with an
 /// underline, over the run's own colour. Links here style themselves (the accent, a file mention in body
 /// colour), so the drawing-time attributes are dropped.
@@ -409,3 +419,4 @@ final class FlippedClip: NSClipView {
 class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
+#endif
