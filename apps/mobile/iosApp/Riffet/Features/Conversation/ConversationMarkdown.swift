@@ -21,6 +21,7 @@ struct ConversationMarkdown: View {
     @State private var serverTarget: ConversationServerTarget?
     @Environment(\.palette) private var palette
     @Environment(\.conversationFindHighlight) private var findHighlight
+    @ScaledMetric(relativeTo: .body) private var bodySize = 16.0
     @StateObject private var holder: ConversationMarkdownHolder
     private var content: ConversationMarkdownContent { holder.content }
 
@@ -135,7 +136,8 @@ struct ConversationMarkdown: View {
 
     /// `muted` is a quote's tone: prose draws its own colour, so it is passed down rather than styled from outside.
     private func partsView(_ parts: [MarkdownPart], statePath: String, muted: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: compact ? 8 : 12) {
+        // 14 between blocks over a 26 line, as the web's `.md`: a paragraph break reads as one and a half lines.
+        VStack(alignment: .leading, spacing: compact ? 8 : 14) {
             ForEach(Array(parts.enumerated()), id: \.offset) { partIndex, part in
                 switch part {
                 case let .prose(run):
@@ -148,24 +150,31 @@ struct ConversationMarkdown: View {
         }
     }
 
+    private var leading: Double { compact ? ConversationProse.compactLeading : ConversationProse.bodyLeading }
+
     private func blockView(_ block: MarkdownBlock, statePath: String, muted: Bool = false) -> AnyView {
         switch block {
-        // CJK prose reads best near 1.55× its size: 16pt body gets 6pt of leading (about 25pt a line), compact text 5.
-        case let .paragraph(text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, secondary: compact || muted, spacing: compact ? 5 : 6, findOffset: findOffsets?[statePath]).fixedSize(horizontal: false, vertical: true))
-        case let .heading(level, text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, textStyle: level < 2 ? .title2 : level == 2 ? .title3 : .headline, bold: true, secondary: compact || muted, spacing: 3, findOffset: findOffsets?[statePath]).padding(.top, compact ? 4 : 8).accessibilityAddTraits(.isHeader))
+        case let .paragraph(text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, secondary: compact || muted, leading: leading, findOffset: findOffsets?[statePath]).fixedSize(horizontal: false, vertical: true))
+        case let .heading(level, text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, textStyle: level < 2 ? .title2 : level == 2 ? .title3 : .headline, bold: true, secondary: compact || muted, leading: ConversationProse.headingLeading, findOffset: findOffsets?[statePath]).padding(.top, compact ? 4 : 8).accessibilityAddTraits(.isHeader))
         case let .code(language, text):
             if ["math", "latex", "tex"].contains(language?.lowercased() ?? "") { return AnyView(ConversationMath(tex: text, workbench: workbench)) }
             return AnyView(ConversationCode(text: text, language: language, workbench: workbench, projectID: projectID, stateID: stateID.map { $0 + "." + statePath + ".code" }))
         case let .quote(parts): return AnyView(HStack(alignment: .top, spacing: 10) { RoundedRectangle(cornerRadius: 2).fill(palette.line).frame(width: 3); partsView(parts, statePath: statePath + ".quote", muted: true) }.fixedSize(horizontal: false, vertical: true))
         case let .list(ordered, start, items):
-            return AnyView(VStack(alignment: .leading, spacing: 8) {
+            // Items 6 apart, a second paragraph in an item 10 below the first, a nested list 4 (the web's `li`).
+            return AnyView(VStack(alignment: .leading, spacing: 6) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     HStack(alignment: .top, spacing: 8) {
-                        if let check = item.checkbox { Image(systemName: check ? "checkmark.square" : "square").foregroundStyle(palette.fg3) }
-                        else { Text(ordered ? "\(start + index)." : "•").foregroundStyle(palette.fg3).frame(minWidth: 14, alignment: .trailing) }
-                        VStack(alignment: .leading, spacing: 6) {
+                        // The marker fills the first line's box, so it centres on that line's text.
+                        Group {
+                            if let check = item.checkbox { Image(systemName: check ? "checkmark.square" : "square") }
+                            else { Text(ordered ? "\(start + index)." : "•").monospacedDigit() }
+                        }
+                        .foregroundStyle(palette.fg3).frame(minWidth: 14, minHeight: (bodySize * leading).rounded(), alignment: .trailing)
+                        VStack(alignment: .leading, spacing: 0) {
                             ForEach(Array(item.blocks.enumerated()), id: \.offset) { blockIndex, block in
                                 blockView(block, statePath: statePath + ".list.\(index).block.\(blockIndex)", muted: muted)
+                                    .padding(.top, blockIndex == 0 ? 0 : block.isList ? 4 : 10)
                             }
                         }
                     }
@@ -227,8 +236,7 @@ struct ConversationMarkdownTable: View {
     private func row(_ values: [AttributedString], columns: [CGFloat], heading: Bool) -> some View {
         HStack(alignment: .top, spacing: 0) {
             ForEach(columns.indices, id: \.self) { column in
-                ConversationInlineText(source: column < values.count ? values[column] : AttributedString(), origin: origin, bold: heading, alignment: textAlignment(column))
-                    .lineSpacing(4)
+                ConversationInlineText(source: column < values.count ? values[column] : AttributedString(), origin: origin, bold: heading, leading: ConversationProse.tableLeading, alignment: textAlignment(column))
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(width: max(1, columns[column] - 20), alignment: columnAlignment(column))
                     .padding(10)
@@ -614,4 +622,8 @@ private struct ConversationServerFile: View {
             catch is CancellationError {} catch { self.error = error.riffetMessage }
         }
     }
+}
+
+private extension MarkdownBlock {
+    var isList: Bool { if case .list = self { return true }; return false }
 }

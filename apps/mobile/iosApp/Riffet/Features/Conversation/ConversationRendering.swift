@@ -290,7 +290,8 @@ struct ConversationInlineText: View {
     var textStyle: UIFont.TextStyle = .body
     var bold = false
     var secondary = false
-    var spacing: CGFloat = 5
+    /// Line height as a multiple of the font size; every line gets exactly this height (`ConversationFormulaText`).
+    var leading: Double = ConversationProse.bodyLeading
     var alignment: NSTextAlignment = .left
     /// Occurrences of the needle in the markdown blocks before this one; nil marks every match.
     var findOffset: Int? = nil
@@ -318,8 +319,8 @@ struct ConversationInlineText: View {
         return ready
     }
     var body: some View {
-        let colors = ConversationParagraph.Colors(text: palette.uiColor(secondary ? \.fg3 : \.fg), link: palette.uiColor(\.accent), linkLine: palette.uiColor(\.lineStrong), code: UIColor(palette.press))
-        ConversationParagraph(source: source.highlighting(findHighlight, only: findHighlight.flatMap { h in findOffset.map { h.nth - $0 } }, color: palette.warning.opacity(0.4)), images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, spacing: spacing, alignment: alignment, open: { openURL($0) }, quote: quote)
+        let colors = ConversationParagraph.Colors(text: palette.uiColor(secondary ? \.fg3 : \.fg), link: palette.uiColor(\.accent), linkLine: palette.uiColor(\.lineStrong), code: palette.uiColor(secondary ? \.fg3 : \.fg2))
+        ConversationParagraph(source: source.highlighting(findHighlight, only: findHighlight.flatMap { h in findOffset.map { h.nth - $0 } }, color: palette.warning.opacity(0.4)), images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, lineHeight: (fontSize * leading).rounded(), alignment: alignment, open: { openURL($0) }, quote: quote)
             .task(id: key) {
                     guard !formulas.isEmpty else { return }
                     var ready: [String: ConversationInlineMathRenderer.Rendered] = [:]
@@ -341,7 +342,7 @@ struct ConversationParagraph: UIViewRepresentable {
     let fontSize: Double
     let bold: Bool
     let colors: Colors
-    let spacing: CGFloat
+    let lineHeight: CGFloat
     var alignment: NSTextAlignment = .left
     let open: (URL) -> Void
     let quote: ((String) -> Void)?
@@ -350,6 +351,8 @@ struct ConversationParagraph: UIViewRepresentable {
         let view = ConversationParagraphTextView.reused() ?? ConversationParagraphTextView.make()
         view.backgroundColor = .clear; view.isEditable = false; view.isSelectable = true; view.isScrollEnabled = false
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
+        // Links style themselves per run (`ConversationFormulaText`): a file mention keeps the body ink.
+        view.linkTextAttributes = [:]
         view.delegate = context.coordinator
         view.widthChanged = { [weak coordinator = context.coordinator, weak view] width in
             guard let view else { return }; coordinator?.publish(to: view, width: width); coordinator?.reportMark(view)
@@ -360,7 +363,7 @@ struct ConversationParagraph: UIViewRepresentable {
     func updateUIView(_ view: UITextView, context: Context) {
         context.coordinator.open = open
         context.coordinator.quote = quote
-        if view.tintColor != colors.link || view.linkTextAttributes[.underlineColor] as? UIColor != colors.linkLine { view.tintColor = colors.link; view.linkTextAttributes = [.foregroundColor: colors.link, .underlineStyle: NSUnderlineStyle.single.rawValue, .underlineColor: colors.linkLine] }
+        if view.tintColor != colors.link { view.tintColor = colors.link }
         context.coordinator.configure(self)
         context.coordinator.publish(to: view, width: view.bounds.width > 0 ? view.bounds.width : 320)
         context.coordinator.probe = context.environment.conversationFindProbe
@@ -386,7 +389,7 @@ struct ConversationParagraph: UIViewRepresentable {
             let fontSize: Double
             let bold: Bool
             let colors: Colors
-            let spacing: CGFloat
+            let lineHeight: CGFloat
             let alignment: NSTextAlignment
         }
         struct Layout { let text: NSAttributedString; let height: CGFloat }
@@ -403,10 +406,10 @@ struct ConversationParagraph: UIViewRepresentable {
         init(open: @escaping (URL) -> Void) { self.open = open }
         func reportMark(_ view: UITextView) { probe?.report(view, marked: view.attributedText.findMarkRange != nil) }
         func configure(_ value: ConversationParagraph) {
-            let next = ContentKey(source: value.source, images: value.images.mapValues { ImageKey(identity: ObjectIdentifier($0.image), descent: $0.descent) }, fontSize: value.fontSize, bold: value.bold, colors: value.colors, spacing: value.spacing, alignment: value.alignment)
+            let next = ContentKey(source: value.source, images: value.images.mapValues { ImageKey(identity: ObjectIdentifier($0.image), descent: $0.descent) }, fontSize: value.fontSize, bold: value.bold, colors: value.colors, lineHeight: value.lineHeight, alignment: value.alignment)
             guard key != next else { return }
             key = next; generation += 1; layouts.removeAll(keepingCapacity: true)
-            factory = { width in ConversationFormulaText.attributed(value.source, images: value.images, fontSize: value.fontSize, bold: value.bold, color: value.colors.text, codeFill: value.colors.code, spacing: value.spacing, alignment: value.alignment, maximumWidth: width) }
+            factory = { width in ConversationFormulaText.attributed(value.source, images: value.images, fontSize: value.fontSize, bold: value.bold, colors: value.colors, lineHeight: value.lineHeight, alignment: value.alignment, maximumWidth: width) }
         }
         private func widthKey(_ width: CGFloat) -> Int { max(1, min(10_000, Int(width.rounded(.down)))) }
         func layout(width: CGFloat) -> Layout {
@@ -458,7 +461,7 @@ final class ConversationParagraphTextView: UITextView {
     /// TextKit 1, the same engine `Coordinator.layout` measures with, so the drawn height is the fitted one.
     static func make() -> ConversationParagraphTextView {
         let storage = NSTextStorage()
-        let manager = InlineCodeLayoutManager()
+        let manager = FindMarkLayoutManager()
         let container = NSTextContainer(size: CGSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
         storage.addLayoutManager(manager); manager.addTextContainer(container)
@@ -502,9 +505,9 @@ final class ConversationParagraphTextView: UITextView {
     }
 }
 
-/// Inline code keeps its fill to its own glyphs, rounded. TextKit 1's own fill runs to the
-/// container edge when a code span wraps, and paints the line spacing below it.
-private final class InlineCodeLayoutManager: NSLayoutManager {
+/// A find mark keeps its fill to its own glyphs, rounded. TextKit 1's own fill runs to the
+/// container edge when a marked span wraps, and fills the whole fixed-height line box.
+private final class FindMarkLayoutManager: NSLayoutManager {
     override func fillBackgroundRectArray(_ rectArray: UnsafePointer<CGRect>, count rectCount: Int, forCharacterRange charRange: NSRange, color: UIColor) {
         guard let container = textContainers.first, let storage = textStorage, charRange.location < storage.length,
               let font = storage.attribute(.font, at: charRange.location, effectiveRange: nil) as? UIFont else {
@@ -525,37 +528,87 @@ private final class InlineCodeLayoutManager: NSLayoutManager {
     }
 }
 
+/// Reading measures shared by the transcript's prose (surfaces.md §1.2, at the phone's 16pt body).
+enum ConversationProse {
+    /// 26 on 16: long-form reading leading, within the 1.6× floor of foundations §2.4.
+    static let bodyLeading = 26.0 / 16
+    /// Thoughts and other compact prose, a notch tighter.
+    static let compactLeading = 24.0 / 16
+    static let headingLeading = 1.35
+    /// Table cells read as data, not as running prose.
+    static let tableLeading = 1.5
+    /// Inline code (`inlineCode: plain`): the code face a step smaller, no fill.
+    static let codeScale = 0.86
+}
+
+extension NSAttributedString.Key {
+    /// A narrow space this renderer put beside inline code; copying leaves it out.
+    static let conversationCodePad = NSAttributedString.Key("riffet.conversationCodePad")
+}
+
 enum ConversationFormulaText {
     static func copyText(_ source: NSAttributedString, range: NSRange) -> String {
         guard range.location != NSNotFound, NSMaxRange(range) <= source.length else { return "" }
         var text = ""
         source.enumerateAttributes(in: range) { attributes, span, _ in
+            if attributes[.conversationCodePad] != nil { return }
             if attributes[.attachment] != nil, let url = attributes[.link] as? URL, let tex = MathText.tex(url) { text += "$" + tex + "$" }
             else { text += (source.string as NSString).substring(with: span) }
         }
         return text
     }
-    static func attributed(_ source: AttributedString, images: [String: ConversationInlineMathRenderer.Rendered], fontSize: Double, bold: Bool = false, color: UIColor = .label, codeFill: UIColor = .tertiarySystemFill, spacing: CGFloat = 5, alignment: NSTextAlignment = .left, maximumWidth: CGFloat = 320) -> NSAttributedString {
+    /// Every line is exactly `lineHeight` tall with the text centred in it, whatever mix of SF, PingFang and
+    /// SF Mono it holds; `lineSpacing` would add its gap below each line but the last, so a paragraph's
+    /// last line would sit closer to the next block than to its own previous line.
+    static func attributed(_ source: AttributedString, images: [String: ConversationInlineMathRenderer.Rendered], fontSize: Double, bold: Bool = false, colors: ConversationParagraph.Colors, lineHeight: CGFloat, alignment: NSTextAlignment = .left, maximumWidth: CGFloat = 320) -> NSAttributedString {
         let result = NSMutableAttributedString(string: "")
-        let paragraph = NSMutableParagraphStyle(); paragraph.lineSpacing = spacing; paragraph.alignment = alignment
-        for run in source.runs {
-            // Strong text is Medium, not Bold; headings are Semibold.
-            let strong = run.inlinePresentationIntent?.contains(.stronglyEmphasized) == true
+        let body = UIFont.systemFont(ofSize: fontSize)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = alignment
+        paragraph.lineBreakStrategy = .standard
+        paragraph.minimumLineHeight = lineHeight
+        // A formula taller than a line may grow its own line rather than paint over its neighbours.
+        let tallest = images.values.map { $0.image.size.height }.max() ?? 0
+        paragraph.maximumLineHeight = tallest > lineHeight ? 0 : lineHeight
+        let centre = max(0, (lineHeight - body.lineHeight) / 2)
+        let runs = source.runs.map { (run: $0, text: String(source[$0.range].characters)) }
+        for (index, item) in runs.enumerated() {
+            let run = item.run
+            let intent = run.inlinePresentationIntent ?? []
+            let strong = intent.contains(.stronglyEmphasized)
             let inlineTag = run[MarkdownInlineTagKey.self]
             let isScript = inlineTag == .sup || inlineTag == .sub
+            let code = !isScript && intent.contains(.code)
             let size = isScript ? max(10.0, fontSize * 0.75) : fontSize
-            var font = UIFont.systemFont(ofSize: size, weight: bold ? .semibold : strong ? .medium : .regular)
-            var traits: UIFontDescriptor.SymbolicTraits = []
-            if run.inlinePresentationIntent?.contains(.emphasized) == true { traits.insert(.traitItalic) }
-            if !isScript && run.inlinePresentationIntent?.contains(.code) == true { font = UIFont.monospacedSystemFont(ofSize: fontSize * 0.875, weight: .regular) }
-            if let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(traits)) { font = UIFont(descriptor: descriptor, size: font.pointSize) }
-            var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color, .paragraphStyle: paragraph]
-            if isScript { attributes[.baselineOffset] = inlineTag == .sup ? fontSize * 0.35 : -fontSize * 0.18 }
-            if let link = run.link { attributes[.link] = link }
+            // Medium for headings and strong text alike: PingFang's semibold turns a sentence into a black bar.
+            var font = UIFont.systemFont(ofSize: size, weight: bold || strong ? .medium : .regular)
+            if code { font = UIFont.monospacedSystemFont(ofSize: fontSize * ConversationProse.codeScale, weight: strong ? .medium : .regular) }
+            if intent.contains(.emphasized), let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(.traitItalic)) { font = UIFont(descriptor: descriptor, size: font.pointSize) }
+            var attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: code ? colors.code : colors.text, .paragraphStyle: paragraph, .baselineOffset: centre]
+            if isScript { attributes[.baselineOffset] = centre + (inlineTag == .sup ? fontSize * 0.35 : -fontSize * 0.18) }
+            if let link = run.link {
+                attributes[.link] = link
+                if MathText.tex(link) == nil {
+                    attributes[.underlineColor] = colors.linkLine
+                    if code && link.scheme == FileLink.scheme {
+                        // A file mention, as the web's `.md-file-mention`: body ink and a dashed rule, so a
+                        // paragraph full of paths reads as prose with references, not as a row of links.
+                        attributes[.foregroundColor] = colors.text
+                        attributes[.underlineStyle] = NSUnderlineStyle.single.union(.patternDash).rawValue
+                    } else {
+                        attributes[.foregroundColor] = colors.link
+                        attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                    }
+                }
+            }
             if run.strikethroughStyle != nil { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-            if !isScript && run.inlinePresentationIntent?.contains(.code) == true { attributes[.backgroundColor] = codeFill }
             // Only find sets a run's background: the run is also tagged, so the list can find where it is drawn.
             if let mark = run.backgroundColor { attributes[.backgroundColor] = UIColor(mark); attributes[.conversationFindMark] = true }
+            // Where code meets a word with no space between, a narrow no-break space stands in for the
+            // chip's padding (clreq: about a quarter em between scripts); beside a space or punctuation none.
+            let pad = NSAttributedString(string: "\u{202F}", attributes: [.font: body, .paragraphStyle: paragraph, .baselineOffset: centre, .conversationCodePad: true])
+            let before = index > 0 ? runs[index - 1] : nil, after = index + 1 < runs.count ? runs[index + 1] : nil
+            if code, let before, !(before.run.inlinePresentationIntent ?? []).contains(.code), needsPad(before.text.unicodeScalars.last) { result.append(pad) }
             if let tex = run.link.flatMap(MathText.tex), let rendered = images[tex] {
                 let attachment = NSTextAttachment(); attachment.image = rendered.image
                 let ratio = min(1, max(1, maximumWidth) / max(1, rendered.image.size.width))
@@ -563,8 +616,13 @@ enum ConversationFormulaText {
                 let formula = NSMutableAttributedString(attachment: attachment)
                 formula.addAttributes(attributes, range: NSRange(location: 0, length: formula.length))
                 result.append(formula)
-            } else { result.append(NSAttributedString(string: String(source[run.range].characters), attributes: attributes)) }
+            } else { result.append(NSAttributedString(string: item.text, attributes: attributes)) }
+            if code, let after, !(after.run.inlinePresentationIntent ?? []).contains(.code), needsPad(after.text.unicodeScalars.first) { result.append(pad) }
         }
         return result
+    }
+    private static func needsPad(_ neighbour: Unicode.Scalar?) -> Bool {
+        guard let neighbour else { return false }
+        return CharacterSet.alphanumerics.contains(neighbour)
     }
 }
