@@ -6,7 +6,8 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './errors.js';
 import { mdnsNames } from './mdns-name.js';
 import { linkOfRequest } from './links/socket.js';
-import type { DevicePushRegistration, DeviceReport } from '../../../packages/contracts/src/index.js';
+import { SESSION_COOKIE_BUDGET, type DevicePushRegistration, type DeviceReport } from '../../../packages/contracts/src/index.js';
+import { secureTransport, trustedNetworks } from './access/transport.js';
 
 /**
  * A request a proxy relayed: a reverse proxy, an SSH-less front door or `tailscale serve` reaches a
@@ -55,6 +56,8 @@ export type AuthKind = 'cookie' | 'device' | 'link';
 export interface AuthContext { kind: AuthKind; cookie?: string; deviceId?: string; linkServerId?: string }
 
 const DEVICE_TOKEN = /^wkn_([0-9a-f]{16})_(.+)$/;
+const SESSION_COOKIE = 'cw_session';
+const SECURE_SESSION_COOKIE = '__Host-cw_session';
 /** Persisting every request would rewrite the file on each poll; the timestamp is in-memory between flushes. */
 const DEVICE_FLUSH_MS = 60_000;
 /** How long the interface address list is reused. */
@@ -63,6 +66,8 @@ const HOSTS_CACHE_MS = 5_000;
 export class Auth {
   readonly token: string;
   readonly tokenRequired: boolean;
+  /** Networks the operator says are already encrypted (`--trust-network`). */
+  private readonly trusted: import('node:net').BlockList | undefined;
   private readonly staticHosts: Set<string>;
   private readonly signingKey: string;
   private readonly devicesPath: string;
@@ -77,7 +82,8 @@ export class Auth {
   /** Cookies ended by a logout, kept until they would have expired anyway. */
   private revokedSessions: Record<string, number> = {};
   private hostsCache?: { at: number; hosts: ReadonlySet<string> };
-  constructor(stateDir: string, options: {token?:string;host?:string;allowedHosts?:string[];auth?:boolean} = {}) {
+  constructor(stateDir: string, options: {token?:string;host?:string;allowedHosts?:string[];auth?:boolean;trustedNetworks?:string[]} = {}) {
+    this.trusted=trustedNetworks(options.trustedNetworks);
     mkdirSync(stateDir,{recursive:true,mode:0o700});
     const path=join(stateDir,'access-token');
     let saved: string|undefined;
@@ -163,7 +169,9 @@ export class Auth {
     return this.cookieSession(request)?.cookie;
   }
   private cookieSession(request: FastifyRequest): {cookie:string;nonce:string;exp:number;deviceId?:string} | undefined {
-    const raw=request.headers.cookie?.split(';').map(c=>c.trim()).find(c=>c.startsWith('cw_session='))?.slice(11);
+    // Over HTTPS the cookie is `__Host-` prefixed, so nothing served over HTTP or from a subdomain can set or replace it.
+    const cookies=request.headers.cookie?.split(';').map(c=>c.trim())??[];
+    const raw=cookies.find(c=>c.startsWith(`${SECURE_SESSION_COOKIE}=`))?.slice(SECURE_SESSION_COOKIE.length+1)??cookies.find(c=>c.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length+1);
     if (!raw) return;
     const split=raw.lastIndexOf('.'); if (split<0) return;
     const payload=raw.slice(0,split),signature=raw.slice(split+1);
@@ -375,17 +383,23 @@ export class Auth {
   require(request: FastifyRequest, mutate = false): string { return this.authenticate(request,mutate).cookie ?? ''; }
   login(reply: FastifyReply, request: FastifyRequest, deviceId?: string): string {
     if (deviceId!==undefined&&!this.devices.some(device=>device.id===deviceId)) throw new AppError('DEVICE_NOT_FOUND','No such paired device',404);
-    const payload=Buffer.from(JSON.stringify({nonce:randomBytes(24).toString('base64url'),exp:Date.now()+30*86400_000,ep:this.sessionEpoch,...(deviceId?{deviceId}:{})})).toString('base64url');
+    // A cookie that crossed the network in the clear may have been copied, so it lasts a day (docs/TRANSPORT-SECURITY.md §4).
+    const maxAge=!request.raw||secureTransport(request,this.trusted)?SESSION_COOKIE_BUDGET.secureMaxAgeSeconds:SESSION_COOKIE_BUDGET.insecureMaxAgeSeconds;
+    const payload=Buffer.from(JSON.stringify({nonce:randomBytes(24).toString('base64url'),exp:Date.now()+maxAge*1000,ep:this.sessionEpoch,...(deviceId?{deviceId}:{})})).toString('base64url');
     const cookie=payload+'.'+this.sign(payload);
-    const secure=request.protocol==='https' || request.headers.origin?.startsWith('https://');
-    reply.header('Set-Cookie',`cw_session=${cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000${secure?'; Secure':''}`);
+    // Only a page served over HTTPS keeps a `Secure` cookie; `localhost` over HTTP is left as it was, since not every
+    // engine keeps one there.
+    const https=request.protocol==='https' || request.headers.origin?.startsWith('https://');
+    reply.header('Set-Cookie',https
+      ? [`${SECURE_SESSION_COOKIE}=${cookie}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`,`${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`]
+      : `${SESSION_COOKIE}=${cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${maxAge}`);
     return this.csrf(cookie);
   }
   /** Ends the caller's cookie on the server too, so a copy of it stops working, not just the browser's. */
   logout(reply: FastifyReply, request?: FastifyRequest) {
     const session=request&&this.cookieSession(request);
     if(session){this.revokeNonce(session.nonce,session.cookie);this.closeStreams(`cookie:${session.nonce}`);}
-    reply.header('Set-Cookie','cw_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+    reply.header('Set-Cookie',[`${SESSION_COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0`,`${SECURE_SESSION_COOKIE}=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0`]);
   }
   /** Ends every master-token and paired-browser cookie; devices' bearer tokens are unaffected. */
   revokeAllSessions() {

@@ -649,6 +649,14 @@ export const LINK_BUDGET = {
   searchWaitMs: 8_000,
 } as const;
 
+/** A browser's sign-in (docs/TRANSPORT-SECURITY.md §4). */
+export const SESSION_COOKIE_BUDGET = {
+  /** Over an encrypted connection. */
+  secureMaxAgeSeconds: 30 * 24 * 60 * 60,
+  /** Over plain HTTP from another machine, where the cookie can be copied off the network: it stops working sooner. */
+  insecureMaxAgeSeconds: 24 * 60 * 60,
+} as const;
+
 /** The security record (docs/TRANSPORT-SECURITY.md §7), kept in `security-audit.jsonl` in the state directory. */
 export const SECURITY_AUDIT_BUDGET = {
   /** Entries kept; past it the oldest drop when the file is next compacted. */

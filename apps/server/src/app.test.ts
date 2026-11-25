@@ -2429,6 +2429,14 @@ describe('API authentication boundary', () => {
       return (method: string, url: string, payload?: unknown) => app.inject({ method: method as 'GET', url, remoteAddress, headers: { host: '127.0.0.1', cookie, 'x-csrf-token': csrf, ...extra }, ...(payload === undefined ? {} : { payload: payload as object }) });
     };
     const lan = await as('192.0.2.10');
+    // A sign-in that crossed the network in the clear lasts a day; one over HTTPS is `__Host-` prefixed and lasts the usual 30.
+    const lanLogin = await app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: '192.0.2.10', headers: { host: '127.0.0.1' }, payload: { token } });
+    expect(String(lanLogin.headers['set-cookie'])).toMatch(/^cw_session=.*Max-Age=86400$/);
+    const httpsHeaders = { host: '127.0.0.1', origin: 'https://127.0.0.1', 'x-forwarded-proto': 'https', 'x-forwarded-for': '192.0.2.10' };
+    const httpsLogin = await app.inject({ method: 'POST', url: '/api/auth/login', remoteAddress: '127.0.0.1', headers: httpsHeaders, payload: { token } });
+    const hostCookie = [httpsLogin.headers['set-cookie']].flat().map(String).find(value => value.startsWith('__Host-cw_session='))!;
+    expect(hostCookie).toMatch(/; Secure;.*Max-Age=2592000$/);
+    expect((await app.inject({ method: 'GET', url: '/api/sessions', remoteAddress: '127.0.0.1', headers: { ...httpsHeaders, cookie: hostCookie.split(';')[0]! } })).statusCode).toBe(200);
     expect((await lan('GET', '/api/sessions')).statusCode).toBe(200);
     expect((await lan('GET', '/api/bootstrap')).json().access).toEqual({ secure: false, capabilities: ['read'] });
     for (const [method, url, payload] of [['POST', '/api/projects', { cwd: tmpdir() }], ['POST', '/api/pairing/code', {}], ['POST', '/api/terminals', {}], ['POST', '/api/remote/exec', { command: 'true' }], ['PATCH', '/api/settings', { allowInsecureChat: true }], ['POST', '/api/servers/7f1c2f2e-0000-4000-8000-000000000000/remote/exec', { command: 'true' }]] as const) {
