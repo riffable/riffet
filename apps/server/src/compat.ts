@@ -5,6 +5,22 @@ import { join } from 'node:path';
 /** DSH's isolated profile home, beside the other state Riffet keeps in the user's home. */
 export const DEFAULT_DSH_CONFIG_DIR = join(homedir(), '.riffet', 'dsh');
 
+/** `server.lock` is held: by a live process (`pid`), or by none that can be trusted (an interrupted write, no `pid`). */
+export class StateDirectoryBusy extends Error {
+  constructor(readonly pid?: number) {
+    super(pid ? `This state directory is in use by another Riffet process (pid ${pid})` : 'The state directory lock has no valid owner; inspect server.lock before retrying');
+    this.name = 'StateDirectoryBusy';
+  }
+}
+
+/** The live process holding `server.lock`, if one does; read without claiming. */
+export function stateDirectoryOwner(stateDir: string): number | undefined {
+  let owner: number;
+  try { owner = Number(readFileSync(join(stateDir, 'server.lock'), 'utf8')); } catch { return undefined; }
+  if (!Number.isSafeInteger(owner) || owner < 1 || owner === process.pid) return undefined;
+  try { process.kill(owner, 0); return owner; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' ? owner : undefined; }
+}
+
 /** Shared by the daemon and one-off storage migrations; a stopped owner's lock is recoverable. */
 export function claimStateDirectory(stateDir: string): () => void {
   const path = join(stateDir, 'server.lock');
@@ -21,10 +37,10 @@ export function claimStateDirectory(stateDir: string): () => void {
       if (Number.isSafeInteger(owner) && owner > 0) {
         try { process.kill(owner, 0); }
         catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') { unlinkSync(path); continue; } throw error; }
-        throw new Error('This state directory is already in use by a live server; restart that server before migrating plugin storage');
+        throw new StateDirectoryBusy(owner);
       }
       // An interrupted lock write has no trustworthy owner. Leave it for inspection.
-      throw new Error('The state directory lock has no valid owner; inspect server.lock before retrying');
+      throw new StateDirectoryBusy();
     }
   }
   throw new Error('Could not claim the state directory');

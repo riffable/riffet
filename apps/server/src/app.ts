@@ -160,6 +160,7 @@ import { linkOfRequest } from './links/socket.js';
 import { LINK_TUNNEL_ROUTE, SERVER_FORWARD_ROUTE, registerLinkRoutes } from './routes/links.js';
 import { ChannelService, channelProvider } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
+import type { StartupPhase } from './server-log.js';
 import { registerChannelRoutes } from './channels/routes.js';
 import { RIFFET_MCP_HTTP_ROUTE, RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
 import { CouncilService } from './council/service.js';
@@ -186,7 +187,9 @@ export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; t
   /** Replaces the APNs connection and the push delays; tests only. */
   push?:{transport?:ApnsTransport;retryDelaysMs?:number[];timing?:PushTiming};
   /** Replaces the built-in IM providers (docs/design/channels.md); tests only. */
-  channelProviders?:ChannelProvider[]; }
+  channelProviders?:ChannelProvider[];
+  /** Told as start-up enters each phase, so the served daemon can log where a slow start is. */
+  onStartupPhase?:(phase:StartupPhase)=>void; }
 export async function createApp(options: AppOptions = {}) {
   const profile:ServerProfile=options.profile??'full';
   const profileBudget=serverProfileBudget(profile);
@@ -197,6 +200,7 @@ export async function createApp(options: AppOptions = {}) {
   setAppServerOwner(createHash('sha256').update(stateDir).digest('hex').slice(0,12));
   // Resolve the daemon's environment before anything reads it: settings fall back to process.env,
   // and a backend CLI is resolved against PATH.
+  options.onStartupPhase?.('environment');
   await applyProcessEnvironment({stateDir});
   configureExecWorker({idleMs:profileBudget.execWorkerIdleMs});
   const legacyCliPath=options.cliPath??process.env.RIFFET_CLI??'cursor-agent';
@@ -204,6 +208,7 @@ export async function createApp(options: AppOptions = {}) {
   const settings:SettingsService=new SettingsService({cliPath:legacyCliPath,stateDir,validateProfileConfig:(backendId,config)=>nativeBackends.catalog.validateProfileConfig(backendId,config),consumesModelSources:backendId=>nativeBackends.catalog.consumesProtocols(backendId).length>0});
   const themes=new ThemeService({stateDir});
   const owner=new OwnerService({stateDir,avatarStyles:()=>plugins});
+  options.onStartupPhase?.('databases');
   const store=new Store(join(stateDir,'workbench.db'),{profile}); store.recoverInterruptedRuns();
   // 会话标题规则 (docs/SESSION-TITLES.md): read on every session write, so kept as of the last save rather than read from disk.
   const titleRuleConfig=(value:import('../../../packages/contracts/src/index.js').AppSettings)=>({rules:value.titleRules,timeZone:value.assistant?.timeZone});
@@ -365,10 +370,13 @@ export async function createApp(options: AppOptions = {}) {
   const ingest=new TranscriptIngest({journal:store.journal,source:id=>nativeBackends.transcriptSource(id)});
   nativeBackends.attachIngest(ingest);
   // Evaluated only once the backends exist, since turning a plugin on refreshes their catalogs.
+  options.onStartupPhase?.('plugins');
   await plugins.refreshWithin(1_500);
   // After the integrations: a task that ended while the server was down gets its diagnostics from the provider that started it.
   const tasks=new TaskService({stateDir,db:store.db,project:id=>store.getProject(id),providers:plugins});
+  options.onStartupPhase?.('tasks');
   await tasks.recover();
+  options.onStartupPhase?.('services');
   // A plugin turned off, or switched to another version, while it had running tasks goes ahead once the last one ends.
   tasks.subscribe((event:{state:Parameters<typeof isOpen>[0]})=>{if(!isOpen(event.state))plugins.tasksChanged();});
   // A Claude CLI that outlived the previous server posts hooks before any client opens its conversation: bring the conversation up for them.

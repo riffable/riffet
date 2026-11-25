@@ -36,6 +36,7 @@ verify:
 - 首次启动生成服务器链接证书时报 OpenSSL `illegal padding`：检查 `links/identity.ts` 的证书序列号。DER 要求正整数采用最短编码，随机首字节清除符号位后可能为零。
 
 - 新会话没有用上预热的进程：服务日志里出现 `prewarm: a new session did not match the warm one`（`packages/plugin-api/src/kit/warm-pool.ts`），日志里带着持有的键和想要的键，对比二者即可知道哪个字段不同。
+- `riffet start` / `restart` 报启动失败或等得久：服务在监听前写 `server.log` 的 `[riffet] starting: <阶段>`，就绪时写一行 `ready in …`，括号里是各阶段耗时，启动慢先看哪段最长。CLI 跟随这些行等待（`cli/startup.ts#waitForStartup`），只在进程退出或 `SERVER_BUDGET.startupStallMs` 内没有新日志时报错；卡住的进程不结束，`riffet stop` 会结束它。持有 `server.lock` 但还没写 `daemon.json` 的 `serve` 进程算作启动中（`startingServer`）：`start`、`restart`、`stop`、`status` 都等它或报告它，不再拉起第二个去撞锁。
 - `riffet update` 报 `Could not tell which source CLI process <pid> uses`：`cli/source-update.ts#assertSourceProcessesStopped` 读不到该进程的 cwd，没法判断它命令行里的相对路径 `dist/cli.js` 或 `apps/server/src/cli.ts` 是不是本仓库的入口。看 `ps -p <pid> -o command=` 和 `lsof -a -p <pid> -d cwd`；相对路径从 cwd 解析后不存在的进程不算。
 - 环境与依赖问题：`riffet doctor --json` 逐项列出 Node、tmux、各 CLI、端口和数据目录。
 - 数据库疑似损坏：服务启动一分钟后在 worker 里对 `workbench.db`、`journal.db` 各跑一次只读 `quick_check`（`storage/integrity.ts`），失败只写一条 `[riffet] <库>.db failed its integrity check` 错误日志，不删不改；`riffet doctor` 的 Storage 一节另做跨库一致性（缺失的大块数据、孤儿块、没有会话的日志、derived 超前于日志）。恢复用 `riffet restore --backup <dir> --state-dir <空目录>`。

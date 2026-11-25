@@ -218,14 +218,34 @@ export interface Spinner {
   update(text: string): void;
   /** Replaces the spinner line with a final one; `undefined` only clears it. */
   stop(final?: string): void;
+  /** Ends with `✓ text` and how long the step took: the line a finished step leaves behind. */
+  done(text: string): void;
+  /** Ends with `✗ text` and how long the step ran. */
+  fail(text: string): void;
 }
 
-/** A one-line spinner on stderr; where stderr is not a terminal it prints nothing and `stop` prints the final line. */
+/** A step's length: tenths below ten seconds, where a restart's steps usually fall. */
+const stepTime = (ms: number) => (ms < 10_000 ? `${(Math.max(0, ms) / 1000).toFixed(1)}s` : duration(ms));
+/** A spinner shows how long it has run once that is long enough to wonder whether it is stuck. */
+const ELAPSED_AFTER_MS = 2_000;
+
+/** A one-line spinner on stderr; where stderr is not a terminal it prints nothing and `stop`, `done` and `fail` print the final line. */
 export function spinner(text: string): Spinner {
   const stream = process.stderr;
-  if (!stream.isTTY) return { update() {}, stop(final) { if (final) stream.write(final + '\n'); } };
-  let frame = 0, current = text.length > (stream.columns ?? 80) - 4 ? text.slice(0, (stream.columns ?? 80) - 5) + '…' : text;
-  const draw = () => stream.write(`\r\x1b[2K${err.accent(FRAMES[frame++ % FRAMES.length]!)} ${current}`);
+  const startedAt = Date.now();
+  const result = (marker: string, label: string) => `${marker} ${label}  ${err.dim(stepTime(Date.now() - startedAt))}`;
+  if (!stream.isTTY) {
+    const stop = (final?: string) => { if (final) stream.write(final + '\n'); };
+    return { update() {}, stop, done: label => stop(result(err.ok(MARK.ok), label)), fail: label => stop(result(err.fail(MARK.fail), label)) };
+  }
+  // A pseudo-terminal without a size reports 0 columns.
+  const fit = (value: string, reserve: number) => { const room = (stream.columns || 80) - 4 - reserve; return value.length > room ? value.slice(0, room - 1) + '…' : value; };
+  let frame = 0, current = text;
+  const draw = () => {
+    const elapsed = Date.now() - startedAt;
+    const suffix = elapsed >= ELAPSED_AFTER_MS ? duration(elapsed) : '';
+    stream.write(`\r\x1b[2K${err.accent(FRAMES[frame++ % FRAMES.length]!)} ${fit(current, suffix ? suffix.length + 2 : 0)}${suffix ? '  ' + err.dim(suffix) : ''}`);
+  };
   stream.write('\x1b[?25l');
   draw();
   // Never what keeps the process alive: an error that skips `stop` must still let it exit.
@@ -236,16 +256,25 @@ export function spinner(text: string): Spinner {
   const interrupt = (signal: NodeJS.Signals) => { clearInterval(timer); stream.write('\r\x1b[2K'); restore(); process.exit(signal === 'SIGINT' ? 130 : 143); };
   process.once('exit', restore);
   process.once('SIGINT', interrupt); process.once('SIGTERM', interrupt);
-  return {
-    update(next) { current = next.length > (stream.columns ?? 80) - 4 ? next.slice(0, (stream.columns ?? 80) - 5) + '…' : next; },
-    stop(final) {
-      clearInterval(timer);
-      stream.write('\r\x1b[2K');
-      restore();
-      process.off('exit', restore); process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt);
-      if (final) stream.write(final + '\n');
-    },
+  const stop = (final?: string) => {
+    clearInterval(timer);
+    stream.write('\r\x1b[2K');
+    restore();
+    process.off('exit', restore); process.off('SIGINT', interrupt); process.off('SIGTERM', interrupt);
+    if (final) stream.write(final + '\n');
   };
+  return {
+    update(next) { current = next; },
+    stop,
+    done: label => stop(result(err.ok(MARK.ok), label)),
+    fail: label => stop(result(err.fail(MARK.fail), label)),
+  };
+}
+
+/** Runs `work` under a spinner that leaves no line behind: for a wait whose result the caller prints. */
+export async function spinning<T>(text: string, work: () => Promise<T>): Promise<T> {
+  const progress = spinner(text);
+  try { return await work(); } finally { progress.stop(); }
 }
 
 /** Closest known word to `input` by edit distance, for "Did you mean …?". */

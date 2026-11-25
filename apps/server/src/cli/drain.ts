@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { localServerUrl, type PairingDaemon } from './pair.js';
+import { note, spinner } from './ui.js';
 
 /** What `GET /api/service/restartable` answers (`NativeDispatcher.restartability`). */
 interface Restartability { restartable: boolean; blockers: Array<{ sessionId: string; title: string; backendId: string; reason: string }> }
@@ -45,4 +46,18 @@ export async function drainForRestart(record: PairingDaemon, token: string, opti
       await new Promise(resolve => setTimeout(resolve, 3000));
     }
   } catch (error) { await release(); throw error; }
+}
+
+/**
+ * `drainForRestart` at a terminal: a step that ends in a line saying whether anything had to finish. The
+ * conversations in the way are named once; the spinner only shows that it is still waiting.
+ */
+export async function drainWithProgress(record: PairingDaemon, token: string, waitSeconds: number): Promise<(() => Promise<void>) | undefined> {
+  let waiting = spinner('Checking for running turns'), waited = false;
+  try {
+    const release = await drainForRestart(record, token, { waitSeconds, log: message => { waiting.stop(); note(message); waited = true; waiting = spinner('Waiting for them to finish'); } });
+    if (!release) waiting.stop();
+    else waiting.done(waited ? 'Running turns finished' : 'No running turns');
+    return release;
+  } catch (error) { waiting.stop(); throw error; }
 }

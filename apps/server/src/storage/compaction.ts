@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { StorageCompaction, StorageCompactionResult } from '../../../../packages/contracts/src/index.js';
 import { STORAGE_BUDGET } from '../../../../packages/contracts/src/budgets.js';
-import { claimStateDirectory } from '../compat.js';
+import { claimStateDirectory, StateDirectoryBusy } from '../compat.js';
 import { Journal } from '../journal/journal.js';
 import { migrateStorageLayout, needsStorageLayoutMigration } from '../journal/storage-migration.js';
 import { optimizeDatabase, storageLayoutForStateDir } from '../sqlite-storage.js';
@@ -145,7 +145,7 @@ export function compactDatabase(stateDir: string, log: (line: string) => void = 
   let release: () => void;
   try { release = claimStateDirectory(stateDir); } catch (error) {
     // Only a held lock means "stop the server"; any other failure (permissions, a missing directory) keeps its own message.
-    if (/already in use by a live server|lock has no valid owner/.test((error as Error).message)) throw new Error('Stop the server before compacting: server.lock in the state directory is held by a running process, or has no valid owner.');
+    if (error instanceof StateDirectoryBusy) throw new Error('Stop the server before compacting: server.lock in the state directory is held by a running process, or has no valid owner.');
     throw error;
   }
   try {

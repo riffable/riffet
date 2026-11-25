@@ -1,7 +1,9 @@
 import { networkInterfaces } from 'node:os';
+import { join } from 'node:path';
 import type { Session } from '../../../../packages/contracts/src/index.js';
 import { Api } from './api.js';
 import { accessToken, active, health, isLoopback, isWildcard, managerLabel, serverUrl, stateDir, type DaemonRecord, type Health } from './context.js';
+import { currentStartupPhase, phaseLabel, startingServer } from './startup.js';
 import { availableUpdate } from './update-notice.js';
 import { MARK, duration, fields, hint, out, plural, printJson, printLines, tilde } from './ui.js';
 
@@ -88,8 +90,10 @@ export async function serverSummary(record: DaemonRecord, dir: string, options: 
 export async function status(options: { stateDir: string; json?: boolean }): Promise<void> {
   const dir = stateDir(options.stateDir);
   const record = await active(dir);
+  const starting = record ? undefined : startingServer(dir);
+  const phase = starting && currentStartupPhase(join(dir, 'server.log'), starting.since);
   if (options.json) {
-    if (!record) { printJson({ running: false, stateDir: dir }); return; }
+    if (!record) { printJson({ running: false, stateDir: dir, ...(starting ? { starting: { pid: starting.pid, since: new Date(starting.since).toISOString(), phase: phase ?? null } } : {}) }); return; }
     const state = await health(record);
     const counts = await sessionCounts(record, dir);
     printJson({
@@ -97,6 +101,10 @@ export async function status(options: { stateDir: string; json?: boolean }): Pro
       url: serverUrl(record), host: record.host, port: record.port, network: networkUrls(record), auth: authenticated(record),
       managedBy: state?.managedBy ?? null, stateDir: dir, sessions: counts ?? null, update: availableUpdate(dir, state?.build) ?? null,
     });
+    return;
+  }
+  if (starting) {
+    printLines([`${out.accent(MARK.running)} ${out.bold('Riffet')} ${out.dim(`starting · ${phaseLabel(phase)} · ${duration(Date.now() - starting.since)}`)}`, '', ...fields([['Process', `pid ${starting.pid}`], ['State', tilde(dir)]]), '', hint('riffet logs -f', out)]);
     return;
   }
   if (!record) {

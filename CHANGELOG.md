@@ -57,6 +57,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Fixes
 
 - On iPhone, the setup card on New session is laid out like the rest of the app: saved and nearby servers are plain rows with one action each, an expired pairing shows Pair again on its row, and Skip next to Choose project is no longer squeezed out.
+- `riffet restart` and `riffet start` no longer report "Riffet did not start" while a large state directory is still starting: they wait as long as the server makes progress and show the phase it is in (opening databases, loading plugins, recovering tasks…); when the server does exit, only its own log lines are shown. Running `start`, `restart` or `stop` while a server is starting now waits for it instead of launching another, and `riffet status` shows it as starting.
+- `riffet restart` and `riffet stop` leave one line per finished step with how long it took; a step that takes more than 2 seconds shows its elapsed time.
 - On Android, switching to the assistant or opening a conversation no longer shows a still, closed ring first; a spinner appears only if loading takes longer than 0.4 s.
 - On Android, the new-session page no longer flashes the server · agent · project setup card and "Loading projects" at launch.
 - On Android, the hold-to-talk bubble is centred over the dome below it instead of leaning to one side with the composer (on the assistant page). On Android and iPhone, before any words are recognised the level meter and timer sit in the middle of the bubble.

@@ -217,6 +217,8 @@ export const SERVER_BUDGET = {
   forkTranscriptBytes: 64 * MIB,
   /** An event-loop block this long is a defect: it is logged and profiled (`loop-health.ts`). */
   loopBlockMs: 200,
+  /** A starting server that logs nothing new for this long is reported as stuck by the launching CLI, which leaves it running. */
+  startupStallMs: 60_000,
 } as const;
 
 /** Total host RAM ceiling (bytes) at or below which `--profile=auto` selects the low-footprint `lite` profile. */

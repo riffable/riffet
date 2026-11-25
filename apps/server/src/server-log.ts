@@ -63,3 +63,33 @@ function sameFile(fd: number, path: string): boolean {
   try { const open = fstatSync(fd), named = statSync(path); return open.isFile() && open.dev === named.dev && open.ino === named.ino; }
   catch { return false; }
 }
+
+/*
+ * Start-up progress. A launcher (`riffet start`, `service install`) follows the log it opened to tell
+ * the person waiting where a slow start is, and to tell a start that is still working from one that
+ * stopped; the line is the only channel, so its shape is shared here.
+ */
+
+/** What a starting server does, in order; `storage` migrates or compacts only when one is due. */
+export const STARTUP_PHASES = {
+  storage: 'checking storage',
+  environment: 'reading the login environment',
+  databases: 'opening databases',
+  plugins: 'loading plugins',
+  tasks: 'recovering tasks',
+  services: 'starting services',
+  listening: 'listening',
+} as const;
+export type StartupPhase = keyof typeof STARTUP_PHASES;
+
+const PHASE_PREFIX = '[riffet] starting: ';
+
+export const startupPhaseLine = (phase: StartupPhase): string => PHASE_PREFIX + phase;
+
+/** The phase a log line announces, if it is one (stamped or not). */
+export function startupPhaseOf(line: string): StartupPhase | undefined {
+  const at = line.indexOf(PHASE_PREFIX);
+  if (at < 0) return undefined;
+  const name = line.slice(at + PHASE_PREFIX.length).trim();
+  return Object.hasOwn(STARTUP_PHASES, name) ? name as StartupPhase : undefined;
+}

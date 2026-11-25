@@ -474,7 +474,7 @@ describe('plugin storage migration', () => {
     const dir = await stateDir();
     await writeFile(join(dir, 'integrations.json'), '{}');
     await writeFile(join(dir, 'server.lock'), String(process.ppid));
-    expect(() => migratePluginStorage(dir)).toThrow('live server');
+    expect(() => migratePluginStorage(dir)).toThrow('in use by another Riffet process');
     expect(await readFile(join(dir, 'integrations.json'), 'utf8')).toBe('{}');
     await writeFile(join(dir, 'server.lock'), String(process.pid));
     migratePluginStorage(dir);

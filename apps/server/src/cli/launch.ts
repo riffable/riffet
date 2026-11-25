@@ -8,14 +8,15 @@ import { AGENT_PROCESS_BUDGET } from '../../../../packages/contracts/src/index.j
 import { isTempStateDir } from '../terminal/orphans.js';
 import { createApp } from '../app.js';
 import { isServerProfileInput, parseIdleExitMs, resolveServerProfile, serverProfileBudget, type ServerProfileInput } from '../memory/profile.js';
-import { claimStateDirectory } from '../compat.js';
-import { COMPACTION_WAIT_MS, compactionRunning, runRequestedCompaction, runStorageMigrationIfNeeded } from '../storage/compaction.js';
+import { claimStateDirectory, StateDirectoryBusy } from '../compat.js';
+import { runRequestedCompaction, runStorageMigrationIfNeeded } from '../storage/compaction.js';
 import { startDiscovery, type DiscoveryHandle } from '../discovery.js';
 import { SERVER_VERSION } from '../version.js';
-import { rotateServerLog, stampServerOutput } from '../server-log.js';
+import { rotateServerLog, stampServerOutput, startupPhaseLine, type StartupPhase } from '../server-log.js';
 import { portFree } from '../doctor.js';
 import { APP_MANAGED_HINT, DEFAULT_HOST, DEFAULT_PORT, accessToken, active, entry, health, installRoot, isLoopback, ownsPid, pidExists, readDaemon, serverUrl, stateDir, type DaemonRecord } from './context.js';
-import { drainForRestart } from './drain.js';
+import { drainWithProgress } from './drain.js';
+import { StartupStalled, logSize, startingServer, waitForStartup, type StartingServer } from './startup.js';
 import { assertSourceStartAllowed } from './source-update.js';
 import { serverSummary } from './status.js';
 import { CliError, MARK, UsageError, duration, err, hint, note, out, printLines, spinner, tilde, warning } from './ui.js';
@@ -143,10 +144,19 @@ export async function serve(options: LaunchOptions): Promise<void> {
   validateLaunchOptions(options);
   const port = Number(options.port);
   const cwd = options.workspace ? realpathSync(resolve(options.workspace)) : undefined;
-  const releaseState = claimStateDirectory(dir);
+  let releaseState: () => void;
+  try { releaseState = claimStateDirectory(dir); } catch (error) {
+    if (error instanceof StateDirectoryBusy && error.pid) throw new CliError(`Riffet is already starting or running on this state directory (pid ${error.pid})`, ['riffet status']);
+    throw error;
+  }
   process.once('exit', releaseState);
   rotateServerLog(join(dir, 'server.log'));
+  const began = Date.now();
+  // Where each start-up phase began: logged as it is entered, so a launcher can follow it, and summed once listening.
+  const phases: Array<[StartupPhase, number]> = [];
+  const enter = (phase: StartupPhase) => { phases.push([phase, Date.now()]); if (!process.stdout.isTTY) console.log(startupPhaseLine(phase)); };
   // Migrate a legacy single-file workbench.db before opening databases, then run any requested compaction.
+  enter('storage');
   runStorageMigrationIfNeeded(dir);
   runRequestedCompaction(dir);
   const instanceId = randomUUID();
@@ -156,14 +166,14 @@ export async function serve(options: LaunchOptions): Promise<void> {
   if (options.dev && !process.env.RIFFET_PLUGIN_INDEX?.trim() && existsSync(localIndex)) process.env.RIFFET_PLUGIN_INDEX = pathToFileURL(localIndex).href;
   const profile = resolveServerProfile(options.profile as ServerProfileInput | undefined);
   const idleExitMs = parseIdleExitMs(options.idleExit);
-  const began = Date.now();
   let services: Awaited<ReturnType<typeof createApp>> | undefined;
   let discovery: DiscoveryHandle | undefined;
   const path = join(dir, 'daemon.json');
   let record: DaemonRecord;
   try {
-    services = await createApp({ stateDir: dir, cliPath: options.cli, host: options.host, port, auth: options.auth !== false, allowedHosts: options.allowHost ?? [], trustedNetworks: options.trustNetwork ?? [], webRoot, instanceId, profile, profileStalls: true });
+    services = await createApp({ stateDir: dir, cliPath: options.cli, host: options.host, port, auth: options.auth !== false, allowedHosts: options.allowHost ?? [], trustedNetworks: options.trustNetwork ?? [], webRoot, instanceId, profile, profileStalls: true, onStartupPhase: enter });
     if (cwd) services.store.createProject(cwd, dirname(cwd) === cwd ? cwd : cwd.split('/').at(-1)!);
+    enter('listening');
     await services.app.listen({ host: options.host, port });
     const address = services.app.server.address();
     if (!address || typeof address === 'string') throw new Error('Could not determine the listening port');
@@ -181,6 +191,9 @@ export async function serve(options: LaunchOptions): Promise<void> {
     // The log of a background server: one plain line, stamped by stampServerOutput.
     const profileTag = profile === 'lite' ? ', profile lite' : '';
     console.log(`[riffet] ${SERVER_VERSION} listening on ${serverUrl(record)} (pid ${process.pid}, ${options.auth === false ? 'no token on loopback' : 'token required'}${profileTag})`);
+    // What a slow start spent its time on: the phases that took a measurable part of it.
+    const spent = phases.map(([phase, at], index) => [phase, (phases[index + 1]?.[1] ?? Date.now()) - at] as const).filter(([, ms]) => ms >= 100);
+    console.log(`[riffet] ready in ${seconds(Date.now() - began)}${spent.length ? ` (${spent.map(([phase, ms]) => `${phase} ${seconds(ms)}`).join(', ')})` : ''}`);
   }
   if (options.dev && process.env.RIFFET_PLUGIN_INDEX) console.log(`[riffet] plugin index: ${process.env.RIFFET_PLUGIN_INDEX}`);
   let shuttingDown = false;
@@ -224,9 +237,9 @@ function stopWhenUnused(services: Awaited<ReturnType<typeof createApp>>, idleMs:
 // ---------------------------------------------------------------------------------------------------
 // start / stop / restart
 
-const redactToken = (text: string) => text.replace(/([?&]token=)[^\s&#]+/g, '$1[REDACTED]');
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
-/** Starts a background server unless one runs; resolves to it either way. */
+/** Starts a background server unless one runs; resolves to it either way. A server already starting is waited for, not started twice. */
 export async function start(options: LaunchOptions, report: { quietIfRunning?: boolean } = {}): Promise<DaemonRecord> {
   assertSourceStartable();
   const dir = stateDir(options.stateDir);
@@ -235,64 +248,83 @@ export async function start(options: LaunchOptions, report: { quietIfRunning?: b
     if (!report.quietIfRunning) printLines(await serverSummary(existing, dir, { already: true }));
     return existing;
   }
+  const starting = startingServer(dir);
+  if (starting) return await awaitStarting(dir, starting, report);
   validateLaunchOptions(options);
   if (await portFree(options.host, Number(options.port)).then(error => error?.code === 'EADDRINUSE')) {
     throw new CliError(`Port ${options.port} is already in use`, [`lsof -nP -iTCP:${options.port} -sTCP:LISTEN`, `riffet start --port ${Number(options.port) + 1}`]);
   }
   const log = join(dir, 'server.log');
+  // Only what this server writes is followed and quoted; earlier lines belong to the server it replaces.
+  const offset = logSize(log);
   const fd = openSync(log, 'a', 0o600);
   const execArgv = [...process.execArgv];
   const resolvedProfile = resolveServerProfile(options.profile as ServerProfileInput | undefined);
   if (resolvedProfile === 'lite' && !execArgv.some(arg => arg.startsWith('--max-old-space-size'))) {
     execArgv.push(`--max-old-space-size=${serverProfileBudget('lite').v8MaxOldSpaceMb}`);
   }
+  const began = Date.now();
   const child = spawn(process.execPath, [...execArgv, entry, ...argsFor(options)], { cwd: process.cwd(), env: { ...process.env, RIFFET_MANAGED_BY: 'cli' }, detached: true, stdio: ['ignore', fd, fd] });
   child.unref();
   closeSync(fd);
   const progress = spinner('Starting Riffet');
-  // A compaction the settings page asked for runs before the service listens: wait for it, up to its own limit.
-  const began = Date.now();
-  let deadline = began + 8000, told = false;
-  while (Date.now() < deadline) {
-    await sleep(100);
-    const record = await active(dir);
-    if (record) {
-      progress.stop();
-      if (!report.quietIfRunning) printLines(await serverSummary(record, dir, { readyMs: Date.now() - began }));
-      return record;
-    }
-    if (child.exitCode !== null) break;
-    if (compactionRunning(dir)) {
-      if (!told) { progress.update('Compacting the database before Riffet starts; this can take several minutes'); told = true; }
-      deadline = Math.min(Math.max(deadline, Date.now() + 8000), began + COMPACTION_WAIT_MS);
-    }
-  }
-  progress.stop();
-  let tail = '';
-  try { tail = readFileSync(log, 'utf8').split('\n').slice(-12).join('\n').trim(); } catch { /* the log itself may be missing */ }
-  throw new CliError(`Riffet did not start${tail ? '\n' + err.dim(redactToken(tail).split('\n').map(line => '│ ' + line).join('\n')) : ''}`, [`riffet logs  ${err.dim('(full log: ' + tilde(log) + ')')}`, 'riffet doctor']);
+  let record: DaemonRecord;
+  try { record = await waitForStartup({ dir, pid: child.pid!, since: began, offset, exitCode: () => child.exitCode }, progress); }
+  finally { progress.stop(); }
+  if (!report.quietIfRunning) printLines(await serverSummary(record, dir, { readyMs: Date.now() - began }));
+  return record;
+}
+
+/** Waits for a server another command launched and that is still starting. */
+async function awaitStarting(dir: string, starting: StartingServer, report: { quietIfRunning?: boolean } = {}): Promise<DaemonRecord> {
+  note(`Riffet is still starting (pid ${starting.pid})`);
+  const progress = spinner('Starting Riffet');
+  let record: DaemonRecord;
+  try { record = await waitForStartup({ dir, pid: starting.pid, since: starting.since }, progress); }
+  finally { progress.stop(); }
+  if (!report.quietIfRunning) printLines(await serverSummary(record, dir, { readyMs: Date.now() - starting.since }));
+  return record;
+}
+
+/** The server on this state directory, waiting for one that is still starting; `undefined` when none runs. */
+async function runningOrStarting(dir: string): Promise<DaemonRecord | undefined> {
+  const record = await active(dir);
+  if (record) return record;
+  const starting = startingServer(dir);
+  return starting ? await awaitStarting(dir, starting, { quietIfRunning: true }) : undefined;
 }
 
 /** Stops the server on this state directory; resolves to whether one was running. */
 export async function stop(options: { stateDir: string }, report: { quiet?: boolean } = {}): Promise<boolean> {
   const dir = stateDir(options.stateDir);
-  const record = await active(dir);
-  if (!record) {
+  let record = await active(dir), pid = record?.pid;
+  const starting = record ? undefined : startingServer(dir);
+  if (starting) {
+    // A server still starting may be migrating storage: it is stopped once it is up, not interrupted, unless it is stuck.
+    try { record = await awaitStarting(dir, starting, { quietIfRunning: true }); pid = record.pid; }
+    catch (error) {
+      if (!(error instanceof StartupStalled) || !pidExists(starting.pid)) throw error;
+      warning(`${error.summary}; stopping it`);
+      pid = starting.pid;
+    }
+  }
+  if (!pid) {
     if (!report.quiet) process.stdout.write(`${out.dim(MARK.stopped)} Riffet is not running\n`);
     return false;
   }
-  if ((await health(record))?.managedBy === 'app') throw new CliError('This server is run by Riffet.app', [APP_MANAGED_HINT]);
-  if (!ownsPid(record)) throw new CliError(`Process ${record.pid} does not look like this Riffet server; not signalling it`, ['riffet status']);
+  if (record && (await health(record))?.managedBy === 'app') throw new CliError('This server is run by Riffet.app', [APP_MANAGED_HINT]);
+  if (record && !ownsPid(record)) throw new CliError(`Process ${record.pid} does not look like this Riffet server; not signalling it`, ['riffet status']);
+  const target = pid;
   const progress = spinner('Stopping Riffet');
-  const signal = (name: NodeJS.Signals) => { try { process.kill(record.pid, name); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; } };
+  const signal = (name: NodeJS.Signals) => { try { process.kill(target, name); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error; } };
   let stopped = false;
   try {
     signal('SIGTERM');
-    for (let i = 0; i < 70 && !stopped; i++) { await sleep(150); stopped = !pidExists(record.pid); }
+    for (let i = 0; i < 70 && !stopped; i++) { await sleep(150); stopped = !pidExists(target); }
     if (!stopped) signal('SIGKILL');
-  } finally { progress.stop(); }
-  if (!stopped) warning('Riffet did not stop in 10s and was killed; check your conversations after the next start');
-  else if (!report.quiet) process.stdout.write(`${out.ok(MARK.ok)} Stopped ${out.dim('· terminals and agent sessions keep running')}\n`);
+  } catch (error) { progress.stop(); throw error; }
+  if (!stopped) { progress.stop(); warning('Riffet did not stop in 10s and was killed; check your conversations after the next start'); }
+  else progress.done(report.quiet ? 'Stopped' : `Stopped ${err.dim('· terminals and agent sessions keep running')}`);
   return true;
 }
 
@@ -311,15 +343,10 @@ export async function restart(options: LaunchOptions & RestartWaitOptions, comma
   const next = resolveLaunchOptions(options, command, previous?.args ?? savedLaunchArgs(dir));
   validateLaunchOptions(next);
   const waitSeconds = restartWaitSeconds(options);
-  const record = await active(dir);
+  // A restart runs the build installed now, so one still starting is waited for and then restarted too.
+  const record = await runningOrStarting(dir);
   if (record && (await health(record))?.managedBy === 'app') throw new CliError('This server is run by Riffet.app', [APP_MANAGED_HINT]);
-  let release: (() => Promise<void>) | undefined;
-  if (record && waitSeconds > 0) {
-    // The conversations in the way are named once; the spinner only shows that it is still waiting.
-    let waiting = spinner('Checking for running turns');
-    try { release = await drainForRestart(record, accessToken(dir), { waitSeconds, log: message => { waiting.stop(); note(message); waiting = spinner('Waiting for them to finish'); } }); }
-    finally { waiting.stop(); }
-  }
+  const release = record && waitSeconds > 0 ? await drainWithProgress(record, accessToken(dir), waitSeconds) : undefined;
   // The service is still up if stopping failed: let it deliver again.
   try { await stop({ stateDir: dir }, { quiet: true }); } catch (error) { await release?.(); throw error; }
   await start(next);
