@@ -8,7 +8,7 @@
 
 ### Keep the riff going.
 
-自托管的 Agent CLI 工作台。
+自托管的 Agent CLI 工作台，部署在任意主机上，从任意设备继续会话。
 
 [![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
@@ -16,29 +16,25 @@
 
 [English](README.md) · 简体中文 · [主页](https://riffable.github.io/riffet/) · [插件市场](https://riffable.github.io/riffet/plugins/) · [Releases](https://github.com/riffable/riffet/releases) · [变更记录](CHANGELOG.zh-CN.md)
 
-**8** 款 Agent CLI · **5** 个客户端（`Web`、`macOS`、`iPhone`、`Android`、`飞书`）· **本地**日志 · **插件** SDK
-
 </div>
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.png">
-    <img alt="Riffet 网页工作台：五条会话以标签页打开，Agent 给出的设计方案与渲染出的时序图，右侧概览栏列出大纲、子 Agent 和产出文件，旁边是 iPhone 上的同一条会话" src="docs/assets/hero-light.png" width="100%">
+    <img alt="Riffet 网页工作台：Agent 关于按密钥限流的回答和左侧会话列表，旁边是 Android 应用里的同一条会话" src="docs/assets/hero-light.png" width="100%">
   </picture>
 </p>
 
-Riffet 是自托管的工作台，用于驱动安装在 macOS 或 Linux 主机上的 Agent CLI。会话留在主机上，可以从任一已连接的客户端发起、阅读、引导和继续：Web 工作台，macOS、iPhone、Android 原生应用，或飞书（Lark）机器人。
+Riffet 是自托管的 Agent CLI 工作台，可驱动 Claude Code、Codex、Cursor、Antigravity、TRAE CLI 等主流 Agent CLI。会话保存在你自己的主机上，支持在浏览器、macOS、iPhone 和 Android 上随时查看、引导和继续；多台主机互联后，可在一个 Web 工作台中统一管理所有会话。
 
-- **Agent。** Riffet 驱动官方 CLI（Claude Code、Codex、Cursor、Antigravity、TRAE CLI、Factory Droid、DeepSeek Harness、pi），并就地读取各 CLI 自己的会话存储。各 Agent 支持的能力见[后端能力矩阵](#后端能力矩阵)。
-- **数据。** 代码、终端、登录凭证和历史保存在服务端。客户端直连服务端。
-- **许可证。** Apache-2.0，全部功能都在开源版本中。
+Claude Code、Codex 等 Agent 独立于服务进程运行，重启服务不会中断进行中的回合，客户端断线后自动续传。代码、凭证和历史记录始终留在你的主机上。Riffet 基于 Apache-2.0 许可证开源。
 
 ---
 
 ## 安装
 
-需要 **macOS 或 Linux**、**Node.js `>= 24.19.0`**、**`tmux >= 3.2`**（Cursor、Claude Code、Antigravity 会话及实时终端视图需要），并在主机上至少安装并登录一款[受支持的 Agent CLI](#后端能力矩阵)。
+需要 macOS 或 Linux、Node.js 24.19+ 和 tmux 3.2+，并在主机上安装和登录至少一款[受支持的 Agent CLI](#后端能力矩阵)。
 
 ```bash
 npm install -g riffet
@@ -47,7 +43,7 @@ riffet start --workspace .     # 启动后台服务并添加当前代码库
 riffet                         # 在浏览器打开 http://127.0.0.1:4337/
 ```
 
-通过 npm 安装的实例使用 `riffet update` 升级（或 `npm i -g riffet@latest && riffet restart`）。不要通过 `npx` 运行：Hook 与 MCP 路径需要保持固定。
+升级使用 `riffet update`。Hook 和 MCP 依赖固定的安装路径，因此请全局安装，不要通过 `npx` 运行。
 
 ### 客户端
 
@@ -57,18 +53,27 @@ riffet                         # 在浏览器打开 http://127.0.0.1:4337/
 | macOS 应用 | [GitHub Releases 下载 `Riffet.dmg`](https://github.com/riffable/riffet/releases) *（即将发布）* | macOS 15+，Apple Silicon；内置服务端运行时 |
 | Android 应用 | [GitHub Releases 下载 `APK`](https://github.com/riffable/riffet/releases) | 扫描二维码，或输入地址与一次性配对码 |
 | iPhone 应用 | 源码构建（`apps/mobile/iosApp`） | iOS 18+，使用自己的 Apple 团队 ID 签名（见[构建说明](apps/mobile/iosApp/README.md)） |
-| 飞书 / Lark 机器人 | 服务端内置 | 在「设置 → 功能 → 机器人」连接（出站 WebSocket，无需公网 IP） |
 
 ### 连接其他设备
 
-服务端默认只监听 `127.0.0.1`。需要经局域网、Tailscale / VPN 或 HTTPS 代理从其他设备访问时：
+服务端默认只监听本机。如需从局域网、Tailscale 或 HTTPS 代理访问，请以认证模式重启并生成配对码：
 
 ```bash
 riffet restart --host 0.0.0.0 --auth
 riffet pair                    # 打印可达地址、5 分钟有效的一次性配对码与二维码
 ```
 
-iPhone 与 Android 应用扫描二维码，远端浏览器或 Mac 应用输入配对码。`--allow-host` 与用于隧道的 `riffet pair --url` 见[远程访问](docs/guide/remote-access.md)。
+手机应用扫描二维码完成配对，浏览器和 Mac 应用输入配对码。隧道与反向代理的配置见[远程访问](docs/guide/remote-access.md)。
+
+### 服务器互联
+
+```bash
+riffet link invite             # 在一台服务器上生成链接串
+riffet link join <链接串>       # 在另一台上加入，也可以粘贴到「设置 › 互联」
+riffet link ssh devbox         # 端口不可达时经 SSH 互联
+```
+
+每台服务器可分别设置是否允许对方操作本机，默认不允许；任一方解除链接即双向解除。详见[服务器链接](docs/SERVER-LINKS.md)。
 
 <details>
 <summary><strong>从源码构建</strong></summary>
@@ -93,6 +98,8 @@ ln -s "$HOME/.local/src/riffet/scripts/riffet.mjs" "$HOME/.local/bin/riffet"
 riffet                 # 启动后台服务（若未运行）并打开浏览器
 riffet status          # 查看运行状态、监听地址、数据目录与可用更新
 riffet pair            # 生成 5 分钟有效的一次性配对码与二维码（隧道可加 --url）
+riffet link            # 与另一台服务器互联：invite、join、ssh、list、rename、remove
+riffet ssh <服务器>     # 在互联的服务器上打开 shell 或执行命令
 riffet stop            # 关闭 Web 服务；tmux 中的 Agent 终端继续运行
 riffet restart         # 按已保存的监听与认证参数重启
 riffet logs -f         # 持续查看服务日志，令牌已脱敏（支持 --since、--scope）
@@ -109,89 +116,79 @@ riffet restore         # 将已校验的备份恢复到空数据目录（--backu
 riffet plugin --help   # 开发、打包、安装、管理插件源与诊断插件
 ```
 
-默认值：地址 `http://127.0.0.1:4337/`，默认后端 `cursor-agent`，私有数据目录 `~/.local/share/riffet`（目录权限 `0700`，密钥文件 `0600`），回环地址无需令牌。覆盖项：`--port`、`--host`、`--cli`、`--state-dir`、`--workspace`、`--allow-host`；前四项同时读取 `RIFFET_PORT`、`RIFFET_HOST`、`RIFFET_CLI`、`RIFFET_STATE_DIR`。
+默认值：地址 `http://127.0.0.1:4337/`，Cursor 可执行文件 `cursor-agent`，私有数据目录 `~/.local/share/riffet`（目录权限 `0700`，密钥文件 `0600`），回环地址无需令牌。覆盖项：`--port`、`--host`、`--cli`、`--state-dir`、`--workspace`、`--allow-host`；前四项同时读取 `RIFFET_PORT`、`RIFFET_HOST`、`RIFFET_CLI`、`RIFFET_STATE_DIR`。
 
 </details>
 
 ---
 
-## 后端能力矩阵
+## 功能
 
-| 后端 | CLI | 结构化对话 | 实时 TUI 终端 | 运行中引导 (Steer) | 子 Agent 详情页 | Riffet MCP / 自唤醒 | 按对话开关 MCP / Skill | @ 会话引用 | 终端导入 / 交还 |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Cursor** | `cursor-agent` | ✓ | ✓（`tmux`） | ✓ | ✓ | — | — | — | — |
-| **Claude Code** | `claude` | ✓ | ✓（`tmux`） | ✓ | ✓ | ✓ | MCP + Skills | ✓ | ✓ |
-| **Codex** | `codex` | ✓ | ✓（`--remote`） | ✓ | ✓ | ✓ | MCP | ✓ | ✓ |
-| **Antigravity** | `agy`（`1.5.6+`） | ✓ | ✓（`tmux`） | — | ✓ | ✓ | — | ✓ | — |
-| **TRAE CLI** | `traex` | ✓ | ✓（原生） | ✓ | ✓ | ✓ | MCP | — | — |
-| **DeepSeek Harness** | `dsh`（`0.2.0-rc.2+`） | ✓ | — | — | ✓ | — | — | — | — |
-| **Factory Droid** | `droid` | ✓ | — | — | ✓ | ✓ | — | — | — |
-| **pi** | `pi`（`1.4.0+`） | ✓ | — | — | — | ✓ | — | — | — |
+### 01 · 配对与互联
 
-CLI 路径通过环境变量 `RIFFET_CLI`、`CLAUDE_CLI`、`CODEX_CLI`、`DSH_CLI`、`DROID_CLI`、`TRAEX_CLI`、`PI_CLI` 指定，或在「设置 → 模型」中按配置指定（含 `agy`）。其他后端、模型源、视图和主题以插件包的形式添加，使用 [`@riffet/plugin-api`](docs/PLUGINS.md) 开发。
-
----
-
-## 工作台与核心流程
-
-### 01 · 配对与多端同步
-
-服务端运行在 Mac、Linux 机器或云服务器上，可手动启动、注册为 `launchd` / `systemd` 服务，或由 macOS 应用内置运行。手机扫码完成配对（`riffet pair`），浏览器与 Mac 应用输入一次性配对码，原生应用可保存多台服务器并随时切换。各端共享同一份会话转录与未读状态，服务重启后进行中的回合保持运行。
+- **扫码配对**：支持手机扫码连接服务器，一个客户端可同时管理多台服务器，各端实时同步同一会话。
+- **服务器互联**：支持多台服务器互联，在一个 Web 工作台中统一浏览、打开和新建各服务器上的会话。
+- **远程执行**：可授权 Agent 在互联的机器上执行命令。
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-connect-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-connect-light.gif">
-    <img alt="手机扫描桌面上的配对码，随后同一段回答在桌面和 iPhone 上同时输出，最后 Mac、iPhone 与 Android 应用并排" src="docs/assets/reel-connect-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-link-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-link-light.gif">
+    <img alt="终端里运行 riffet link ssh devbox；网页的新任务页把服务器选成 devbox，会话在 devbox 上运行；随后 Android 应用扫描网页上的配对码，进入任务列表" src="docs/assets/reel-link-light.gif" width="100%">
   </picture>
 </p>
 
-### 02 · 会话、运行中引导与并行尝试
+### 02 · 会话与模型
 
-- **沿用官方 CLI 环境。** 每条会话各自选择 Agent 和模型，CLI 原有的登录、Rules、Skills、MCP 和订阅保持原样生效。空闲 CLI 按最近使用时间和可设置的内存上限回收。
-- **终端会话导入与交还。** 在终端中开始的 Claude Code 或 Codex 会话可导入 Riffet 继续，并通过「在终端恢复」或 `riffet resume` 交还终端。同一时刻只有一方写入，转录不会交错。
-- **并行尝试。** 同一条提示词可同时发给 2–4 个 Agent 或模型，每一路运行在独立的 Git worktree 中（非 Git 目录使用影子仓库），改动并排比较后采用其中一路。*（Web、macOS）*
-- **运行中引导。** Agent 执行期间可随时追加指令而无需 `Ctrl+C`，也可排入下一轮。
-- **侧边线程与快速对话。** 选中回答中的一段可在侧边线程讨论，不进入主时间线 *（Web）*。不属于任何项目的问题直接发给模型，支持联网搜索和附件（macOS 为 `⌃⌥Space`，Android 为快捷开关、分享菜单或选中文字）。*（Web、macOS、iPhone、Android）*
+Riffet 直接驱动官方 CLI，完整保留 CLI 自身的登录、Rules、Skills、MCP 与订阅。
+
+- **Agent 与模型**：每条会话可独立选择 Agent 和模型；常用 CLI 预先启动，新会话无需冷启动。
+- **运行中引导**：支持在回合运行中追加指令，或将指令排入下一轮。
+- **终端互通**：支持导入终端中的 Claude Code、Codex 会话，也可随时交还终端继续。
+- **自定义模型源**：可自定义 LLM Provider，兼容 OpenAI、Anthropic、Google 协议，也支持通过插件接入，并实时显示剩余额度。
+- **切换与交接**：支持在会话中切换同系列模型，可将任意会话交接给其他 Agent 继续。
+- **会话引用**：支持以 `@` 引用历史会话作为上下文。
+- **导出与分享**：支持导出 PDF，或生成限时只读的分享链接。
+- **语音输入**：支持语音输入，可接入云端或本地语音识别模型。
+- **侧边会话与快速对话**：支持在回答中划选内容发起侧边会话，并提供独立于项目的快速对话。
+
+### 03 · Agent 协作
+
+- **Agent 互相调用**：支持在会话中 `@` 其他 Agent 发起调用，被调用方在独立会话中运行，可随时查看和介入。
+- **多模型协作**：支持多个模型围绕同一问题进行辩论、圆桌讨论、交叉质询和文档审阅。
+- **并行尝试**：支持将同一任务同时交给多个 Agent，在隔离的 worktree 中并行实现，择优采用。
+- **任务看板**：支持任务依赖与自动流转，前置任务验收后后续任务自动开始，可指定其他 Agent 核验交付；收件箱集中呈现需要人处理的事项。
+- **个人助理**：提供跨项目常驻的个人助理，具备独立记忆和后台委托能力。
+- **自动化**：支持定时和周期任务，Agent 也可以为自己安排后续唤醒。
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-start-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-start-light.gif">
-    <img alt="输入需求并选择 Agent，并行尝试逐个加入，可继续的终端会话列表，以及模型选择器" src="docs/assets/reel-start-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-agents-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-agents-light.gif">
+    <img alt="在提示词里提到 Codex，Claude 在本轮中调用它；两个模型一对一辩论并给出判定；验收一项交付后，看板上的下一个任务自动开始" src="docs/assets/reel-agents-light.gif" width="100%">
   </picture>
 </p>
 
-### 03 · 个人助理、任务看板与自动化
+### 04 · 视图、文件与 Git
 
-- **个人助理。** 跨项目常驻的个人助理，拥有独立页面、记忆（`USER.md` 与主题笔记）、规则、能力包与后台跟进委托（`/new` 重新开始）。运行在隔离的 Claude Code 或 Codex 上，不读取也不改动你的项目配置。*（Web、macOS、iPhone、Android、飞书私聊）*
-- **任务看板。** 会话可归属到任务，支持一句话新建任务、可选完成标准与状态流转；收件箱只呈现需要人工审批、提问或验收的事项。*（Web、macOS、iPhone、Android）*
-- **自动化。** 提示词可手动或按 cron 定时运行并保留最近 50 次记录，Agent 也可为自己安排定时唤醒。
-
-### 04 · 时间线、托管浏览器、文件与 Git
-
-- **时间线与划选工具栏。** 工具调用折叠为一行，修改展开为 Diff，子 Agent 拥有独立转录，任务目标在各端同步显示。Mermaid、D2、Graphviz、PlantUML、Vega-Lite 与 KaTeX 在本地渲染，代码高亮主题可选择和自定义。在回答或旁白中选中文字会弹出工具栏：引用到输入框、侧边聊天、悬停选色高亮、导出图片以及翻译等插件命令。
-- **多视图与查找。** 会话可在时间线、实时终端、按回合铺开命令与文件的画布，以及逐行查看会话日志、工具耗时、模型请求与 token 用量的追踪之间切换 *（画布：Web、macOS；追踪：Web）*。`⌘K` 全局搜索，会话内支持原地查找。
-- **Riffet 浏览器。** 内置浏览器插件（`riffet.browser`）通过 `playwright-core` 驱动无头 Chromium，在侧边面板实时推流画面并支持人与 Agent 共同操作，遇到登录或付款时交由用户接手。*（Web、macOS）*
-- **文件预览与 Git。** 本地预览 20 多种文件类型（沙箱 HTML、PDF、Office 文档、Jupyter Notebook、SQLite、3D 模型等）。Git 面板支持历史、按行暂存、提交、切分支、拉取推送、经 `gh` 创建 PR、每轮检查点回退或分叉，以及将 Diff 行批注发回给 Agent *（Web、macOS、iPhone、Android）*。
+- **时间线**：工具调用自动折叠，文件修改以 Diff 呈现，子 Agent 拥有独立转录，支持 Mermaid、KaTeX 等图表与公式的本地渲染。
+- **多视图**：同一会话支持对话、实时终端、画布和追踪四种视图，追踪可查看每次模型请求的 token 用量与工具调用。
+- **文件**：支持 PDF、Office、Notebook、SQLite、3D 模型等多种格式的本地预览，各端均可编辑文本文件。
+- **Git**：支持按行暂存、提交、分支、推拉与 PR；每轮自动创建检查点，可回退或分叉；支持在 Diff 上批注并发回 Agent。
+- **Code Studio**：提供 Android Studio 式的代码阅读体验，无需 Gradle 同步即可跳转定义、查找引用和查看 blame。
+- **浏览器**：内置浏览器面板，支持人与 Agent 协同操作同一网页。
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-session-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-session-light.gif">
-    <img alt="回答连同时序图逐行输出，视图翻到画布，搜索 redis，高亮一句话并在收藏里找到它，以及分享菜单" src="docs/assets/reel-session-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-views-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-views-light.gif">
+    <img alt="同一条会话依次显示为逐段生成的对话、实时终端、卡片逐张出现的画布，以及陆续到达的模型请求追踪" src="docs/assets/reel-views-light.gif" width="100%">
   </picture>
 </p>
 
-### 05 · 模型、引用、交接与导出
+### 05 · 插件
 
-- **模型源与额度。** 通过接口地址、密钥与协议（OpenAI Chat Completions / Responses、Anthropic Messages、Google Generative AI）或模型源插件添加提供方。模型选择器显示 Codex 与模型源的剩余额度，会话实时显示上下文窗口占用。标题、快速对话、交接摘要、画布摘要及插件声明用途可分别指定辅助模型。
-- **切换与交接。** 同系列模型或模型源可原地切换并继续；跨系列或额度耗尽时，连同结构化摘要交接给另一个 Agent。
-- **引用、收藏与导出。** `@` 通过只读转录快照引用之前的会话 *（Claude Code、Codex、Antigravity）*。收藏可将高亮片段、整条回答、图片和文件保存为独立快照，原会话删除后仍可阅读 *（Web、macOS）*。任一会话可导出为 PDF，或经分享插件发布为带有效期的只读链接 *（Web、macOS）*。
-
-### 06 · 插件与外观
-
-- **插件。** 内置插件（`cursor`、`antigravity`、`canvas`、`trace`、`browser`、`avatars`、`translate`）在服务进程内运行，安装的插件包默认在隔离进程中运行（见[插件架构](docs/PLUGIN_ARCHITECTURE.md)）。插件可提供 Agent 后端 *（实验性）*、模型源、工作台视图、项目任务、消息与选区菜单命令、分享发布、配色、图标包与字体。支持添加多个插件源并锁定安装来源，公开包索引见[插件市场](https://riffable.github.io/riffet/plugins/)。
+Riffet 提供完整的插件体系，可扩展 Agent 后端、模型源、会话视图、侧边面板、页面、命令、主题和 IM 通道。内置插件在服务进程内运行，第三方插件默认隔离运行。公开插件见[插件市场](https://riffable.github.io/riffet/plugins/)，开发方法见[插件开发指南](docs/PLUGINS.md)。
 
 ```bash
 riffet plugin dev ./my-plugin
@@ -199,31 +196,82 @@ riffet plugin pack ./my-plugin --out my-plugin.tgz
 riffet plugin install my-plugin.tgz
 ```
 
-- **标签页、概览栏与主题。** 会话以标签页保持打开，旁侧概览栏显示计划、大纲、子 Agent、后台任务和产出文件 *（标签页：Web，以及 macOS 的 Riffet 风格）*。内置 12 套配色与实时主题编辑器，支持替换图标包与各端界面风格（macOS：原生、Riffet、线条；Android：Material 3、iOS、Expressive、Miuix、Fluent）。
+| 扩展点 | 内置 | 官方与示例 |
+| :--- | :--- | :--- |
+| Agent 后端 *（实验性）* | `cursor`、`antigravity` | `example.echo` |
+| 模型源 | — | `riffet.litellm`、`example.gateway-models` |
+| 会话视图 | `canvas`、`trace` | — |
+| 侧边面板 | `browser` | `riffet.android`、`example.session-stats` |
+| 页面 | `code-studio` | `example.workbench-sample` |
+| 命令 | `translate` | — |
+| 外观 | `avatars` | `riffet.appearance-paper`、`example.tux-theme`、`example.graphite-theme`、`example.mono-icons` |
+| 分享、IM 通道、语音 | `feishu`、`speech-local` | `riffet.share-s3` |
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-shape-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-shape-light.gif">
-    <img alt="在主题面板上拖动色点，后面的页面随之换色，从浅色擦到深色，插件列表，以及用插件构建 Android 应用" src="docs/assets/reel-shape-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-plugins-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-plugins-light.gif">
+    <img alt="插件页和插件源目录，会话旁的 Android 构建面板近看日志滚动，以及在 Code Studio 中搜索并打开定义" src="docs/assets/reel-plugins-light.gif" width="100%">
   </picture>
+</p>
+
+### 06 · 外观
+
+- **主题**：内置多套配色，支持自定义主题、壁纸和标志，也可通过插件安装主题。
+- **界面风格**：macOS 与 Android 支持切换多种界面风格。
+- **会话布局**：支持以水平标签页管理会话，并可在侧栏查看会话的计划、大纲、子 Agent 和产出文件。
+
+<p align="center">
+  <img alt="近看主题编辑器的色板拖动色点，同一条会话换上 Tux Polar 和 Paper 主题插件，擦到深色，旁边是 Android 应用" src="docs/assets/reel-appearance.gif" width="100%">
 </p>
 
 ---
 
-## 客户端
+## 后端能力矩阵
 
-- **Web。** 由 Riffet 服务端提供的完整工作台，支持桌面标签页、移动端自适应布局与 PWA 安装。
-- **macOS。** SwiftUI + AppKit 原生应用，内置服务端，支持原生会话画布、菜单栏常驻状态与审批、快捷指令、小组件与聚焦搜索。
-- **iPhone。** 基于共享客户端核心构建的原生 SwiftUI 应用，支持推送通知、Diff、远端目录浏览、Git 面板与终端。
-- **Android。** Kotlin Multiplatform + Compose 应用，支持五种界面风格、触控终端、Git 面板与系统入口快速对话。预览功能：Agent 可在会话开关与设备生物识别双重确认下读取并操作已配对手机。
-- **飞书 / Lark。** 服务端建立出站 WebSocket 连接，不需要公网 IP、域名或内网穿透。支持在私聊或群话题中新建/继续项目会话、处理审批，以及在私聊中使用个人助理。
+| 后端 | CLI | 结构化对话 | 实时 TUI 终端 | 运行中引导 (Steer) | 子 Agent 详情页 | Riffet MCP / 自唤醒 | 按对话开关 MCP / Skill | @ 会话引用 | 可被 @ 调用 | 终端导入 / 交还 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Claude Code | `claude` | ✓ | ✓（`tmux`） | ✓ | ✓ | ✓ | MCP + Skills | ✓ | 咨询、动手 | ✓ |
+| Codex | `codex` | ✓ | ✓（`--remote`） | ✓ | ✓ | ✓ | MCP | ✓ | 咨询、动手 | ✓ |
+| Cursor | `cursor-agent` | ✓ | ✓（`tmux`） | ✓ | ✓ | ✓ | — | ✓ | 动手 | — |
+| Antigravity | `agy`（`1.5.6+`） | ✓ | ✓（`tmux`） | — | ✓ | ✓ | — | ✓ | 动手 | — |
+| TRAE CLI | `traex` | ✓ | ✓（原生） | ✓ | ✓ | ✓ | MCP | ✓ | 咨询、动手 | — |
+| DeepSeek Harness | `dsh`（`0.2.0-rc.2+`） | ✓ | — | — | ✓ | — | — | ✓ | 动手 | — |
+| Factory Droid | `droid` | ✓ | — | — | ✓ | ✓ | — | ✓ | 动手 | — |
+| pi | `pi`（`1.4.0+`） | ✓ | — | — | — | ✓ | — | ✓ | 动手 | — |
+
+**可被 @ 调用**：「咨询」只读；「动手」在新的 Git worktree 中运行，可修改文件。支持 Riffet MCP 的 Agent 均可发起调用。
+
+支持通过环境变量 `RIFFET_CLI`、`CLAUDE_CLI`、`CODEX_CLI`、`DSH_CLI`、`DROID_CLI`、`TRAEX_CLI`、`PI_CLI` 或「设置 → 模型」指定各 CLI 的路径（包括 `agy`）；其他后端可通过 [`@riffet/plugin-api`](docs/PLUGINS.md) 以插件形式接入。
+
+---
+
+## 稳定性
+
+| 能力 | 实现 | 参考 |
+| :--- | :--- | :--- |
+| 进程隔离 | Claude Code、Cursor 运行在 Riffet 管理的 `tmux` 中，Codex、TRAE CLI 运行在独立的 app-server 中，服务重启不会中断它们的回合；Droid、pi、DeepSeek Harness 随服务退出 | [消息投递](docs/DELIVERY.md) |
+| 至多一次投递 | 每条会话的输入串行排队，以 Agent 的转录或 hook 回执确认送达；崩溃后不重发未确认的消息 | `apps/server/src/native/dispatch.property.test.ts` |
+| 断点续传 | 行与同步游标在同一事务中提交，客户端从游标续传，不漏行、不重复 | [同步](docs/SYNC-V3.md) |
+| CLI 行为回归检测 | 录制真实的 CLI 会话并在测试中回放；`pnpm record <cli> all --check` 用已安装的版本重录并对比 | `scripts/record.ts` |
+| 数据校验与恢复 | journal 只追加；启动时检查数据库完整性，`riffet doctor` 报告缺失和无主的数据；备份带校验，可用 `riffet restore` 恢复 | [运行与维护](docs/guide/operations.md) |
+| 资源上限与回收 | 缓存、存储和 CLI 进程的上限集中定义，与移动端共用；空闲 CLI 按最近使用时间和内存预算回收 | [性能规范](docs/guide/performance.md) |
+
+---
+
+## 各端的差异
+
+Web 端功能最完整，支持安装为 PWA；服务器互联、Agent 调用、模型协作、任务看板、追踪和 Code Studio 目前仅在 Web 端提供。
+
+- **macOS**：SwiftUI + AppKit 原生应用，内置服务端，支持菜单栏审批、快捷指令、小组件和聚焦搜索；经授权后，Agent 可截取窗口、读写剪贴板和发送通知。
+- **iPhone**：SwiftUI 原生应用，支持在推送通知中直接审批和回复（需自行配置 APNs），提供小组件和终端。
+- **Android**：Kotlin Multiplatform + Compose 应用，提供触控终端；经会话授权和生物识别确认后，Agent 可操作这台手机（预览）。
 
 ---
 
 ## 架构
 
-Riffet 是单节点服务，位于客户端与同一主机上已安装的 agent CLI 之间。命令沿一条路径送达 agent；agent 的输出沿另一条路径返回，折叠成各客户端一致的行。
+Riffet 是单节点服务，位于客户端与同一主机上已安装的 Agent CLI 之间。命令沿一条路径送达 Agent；Agent 的输出沿另一条路径返回，折叠成各客户端一致的行。
 
 <p align="center">
   <picture>
@@ -235,28 +283,13 @@ Riffet 是单节点服务，位于客户端与同一主机上已安装的 agent 
 
 设计原则：
 
-1. **厂商 CLI 即 agent。** Riffet 通过 CLI 自身的接口驱动已安装的程序，不重新实现。
-2. **单一会话模型。** agent 之间的差异止于驱动契约，契约之上不出现厂商名。
-3. **命令与观测分离。** 消息以观测到回执为送达，不以写入为准。
+1. **厂商 CLI 即 Agent。** Riffet 通过 CLI 自身的接口驱动已安装的程序，不重新实现。
+2. **单一会话模型。** Agent 之间的差异止于驱动契约，契约之上不出现厂商名。
+3. **命令与观测分离。** 观测到回执才算送达，写入不算。
 4. **Journal 是唯一事实来源。** 时间线、状态、用量与搜索都是它的投影。
 5. **服务端折叠，客户端渲染。** 客户端从游标续传，得到同一份行。
-6. **单节点。** 一个进程、一个数据库文件、一个用户，不依赖外部服务。
-7. **依赖向内。** 表面与驱动依赖核心，反向不成立；可选能力以插件提供。
-
-| 子系统 | 职责 | 代码 |
-| :--- | :--- | :--- |
-| Clients | 渲染行，保存行的副本与缓存，发送命令 | `apps/web`、`apps/mobile`、`apps/macos` |
-| Access | 设备鉴权，终结 HTTP、SSE、WebSocket，适配聊天通道 | `apps/server/src/auth.ts`、`apps/server/src/routes`、`apps/server/src/channels` |
-| Session core：Delivery | 消息排队，一次放行一个回合，至多写入一次，跟踪到回执 | `apps/server/src/native` |
-| Session core：Journal | 只追加的事件日志，按会话有序 | `apps/server/src/journal` |
-| Session core：Timeline | 把事件折叠成客户端渲染的行 | `apps/server/src/timeline`、`packages/timeline` |
-| Session core：Sync | 按各客户端的游标推送行 | `apps/server/src/sync` |
-| Agent integration | 每个 agent 一个驱动，共用一份契约；终端宿主、hook 桥、工具桥 | `apps/server/src/backends`、`apps/server/src/terminal`、`apps/server/src/riffet-mcp` |
-| Automation & Assistant | 个人助理、任务看板、定时自动化与交接 | `apps/server/src/assistant`、`apps/server/src/work-items`、`apps/server/src/orchestration`、`apps/server/src/tasks` |
-| Workspace | agent 工作目录的文件、git 与工作树 | `apps/server/src/workspace`、`apps/server/src/git` |
-| Derived views | 由 journal 派生的读模型：用量、搜索索引、标题、分享 | `apps/server/src/stats`、`apps/server/src/search`、`apps/server/src/shares` |
-| Extension | 在声明的扩展点加载插件；安装包默认隔离运行 | `apps/server/src/plugins-host`、`packages/plugin-api` |
-| Platform | SQLite 存储、设置、进程执行、服务生命周期 | `apps/server/src/store.ts`、`apps/server/src/exec.ts` |
+6. **单节点。** 一个进程、内嵌 SQLite（三个数据库加一个 blob 存储）、一个用户，不依赖外部服务。互联的服务器彼此对等，不共享数据。
+7. **依赖向内。** 客户端接入层与驱动依赖核心，反向不成立；可选能力以插件提供。
 
 各子系统、导入分层与运行时拓扑（进程、文件、接口）各有一张图，见 [docs/guide/architecture.md](docs/guide/architecture.md)。
 
@@ -286,14 +319,14 @@ cd apps/macos
 ./scripts/release.sh          # 构建签名与公证后的 DMG
 ```
 
-自动化测试遵循[仓库协作规范](AGENTS.md#测试与验证)：非必要不增加测试，只覆盖鉴权与数据隔离、外部协议契约、幂等、持久化、并发一致性与故障恢复，不维护 UI 展示、样式或简单格式化测试。提交 PR 前的完整检查与 npm 打包步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+提交 PR 前的检查和 npm 打包步骤见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 文档索引
 
 - **使用指南**：[对话、模型与会话](docs/guide/conversation.md) · [Cursor 原生会话与自定义网关](docs/guide/cursor.md) · [工作区、多格式预览与 Git](docs/guide/workspace.md) · [远程访问](docs/guide/remote-access.md) · [运行、部署与维护](docs/guide/operations.md) · [代码结构与前端约定](docs/guide/architecture.md) · [版本、发布与分发](docs/RELEASE.md)
-- **核心工作流**：[个人助理](docs/ASSISTANT.md) · [任务看板](docs/TASK-BOARD.md) · [审阅发布与会话编排](docs/ORCHESTRATION.md) · [运行中会话引导](docs/STEER.md) · [侧边聊天](docs/DISCUSSIONS.md) · [快速对话](docs/QUICK-CHAT.md) · [高亮与收藏](docs/MARKS.md) · [会话分享与 PDF 导出](docs/SHARES.md) · [用量与吞吐统计](docs/STATS.md)
-- **多端与通道**：[设计体系](docs/design/system/README.md) · [Web 设计契约](docs/WEB.md) · [macOS 客户端](docs/MACOS.md) · [Android 与移动端](docs/MOBILE.md) · [iPhone 客户端](docs/IOS.md) · [移动端终端](docs/MOBILE-TERMINAL.md) · [飞书 / IM 通道](docs/design/channels.md) · [Riffet 浏览器](docs/BROWSER.md) · [设备操控与 Riffet MCP](docs/DEVICES.md) · [服务器链接](docs/SERVER-LINKS.md) · [主题系统](docs/THEMES.md)
-- **扩展与运维**：[扩展管理](docs/EXTENSIONS.md) · [插件开发指南](docs/PLUGINS.md) · [插件架构](docs/PLUGIN_ARCHITECTURE.md) · [Antigravity CLI](docs/ANTIGRAVITY.md) · [TRAE CLI](docs/TRAEX.md) · [pi RPC](docs/PI.md) · [更新机制](docs/UPDATE.md) · [安全模型](docs/SECURITY.md)
+- **核心工作流**：[个人助理](docs/ASSISTANT.md) · [任务看板](docs/TASK-BOARD.md) · [审阅发布与会话编排](docs/ORCHESTRATION.md) · [调用其他 Agent](docs/AGENT-CALLS.md) · [运行中会话引导](docs/STEER.md) · [侧边聊天](docs/DISCUSSIONS.md) · [快速对话](docs/QUICK-CHAT.md) · [高亮与收藏](docs/MARKS.md) · [会话分享与 PDF 导出](docs/SHARES.md) · [用量与吞吐统计](docs/STATS.md)
+- **多端与通道**：[设计体系](docs/design/system/README.md) · [Web 设计契约](docs/WEB.md) · [macOS 客户端](docs/MACOS.md) · [Android 与移动端](docs/MOBILE.md) · [iPhone 客户端](docs/IOS.md) · [移动端终端](docs/MOBILE-TERMINAL.md) · [IM 通道](docs/design/channels.md) · [Riffet 浏览器](docs/BROWSER.md) · [Code Studio](docs/CODE-STUDIO.md) · [会话追踪](docs/TRACE.md) · [语音输入](docs/VOICE.md) · [设备操控与 Riffet MCP](docs/DEVICES.md) · [服务器链接](docs/SERVER-LINKS.md) · [主题系统](docs/THEMES.md)
+- **扩展与运维**：[扩展管理](docs/EXTENSIONS.md) · [插件开发指南](docs/PLUGINS.md) · [插件架构](docs/PLUGIN_ARCHITECTURE.md) · [Antigravity CLI](docs/ANTIGRAVITY.md) · [TRAE CLI](docs/TRAEX.md) · [pi RPC](docs/PI.md) · [更新机制](docs/UPDATE.md) · [消息投递](docs/DELIVERY.md) · [同步](docs/SYNC-V3.md) · [安全模型](docs/SECURITY.md)
 
 ## 致谢与许可证
 
