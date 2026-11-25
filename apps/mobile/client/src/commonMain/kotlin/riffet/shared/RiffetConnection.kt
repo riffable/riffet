@@ -4,7 +4,11 @@ import io.ktor.client.HttpClient
 import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.withLock
@@ -26,6 +30,8 @@ class RiffetConnection(
     private val parseContext: CoroutineContext = Dispatchers.Default,
 ) {
     private var api: RiffetApi? = null
+    /** Moves paired servers to TLS in the background ([securePairings]); ends with [close]. */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     var baseUrl: String? = null
         private set
@@ -70,7 +76,37 @@ class RiffetConnection(
     suspend fun restore(): RiffetApi? = pairingChanges.withLock {
         val state = tokens.pairings()
         state.applyRoutes()
+        if (state.servers.any { it.tlsFingerprint == null }) background.launch { securePairings() }
         state.servers.firstOrNull { it.origin == state.activeOrigin }?.let { connect(it.baseUrl) }
+    }
+
+    /**
+     * Moves every paired server that speaks TLS on its port, and has no certificate pinned yet, to TLS
+     * (docs/TRANSPORT-SECURITY.md §11). The fingerprint comes from `/api/devices/prove`, under an HMAC only the server
+     * holding this device's record can give, and is kept only once that server answers over TLS with it. A server
+     * reached through an HTTPS front door, or too old to say, stays as it is.
+     */
+    @Throws(Exception::class)
+    suspend fun securePairings() {
+        val pending = pairingChanges.withLock { tokens.pairings().servers.filter { it.tlsFingerprint == null && !it.baseUrl.startsWith("https") } }
+        for (credential in pending) {
+            val fingerprint = http.proveDevice(credential.route ?: credential.baseUrl, credential.token)?.tlsFingerprint ?: continue
+            TransportPins.put(credential.origin, fingerprint)
+            val answers = runCatching { withTimeoutOrNull(REACH_TIMEOUT_MILLIS) { probe(credential.baseUrl).authStatus(); true } == true }.getOrDefault(false)
+            pairingChanges.withLock {
+                val state = tokens.pairings()
+                val current = state.servers.firstOrNull { it.origin == credential.origin && it.token == credential.token }
+                if (!answers || current == null) {
+                    state.applyRoutes()
+                    return@withLock
+                }
+                val next = state.copy(servers = state.servers.map { if (it === current) it.copy(tlsFingerprint = fingerprint) else it })
+                withContext(NonCancellable) {
+                    tokens.savePairings(next.encoded())
+                    next.applyRoutes()
+                }
+            }
+        }
     }
 
     @Throws(Exception::class)
@@ -173,9 +209,11 @@ class RiffetConnection(
     @Throws(Exception::class)
     suspend fun pair(payload: PairingPayload): IssuedDevice {
         val urls = payload.baseUrls
+        // A QR that names the server's certificate pairs over TLS: every address it lists is that server's.
+        payload.fingerprint?.let { fingerprint -> urls.mapNotNull(::serverOrigin).forEach { TransportPins.put(it, fingerprint) } }
         val base = if (urls.size == 1) payload.baseUrl else firstReachable(urls)
             ?: throw RiffetNetworkException(L10n.uiText("connection.pairingTimeout"), IllegalStateException("No pairing address answered"))
-        return pair(base, payload.code, deviceInfo.deviceName, payload.name, alternates = urls - base)
+        return pair(base, payload.code, deviceInfo.deviceName, payload.name, alternates = urls - base, tlsFingerprint = payload.fingerprint)
     }
 
     /**
@@ -211,6 +249,29 @@ class RiffetConnection(
         deviceName: String,
         name: String? = null,
         alternates: List<String> = emptyList(),
+        tlsFingerprint: String? = null,
+    ): IssuedDevice {
+        val issued = pairLocked(baseUrl, code, deviceName, name, alternates, tlsFingerprint)
+        // Paired without the certificate (an older QR, an address typed in): moved to TLS now, once the server proves it.
+        if (tlsFingerprint == null) {
+            try {
+                withTimeoutOrNull(2 * REACH_TIMEOUT_MILLIS) { securePairings() }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                // Stays on plain HTTP until the next start tries again.
+            }
+        }
+        return issued
+    }
+
+    private suspend fun pairLocked(
+        baseUrl: String,
+        code: String,
+        deviceName: String,
+        name: String?,
+        alternates: List<String>,
+        tlsFingerprint: String?,
     ): IssuedDevice =
         pairingChanges.withLock {
             val state = tokens.pairings()
@@ -229,6 +290,7 @@ class RiffetConnection(
                 lastUsedAt = platformNowMillis(),
                 alternates = alternates.map { it.trim().trimEnd('/') }.filter { serverOrigin(it) != origin }.distinct()
                     .ifEmpty { previous?.alternates.orEmpty() },
+                tlsFingerprint = tlsFingerprint,
             )
             withContext(NonCancellable) {
                 val next = state.copy(activeOrigin = origin, servers = state.servers.filterNot { it.origin == origin } + saved)
@@ -266,7 +328,10 @@ class RiffetConnection(
         if (origin != null) forgetServer(origin)
     }
 
-    fun close() { http.close() }
+    fun close() {
+        background.cancel()
+        http.close()
+    }
 }
 
 /**

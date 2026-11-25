@@ -298,6 +298,16 @@ export class Auth {
     const device=this.devices.find(candidate=>candidate.id===id);
     return device&&createHmac('sha256',device.hash).update(nonce).digest('base64url');
   }
+  /**
+   * The same proof over this server's TLS certificate (docs/TRANSPORT-SECURITY.md §11): a device paired before TLS
+   * learns the fingerprint to pin from an answer only the server holding its record could give, so it moves to TLS
+   * without being paired again. The fingerprint is uppercase hex without separators.
+   */
+  proveTls(id: string, nonce: string, fingerprint: string): string | undefined {
+    const device=this.devices.find(candidate=>candidate.id===id);
+    const normal=fingerprint.replace(/[^0-9a-f]/gi,'').toUpperCase();
+    return device&&createHmac('sha256',device.hash).update(`riffet-tls\n${nonce}\n${normal}`).digest('base64url');
+  }
   /** The APNs registration a device reported; it stays server-side (the push service only). */
   devicePush(id: string): DevicePushRegistration | undefined { return this.devices.find(candidate=>candidate.id===id)?.push??undefined; }
   /**

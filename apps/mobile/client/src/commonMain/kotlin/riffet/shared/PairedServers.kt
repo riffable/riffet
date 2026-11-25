@@ -43,6 +43,8 @@ internal data class PairedCredential(
     val route: String? = null,
     /** The pairing QR's other addresses, tried by [RiffetConnection.relocate] where discovery finds nothing. */
     val alternates: List<String> = emptyList(),
+    /** The server's TLS certificate SHA-256 once pinned; its requests then go over TLS ([TransportPins]). */
+    val tlsFingerprint: String? = null,
 ) {
     fun server() = PairedServer(origin, baseUrl, name, lastUsedAt)
 }

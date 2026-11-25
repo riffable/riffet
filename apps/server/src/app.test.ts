@@ -2509,6 +2509,12 @@ describe('API authentication boundary', () => {
     // Both ends show the same comparison code.
     const listed = (await call('/api/devices', { bearer: token, cert: true })).json.devices as Array<{ id: string; verificationCode?: string }>;
     expect(listed.find(device => device.id === paired.json.device.id)?.verificationCode).toBe(verificationCode('riffet-device-sas', fp, phone.fingerprint));
+    // A device paired before TLS learns the fingerprint from an answer keyed by its own record.
+    const nonce = 'n'.repeat(16), hex = fp.replace(/:/g, '');
+    const proved = await app.inject({ method: 'POST', url: '/api/devices/prove', headers: { host: '127.0.0.1' }, payload: { device: paired.json.device.id, nonce } });
+    const { createHmac } = await import('node:crypto');
+    const key = createHash('sha256').update(token).digest('base64url');
+    expect(proved.json().tls).toEqual({ fingerprint: hex, proof: createHmac('sha256', key).update(`riffet-tls\n${nonce}\n${hex}`).digest('base64url') });
   });
 
   it('rejects absolute-form request targets before any handler, including WebSocket upgrades', async () => {

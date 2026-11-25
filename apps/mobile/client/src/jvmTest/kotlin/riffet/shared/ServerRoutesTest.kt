@@ -28,7 +28,10 @@ class ServerRoutesTest {
     private val token = "wkn_0123456789abcdef_c2VjcmV0LXRoYXQtbXVzdC1zdGF5"
 
     @AfterTest
-    fun reset() = ServerRoutes.replace(emptyMap())
+    fun reset() {
+        ServerRoutes.replace(emptyMap())
+        TransportPins.replace(emptyMap())
+    }
 
     /** What `Auth.proveDevice` answers: HMAC-SHA256 keyed by the stored hash, base64url(sha256(token)). */
     private fun serverProof(token: String, nonce: String): String {
@@ -36,6 +39,27 @@ class ServerRoutesTest {
         val key = url.encodeToString(MessageDigest.getInstance("SHA-256").digest(token.toByteArray()))
         val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(key.toByteArray(), "HmacSHA256")) }
         return url.encodeToString(mac.doFinal(nonce.toByteArray()))
+    }
+
+    @Test
+    fun aProofVouchesForTheServersCertificateAndAPinnedServerIsReachedOverTls() = runTest {
+        val fingerprint = "AB".repeat(32)
+        var vouched = fingerprint
+        val seen = mutableListOf<HttpRequestData>()
+        val client = HttpClient(MockEngine { request ->
+            seen += request
+            val nonce = (request.body as? TextContent)?.let { RiffetJson.instance.parseToJsonElement(it.text).jsonObject["nonce"]!!.jsonPrimitive.content }
+                ?: return@MockEngine respond("{}", HttpStatusCode.OK, jsonHeaders)
+            respond("""{"proof":"${serverProof(token, nonce)}","tls":{"fingerprint":"$fingerprint","proof":"${serverProof(token, "riffet-tls\n$nonce\n$vouched")}"}}""", HttpStatusCode.OK, jsonHeaders)
+        }) { installRiffetClient() }
+        assertEquals(fingerprint, client.proveDevice("http://10.0.0.5:4337", token)?.tlsFingerprint)
+        // A fingerprint the proof does not cover is not one to pin.
+        vouched = "CD".repeat(32)
+        assertEquals(null, client.proveDevice("http://10.0.0.5:4337", token)?.tlsFingerprint)
+        TransportPins.replace(mapOf("http://10.0.0.5:4337" to fingerprint))
+        RiffetApi(client, "http://10.0.0.5:4337", tokenProvider = { token }).get("/api/sessions")
+        assertEquals("https://10.0.0.5:4337/api/sessions", seen.last().url.toString())
+        client.close()
     }
 
     @Test

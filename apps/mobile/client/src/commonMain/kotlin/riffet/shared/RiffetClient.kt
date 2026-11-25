@@ -94,8 +94,8 @@ fun HttpClientConfig<*>.installRiffetClient(config: RiffetClientConfig = RiffetC
 }
 
 /**
- * Creates the real client. With no engine argument Ktor resolves one from the platform artifacts
- * (`ktor-client-okhttp` on Android, `ktor-client-darwin` on iOS).
+ * Creates the real client: OkHttp on Android, Darwin on Apple, each trusting a paired server's pinned certificate
+ * ([TransportPins]).
  */
 fun createRiffetHttpClient(config: RiffetClientConfig = RiffetClientConfig()): HttpClient =
-    HttpClient { installRiffetClient(config) }
+    platformHttpClient { installRiffetClient(config) }

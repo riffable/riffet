@@ -45,6 +45,11 @@ data class PairingPayload(
      * from an older server carries only [host].
      */
     val hosts: List<String> = listOf(host),
+    /**
+     * The server's TLS certificate SHA-256 (`fp`, docs/TRANSPORT-SECURITY.md §5). With it the app pairs and talks over TLS
+     * on the same port, pinning this certificate; a QR from an older server has none.
+     */
+    val fingerprint: String? = null,
 ) {
     /**
      * Plain HTTP over a LAN is the documented tradeoff (`docs/MOBILE.md`, 网络接入): the token
@@ -94,9 +99,10 @@ data class PairingPayload(
                 .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
                 .filter { it.isNotEmpty() && it.all { char -> char in 'a'..'z' || char in 'A'..'Z' || char in '0'..'9' || char in ".-_" } }
                 .take(MAX_HOSTS)
+            val fingerprint = (payload["fp"] as? JsonPrimitive)?.contentOrNull?.let(::normalFingerprint)?.takeIf { it.length == 64 }
             return PairingPayload(
                 v = version, host = host, port = port, code = code, name = name, scheme = scheme,
-                hosts = (listOf(host) + hosts).distinct(),
+                hosts = (listOf(host) + hosts).distinct(), fingerprint = fingerprint,
             )
         }
     }

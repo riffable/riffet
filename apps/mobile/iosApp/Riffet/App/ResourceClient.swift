@@ -26,7 +26,9 @@ final class ResourceClient {
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""), url.user == nil, url.password == nil else {
             throw ClientFailure(String(localized: "不支持这个资源地址", bundle: .riffet))
         }
-        var request = URLRequest(url: url)
+        // A server whose certificate is pinned is reached over TLS, as the shared client reaches it.
+        let sent = URL(string: TransportPinsKt.transportUrl(url: url.absoluteString)) ?? url
+        var request = URLRequest(url: sent)
         request.timeoutInterval = 30
         if ServerAddress.sameOrigin(url, baseURL), let authorization = try await host.authorizationFor(url: url.absoluteString) {
             request.setValue(authorization, forHTTPHeaderField: "Authorization")
@@ -74,7 +76,8 @@ final class ResourceClient {
         let (_, response) = try await mintSession.data(for: request(for: raw))
         guard let http = response as? HTTPURLResponse else { throw ClientFailure(String(localized: "无法加载资源（HTTP 0）", bundle: .riffet)) }
         guard (300..<400).contains(http.statusCode), let location = http.value(forHTTPHeaderField: "Location"),
-              let url = URL(string: location, relativeTo: http.url ?? raw)?.absoluteURL,
+              // Resolved against the address asked for, not the TLS one it went out as, so it keeps the paired origin.
+              let url = URL(string: location, relativeTo: raw)?.absoluteURL,
               ServerAddress.sameOrigin(url, baseURL), url.path.contains("/api/file-sites/") else {
             try validate(response)
             throw ClientFailure(String(localized: "无法加载资源（HTTP \(http.statusCode)）", bundle: .riffet))
@@ -102,6 +105,17 @@ final class ResourceClient {
 private final class ResourceNoRedirect: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        pairedServerTrust(challenge)
+    }
+}
+
+/// A paired server's own certificate is accepted by its pin (docs/TRANSPORT-SECURITY.md §3); anything else as the system decides.
+func pairedServerTrust(_ challenge: URLAuthenticationChallenge) -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+    guard TransportTrustKt.trustsPairedServer(space: challenge.protectionSpace), let trust = challenge.protectionSpace.serverTrust else {
+        return (.performDefaultHandling, nil)
+    }
+    return (.useCredential, URLCredential(trust: trust))
 }
 
 private final class ResourceRedirectPolicy: NSObject, URLSessionTaskDelegate {
@@ -111,6 +125,9 @@ private final class ResourceRedirectPolicy: NSObject, URLSessionTaskDelegate {
               ["http", "https"].contains(next.scheme?.lowercased() ?? ""),
               ServerAddress.sameOrigin(original, next) else { completionHandler(nil); return }
         completionHandler(request)
+    }
+    func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
+        pairedServerTrust(challenge)
     }
 }
 

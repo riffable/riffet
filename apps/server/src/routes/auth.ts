@@ -107,7 +107,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     if(typeof device!=='string'||typeof nonce!=='string'||!/^[A-Za-z0-9_-]{16,128}$/.test(nonce))throw new AppError('INVALID_DEVICE_PROOF','device and a 16–128 character nonce are required',400);
     const proof=auth.proveDevice(device,nonce);
     if(!proof)throw new AppError('DEVICE_NOT_FOUND','No such paired device',404);
-    return {proof};
+    const fingerprint=deps.tlsFingerprint.replace(/:/g,'');
+    return {proof,tls:{fingerprint,proof:auth.proveTls(device,nonce,fingerprint)}};
   });
   // `currentId` is the caller's own record (a paired browser or phone), so a list can say which one removing would sign out.
   app.get('/api/devices',async(request)=>{const {deviceId}=auth.authenticate(request);return {devices:deps.devices.list(),...(deviceId?{currentId:deviceId}:{})};});
