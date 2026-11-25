@@ -434,6 +434,11 @@ msgstr "对方未允许这台服务器操作它"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
+msgid "error.LINK_INSECURE_TRANSPORT"
+msgstr "连接未加密，链接串可能被截获。请在本机网页、HTTPS 地址或命令行里操作"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
 msgid "error.LINK_MISMATCH"
 msgstr "对方的身份和互联时记录的不一致"
 

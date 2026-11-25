@@ -222,6 +222,9 @@ function LinkGroup({ link, busy, onInbound, onEdit, onRemove }: { link: LinkInfo
       </div>
     </div>
     {link.state !== 'removed' && <div className="pb-2"><LinkDirectionSummary link={link} /></div>}
+    {link.state !== 'removed' && <SettingsRow title={t`比对码`} description={t`${link.name} 上显示的应与此相同，不同就断开`}>
+      <span className="font-mono text-sm tabular-nums text-fg">{link.verificationCode}</span>
+    </SettingsRow>}
     {link.state !== 'removed' && <SettingsRow title={t`允许 ${link.name} 操作这台电脑`} description={t`开启后对方可浏览本机目录并新建会话；${link.name} 被他人控制时也会波及这台电脑`}>
       <Switch checked={link.inbound} disabled={busy} onCheckedChange={onInbound} aria-label={t`允许 ${link.name} 操作这台电脑`} />
     </SettingsRow>}

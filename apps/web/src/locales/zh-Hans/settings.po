@@ -77,6 +77,11 @@ msgstr "{0} 上下文长度"
 
 #. placeholder {0}: link.name
 #: src/app/settings/LinksSection.tsx
+msgid "{0} 上显示的应与此相同，不同就断开"
+msgstr "{0} 上显示的应与此相同，不同就断开"
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
 msgid "{0} 不能操作这台电脑"
 msgstr "{0} 不能操作这台电脑"
 
@@ -7079,6 +7084,10 @@ msgstr "每类组件的形态"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "比例"
 msgstr "比例"
+
+#: src/app/settings/LinksSection.tsx
+msgid "比对码"
+msgstr "比对码"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "比较"

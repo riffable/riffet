@@ -2454,6 +2454,9 @@ describe('API authentication boundary', () => {
     const { token: deviceToken } = auth.issueDevice('Phone');
     const device = await app.inject({ method: 'POST', url: '/api/projects', remoteAddress: '192.0.2.10', headers: { host: '127.0.0.1', authorization: `Bearer ${deviceToken}` }, payload: { cwd: tmpdir() } });
     expect(device.statusCode).toBe(200);
+    // A link string admits a server, so it never crosses an unencrypted connection, whoever asks.
+    const invite = await app.inject({ method: 'POST', url: '/api/links/invites', remoteAddress: '192.0.2.10', headers: { host: '127.0.0.1', authorization: `Bearer ${deviceToken}` }, payload: { inbound: false } });
+    expect(invite.json().error.code).toBe('LINK_INSECURE_TRANSPORT');
   });
 
   it('rejects absolute-form request targets before any handler, including WebSocket upgrades', async () => {

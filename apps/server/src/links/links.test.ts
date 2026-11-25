@@ -72,6 +72,10 @@ describe('server links', () => {
     expect(servers[1]).toMatchObject({ id: b.serverId, outbound: true, inbound: false, online: true });
     const fromB = (await b.call<{ links: Array<{ serverId: string; inbound: boolean; outbound: boolean; dialer: boolean }> }>('GET', '/api/links')).body.links;
     expect(fromB).toEqual([expect.objectContaining({ serverId: a.serverId, inbound: true, outbound: false, dialer: false })]);
+    // Both ends derive the same comparison code from the two certificates.
+    const code = (await a.call<{ links: Array<{ verificationCode: string }> }>('GET', '/api/links')).body.links[0]?.verificationCode;
+    expect(code).toMatch(/^\d{3} \d{3}$/);
+    expect((fromB[0] as { verificationCode?: string }).verificationCode).toBe(code);
   });
 
   it('names the linked servers in its own bootstrap, not in one read through the link', async () => {

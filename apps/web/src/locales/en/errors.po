@@ -434,6 +434,11 @@ msgstr "The other server doesn't let this one operate it"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
+msgid "error.LINK_INSECURE_TRANSPORT"
+msgstr "This connection isn't encrypted, so the link string could be intercepted. Use this computer's own page, an HTTPS address, or the command line"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
 msgid "error.LINK_MISMATCH"
 msgstr "The other server's identity doesn't match the one it linked with"
 

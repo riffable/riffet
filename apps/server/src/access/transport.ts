@@ -33,10 +33,10 @@ export function secureTransport(request: { ip: string; headers: IncomingHttpHead
 
 /** Tailscale's CGNAT range and its IPv6 ULA prefix: traffic between nodes is WireGuard. */
 const OVERLAY = new BlockList();
-OVERLAY.addSubnet('100.64.0.0', 10, 'ipv4');
+OVERLAY.addSubnet('100.64.0.0', 10, 'ipv4'); // privacy: allow Tailscale's published range
 OVERLAY.addSubnet('fd7a:115c:a1e0::', 48, 'ipv6');
 
-/** Parses `--trust-network` values (`10.8.0.0/24`, `fd00::/8`, or a single address). Throws on anything else. */
+/** Parses `--trust-network` values (`10.8.0.0/24`, `fd00::/8`, or a single address; privacy: allow example). Throws on anything else. */
 export function trustedNetworks(values: readonly string[] | undefined): BlockList | undefined {
   if (!values?.length) return undefined;
   const list = new BlockList();

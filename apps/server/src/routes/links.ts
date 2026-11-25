@@ -16,7 +16,7 @@ export const LINK_TUNNEL_ROUTE = '/api/links/tunnel';
 /** Forwards to a linked server (docs/SERVER-LINKS.md §4); judged by the route it reaches there (`app.ts`). */
 export const SERVER_FORWARD_ROUTE = '/api/servers/:serverId/*';
 
-export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkService; auth: Auth; deviceName: (id: string) => string | undefined }) {
+export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkService; auth: Auth; deviceName: (id: string) => string | undefined; secure: (request: FastifyRequest) => boolean }) {
   const { links, auth } = deps;
 
   app.get('/api/servers', async () => ({ servers: links.servers() }));
@@ -28,7 +28,14 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
     return { self: links.setSelfName(name) };
   });
 
+  // A link string carries the secret that admits a server; on an unencrypted connection anyone on the path could use
+  // it first (docs/TRANSPORT-SECURITY.md §5). The CLI and this machine's own page reach the server over loopback.
+  const requireSecure = (request: FastifyRequest) => {
+    if (!deps.secure(request)) throw new AppError('LINK_INSECURE_TRANSPORT', 'Link strings are only made and used over an encrypted connection', 403);
+  };
+
   app.post<{ Body: Partial<LinkInviteRequest> }>('/api/links/invites', async request => {
+    requireSecure(request);
     const body = request.body ?? {};
     if (typeof body.inbound !== 'boolean') throw new AppError('INVALID_INPUT', 'inbound must be true or false', 400);
     if (body.url !== undefined && typeof body.url !== 'string') throw new AppError('INVALID_INPUT', 'url must be a string', 400);
@@ -36,6 +43,7 @@ export function registerLinkRoutes(app: FastifyInstance, deps: { links: LinkServ
   });
 
   app.post<{ Body: Partial<LinkJoinRequest> }>('/api/links/join', async request => {
+    requireSecure(request);
     const body = request.body ?? {};
     if (typeof body.link !== 'string' || !body.link.trim()) throw new AppError('INVALID_INPUT', 'link must be a link string', 400);
     if (typeof body.inbound !== 'boolean') throw new AppError('INVALID_INPUT', 'inbound must be true or false', 400);

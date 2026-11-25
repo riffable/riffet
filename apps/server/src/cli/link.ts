@@ -25,6 +25,7 @@ export async function linkInvite(options: Common & { url?: string; allowIn?: boo
   note(`On the other server: riffet link join '<this string>'. It works once, for ${Math.round((invite.expiresAt - Date.now()) / 60_000)} minutes.`);
   if (!options.url) note('It has no address, so only `riffet link ssh` can use it; pass --url to join directly');
   note(options.allowIn ? 'The other server will be able to operate this one' : 'The other server will not be able to operate this one; pass --allow-in to let it');
+  note('After it joins, `riffet link list` shows a code on each server; the two must match');
 }
 
 export async function linkJoin(options: Common & { link: string; allowIn?: boolean }) {
@@ -33,6 +34,7 @@ export async function linkJoin(options: Common & { link: string; allowIn?: boole
   if (options.json) { printJson(link); return; }
   success(`Linked with ${link.name}`);
   printLines(describe([link]));
+  note(`${link.name} should show the same code ${link.verificationCode} for this server; if it does not, remove the link`);
 }
 
 /** Gets a link string from the other machine over SSH, then joins it with the tunnel running over SSH too. */
@@ -125,6 +127,7 @@ function describe(links: LinkInfo[]): string[] {
   return columns(links.map(link => [
     out.bold(link.name),
     out.dim(link.alias),
+    link.verificationCode,
     state(link),
     direction(link),
     out.dim(link.address ? `${link.transport} ${link.address}` : link.transport),

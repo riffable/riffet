@@ -7,7 +7,7 @@ import WebSocket, { createWebSocketStream } from 'ws';
 import type { LinkAuditEntry, LinkInfo, LinkInviteResult, LinkJoinRequest, LinkSelfInfo, LinkState, LinkTransportId, LinkUpdateRequest, ProtocolInfo, ServerInfo, ServerPlatform } from '../../../../packages/contracts/src/index.js';
 import { LINK_BUDGET } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
-import { loadLinkIdentity, sameFingerprint, type LinkIdentity } from './identity.js';
+import { linkVerificationCode, loadLinkIdentity, sameFingerprint, type LinkIdentity } from './identity.js';
 import { decodeInvite, encodeInvite, inviteProof, newInviteSecret, proofMatches, type LinkInvite } from './invite.js';
 import { LINK_SOCKET } from './socket.js';
 import { boundedWrites, plain, secure } from './tunnel.js';
@@ -489,6 +489,7 @@ export class LinkService {
       inbound: record.inbound, outbound: record.outbound, state,
       ...(record.version ? { version: record.version } : {}), ...(record.protocol ? { protocol: record.protocol } : {}),
       ...(record.transport === 'direct' && record.dialer && record.address ? { webUrl: record.address } : {}),
+      verificationCode: linkVerificationCode(this.identity.fingerprint, record.peerFingerprint),
       createdAt: record.createdAt, ...(record.lastConnectedAt ? { lastConnectedAt: record.lastConnectedAt } : {}),
       ...(live?.lastError && state !== 'online' ? { lastError: live.lastError } : {}),
     };

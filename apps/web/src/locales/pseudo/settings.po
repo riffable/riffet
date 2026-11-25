@@ -77,6 +77,11 @@ msgstr ""
 
 #. placeholder {0}: link.name
 #: src/app/settings/LinksSection.tsx
+msgid "{0} 上显示的应与此相同，不同就断开"
+msgstr ""
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
 msgid "{0} 不能操作这台电脑"
 msgstr ""
 
@@ -7078,6 +7083,10 @@ msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "比例"
+msgstr ""
+
+#: src/app/settings/LinksSection.tsx
+msgid "比对码"
 msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx

@@ -1,4 +1,4 @@
-import { X509Certificate, generateKeyPairSync, randomBytes, sign, type KeyObject } from 'node:crypto';
+import { X509Certificate, createHash, generateKeyPairSync, randomBytes, sign, type KeyObject } from 'node:crypto';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -51,6 +51,19 @@ export function certificateFingerprint(cert: string | Buffer): string {
 export function sameFingerprint(left: string | undefined, right: string | undefined): boolean {
   const normal = (value: string) => value.replace(/[^0-9a-f]/gi, '').toUpperCase();
   return !!left && !!right && normal(left).length === 64 && normal(left) === normal(right);
+}
+
+/**
+ * Six digits both ends of a link compute from the two certificates (docs/TRANSPORT-SECURITY.md §5). The operator
+ * compares them after pairing: a server that intercepted the link string and joined in between holds a different
+ * certificate, so the two ends show different codes.
+ */
+export function linkVerificationCode(own: string, peer: string): string {
+  const normal = (value: string) => value.replace(/[^0-9a-f]/gi, '').toUpperCase();
+  const [first, second] = [normal(own), normal(peer)].sort();
+  const digest = createHash('sha256').update(`riffet-link-sas\n${first}\n${second}`).digest();
+  const code = String(digest.readUInt32BE(0) % 1_000_000).padStart(6, '0');
+  return `${code.slice(0, 3)} ${code.slice(3)}`;
 }
 
 const ED25519 = Buffer.from([0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70]);

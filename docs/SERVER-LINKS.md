@@ -249,6 +249,8 @@ riffet-link:v1:<base64url({url, serverId, name, fingerprint, inviteId, key, expi
 - 由一方生成，5 分钟内有效，只能用一次。
 - `fingerprint` 让加入方第一次连接就能核对对端，不需要「首次信任」。
 - `key` 只在本地用来计算 HMAC，从来不在网络上发送：加入方连上以后提交 `HMAC(key, inviteId ‖ 双方指纹)` 和自己的证书指纹，生成方核对后记下它的指纹，邀请作废。
+- 只在加密连接上生成和接受（本机、HTTPS、命令行、SSH）：明文连接上的链接串可能被抢先使用，服务器返回 `LINK_INSECURE_TRANSPORT`。
+- 配对后两边各显示一个比对码（`sha256("riffet-link-sas\n" ‖ 排序后的双方指纹)` 的前 4 字节模 10⁶，`LinkInfo.verificationCode`）。有人截获链接串抢先加入时，他的证书和真正的对端不同，两边的码就不一致。
 - 不用现有的 6 位配对码，是因为它太短：中间人拿到一次 HMAC，离线几毫秒就能把码试出来。
 
 ### 四个入口

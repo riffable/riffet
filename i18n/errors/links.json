@@ -9,6 +9,7 @@
   "LINK_FAILED": { "zh": "{message}", "en": "{message}" },
   "LINK_FORBIDDEN": { "zh": "这项操作不能经互联进行，请打开对方的网页", "en": "This can't be done through a server link; open the other server's own page" },
   "LINK_INBOUND_DISABLED": { "zh": "对方未允许这台服务器操作它", "en": "The other server doesn't let this one operate it" },
+  "LINK_INSECURE_TRANSPORT": { "zh": "连接未加密，链接串可能被截获。请在本机网页、HTTPS 地址或命令行里操作", "en": "This connection isn't encrypted, so the link string could be intercepted. Use this computer's own page, an HTTPS address, or the command line" },
   "LINK_MISMATCH": { "zh": "对方的身份和互联时记录的不一致", "en": "The other server's identity doesn't match the one it linked with" },
   "LINK_NOT_ALLOWED": { "zh": "{name} 未允许这台服务器操作它", "en": "{name} doesn't let this server operate it" },
   "LINK_NOT_FOUND": { "zh": "没有这台互联的服务器", "en": "No such linked server" },

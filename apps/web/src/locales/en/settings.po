@@ -77,6 +77,11 @@ msgstr "{0} context length"
 
 #. placeholder {0}: link.name
 #: src/app/settings/LinksSection.tsx
+msgid "{0} 上显示的应与此相同，不同就断开"
+msgstr "{0} should show the same code; if it doesn't, disconnect"
+
+#. placeholder {0}: link.name
+#: src/app/settings/LinksSection.tsx
 msgid "{0} 不能操作这台电脑"
 msgstr "{0} cannot operate this computer"
 
@@ -7079,6 +7084,10 @@ msgstr "Each kind of component's form"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "比例"
 msgstr "Scale"
+
+#: src/app/settings/LinksSection.tsx
+msgid "比对码"
+msgstr "Verification code"
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "比较"

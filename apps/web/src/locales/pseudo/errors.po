@@ -434,6 +434,11 @@ msgstr ""
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/links.json
+msgid "error.LINK_INSECURE_TRANSPORT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/links.json
 msgid "error.LINK_MISMATCH"
 msgstr ""
 

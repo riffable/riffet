@@ -682,7 +682,7 @@ export async function createApp(options: AppOptions = {}) {
   const links=new LinkService({stateDir,serverId,name:()=>hostname().replace(/\.local$/i,'').slice(0,64)||'Riffet',version:SERVER_VERSION,protocol:PROTOCOL_INFO,httpServer:()=>app.server,log:message=>console.warn(message)});
   linksRef=links;
   links.onRevoke(id=>auth.revokeLink(id));
-  registerLinkRoutes(app,{links,auth,deviceName:id=>auth.device(id)?.name});
+  registerLinkRoutes(app,{links,auth,deviceName:id=>auth.device(id)?.name,secure:request=>accessOf(request).secure});
   app.addHook('onReady',async()=>{links.start();});
   // Background pushes to iOS devices, straight to APNs with the owner's key (docs/DEVICES.md §3「后台推送」).
   const apns=new ApnsClient({stateDir,...(options.push?.transport?{transport:options.push.transport}:{}),...(options.push?.retryDelaysMs?{retryDelaysMs:options.push.retryDelaysMs}:{})});
