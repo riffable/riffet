@@ -935,10 +935,11 @@ msgstr ""
 
 #: src/app/panels/ContextPanel.tsx
 #: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTabs.tsx
 msgid "关闭"
 msgstr ""
 
-#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTabs.tsx
 msgid "关闭（有未保存的修改）"
 msgstr ""
 
@@ -1091,6 +1092,10 @@ msgstr ""
 
 #: src/app/panels/ContextPanel.tsx
 msgid "悬浮"
+msgstr ""
+
+#: src/app/panels/FileTabs.tsx
+msgid "打开的文件"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx

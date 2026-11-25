@@ -20,7 +20,7 @@ const ancestors = (path: string) => path.split('/').slice(0, -1).map((_, index, 
  * whose only entry is another folder shows as one row (`src/main/java/com/example`), as VS Code's
  * compact folders and Studio's package view do, so deep package paths don't eat the width.
  */
-export function FileTree({ projectId, active, reveal, refreshToken, icon, actions, onOpen, onContextMenu, onError }: {
+export function FileTree({ projectId, active, reveal, refreshToken, icon, actions, onOpen, onKeep, onContextMenu, onError }: {
   projectId: string;
   /** The open file, marked in the tree. */
   active?: string | undefined;
@@ -30,6 +30,8 @@ export function FileTree({ projectId, active, reveal, refreshToken, icon, action
   icon: (entry: FileEntry) => ReactNode;
   actions: (entry: FileEntry, path: string) => ReactNode;
   onOpen: (path: string) => void;
+  /** Double-clicking a file opens and keeps its tab. */
+  onKeep?: (path: string) => void;
   onContextMenu: (path: string) => void;
   onError: (message: string) => void;
 }) {
@@ -166,7 +168,7 @@ export function FileTree({ projectId, active, reveal, refreshToken, icon, action
       } else {
         rows.push(
           <div key={path} data-path={path} onContextMenu={(event) => { event.preventDefault(); onContextMenu(path); }} className={cn('group/file flex h-6 items-center gap-1 rounded pr-1 hover:bg-hover', active === path && 'bg-active hover:bg-active')} style={indent}>
-            <button type="button" onClick={() => onOpen(path)} className="flex h-full flex-1 items-center gap-1 pl-[18px] text-left text-sm text-fg">
+            <button type="button" onClick={() => onOpen(path)} onDoubleClick={() => onKeep?.(path)} className="flex h-full flex-1 items-center gap-1 pl-[18px] text-left text-sm text-fg">
               {icon(entry)}
               <span className="whitespace-nowrap">{entry.name}</span>
             </button>

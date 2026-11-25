@@ -993,14 +993,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
       <SidebarPeekTrigger.Provider value={desktop && sidebarCollapsed ? sidebarPeek.triggerProps : null}>
       <TabChromeContext.Provider value={tabChrome}>
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      {/* Stay unpositioned so PanelHost's absolute frame sizes against .workbench-viewport (and animates with the sidebar). */}
+      <div className="flex min-w-0 flex-1 flex-col">
       {tabbed && tabStyle === 'strip' && (
         // Stats, tasks, marks and extensions carry their own expand button under the strip.
         <TabBar variant="strip" activeId={anyPageOpen || assistantPage ? '' : session?.id ?? ''} sidebarCollapsed={sidebarCollapsed && !pageOpen} onExpandSidebar={expandSidebar} onNewSession={newSession} actionsRef={setTabActions} />
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
       <main
-        className={cn('flex min-w-0 flex-1 flex-col', desktop && 'mb-2 mr-2 overflow-hidden rounded-xl bg-card', desktop && !stripTabs && 'mt-2', desktop && sidebarCollapsed && 'ml-2')}
+        className={cn('relative flex min-w-0 flex-1 flex-col', desktop && 'mb-2 mr-2 overflow-hidden rounded-xl bg-card', desktop && !stripTabs && 'mt-2', desktop && sidebarCollapsed && 'ml-2')}
         aria-hidden={(panelMaximized && wide) || undefined}
         inert={panelMaximized && wide}
       >

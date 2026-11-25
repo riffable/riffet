@@ -935,10 +935,11 @@ msgstr "Fullscreen"
 
 #: src/app/panels/ContextPanel.tsx
 #: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTabs.tsx
 msgid "关闭"
 msgstr "Close"
 
-#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTabs.tsx
 msgid "关闭（有未保存的修改）"
 msgstr "Close (unsaved changes)"
 
@@ -1092,6 +1093,10 @@ msgstr "Current"
 #: src/app/panels/ContextPanel.tsx
 msgid "悬浮"
 msgstr "Float"
+
+#: src/app/panels/FileTabs.tsx
+msgid "打开的文件"
+msgstr "Open files"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "按 {quickOpenHint} 搜索文件"

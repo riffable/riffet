@@ -66,22 +66,27 @@ const zones: Array<{ edge: Edge; className: string }> = [
 ];
 
 /**
- * A context panel floating over its container (the element it is rendered in): dragged by its
- * header, resized from any edge, snapping to the container's edges. The frame is written straight
- * to the element's style during a gesture and committed once on release, so the workbench does not
- * render per frame; the transitions here never touch position or size.
+ * The wide-desktop panel frame: floats over its container when `floating` is true (dragged by its
+ * header, resized from any edge, snapping to the container's edges), or docks / maximizes beside the
+ * conversation when false. Keeping one tree across all three modes lets `ContextPanel` and its
+ * views stay mounted when toggling fullscreen or floating.
  */
-export function FloatingPanelFrame({ frame, defaultWidth, shown, inert, onCommit, children }: {
+export function FloatingPanelFrame({ floating = true, frame, defaultWidth, shown, inert, dockedClassName, dockedInnerClassName, onCommit, children }: {
+  floating?: boolean;
   frame: PanelFrame | undefined;
   /** The width of a first float, before it has been sized. */
   defaultWidth: number;
   /** Faded in; false while closed or just mounted. */
   shown: boolean;
   inert: boolean;
+  /** Applied to the outer `<aside>` while docked or maximized. */
+  dockedClassName?: string;
+  /** Applied to the inner width-stabilizing wrapper while docked or maximized. */
+  dockedInnerClassName?: string;
   onCommit: (frame: PanelFrame) => void;
   children: ReactNode;
 }) {
-  const element = useRef<HTMLDivElement>(null);
+  const element = useRef<HTMLElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);
   const latest = useRef({ frame, defaultWidth, onCommit });
   latest.current = { frame, defaultWidth, onCommit };
@@ -108,22 +113,34 @@ export function FloatingPanelFrame({ frame, defaultWidth, shown, inert, onCommit
     style.height = `${resolved.h}px`;
   };
   const place = () => {
+    if (!floating) return;
     const size = box();
     if (!size || gesture.current) return;
     const { frame: stored, defaultWidth: width } = latest.current;
     const base: PanelFrame = stored ?? { x: 0, y: INSET, w: width, h: Math.round(size.h * 0.7), ax: 'right', ay: 'top' };
     paint(resolve(base, size));
   };
-  useLayoutEffect(place, [frame, defaultWidth]);
   useLayoutEffect(() => {
+    if (!floating) {
+      gesture.current = undefined;
+      const style = element.current?.style;
+      if (style) { style.left = ''; style.top = ''; style.width = ''; style.height = ''; }
+      return;
+    }
+    place();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `place` reads latest refs
+  }, [floating, frame, defaultWidth]);
+  useLayoutEffect(() => {
+    if (!floating) return;
     const parent = element.current?.parentElement;
     if (!parent) return;
     const observer = new ResizeObserver(place);
     observer.observe(parent);
     return () => observer.disconnect();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `place` reads latest refs
+  }, [floating]);
 
-  const begin = (event: PointerEvent<HTMLDivElement>, mode: Gesture['mode']) => {
+  const begin = (event: PointerEvent<HTMLElement>, mode: Gesture['mode']) => {
     const size = box();
     const target = element.current;
     if (!size || !target) return;
@@ -134,14 +151,14 @@ export function FloatingPanelFrame({ frame, defaultWidth, shown, inert, onCommit
     target.setPointerCapture(event.pointerId);
     gesture.current = { mode, x: event.clientX, y: event.clientY, frame: start, box: size, next: start, moved: false };
   };
-  const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
+  const onPointerDown = (event: PointerEvent<HTMLElement>) => {
+    if (!floating || event.button !== 0) return;
     const target = event.target as HTMLElement;
     const edge = target.closest<HTMLElement>('[data-edge]')?.dataset.edge as Edge | undefined;
     if (edge) { begin(event, edge); return; }
     if (target.closest('[data-panel-drag]') && !target.closest('button, a, input, select, textarea, [role="tab"], [role="button"], [role="menuitem"]')) begin(event, 'move');
   };
-  const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (event: PointerEvent<HTMLElement>) => {
     const current = gesture.current;
     if (!current) return;
     if (!(event.buttons & 1)) { finish(); return; }
@@ -170,12 +187,12 @@ export function FloatingPanelFrame({ frame, defaultWidth, shown, inert, onCommit
   };
 
   return (
-    <div
+    <aside
       ref={element}
-      className={cn(
+      className={floating ? cn(
         'absolute z-(--z-panel) transition-[opacity,scale] duration-[var(--duration-base)] ease-out-soft',
         shown ? 'opacity-100 scale-100' : 'scale-[0.98] opacity-0',
-      )}
+      ) : dockedClassName}
       aria-hidden={inert || undefined}
       inert={inert}
       onPointerDown={onPointerDown}
@@ -184,8 +201,10 @@ export function FloatingPanelFrame({ frame, defaultWidth, shown, inert, onCommit
       onPointerCancel={finish}
       onLostPointerCapture={finish}
     >
-      <div className="relative flex size-full overflow-hidden rounded-xl border border-line bg-bg shadow-pop">{children}</div>
-      {zones.map(({ edge, className }) => <div key={edge} data-edge={edge} aria-hidden className={cn('absolute z-10 touch-none', className)} />)}
-    </div>
+      <div className={floating ? 'relative flex size-full overflow-hidden rounded-xl border border-line bg-bg shadow-pop' : dockedInnerClassName}>
+        <div className={cn('flex size-full', !floating && 'bg-card')}>{children}</div>
+      </div>
+      {floating && zones.map(({ edge, className }) => <div key={edge} data-edge={edge} aria-hidden className={cn('absolute z-10 touch-none', className)} />)}
+    </aside>
   );
 }

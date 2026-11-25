@@ -26,6 +26,7 @@ import { FavoriteMenu, FavoriteStar, favoriteName, useFolderFavorites } from '..
 import type { SidebarBodyProps } from './sidebarViews';
 import type { CodeTarget, SymbolAt } from './CodeView';
 import { FileTree } from './FileTree';
+import { EditorTabs, useFileTabs, type TabOpenMode } from './FileTabs';
 import { DirectoryHint, FileIcon, Matched, splitPath } from './fileVisuals';
 import { QuickOpen, type QuickOpenMode } from './QuickOpen';
 import { useRecentFiles } from './recentFiles';
@@ -34,7 +35,7 @@ import { useDraftPaths, useDraftsGuard } from './fileDrafts';
 import { useFileEditing } from './useFileEditing';
 import { useFileOperations } from './useFileOperations';
 import { Notice } from '@/components/ui/notice';
-import { useLists, useUi } from '../state/stores';
+import { useLists, useStores, useUi } from '../state/stores';
 import { quoteIntoComposer } from '../session/composerQuotes';
 import { viewIcon } from '@/plugins/viewIcons';
 import { PluginView } from '@/plugins/PluginView';
@@ -115,6 +116,7 @@ const modifier = (event: { metaKey: boolean; ctrlKey: boolean }) => (isApplePlat
  */
 export function FilesPanel({ project, sessionId, previewTarget, shown, wide = false, headerSlot, show, onReference, onError, onClose }: SidebarBodyProps) {
   const { t } = useLingui();
+  const { ui } = useStores();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const panelOpen = useUi((state) => state.panelOpen);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -139,6 +141,8 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   const [preview, setPreview] = useState<FilePreview>();
   // The server normalizes project-local absolute paths; use that result for file actions.
   const previewFilePath = preview?.path ?? previewPath;
+  const previewFilePathRef = useRef(previewFilePath);
+  previewFilePathRef.current = previewFilePath;
   const [rendered, setRendered] = useState(true);
   const previewTheme = usePreviewTheme();
   const fileWrites = useLists((state) => state.fileWrites);
@@ -149,19 +153,28 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   });
   useDraftsGuard();
   const drafts = useDraftPaths(project.id);
+  const fileTabs = useFileTabs(project.id, drafts);
+  const recent = useRecentFiles(project.id, drafts);
   const operations = useFileOperations({
     projectId: project.id,
     onChanged: () => setRefreshToken((value) => value + 1),
-    onCreated: (created, kind) => { if (kind === 'file') { edit.startOnOpen(created); void openPreviewRef.current(created); } },
+    onCreated: (created, kind) => { if (kind === 'file') { edit.startOnOpen(created); void openPreviewRef.current(created, 'keep'); } },
     onMoved: (from, to) => {
       const moved = (file: string) => file === from || file.startsWith(`${from}/`);
       recent.move(from, to);
-      if (previewFilePath !== undefined && moved(previewFilePath)) void openPreviewRef.current(to + previewFilePath.slice(from.length));
+      fileTabs.move(from, to);
+      const current = previewFilePathRef.current;
+      if (current !== undefined && moved(current)) void openPreviewRef.current(to + current.slice(from.length));
     },
     onRemoved: (removed) => {
       const gone = (file: string) => file === removed || file.startsWith(`${removed}/`);
       for (const file of recent.files.map((item) => item.path).filter(gone)) recent.remove(file);
-      if (previewFilePath !== undefined && gone(previewFilePath)) { previewRequest.current += 1; setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false); }
+      const next = fileTabs.removeUnder(removed);
+      const current = previewFilePathRef.current;
+      if (current !== undefined && gone(current)) {
+        if (next) void openPreviewRef.current(next);
+        else clearPreviewRef.current();
+      }
     },
   });
   const renderable = Boolean(preview?.render || (preview && isHtmlPath(preview.path)));
@@ -179,8 +192,9 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   const pluginFileView = fileViews.find((view) => view.id === viewAs);
   const [previewBlocked, setPreviewBlocked] = useState(false);
   const previewRequest = useRef(0);
-  /** `openPreview`, for handlers set up before it. */
-  const openPreviewRef = useRef<(path: string) => Promise<void>>(async () => undefined);
+  /** `openPreview` / `clearPreview`, for handlers set up before them. */
+  const openPreviewRef = useRef<(path: string, mode?: TabOpenMode) => Promise<void>>(async () => undefined);
+  const clearPreviewRef = useRef<() => void>(() => undefined);
   /** The line (and column) the code view goes to, for the file it belongs to. */
   const [jump, setJump] = useState<CodeTarget & { path: string }>();
   /** Where ⌘-click jumps came from, newest last, for Back. */
@@ -198,7 +212,6 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   const [navigating, setNavigating] = useState(false);
   const definitionRequest = useRef(0);
   const [reveal, setReveal] = useState<{ path: string; token: number; expand?: boolean }>();
-  const recent = useRecentFiles(project.id, drafts);
   /** Where each file was scrolled to when it was left, so coming back to it lands there. */
   const topLines = useRef(new Map<string, number>());
   const [quickOpen, setQuickOpen] = useState<QuickOpenMode>();
@@ -234,9 +247,10 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     for (const holder of [usagesAbort, definitionAbort, searchAbort]) holder.current?.abort();
     paginationRequest.current = undefined; handledPreviewToken.current = undefined; here.current = undefined;
     setHistory([]); setUsages(undefined); setSymbolMenu(undefined); setNavigating(false); setJump(undefined); setQuickOpen(undefined);
+    setReveal(undefined); setSiteEntry(undefined); setViewAs(undefined); setPreviewMissing(false); setPreviewBlocked(false); setImageLoadError(false);
     topLines.current.clear();
     directoryVisits.current.clear(); searchScroll.current = 0; focusSearch.current = false;
-    setPreviewLoading(false); setSearching(false); setLoadingMore(false); setPath(''); setPreviewPath(undefined); setPreview(undefined);
+    setFetching(false); setPreviewLoading(false); setSearching(false); setLoadingMore(false); setPath(''); setPreviewPath(undefined); setPreview(undefined);
     setEntries([]); setHasMore(false); setSearchOpen(false); setQuery(''); setFound(undefined); setHits(undefined); setMenuPath(undefined);
     return () => {
       previewRequest.current += 1; searchRequest.current += 1; listingRequest.current += 1; usagesRequest.current += 1; definitionRequest.current += 1;
@@ -279,11 +293,22 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     if (searchListRef.current) searchScroll.current = searchListRef.current.scrollTop;
   }, [path]);
 
+  const clearPreview = useCallback(() => {
+    previewRequest.current += 1;
+    definitionRequest.current += 1; definitionAbort.current?.abort(); setNavigating(false);
+    here.current = undefined;
+    setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false);
+    setHistory([]); setJump(undefined); setSiteEntry(undefined); setViewAs(undefined);
+    setPreviewMissing(false); setPreviewBlocked(false); setImageLoadError(false);
+  }, []);
+  clearPreviewRef.current = clearPreview;
+
   const openDirectory = (next: string) => {
     rememberScroll();
-    previewRequest.current += 1; searchRequest.current += 1;
-    setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false); setSearchOpen(false); setSearching(false); setMenuPath(undefined);
-    setHistory([]);
+    if (previewFilePath !== undefined) fileTabs.closePreview(previewFilePath);
+    clearPreview();
+    searchRequest.current += 1;
+    setSearchOpen(false); setSearching(false); setMenuPath(undefined);
     focusSearch.current = false;
     if (next === path) return;
     // Invalidate before the next render, including a pending "load more" response.
@@ -298,8 +323,8 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     setMenuPath(undefined);
     if (previewPath !== undefined && history.length) back();
     else if (previewPath !== undefined) {
-      previewRequest.current += 1;
-      setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false); setHistory([]);
+      if (previewFilePath !== undefined) fileTabs.closePreview(previewFilePath);
+      clearPreview();
     } else if (usages) closeUsages();
     else if (searchOpen) {
       searchRequest.current += 1;
@@ -317,9 +342,10 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     if (searchListRef.current) searchListRef.current.scrollTop = searchScroll.current;
   }, [path, shown, previewPath, searchOpen, entries, found, hits, loading, searching]);
 
-  const openPreview = useCallback(async (filePath: string, line?: number, column?: number) => {
+  const openPreview = useCallback(async (filePath: string, line?: number, column?: number, mode: TabOpenMode = 'preview') => {
     rememberScroll();
     focusSearch.current = false;
+    fileTabs.open(filePath, mode);
     const request = ++previewRequest.current;
     // A definition still being looked up belonged to the file being left.
     definitionRequest.current += 1; definitionAbort.current?.abort(); setNavigating(false);
@@ -339,7 +365,11 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     show();
     try {
       const result = await api.preview(project.id, filePath);
-      if (request === previewRequest.current) { setPreview(result); if (!result.binary || result.image) recent.touch(result.path); }
+      if (request === previewRequest.current) {
+        fileTabs.normalize(filePath, result.path);
+        setPreview(result);
+        if (!result.binary || result.image) recent.touch(result.path);
+      }
     }
     catch (error) {
       if (request !== previewRequest.current) return;
@@ -357,13 +387,16 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
       onError(errorMessage(error, t`无法打开文件`));
     }
     finally { if (request === previewRequest.current) setPreviewLoading(false); }
-  }, [project.id, onError, show, rememberScroll, recent.touch]);
-  openPreviewRef.current = openPreview;
+  }, [project.id, onError, show, rememberScroll, recent.touch, fileTabs.open, fileTabs.normalize]);
+  openPreviewRef.current = (file, mode) => openPreview(file, undefined, undefined, mode);
 
   /** Opens `to`, remembering the place it was asked from for Back. */
   const jumpTo = (to: Place & { column?: number }) => {
     const from = here.current;
-    if (from && !(from.path === to.path && from.line === to.line)) setHistory((previous) => [...previous, from].slice(-MAX_HISTORY));
+    if (from && !(from.path === to.path && from.line === to.line)) {
+      fileTabs.keep(from.path);
+      setHistory((previous) => [...previous, from].slice(-MAX_HISTORY));
+    }
     void openPreview(to.path, to.line, to.column);
   };
   /**
@@ -378,11 +411,16 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
     else if (from) setHistory((previous) => [...previous, { ...from, site }].slice(-MAX_HISTORY));
     here.current = { path: page, site };
     setSiteEntry(site);
+    fileTabs.open(page, 'preview');
     const request = ++previewRequest.current;
     setPreviewPath(page);
     try {
       const result = await api.preview(project.id, page);
-      if (request === previewRequest.current) { setPreview(result); recent.touch(result.path); }
+      if (request === previewRequest.current) {
+        fileTabs.normalize(page, result.path);
+        setPreview(result);
+        recent.touch(result.path);
+      }
     }
     catch { /* the page is on screen already; the header keeps naming the one it came from */ }
   };
@@ -499,12 +537,31 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   };
 
   // An external preview request opens the file here and jumps to the requested line.
+  // Clear it from UI state once consumed so a later remount cannot reopen a closed file.
   useEffect(() => {
     if (!previewTarget || handledPreviewToken.current === previewTarget.token) return;
     handledPreviewToken.current = previewTarget.token;
+    if (ui.get().previewTarget?.token === previewTarget.token) ui.set({ previewTarget: undefined });
     void openPreview(previewTarget.path, previewTarget.line);
     // `token` is bumped on every request so clicking the same file twice still re-opens it.
-  }, [previewTarget?.token, openPreview]);
+  }, [previewTarget?.token, openPreview, ui]);
+
+  // Entering fullscreen reveals the open file (or current folder) in the newly mounted tree,
+  // and brings back the origin file when usages had replaced the preview in narrow mode.
+  const wasWide = useRef(wide);
+  useEffect(() => {
+    const entered = wide && !wasWide.current;
+    wasWide.current = wide;
+    if (!entered) return;
+    if (previewFilePath && !previewFilePath.startsWith('/') && !previewFilePath.startsWith('~')) {
+      setReveal((current) => ({ path: previewFilePath, token: (current?.token ?? 0) + 1 }));
+    } else if (usages && previewPath === undefined) {
+      void openPreview(usages.origin.path, usages.origin.line);
+    } else if (path) {
+      setReveal((current) => ({ path, token: (current?.token ?? 0) + 1, expand: true }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to entering wide mode
+  }, [wide]);
 
   const runSearch = async () => {
     const value = query.trim();
@@ -669,12 +726,11 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
   /** Closing the shown tab shows the one viewed before it. */
   const closeTab = async (file: string) => {
     if (!await edit.discard(file)) return;
-    recent.remove(file);
+    const next = fileTabs.close(file);
     topLines.current.delete(file);
-    if (file !== previewFilePath) return;
-    const next = recent.byRecency.find((item) => item.path !== file);
-    if (next) void openPreview(next.path);
-    else { previewRequest.current += 1; setPreviewPath(undefined); setPreview(undefined); setPreviewLoading(false); }
+    if (file !== previewFilePathRef.current) return;
+    if (next) void openPreview(next);
+    else clearPreview();
   };
   /** Creating a file or a folder in [folder], where the server writes files. */
   const newMenu = (folder: string) => fileWrites && (
@@ -699,7 +755,9 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
       <FileTree
         projectId={project.id} active={previewFilePath} reveal={reveal} refreshToken={refreshToken}
         icon={(entry) => <FileIcon entry={entry} />} actions={rowActions}
-        onOpen={(file) => void openPreview(file)} onContextMenu={setMenuPath} onError={onError}
+        onOpen={(file) => { if (file !== previewFilePath) void openPreview(file); }}
+        onKeep={(file) => { if (file === previewFilePath) fileTabs.keep(file); else void openPreview(file, undefined, undefined, 'keep'); }}
+        onContextMenu={setMenuPath} onError={onError}
       />
     </div>
   );
@@ -722,7 +780,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
           )}
           {edit.editable && viewAs === undefined && (
             <Tip label={edit.editing ? t`结束编辑` : t`编辑`}>
-              <Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', edit.editing && 'bg-active text-fg')} aria-label={edit.editing ? t`结束编辑` : t`编辑`} aria-pressed={edit.editing} onClick={() => { if (edit.editing) void edit.stop(); else { setRendered(false); edit.start(); } }}><IconPencilLine /></Button>
+              <Button size="icon-xs" variant="quiet" className={cn('max-md:size-10', edit.editing && 'bg-active text-fg')} aria-label={edit.editing ? t`结束编辑` : t`编辑`} aria-pressed={edit.editing} onClick={() => { if (edit.editing) void edit.stop(); else { fileTabs.keep(previewFilePath); setRendered(false); edit.start(); } }}><IconPencilLine /></Button>
             </Tip>
           )}
           {renderable && preview && !preview.image && !preview.binary && !edit.editing && (
@@ -964,7 +1022,17 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
             />
           </div>
           <div className="flex min-w-0 flex-1 flex-col">
-            {recent.files.length > 0 && <EditorTabs files={recent.files.map((file) => file.path)} active={previewFilePath} onOpen={(file) => void openPreview(file)} onClose={(file) => void closeTab(file)} dirty={drafts} />}
+            {fileTabs.tabs.length > 0 && (
+              <EditorTabs
+                files={fileTabs.tabs}
+                active={previewFilePath}
+                preview={fileTabs.preview}
+                dirty={drafts}
+                onOpen={(file) => { if (file !== previewFilePath) void openPreview(file); }}
+                onKeep={fileTabs.keep}
+                onClose={(file) => void closeTab(file)}
+              />
+            )}
             {previewPage || (quickOpenHint && <div className="m-auto text-sm text-fg-4"><Trans>按 {quickOpenHint} 搜索文件</Trans></div>)}
           </div>
         </div>
@@ -1017,46 +1085,5 @@ function Occurrence({ location, word }: { location: CodeLocation; word: string }
     <code className="min-w-0 truncate whitespace-pre font-mono text-xs text-fg-2">
       {before}{found && <><span className="rounded-sm bg-accent-soft text-fg">{word}</span>{location.text.slice(at + word.length)}</>}
     </code>
-  );
-}
-
-/** The files viewed last, as an IDE's editor tabs: one click back to any of them. */
-function EditorTabs({ files, active, dirty, onOpen, onClose }: { files: string[]; active?: string | undefined; dirty: string[]; onOpen: (path: string) => void; onClose: (path: string) => void }) {
-  const { t } = useLingui();
-  const row = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const tab = [...(row.current?.querySelectorAll<HTMLElement>('[data-path]') ?? [])].find((element) => element.dataset.path === active);
-    tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [active, files.length]);
-  // Same-named files carry their folder, as VS Code's tabs do.
-  const names = new Map<string, number>();
-  for (const file of files) { const { name } = splitPath(file); names.set(name, (names.get(name) ?? 0) + 1); }
-  return (
-    <div ref={row} role="tablist" aria-label={t`最近查看`} className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto edge-b px-1.5 scrollbar-none">
-      {files.map((file) => {
-        const { name, dir } = splitPath(file);
-        const selected = file === active;
-        return (
-          <div
-            key={file} data-path={file} role="tab" aria-selected={selected} title={file}
-            onMouseDown={(event) => { if (event.button === 1) { event.preventDefault(); onClose(file); } }}
-            className={cn('group/tab flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md pl-2 pr-1 text-xs', selected ? 'bg-active text-fg' : 'text-fg-3 hover:bg-hover hover:text-fg')}
-          >
-            <button type="button" onClick={() => onOpen(file)} className="flex min-w-0 items-center gap-1.5 outline-none">
-              <FileIcon entry={{ kind: 'file', name }} className="size-3.5" />
-              <span className="truncate">{name}</span>
-              {(names.get(name) ?? 0) > 1 && <span className="truncate text-fg-4">{splitPath(dir).name}</span>}
-            </button>
-            {/* An unsaved file shows a dot where its close button is, until pointed at, as editors do. */}
-            <button type="button" aria-label={dirty.includes(file) ? t`关闭（有未保存的修改）` : t`关闭`} onClick={() => onClose(file)} className={cn('group/close grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:bg-hover hover:text-fg', !selected && !dirty.includes(file) && 'opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100')}>
-              {dirty.includes(file) ? <>
-                <span className="size-2 rounded-full bg-fg-3 group-hover/tab:hidden group-focus-visible/close:hidden" />
-                <IconX className="hidden size-3 group-hover/tab:block group-focus-visible/close:block" />
-              </> : <IconX className="size-3" />}
-            </button>
-          </div>
-        );
-      })}
-    </div>
   );
 }

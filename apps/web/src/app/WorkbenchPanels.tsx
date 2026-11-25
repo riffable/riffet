@@ -104,27 +104,24 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
               />
             )}
           </div>
-          {floating ? (
-            <FloatingPanelFrame frame={panelFrame} defaultWidth={panelWidth} shown={panelOpen && expanded} inert={!panelOpen} onCommit={(next) => ui.set({ panelFrame: next })}>
-              {panel(project)}
-            </FloatingPanelFrame>
-          ) : (
-          <aside
-            className={cn(
+          <FloatingPanelFrame
+            floating={floating}
+            frame={panelFrame}
+            defaultWidth={panelWidth}
+            shown={panelOpen && expanded}
+            inert={!panelOpen}
+            dockedClassName={cn(
               'absolute bottom-2 right-2 z-(--z-panel) overflow-hidden rounded-xl transition-[translate,width] duration-[var(--duration-slow)] ease-out-soft [[data-resizing]_&]:transition-none',
               belowTabStrip ? 'top-11' : 'top-2',
               !maximized ? 'w-(--panel-w)' : sidebarCollapsed ? 'w-[calc(100%-16px)]' : 'w-[calc(100%-var(--sidebar-w)-8px)]',
               expanded ? 'translate-x-0' : 'translate-x-[calc(100%+8px)]',
             )}
-            aria-hidden={!panelOpen || undefined}
-            inert={!panelOpen}
+            /* Keep the panel's contents at their docked width throughout the slide. */
+            dockedInnerClassName={cn('absolute inset-y-0 left-0 flex w-full min-w-(--panel-w)', maximized && 'bg-canvas')}
+            onCommit={(next) => ui.set({ panelFrame: next })}
           >
-            {/* Keep the panel's contents at their docked width throughout the slide. */}
-            <div className={cn('absolute inset-y-0 left-0 flex w-full min-w-(--panel-w)', maximized ? 'bg-canvas' : 'bg-card')}>
-              {maximized ? <div className="flex size-full bg-card">{panel(project)}</div> : panel(project)}
-            </div>
-          </aside>
-          )}
+            {panel(project)}
+          </FloatingPanelFrame>
         </>
       )}
       {!wide && project && !pageOpen && (
