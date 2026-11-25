@@ -1,26 +1,29 @@
 import { mkdir, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { AgentHost, AgentRiffetMcpServer } from '@riffet/plugin-api/experimental/agent';
 
 /*
- * Riffet's own tools for Cursor CLIs (docs/DEVICES.md §2). Cursor takes MCP servers per process only from a plugin
- * directory, and every CLI is given the same one, so the server cannot carry a conversation's credential on its command
- * line as Claude's and Codex's do. The plugin's `.mcp.json` starts the shim with `RIFFET_MCP_CREDENTIAL_FILE` taken
- * from the CLI's own environment (`${env:…}`, expanded by Cursor when it loads the plugin); each CLI is launched with the
- * file of its conversation, or of the provisional credential a warm CLI holds until a conversation adopts it.
- * Cursor passes a stdio server only HOME, LOGNAME, PATH, SHELL, TERM and USER of its own environment, so the
- * variable has to be named in the server's `env`.
+ * Riffet's own tools for Cursor CLIs (docs/DEVICES.md §2).
+ * When the server exposes a Streamable HTTP MCP endpoint (`server.http`), each conversation (or warm
+ * provisional owner) gets a `0700` `cursor-plugin/` directory right next to its `0600` `credential.json`
+ * so the Bearer header lives only in a `0600` `.mcp.json` file (never in `ps`/tmux args or process env)
+ * and is cleaned up automatically when `RiffetMcpCredentials.revoke()` removes the credential folder.
+ * When `server.http` is absent (e.g. `RIFFET_MCP_TRANSPORT=stdio`), falls back to the shared stdio
+ * plugin directory with `RIFFET_MCP_CREDENTIAL_FILE` expanded from the CLI's environment (`${env:…}`).
  */
 
 export const RIFFET_MCP_CREDENTIAL_ENV = 'RIFFET_MCP_CREDENTIAL_FILE';
 /** The plugin's name, which Cursor puts in the namespace of the server's tools (`plugin-riffet-tools-riffet`). */
 export const RIFFET_TOOLS_PLUGIN = 'riffet-tools';
 
-/** What a launch adds for Riffet's tools: the plugin directory, and the credential file in the CLI's environment. */
+/** What a launch adds for Riffet's tools: the plugin directory, and any per-session environment variables. */
 export interface CursorToolsLaunch { args: string[]; env: Record<string, string> }
 
 /** The shim's command line without its per-conversation `--credential <file>`. */
 const sharedArgs = (server: AgentRiffetMcpServer) => server.args.filter((arg, index, all) => arg !== '--credential' && all[index - 1] !== '--credential');
+
+const usesHttpTransport = (server: AgentRiffetMcpServer): server is AgentRiffetMcpServer & { http: { url: string; headers: Record<string, string> } } =>
+  Boolean(server.http?.url && server.http.headers?.Authorization);
 
 async function writeAtomic(file: string, content: string): Promise<void> {
   const temporary = `${file}.${process.pid}.tmp`;
@@ -28,13 +31,24 @@ async function writeAtomic(file: string, content: string): Promise<void> {
   await rename(temporary, file);
 }
 
-/** Writes the plugin that runs the shim; the same for every CLI of this server. */
+/** Writes the shared stdio shim plugin; the same for every CLI of this server. */
 export async function writeRiffetToolsPlugin(stateDir: string, server: AgentRiffetMcpServer): Promise<string> {
   const plugin = join(stateDir, 'cursor-hook', 'riffet-tools');
   await mkdir(join(plugin, '.cursor-plugin'), { recursive: true, mode: 0o700 });
   await writeAtomic(join(plugin, '.cursor-plugin/plugin.json'), JSON.stringify({ name: RIFFET_TOOLS_PLUGIN, version: '1.0.0' }));
   await writeAtomic(join(plugin, '.mcp.json'), `${JSON.stringify({
     mcpServers: { [server.name]: { command: server.command, args: sharedArgs(server), env: { [RIFFET_MCP_CREDENTIAL_ENV]: `\${env:${RIFFET_MCP_CREDENTIAL_ENV}}` } } },
+  }, null, 2)}\n`);
+  return plugin;
+}
+
+/** Writes a per-conversation `0700` Streamable HTTP plugin directory alongside `server.credentialFile`. */
+export async function writeRiffetToolsHttpPlugin(server: AgentRiffetMcpServer & { http: { url: string; headers: Record<string, string> } }): Promise<string> {
+  const plugin = join(dirname(server.credentialFile), 'cursor-plugin');
+  await mkdir(join(plugin, '.cursor-plugin'), { recursive: true, mode: 0o700 });
+  await writeAtomic(join(plugin, '.cursor-plugin/plugin.json'), JSON.stringify({ name: RIFFET_TOOLS_PLUGIN, version: '1.0.0' }));
+  await writeAtomic(join(plugin, '.mcp.json'), `${JSON.stringify({
+    mcpServers: { [server.name]: { url: server.http.url, headers: server.http.headers } },
   }, null, 2)}\n`);
   return plugin;
 }
@@ -57,6 +71,9 @@ export class CursorRiffetTools {
   }
 
   private async launch(server: AgentRiffetMcpServer): Promise<CursorToolsLaunch> {
+    if (usesHttpTransport(server)) {
+      return { args: ['--plugin-dir', await writeRiffetToolsHttpPlugin(server)], env: {} };
+    }
     return { args: ['--plugin-dir', await this.plugin(server)], env: { [RIFFET_MCP_CREDENTIAL_ENV]: server.credentialFile } };
   }
 

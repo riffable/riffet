@@ -876,8 +876,9 @@ export interface AgentStandingHost {
   newTopic?(sessionId: string, text: string): boolean;
 }
 
-/** How a CLI starts the Riffet MCP shim (`AgentHost.riffetMcp`). */
-export interface AgentRiffetMcpServer { name: string; command: string; args: string[]; credentialFile: string }
+/** How a CLI connects to the Riffet MCP server (`AgentHost.riffetMcp`): stdio shim, plus optional direct Streamable HTTP endpoint. */
+export interface AgentRiffetMcpHttp { url: string; headers: Record<string, string> }
+export interface AgentRiffetMcpServer { name: string; command: string; args: string[]; credentialFile: string; http?: AgentRiffetMcpHttp }
 
 /**
  * What the core offers a plugin. A call is asynchronous and made on behalf of the session it names; a

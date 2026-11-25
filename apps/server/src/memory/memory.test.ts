@@ -44,16 +44,18 @@ describe('ServerCacheRegistry', () => {
 
       let busy = true;
       let pressure: 'normal' | 'warning' | 'critical' = 'normal';
+      let managed = 100 * 1024 * 1024;
       const stop = registry.startAutoTrim({
         isBusy: () => busy,
         idleMs: 10_000,
         checkIntervalMs: 5_000,
         pressureCooldownMs: 5_000,
         pressure: () => pressure,
-        rssSoftLimitBytes: Number.MAX_SAFE_INTEGER,
+        managedSoftLimitBytes: 256 * 1024 * 1024,
+        managedBytes: () => managed,
       });
 
-      // Busy -> never trims.
+      // Busy & below managed limit -> never trims.
       vi.advanceTimersByTime(30_000);
       expect(trim).not.toHaveBeenCalled();
 
@@ -81,6 +83,13 @@ describe('ServerCacheRegistry', () => {
       pressure = 'warning';
       vi.advanceTimersByTime(5_000);
       expect(trim).toHaveBeenCalledTimes(3);
+      expect(trim).toHaveBeenLastCalledWith('pressure');
+
+      // Managed heap + external exceeding soft limit -> trims even when OS pressure is normal.
+      pressure = 'normal';
+      managed = 300 * 1024 * 1024;
+      vi.advanceTimersByTime(5_000);
+      expect(trim).toHaveBeenCalledTimes(4);
       expect(trim).toHaveBeenLastCalledWith('pressure');
 
       stop();

@@ -806,7 +806,7 @@ export async function createApp(options: AppOptions = {}) {
       return ['starting','running','waiting','cancelling'].some(state=>(sessions[state]??0)>0);
     },
     idleMs:profileBudget.idleTrimMs,
-    rssSoftLimitBytes:profileBudget.steadyFootprintBytes,
+    managedSoftLimitBytes:profileBudget.managedSoftLimitBytes,
     pressure:()=>reclaimer.report()?.pressure??'normal',
   });
   const pruneOldExitedTerminals=()=>{

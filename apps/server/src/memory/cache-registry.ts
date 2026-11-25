@@ -13,8 +13,12 @@ export interface AutoTrimOptions {
   isBusy: () => boolean;
   /** Idle period (ms) before triggering an `'idle'` trim once per idle spell. */
   idleMs: number;
-  /** RSS ceiling (bytes) above which `'pressure'` trim triggers (0 disables RSS-triggered trim). */
-  rssSoftLimitBytes: number;
+  /**
+   * Managed memory ceiling (`heapUsed + external`, bytes) above which `'pressure'` trim triggers
+   * (0 disables managed-heap-triggered trim). Excludes clean file-backed SQLite mmap pages so
+   * healthy active traffic does not thrash caches.
+   */
+  managedSoftLimitBytes?: number;
   /** Optional external OS memory pressure probe. */
   pressure?: () => 'normal' | 'warning' | 'critical';
   /** Poll interval (ms); defaults to 60s. */
@@ -22,7 +26,7 @@ export interface AutoTrimOptions {
   /** Cooldown (ms) between consecutive pressure trims; defaults to 60s. */
   pressureCooldownMs?: number;
   now?: () => number;
-  rssBytes?: () => number;
+  managedBytes?: () => number;
 }
 
 /**
@@ -60,7 +64,11 @@ export class ServerCacheRegistry {
   startAutoTrim(options: AutoTrimOptions): () => void {
     this.stop();
     const now = options.now ?? Date.now;
-    const rssBytes = options.rssBytes ?? (() => process.memoryUsage().rss);
+    const managedBytes = options.managedBytes ?? (() => {
+      const usage = process.memoryUsage();
+      return usage.heapUsed + usage.external;
+    });
+    const softLimit = options.managedSoftLimitBytes ?? 0;
     const checkMs = Math.max(1_000, options.checkIntervalMs ?? 60_000);
     const cooldownMs = Math.max(1_000, options.pressureCooldownMs ?? 60_000);
     let lastActiveAt = now();
@@ -75,8 +83,8 @@ export class ServerCacheRegistry {
         trimmedWhileIdle = false;
       }
       const pressure = options.pressure?.() ?? 'normal';
-      const overRss = options.rssSoftLimitBytes > 0 && rssBytes() > options.rssSoftLimitBytes;
-      if ((pressure !== 'normal' || overRss) && current - lastPressureTrimAt >= cooldownMs) {
+      const overManaged = softLimit > 0 && managedBytes() > softLimit;
+      if ((pressure !== 'normal' || overManaged) && current - lastPressureTrimAt >= cooldownMs) {
         lastPressureTrimAt = current;
         this.trim('pressure');
         return;

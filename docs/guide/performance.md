@@ -42,7 +42,7 @@
 
 - 新缓存的上限取自 §2 的预算。`NSCache`、`LruCache`、Coil、Web 的 `Map` 缓存都一样。
 - 缓存登记到本端的缓存登记表（Mac `CacheRegistry`、iOS 同名类型、Android `CacheRegistry`、Web `cacheRegistry`、服务端 `ServerCacheRegistry`），登记时给出名字、当前大小和清空方法。登记表统一响应：
-  - 系统内存压力：Mac `DispatchSource.makeMemoryPressureSource`，iOS `didReceiveMemoryWarningNotification`，Android `onTrimMemory`，服务端 `memory/cache-registry.ts`（OS 内存压力或 RSS 超过当前档位稳态软上限）；
+  - 系统内存压力：Mac `DispatchSource.makeMemoryPressureSource`，iOS `didReceiveMemoryWarningNotification`，Android `onTrimMemory`，服务端 `memory/cache-registry.ts`（OS 内存压力或托管内存 `heapUsed + external` 超过当前档位 `managedSoftLimitBytes`）；
   - 进入后台（手机）、窗口全部关闭（Mac）、无活跃连接/回合/终端查看者满 `SERVER_BUDGET.idleTrimMs`（服务端，同时执行 `PRAGMA shrink_memory` 并停止空闲的 `riffet-exec` worker）；
   - §4 的上报读取各缓存的大小（服务端直接输出到 `GET /api/system/monitor` 的 `caches`）。
 - 模块级、静态的字典不能无上限地按会话、按项目、按公式累积；要么用有上限的 LRU，要么在会话删除或页面关闭时清理。
@@ -108,7 +108,7 @@
   - `--profile full|lite|auto`（环境变量 `RIFFET_PROFILE`，默认 `full`；`auto` 在主机内存 ≤ `SERVER_PROFILE_AUTO_RAM_BYTES`（4 GiB）时选 `lite`）。`lite` 面向仅作远端工作节点的低配容器/云主机：收紧 V8 老生代上限（`--max-old-space-size`）与三库 SQLite 页缓存/mmap（`temp_store=FILE`）、关闭静态 Web/Math/Diagram 资源、IM 渠道、个人助理后台守护、全量统计回填、启动完整性扫描与预热接口，并将 WAL checkpoint 改为事件循环空闲时内联执行（零常驻 worker 线程）。
   - `full` 档位下 `riffet-exec` 与 `riffet-wal` worker 均在空闲 `execWorkerIdleMs` / `walWorkerIdleMs` 后自动退出释放 V8 isolate，下次需要时按需拉起。
   - `--idle-exit <duration>`（环境变量 `RIFFET_IDLE_EXIT`，如 `30m`、`2h`、`0` 关闭）：在无活跃 HTTP/WS 连接、无终端查看者且无进行中回合满设定时长后优雅退出，支持容器/开发机缩容至 0。
-  - Riffet MCP 对支持 Streamable HTTP 的 Agent CLI（Claude Code、Codex）优先通过 `POST /api/riffet-mcp/http` 直连（沿用按会话 `Bearer wkm_...` 凭据），省去每会话约 40 MB 的独立 `riffet-mcp.mjs` Node 进程；未监听或设置 `RIFFET_MCP_TRANSPORT=stdio` 时自动回退到 stdio shim。
+  - Riffet MCP 对支持 Streamable HTTP 的 Agent CLI（Claude Code、Codex、Cursor）优先通过 `POST /api/riffet-mcp/http` 直连（沿用按会话 `Bearer wkm_...` 凭据），省去每会话约 40 MB 的独立 `riffet-mcp.mjs` Node 进程；未监听或设置 `RIFFET_MCP_TRANSPORT=stdio` 时自动回退到 stdio shim。
 
 ### 3.10 子进程有所有者、有最后使用时间、有内存预算
 
