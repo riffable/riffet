@@ -8,7 +8,7 @@ import {
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import type { Journal } from '../journal/journal.js';
-import { LEGACY_DEFAULT_BACKEND_ID, legacyMirrorFields, requestedNativeSessionId, type IdentifiedRun, type IdentifiedSession } from '../session-identity.js';
+import { LEGACY_DEFAULT_BACKEND_ID, legacyMirrorFields, requestedNativeSessionId, sessionModelLimit, type IdentifiedRun, type IdentifiedSession } from '../session-identity.js';
 import { isPlaceholderTitle } from '../session-title.js';
 import type { StorageLayoutPaths } from '../sqlite-storage.js';
 
@@ -111,10 +111,10 @@ export function retainedReceipts<T extends { createdAt: string }>(receipts: Reco
   return Object.fromEntries([...others, ...live.filter(([key]) => key === keepKey)]);
 }
 
-export function normalizeNativeConfig(config: NativeRunConfig): NativeRunConfig {
+export function normalizeNativeConfig(config: NativeRunConfig, discussion: boolean): NativeRunConfig {
   if (!config || typeof config.mode !== 'string' || !config.mode) throw new AppError('INVALID_NATIVE_CONFIG', 'Native run mode is required');
   if (config.mode.length > 100 || /[\0\r\n]/.test(config.mode)) throw new AppError('INVALID_NATIVE_CONFIG', 'Native run mode is invalid');
-  if (config.model !== undefined && (typeof config.model !== 'string' || !config.model || config.model.length > 200 || /[\0\r\n]/.test(config.model))) throw new AppError('INVALID_NATIVE_CONFIG', 'Native run model is invalid');
+  if (config.model !== undefined && (typeof config.model !== 'string' || !config.model || config.model.length > sessionModelLimit(config.model, discussion) || /[\0\r\n]/.test(config.model))) throw new AppError('INVALID_NATIVE_CONFIG', 'Native run model is invalid');
   if (config.approval !== undefined && (typeof config.approval !== 'string' || !config.approval || config.approval.length > 100 || /[\0\r\n]/.test(config.approval))) throw new AppError('INVALID_NATIVE_CONFIG', 'Native run permission setting is invalid');
   return {
     ...(config.model !== undefined ? { model: config.model } : {}),
@@ -132,7 +132,7 @@ export function normalizedNativeSessionInput(input: NativeSessionInput) {
   }
   const nativeSessionId = requestedNativeSessionId(input);
   if (nativeSessionId !== undefined && (typeof nativeSessionId !== 'string' || !nativeSessionId || nativeSessionId.length > 200 || /[\0\r\n]/.test(nativeSessionId))) throw new AppError('INVALID_NATIVE_SESSION_ID', 'Native session id is invalid');
-  if (input.model !== undefined && (typeof input.model !== 'string' || !input.model || input.model.length > 200 || /[\0\r\n]/.test(input.model))) throw new AppError('INVALID_NATIVE_MODEL', 'Native model selection is invalid');
+  if (input.model !== undefined && (typeof input.model !== 'string' || !input.model || input.model.length > sessionModelLimit(input.model, backendId === 'chat' && input.origin?.kind === 'discussion') || /[\0\r\n]/.test(input.model))) throw new AppError('INVALID_NATIVE_MODEL', 'Native model selection is invalid');
   if (input.mode !== undefined && (typeof input.mode !== 'string' || !input.mode || input.mode.length > 100 || /[\0\r\n]/.test(input.mode))) throw new AppError('INVALID_NATIVE_MODE', 'Native mode is invalid');
   if (input.approval !== undefined && (typeof input.approval !== 'string' || !input.approval || input.approval.length > 100 || /[\0\r\n]/.test(input.approval))) throw new AppError('INVALID_NATIVE_APPROVAL', 'Native permission setting is invalid');
   if (input.workItemId !== undefined && (typeof input.workItemId !== 'string' || !input.workItemId || input.workItemId.length > 100)) throw new AppError('INVALID_WORK_ITEM', 'workItemId must be a string of 1 to 100 characters');

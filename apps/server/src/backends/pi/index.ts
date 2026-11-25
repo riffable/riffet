@@ -15,7 +15,10 @@ import type {
   NativeDriverStored,
 } from '../types.js';
 import { findPiTranscript, forkPiTranscript, piEntryUsage, parsePiTranscript, readPiTranscript, validatePiSessionId, type PiEntry } from './history.js';
-import { invalidatePiModels, listPiModels, listPiSlashItems, probePiCli, PI_MINIMUM_VERSION } from './models.js';
+import { parseNativeModelSelection } from '../shared/model-selection.js';
+import { splitModel } from './runtime-shared.js';
+import { streamPiDiscussion } from './discussion.js';
+import { invalidatePiModels, listPiModels, listPiSlashItems, piDefaultModel, probePiCli, PI_MINIMUM_VERSION } from './models.js';
 import { projectPiChain } from './projection.js';
 import { closePiRuntime, getPiRuntime } from './runtime.js';
 import { piCustomEndpoint, piProviderId } from './provider.js';
@@ -110,6 +113,40 @@ export class PiBackendAdapter implements NativeBackendDriver {
   normalizeModel(model: string, profile?: NativeBackendProfileConfig): string {
     return profile && piCustomEndpoint(profile) ? model.trim().replace(new RegExp(`^${piProviderId(profile)}/`), '') : model.trim();
   }
+
+  async resolveDiscussionModel(profile: NativeBackendProfileConfig, selection: string, confirmed?: string): Promise<string | undefined> {
+    const custom = piCustomEndpoint(profile);
+    const value = selection.trim() || confirmed || (custom ? await piDefaultModel(profile) : undefined);
+    if (!value) return undefined;
+    const requested = parseNativeModelSelection(value);
+    if (!requested.model) return undefined;
+    if (custom) return value;
+    const chosen = splitModel(requested.model);
+    const last = parseNativeModelSelection(confirmed);
+    const reported = splitModel(last.model);
+    if (reported.provider && reported.modelId === chosen.modelId && (!chosen.provider || chosen.provider === reported.provider)) {
+      // An unqualified selection can name several authenticated providers. The actual dispatch identifies which one answered.
+      const options = value.slice(requested.model.length) || confirmed!.slice(last.model.length);
+      return last.model + options;
+    }
+    if (chosen.provider) return chosen.modelId ? value : undefined;
+    const models = await listPiModels(profile);
+    const matches = models.filter(item => {
+      const listed = splitModel(item.value);
+      return listed.provider && listed.modelId === chosen.modelId;
+    });
+    return matches.length === 1 ? matches[0]!.value + value.slice(requested.model.length) : undefined;
+  }
+
+  discussionModelScope(profile: NativeBackendProfileConfig, model: string): string {
+    if (piCustomEndpoint(profile)) return 'profile';
+    const id = parseNativeModelSelection(model).model;
+    const provider = splitModel(id).provider;
+    return provider ? `provider:${provider}` : `model:${id}`;
+  }
+
+  readonly streamDiscussion: NonNullable<NativeBackendDriver['streamDiscussion']> = (_host, profile, request) =>
+    streamPiDiscussion(profile, request);
 
   validateNativeSessionId(value: string): void { validatePiSessionId(value); }
 

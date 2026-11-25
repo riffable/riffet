@@ -8,7 +8,9 @@ import { scanCommandRoots, scanSkillRoots } from '../shared/skill-files.js';
 import type { NativeBackendAvailability, NativeBackendProfileConfig } from '../types.js';
 import { piAgentDir } from './history.js';
 import { expandHome } from '../../environment.js';
-import { piCustomEndpoint, piProviderModels } from './provider.js';
+import { nativeModelEffort, parseNativeModelSelection } from '../shared/model-selection.js';
+import { splitModel, type PiDesired } from './runtime-shared.js';
+import { piCustomEndpoint, piCustomModelId, piProviderId, piProviderModels } from './provider.js';
 
 /*
  * Discovery that must never start a conversation (docs/PI.md §2): the installed CLI is checked with
@@ -82,15 +84,36 @@ export async function readPiSettings(profile: NativeBackendProfileConfig): Promi
 }
 
 /** The model a session starts with: the profile's own choice, else pi's saved default. */
-export async function piDefaultModel(profile: NativeBackendProfileConfig): Promise<string | undefined> {
+export async function piDefaultModel(profile: NativeBackendProfileConfig, signal?: AbortSignal): Promise<string | undefined> {
   const configured = str(profile.config.defaultModel);
   if (configured) return configured;
-  if (piCustomEndpoint(profile)) return (await listPiModels(profile))[0]?.value;
+  if (piCustomEndpoint(profile)) return (await listPiModels(profile, undefined, signal))[0]?.value;
   const settings = await readPiSettings(profile);
   const model = settings.defaultModel;
   if (!model) return undefined;
   return model.includes('/') || !settings.defaultProvider ? model : `${settings.defaultProvider}/${model}`;
 }
+
+export async function piSelection(profile: NativeBackendProfileConfig, value: string | undefined, signal?: AbortSignal): Promise<PiDesired | undefined> {
+  if (!value) return undefined;
+  const selection = parseNativeModelSelection(value);
+  let effort = nativeModelEffort(selection);
+  const custom = piCustomEndpoint(profile);
+  const split = custom ? { provider: piProviderId(profile), modelId: piCustomModelId(profile, selection.model) } : splitModel(selection.model);
+  let provider = split.provider;
+  if ((!provider || custom && !effort) && split.modelId) {
+    const models = await listPiModels(profile, undefined, signal);
+    const model = models.find(model => model.value === split.modelId || model.value.endsWith(`/${split.modelId}`));
+    provider ??= splitModel(model?.value)?.provider;
+    if (custom) effort ??= model?.configOptions.find(option => option.id === 'effort')?.currentValue;
+  }
+  return {
+    ...(provider ? { provider } : {}),
+    ...(split.modelId ? { modelId: split.modelId } : {}),
+    ...(effort ? { thinkingLevel: effort } : {}),
+  };
+}
+
 
 function thinkingOptions(model: RecordValue, fallback: string | undefined): ModelConfigOption | undefined {
   const map = record(model.thinkingLevelMap);
@@ -206,7 +229,7 @@ async function catalogModels(agentDir: string): Promise<unknown[]> {
  * not listed models yet still yields the saved default, so the picker is never empty when pi itself
  * would run.
  */
-export async function listPiModels(profile: NativeBackendProfileConfig, live?: ModelInfo[]): Promise<ModelInfo[]> {
+export async function listPiModels(profile: NativeBackendProfileConfig, live?: ModelInfo[], signal?: AbortSignal): Promise<ModelInfo[]> {
   if (live?.length) {
     rememberPiModels(profile, live);
     return live;
@@ -215,7 +238,7 @@ export async function listPiModels(profile: NativeBackendProfileConfig, live?: M
   const cached = modelCache.get(key);
   if (cached && Date.now() - cached.at < MODEL_CACHE_MS) return cached.models;
   if (piCustomEndpoint(profile)) {
-    const infos = await piProviderModels(profile);
+    const infos = await piProviderModels(profile, undefined, signal);
     modelCache.set(key, { at: Date.now(), models: infos });
     return infos;
   }
@@ -225,7 +248,7 @@ export async function listPiModels(profile: NativeBackendProfileConfig, live?: M
   const enabled = Array.isArray(profile.config.enabledModels) ? profile.config.enabledModels.filter((item): item is string => typeof item === 'string') : undefined;
   if (enabled?.length) infos = infos.filter(model => enabled.includes(model.value));
   if (!infos.length) {
-    const fallback = await piDefaultModel(profile);
+    const fallback = await piDefaultModel(profile, signal);
     if (fallback) infos = [{ value: fallback, name: fallback, configOptions: [] }];
   }
   modelCache.set(key, { at: Date.now(), models: infos });

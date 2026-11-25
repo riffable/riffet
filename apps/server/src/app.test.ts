@@ -194,6 +194,89 @@ describe('app route surface after ACP removal', () => {
     } finally { kick.mockRestore(); available.mockRestore(); capability.mockRestore(); }
   });
 
+  it('runs a native side chat on the parent profile with its original model options and isolated history', async () => {
+    const { app, cookie, csrf, store, projectDir, stateDir, nativeBackends } = await boot();
+    const driver = nativeBackends.registry.require('pi');
+    const stream = vi.spyOn(driver, 'streamDiscussion').mockImplementation(async (_host, _profile, request) => {
+      request.onDelta('Native answer');
+    });
+    const shortName = 'm'.repeat(200 - 'first/[thinking=high]'.length);
+    const qualified = `first/${shortName}`;
+    const catalog = vi.spyOn(driver, 'listModels').mockResolvedValue([
+      { value: qualified, name: 'Model', configOptions: [] },
+      { value: 'second/other', name: 'Other', configOptions: [] },
+    ]);
+    const headers = { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, [CLIENT_FEATURES_HEADER]: 'quick-chat,pi-agent' };
+    const model = qualified + '[thinking=high]';
+    const project = store.createProject(projectDir, 'Native discussion');
+    const attachment = { hook: 'example.provider', id: 'private-route-id' };
+    const profile = nativeBackends.catalog.validateProfile('pi');
+    const parent = store.createSession({ projectId: project.id, kind: 'native', backendId: 'pi', backendProfileId: profile.id, model: shortName });
+    const original = store.acceptNativeRun(parent.id, 'original', { text: 'Question', attachmentIds: [], context: [] }, { mode: 'agent', model: shortName });
+    store.updateRun(original.id, { state: 'completed', native: { ...original.native!, delivery: 'observed', resolvedConfig: { mode: 'agent', model } } });
+    store.updateSession(parent.id, { nativeRuntime: { address: 'local', fingerprint: 'parent', attachment } });
+    const log = new NativeEventLog(store.journal, parent.id);
+    log.assign({ sessionId: parent.id, nativeId: 'answer', sequence: 1, type: 'agent_message_chunk', createdAt: new Date().toISOString(),
+      data: { content: { type: 'text', text: 'Original answer' } } });
+    const path = `/api/sessions/${parent.id}/discussions`;
+    const body = { clientSessionId: 'native-side-chat', commandId: 'first-question', text: 'Why?', anchor: { messageId: 'answer' }, quote: { exact: 'Original answer', prefix: '', suffix: '' } };
+    try {
+      const models = (await app.inject({ method: 'GET', url: path + '/models', headers })).json();
+      expect(models.model).toBe(`pi:${profile.id}:${model}`);
+      expect(models.models.map((entry: { value: string }) => entry.value)).toEqual([`pi:${profile.id}:${qualified}`]);
+      const other = `pi:${profile.id}:second/other`;
+      const denied = await app.inject({ method: 'POST', url: path, headers, payload: { ...body, clientSessionId: 'rejected-side-chat', commandId: 'rejected-question', model: other } });
+      expect(denied.json().error.code).toBe('DISCUSSION_PROVIDER_UNAVAILABLE');
+      const started = await app.inject({ method: 'POST', url: path, headers, payload: { ...body, model: models.model } });
+      expect(started.json()).toMatchObject({ session: { model: models.model } });
+      const child = started.json().session.id;
+      await vi.waitFor(() => expect(store.findRunByCommand(child, body.commandId)?.state).toBe('completed'), { timeout: 5000 });
+      expect(stream.mock.calls[0]![1].id).toBe(profile.id);
+      expect(stream.mock.calls[0]![2]).toMatchObject({ model, sourceSessionId: parent.id, sourceAttachment: attachment, messages: [{ role: 'user', content: 'Why?' }], system: expect.stringContaining('Original answer') });
+      expect(stream.mock.calls[0]![2].system).not.toContain(attachment.id);
+      store.updateSession(parent.id, { nativeRuntime: undefined });
+      for (const route of ['model', 'configure']) {
+        const updated = await app.inject({ method: 'POST', url: `/api/sessions/${child}/native/${route}`, headers, payload: { model: models.model } });
+        expect(updated.statusCode).toBe(200);
+      }
+      const tooLong = await app.inject({ method: 'POST', url: `/api/sessions/${parent.id}/native/model`, headers, payload: { model: model + 'x' } });
+      expect(tooLong.json().error.code).toBe('INVALID_INPUT');
+      const switched = await app.inject({ method: 'POST', url: `/api/sessions/${child}/native/model`, headers, payload: { model: other } });
+      expect(switched.json().error.code).toBe('DISCUSSION_PROVIDER_UNAVAILABLE');
+      await app.inject({ method: 'POST', url: `/api/sessions/${child}/native/send`, headers, payload: { commandId: 'follow-up', text: 'Explain further' } });
+      await vi.waitFor(() => expect(store.findRunByCommand(child, 'follow-up')?.state).toBe('completed'), { timeout: 5000 });
+      expect(stream.mock.calls[1]![2].sourceAttachment).toEqual(attachment);
+      expect(stream.mock.calls[1]![2].messages).toEqual([{ role: 'user', content: 'Why?' }, { role: 'assistant', content: 'Native answer' }, { role: 'user', content: 'Explain further' }]);
+      expect(store.listRuns(parent.id).map(run => run.id)).toEqual([original.id]);
+      stream.mockRejectedValueOnce(new Error('Provider rejected authorization: Bearer fake-private-value'));
+      await app.inject({ method: 'POST', url: `/api/sessions/${child}/native/send`, headers, payload: { commandId: 'provider-error', text: 'Try again' } });
+      await vi.waitFor(() => expect(store.findRunByCommand(child, 'provider-error')?.state).toBe('failed'), { timeout: 5000 });
+      const journal = await readFile(join(stateDir, 'chat', child + '.jsonl'), 'utf8');
+      expect(journal).toContain('[REDACTED]');
+      expect(journal).not.toContain('fake-private-value');
+      // Deletion disposes the driver after the visible answer has ended. It must also stop
+      // the background summary before the session's history file can be removed.
+      let summarySignal: AbortSignal | undefined;
+      stream.mockImplementationOnce(async (_host, _profile, request) => request.onDelta('Short answer'))
+        .mockImplementationOnce(async (_host, _profile, request) => {
+          summarySignal = request.signal;
+          await new Promise<void>(resolve => request.signal.addEventListener('abort', () => resolve(), { once: true }));
+        });
+      const long = await app.inject({ method: 'POST', url: `/api/sessions/${child}/native/send`, headers,
+        payload: { commandId: 'long-question', text: '字'.repeat(50_000) } });
+      expect(long.statusCode).toBe(202);
+      await vi.waitFor(() => expect(summarySignal).toBeDefined(), { timeout: 5000 });
+      await nativeBackends.dispose(child);
+      expect(summarySignal?.aborted).toBe(true);
+      // Legacy records that only named the CLI default cannot change providers when that default changes.
+      store.updateSession(child, { model: `pi:${profile.id}:` });
+      const old = await app.inject({ method: 'GET', url: `/api/sessions/${child}/discussions/models`, headers });
+      expect(old.json().error.code).toBe('DISCUSSION_PROVIDER_UNAVAILABLE');
+      const otherProfile = nativeBackends.catalog.validateProfile('droid');
+      await expect(nativeBackends.catalog.validateDiscussionModel(otherProfile, '', '')).rejects.toMatchObject({ code: 'DISCUSSION_PROVIDER_UNAVAILABLE' });
+    } finally { stream.mockRestore(); catalog.mockRestore(); }
+  });
+
   it('persists a side discussion snapshot once, sends isolated multi-turn context and retains it independently of quick chats', async () => {
     const { app, cookie, csrf, call, store, stateDir, projectDir, nativeBackends, quickChats, dispatch } = await boot();
     expect((await call('POST', '/api/backends/dsh/profiles', { id: 'discussion-gw', name: 'Gateway', apiEndpoint: 'https://discussion.example/v1', apiKey: 'k', enabledModels: ['m'] })).statusCode).toBe(200);
@@ -213,7 +296,7 @@ describe('app route surface after ACP removal', () => {
     const parentLog = new NativeEventLog(store.journal, parent.id);
     parentEvents.forEach(event => parentLog.assign(event));
     const transcript = vi.spyOn(nativeBackends, 'indexableTranscript').mockRejectedValue(new Error('provider unavailable'));
-    const asks = (method: 'GET' | 'POST', url: string, payload?: unknown) => app.inject({ method, url, headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, [CLIENT_FEATURES_HEADER]: 'quick-chat' }, ...(payload === undefined ? {} : { payload: payload as object }) });
+    const asks = (method: 'GET' | 'POST', url: string, payload?: unknown) => app.inject({ method, url, headers: { host: '127.0.0.1:4317', cookie, 'x-csrf-token': csrf, [CLIENT_FEATURES_HEADER]: 'quick-chat,plugin-agents' }, ...(payload === undefined ? {} : { payload: payload as object }) });
     const sse = (text: string) => new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { headers: { 'content-type': 'text/event-stream' } });
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(sse('First discussion answer')).mockResolvedValueOnce(sse('Second discussion answer'));
     try {
@@ -222,7 +305,7 @@ describe('app route surface after ACP removal', () => {
       const mismatched = await asks('POST', `/api/sessions/${parent.id}/discussions`, { ...body, clientSessionId: 'side-wrong-provider', model: 'dsh:other-gw:other-model' });
       expect(mismatched.json().error.code).toBe('DISCUSSION_PROVIDER_UNAVAILABLE');
       expect(store.listSessions().some(session => session.id === 'side-wrong-provider')).toBe(false);
-      const cliOnly = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor', title: 'CLI only' });
+      const cliOnly = store.createSession({ projectId: project.id, kind: 'native', backendId: 'example.unknown', title: 'No side chat driver' });
       expect((await asks('POST', `/api/sessions/${cliOnly.id}/discussions`, { ...body, clientSessionId: 'side-cli-only' })).json().error.code).toBe('DISCUSSION_PROVIDER_UNAVAILABLE');
       expect((await asks('POST', `/api/sessions/${parent.id}/discussions`, { ...body, clientSessionId: 'invalid-side', quote: { ...body.quote, exact: 'a missing passage' } })).statusCode).toBe(400);
       expect(store.listSessions().some(session => session.id === 'invalid-side')).toBe(false);

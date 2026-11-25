@@ -30,7 +30,7 @@ export function piCustomModelId(profile: NativeBackendProfileConfig, value: stri
 }
 
 /** Catalog lookup never launches pi; output limits are collected separately from the public model DTO. */
-export async function piProviderModels(profile: NativeBackendProfileConfig, outputLimits?: Map<string, number>): Promise<ModelInfo[]> {
+export async function piProviderModels(profile: NativeBackendProfileConfig, outputLimits?: Map<string, number>, signal?: AbortSignal): Promise<ModelInfo[]> {
   const endpoint = piCustomEndpoint(profile);
   if (!endpoint) return [];
   const api = piApiProtocol(profile);
@@ -38,7 +38,7 @@ export async function piProviderModels(profile: NativeBackendProfileConfig, outp
   let models: ModelInfo[];
   try {
     models = await fetchGatewayModels({
-      baseUrl: endpoint,
+      baseUrl: endpoint, signal,
       ...(key ? { apiKey: key } : {}),
       protocol: api,
       select: entry => {
@@ -52,6 +52,7 @@ export async function piProviderModels(profile: NativeBackendProfileConfig, outp
       reasoningLevels: true,
     });
   } catch (error) {
+    signal?.throwIfAborted();
     // An explicitly configured model still works when its service implements inference only.
     const configured = Array.isArray(profile.config.enabledModels) ? profile.config.enabledModels : [];
     if (!configured.length && !profile.config.defaultModel) throw error;
@@ -78,12 +79,12 @@ export async function piProviderModels(profile: NativeBackendProfileConfig, outp
 }
 
 /** Pi's official registerProvider API overlays one private provider in this process only. */
-export async function piProviderExtension(profile: NativeBackendProfileConfig, stateDir: string): Promise<{ path: string; env: NodeJS.ProcessEnv } | undefined> {
+export async function piProviderExtension(profile: NativeBackendProfileConfig, stateDir: string, signal?: AbortSignal): Promise<{ path: string; env: NodeJS.ProcessEnv } | undefined> {
   const endpoint = piCustomEndpoint(profile);
   if (!endpoint) return undefined;
   const api = piApiProtocol(profile);
   const outputLimits = new Map<string, number>();
-  const models = await piProviderModels(profile, outputLimits);
+  const models = await piProviderModels(profile, outputLimits, signal);
   if (!models.length) throw new AppError('INVALID_MODEL', 'Choose at least one model for this pi provider.', 400);
   const inputs = profile.config.modelInputModalities as Record<string, Array<'text' | 'image'>> | undefined;
   const definition = {

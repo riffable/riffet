@@ -12,7 +12,8 @@ import { defaultBackendForClient, requireBackendVisibleToClient } from '../nativ
 import { configureNative as configureNativeSession, type NativeConfigurePatch } from '../native/configure.js';
 import type { RouteDeps, NativeMessageBody } from './deps.js';
 import { memoryPressure, type MemoryPressure } from '../native/agent-processes.js';
-import { resolveNativeSessionInput } from '../native/session-input.js';
+import { NATIVE_MODEL_LIMIT } from '../session-identity.js';
+import { requireSessionModel, resolveNativeSessionInput } from '../native/session-input.js';
 
 /** The memory pressure a prewarm is admitted under, read at most every few seconds: every open page asks every 30 s. */
 let pressureRead: { at: number; level: Promise<MemoryPressure> } | undefined;
@@ -308,17 +309,18 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     return nativeBackends.models(session);
   });
   const configureNative=(id:string,patch:NativeConfigurePatch,headers?:IncomingHttpHeaders)=>configureNativeSession({store,dispatch,sessionLock,sessionCommands,nativeBackends},id,patch,headers);
+  const modelForSession=(id:string,value:unknown)=>requireSessionModel(value,typeof value==='string'&&value.length>NATIVE_MODEL_LIMIT&&store.getSession(id).origin?.kind==='discussion');
   app.post<{Params:{id:string};Body:{model?:string;mode?:string;approval?:string;backendProfileId?:string}}>('/api/sessions/:id/native/configure',async(request)=>{
     const body=request.body??{},patch:{model?:string;mode?:string;approval?:string;backendProfileId?:string}={};
     if(body.backendProfileId!==undefined)patch.backendProfileId=requireString(body.backendProfileId,'backendProfileId',200);
-    if(body.model!==undefined)patch.model=requireString(body.model,'model',200);
+    if(body.model!==undefined)patch.model=modelForSession(request.params.id,body.model);
     if(body.mode!==undefined)patch.mode=requireString(body.mode,'mode',100);
     if(body.approval!==undefined)patch.approval=requireString(body.approval,'approval',100);
     if(!Object.keys(patch).length)throw new AppError('INVALID_NATIVE_CONFIG','Choose at least one native setting to update');
     return configureNative(request.params.id,patch,request.headers);
   });
   app.post<{Params:{id:string};Body:{model:string}}>('/api/sessions/:id/native/model',async(request)=>{
-    return configureNative(request.params.id,{model:requireString(request.body?.model,'model',200)},request.headers);
+    return configureNative(request.params.id,{model:modelForSession(request.params.id,request.body?.model)},request.headers);
   });
   app.post<{Params:{id:string};Body:{mode:string}}>('/api/sessions/:id/native/mode',async(request)=>configureNative(request.params.id,{mode:requireString(request.body?.mode,'mode',100)},request.headers));
   app.post<{Params:{id:string};Body:{approval?:unknown}}>('/api/sessions/:id/native/approval',async(request)=>{

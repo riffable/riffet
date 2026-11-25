@@ -312,7 +312,7 @@ export async function createApp(options: AppOptions = {}) {
     .register(new DroidBackendAdapter())
     .register(new PiBackendAdapter({stateDir}))
     .register(new CodexBackendAdapter(undefined, traexFlavor, plugins))
-    .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.catalog.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS,recordAuxiliaryCall}));
+    .register(new ChatBackendAdapter({stateDir,get catalog(){return nativeBackends.catalog;},gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS,recordAuxiliaryCall}));
   // The 助理's directory is made on first use, like its project; its files are checked once per server.
   let assistantHome:AssistantHome|undefined;
   // The 助理's background work (docs/ASSISTANT.md §7) is made further down; the standing conversation reaches it through these.

@@ -9,6 +9,7 @@ export * from './cli-resolve.js';
 export * from './cli-version.js';
 export * from './config-documents.js';
 export * from './deferred-steer.js';
+export * from './discussion.js';
 export * from './environment.js';
 export * from './errors.js';
 export * from './exec.js';

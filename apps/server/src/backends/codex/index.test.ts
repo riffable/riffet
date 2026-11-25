@@ -512,6 +512,33 @@ describe('prewarm', () => {
 });
 
 describe('native runtime attachments', () => {
+  it('pins side questions to their original direct connection or exact runtime attachment', async () => {
+    const h = makeHarness({ flavor: traexFlavor });
+    const original = { hook: 'test.route', id: 'first' };
+    const ask = (sourceAttachment: typeof original | null) => h.adapter.streamDiscussion!(h.host, h.profile, {
+      sourceSessionId: h.session.id, sourceAttachment, model: '', system: 'snapshot', messages: [{ role: 'user', content: 'question' }],
+      signal: new AbortController().signal, idleTimeoutMs: 1000, maxOutputTokens: 100, onDelta: () => {},
+    });
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      const binding = h.session.nativeRuntime!;
+      const before = h.factoryCalls.length;
+      for (const attachment of [undefined, { ...original, id: 'second' }, { ...original, hook: 'test.other' }]) {
+        h.session.nativeRuntime = { ...binding, attachment };
+        await expect(ask(original)).rejects.toMatchObject({ code: 'DISCUSSION_PROVIDER_UNAVAILABLE' });
+      }
+      expect(h.factoryCalls).toHaveLength(before);
+      // A chat opened before the parent gained a route still spawns directly under its own profile.
+      h.factoryErrors.push(new Error('direct process requested'));
+      await expect(ask(null)).rejects.toThrow('direct process requested');
+      expect(h.factoryCalls.at(-1)!.remoteAddress).toBeUndefined();
+      h.session.nativeRuntime = { ...binding, attachment: original };
+      h.factoryErrors.push(new Error('observer requested'));
+      await expect(ask(original)).rejects.toThrow('observer requested');
+      expect(h.factoryCalls.at(-1)!.remoteAddress).toBe(binding.address);
+    } finally { await h.adapter.close(h.host); }
+  });
+
   it('keeps one native writer across sidecar actions and recovers its attachment, saved under either field, after a restart', async () => {
     let onChange: (() => void) | undefined;
     let route = 'direct';

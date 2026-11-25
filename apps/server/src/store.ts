@@ -609,7 +609,7 @@ export class Store {
       ...(normalized.model !== undefined ? { model: normalized.model } : {}),
       mode: normalized.mode,
       ...(normalized.approval !== undefined ? { approval: normalized.approval } : {}),
-    });
+    }, normalized.backendId === 'chat' && normalized.origin?.kind === 'discussion');
     return this.transaction(() => {
       if (this.isSessionDeleted(clientSessionId)) throw sessionDeleted(clientSessionId);
       const stored = this.get<Session>('sessions', clientSessionId);

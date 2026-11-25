@@ -1,4 +1,6 @@
 import { readContextFile } from '../../context-references/read-file.js';
+import { parseNativeModelSelection } from '../shared/model-selection.js';
+import { streamDroidDiscussion } from './discussion.js';
 import { queryDirectory } from '../shared/query-directory.js';
 import type {
   ModelInfo, NativeBackendCapabilities, NativeBackendId, NativeInteraction,
@@ -90,6 +92,21 @@ export class DroidBackendAdapter implements NativeBackendDriver {
   normalizeModel(model: string): string {
     return model.trim();
   }
+
+  resolveDiscussionModel(_profile: NativeBackendProfileConfig, selection: string, confirmed?: string): string | undefined {
+    const value = selection.trim();
+    if (!value) return confirmed || undefined;
+    return confirmed && value === parseNativeModelSelection(confirmed).model ? confirmed : value;
+  }
+
+  discussionModelScope(_profile: NativeBackendProfileConfig, model: string): string {
+    const id = parseNativeModelSelection(model).model;
+    // Each BYOK entry has its own API endpoint and credentials, even inside the same Droid profile.
+    return !id || id.startsWith('custom:') ? `model:${id}` : 'factory';
+  }
+
+  readonly streamDiscussion: NonNullable<NativeBackendDriver['streamDiscussion']> = (_host, profile, request) =>
+    streamDroidDiscussion(profile, request);
 
   validateNativeSessionId(value: string): void { validateDroidSessionId(value); }
 

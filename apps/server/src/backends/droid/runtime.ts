@@ -185,8 +185,9 @@ export class DroidRuntime {
     // This send has adopted the latest persisted selection, replacing any older deferred change.
     state.deferred = undefined;
     if (input.isCancelled()) return;
+    const modelId = desired.modelId ?? state.reported?.modelId;
     const resolvedConfig: NativeRunConfig = {
-      ...(desired.modelId ? { model: droidModelValue(desired.modelId, desired.reasoningEffort, desired.compactionTokenLimit) } : {}),
+      ...(modelId ? { model: droidModelValue(modelId, desired.reasoningEffort ?? state.reported?.reasoningEffort, desired.compactionTokenLimit) } : {}),
       mode: desired.interactionMode === 'spec' ? 'spec' : 'agent',
       approval: desired.autonomyLevel,
     };

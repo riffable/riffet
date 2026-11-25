@@ -229,6 +229,9 @@ export class PluginBackendDriver implements NativeBackendDriver {
   readonly cliVersions: NativeBackendDriver['cliVersions'];
   readonly sendsNow: boolean | undefined;
   readonly steer: NativeBackendDriver['steer'];
+  readonly streamDiscussion: NativeBackendDriver['streamDiscussion'];
+  readonly discussionModelScope: NativeBackendDriver['discussionModelScope'];
+  private readonly discussionLifetime = new AbortController();
   readonly requestInterrupt: NativeBackendDriver['requestInterrupt'];
   readonly normalizeModel: NativeBackendDriver['normalizeModel'];
   readonly validateNativeSessionId: NativeBackendDriver['validateNativeSessionId'];
@@ -291,6 +294,10 @@ export class PluginBackendDriver implements NativeBackendDriver {
       };
     }
     if (backend.requestInterrupt) this.requestInterrupt = (host, session) => backend.requestInterrupt!(this.hostFor(host), session.id);
+    if (backend.streamDiscussion) this.streamDiscussion = (host, profile, request) => backend.streamDiscussion!(this.hostFor(host), profileView(profile), {
+      ...request, signal: AbortSignal.any([request.signal, this.discussionLifetime.signal]),
+    });
+    if (backend.discussionModelScope) this.discussionModelScope = (profile, model) => backend.discussionModelScope!(profileView(profile), model);
     if (backend.normalizeModel) this.normalizeModel = (model, profile) => backend.normalizeModel!(model, profileView(profile));
     if (backend.validateNativeSessionId) this.validateNativeSessionId = id => backend.validateNativeSessionId!(id);
     if (backend.validateProfileConfig) this.validateProfileConfig = config => backend.validateProfileConfig!(config);
@@ -487,6 +494,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
 
   /** The plugin's activation has been released: nothing it left behind (a timer, a listener) can reach the core through the host any more. */
   revoke(): void {
+    this.discussionLifetime.abort();
     this.retired = true;
     this.revoked = true;
     for (const unsubscribe of this.observationSubscriptions) unsubscribe();

@@ -25,6 +25,8 @@ import {
   normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, assertSupportedProfile, providerEnv,
   collaborationModeOf, STEER_MIN_VERSIONS, readCodexOwnerGateway, hasCodexChatgptAuth,
 } from './config.js';
+import type { AgentDiscussionRequest } from '@riffet/plugin-api/experimental/agent';
+import { streamTraeDiscussion } from './traex-discussion.js';
 import { CodexAuxiliary } from './auxiliary.js';
 import { CodexExternalSessions } from './external-sessions.js';
 import { capabilitiesOf, availabilityOf } from './availability.js';
@@ -101,6 +103,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   private readonly profileSwitchFailures = new Set<string>();
   private readonly listeners: CodexListeners;
   private readonly journalFeeds: CodexJournalFeeds;
+  readonly streamDiscussion?: NativeBackendDriver['streamDiscussion'];
+  private readonly sideChats = new AbortController();
   private readonly auxiliary: CodexAuxiliary;
   private readonly externalSessions: CodexExternalSessions;
   private readonly skills: CodexSkills;
@@ -129,6 +133,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     this.label = flavor.label;
     // Each context reads `withTransport` through the adapter on every call, so a replaced reader is seen.
     const withTransport = <T>(project: Project | undefined, profile: NativeBackendProfileConfig, session: Session | undefined, read: (transport: CodexAppServerClient) => Promise<T>) => this.withTransport(project, profile, session, read);
+    if (flavor.id === 'traex') this.streamDiscussion = (host, profile, request) => this.traeDiscussion(host, profile, request);
     this.auxiliary = new CodexAuxiliary({ flavor, startAppServer, withTransport });
     this.externalSessions = new CodexExternalSessions({
       flavor,
@@ -195,6 +200,26 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return this.auxiliary.streamChat(profile, request);
   }
 
+
+  private async traeDiscussion(host: NativeBackendHost, profile: NativeBackendProfileConfig, request: AgentDiscussionRequest): Promise<void> {
+    const source = request.sourceAttachment !== null && request.sourceSessionId ? host.getSession(request.sourceSessionId) : undefined;
+    const current = source?.nativeRuntime?.attachment;
+    const required = request.sourceAttachment === undefined ? current : request.sourceAttachment;
+    let address: string | undefined;
+    if (required) {
+      const runtime = source && this.runtimes.get(source.id);
+      if (!source?.nativeRuntime || current?.hook !== required.hook || current.id !== required.id
+        || source.backendId !== this.id || (source.backendProfileId && source.backendProfileId !== profile.id)
+        || (source.nativeRuntime.profileId && source.nativeRuntime.profileId !== profile.id)
+        || runtime?.launchProfile.id !== profile.id || !runtime.transport?.isOnline
+        || runtime.transport.remoteAddress !== source.nativeRuntime.address || runtime.nativeSessionId !== source.nativeSessionId)
+        throw new AppError('DISCUSSION_PROVIDER_UNAVAILABLE', 'The routing provider of the main conversation is unavailable', 409);
+      address = runtime.transport.remoteAddress;
+    }
+    await streamTraeDiscussion(this.startAppServer, profile, {
+      ...request, signal: AbortSignal.any([request.signal, this.sideChats.signal]),
+    }, address);
+  }
 
   continuationKey(profile: NativeBackendProfileConfig): string {
     return this.id === 'codex' ? resolvePath(this.flavor.stateHome(profile.config)) : profile.id;
@@ -752,6 +777,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   async close(host: NativeBackendHost): Promise<void> {
     if (this.closeTask) return await this.closeTask;
     this.closing = true;
+    this.sideChats.abort();
     for (const timer of this.profileSwitchTimers.values()) clearTimeout(timer);
     this.profileSwitchTimers.clear();
     this.closeTask = (async () => {

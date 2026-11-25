@@ -11,6 +11,8 @@ Runs Antigravity (`agy`) sessions in Riffet. One `agy` terminal UI runs per conv
 - With a service address or model source set, the model list comes from that gateway. Without one, it comes from the CLI.
 - To start a session, choose Antigravity in the Agent list.
 
+Side chats are available when the main conversation’s provider or model source supplies a Gemini API key. Each turn uses that provider and model in a temporary, empty workspace with tools disabled. Riffet saves the replies and the quoted passage.
+
 ## Data and limits
 
 - Each session keeps its own private configuration directory under the plugin's data directory. Sign-in state is not copied into it; your own `agy` settings are not changed. Rules, skills, MCP and hooks configuration from your user directory are carried over as a snapshot.

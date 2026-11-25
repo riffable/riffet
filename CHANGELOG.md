@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Open a side chat from a passage in a Cursor, Antigravity, Pi, Droid, or TRAE CLI conversation and follow up using the same provider.
 - The Mac app now has a single interface style, Riffet. The Native and Line styles and the Interface style setting are gone; anyone who picked them now sees Riffet.
 - Agent answers on iPhone are easier to read. Lines are evenly spaced, and paragraphs and list items have clear gaps between them. Inline code is set in a smaller monospace face with no gray box behind it. File names are underlined with a dashed line instead of being shown as blue links.
 - Scrolling through a long conversation on iPhone no longer stutters as long answers come into view, including on a second pass. Answer text and code blocks are laid out before they reach the screen, the menu under each answer is built when you open it, and diagram and HTML previews appear as pictures until tapped.

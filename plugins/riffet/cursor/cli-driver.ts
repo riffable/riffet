@@ -257,10 +257,33 @@ export function redactCursorOutput(input:string|CursorLaunchProfile,output:strin
   return redactOutput(output,profileSecrets.get(profileOf(input))??process.env.CURSOR_API_KEY);
 }
 
-export function runCursor(cliPath:string|CursorLaunchProfile,args:string[],options:ProcessOptions&{env?:NodeJS.ProcessEnv;includeApiKey?:boolean}) {
+/** The OS account is used only when the launch has no explicit key or token. */
+export function cursorUsesAccountLogin(profile: CursorLaunchProfile): boolean {
+  return !(profileSecrets.has(profile) || process.env.CURSOR_API_KEY || process.env.CURSOR_AUTH_TOKEN || process.env.CURSOR_AUTH_TOKEN_FILE);
+}
+
+export function runCursor(cliPath:string|CursorLaunchProfile,args:string[],options:ProcessOptions&{env?:NodeJS.ProcessEnv;includeApiKey?:boolean;isolatedHome?:string}) {
   const spec=cursorCommand(cliPath,args,options.env,{includeApiKey:options.includeApiKey});
+  // Resolve a shell launcher's function in the owner's login shell before selecting the
+  // private home for its CLI. User extensions live in these standard home/config paths.
+  const isolatedHome = options.isolatedHome;
+  if (isolatedHome) {
+    const env: Record<string, string> = {
+      HOME: isolatedHome, USERPROFILE: isolatedHome, XDG_CONFIG_HOME: join(isolatedHome, '.config'),
+      XDG_DATA_HOME: join(isolatedHome, '.local/share'), XDG_CACHE_HOME: join(isolatedHome, '.cache'),
+      APPDATA: join(isolatedHome, 'AppData/Roaming'), LOCALAPPDATA: join(isolatedHome, 'AppData/Local'),
+    };
+    if (profileOf(cliPath).executable.startsWith('shell:')) {
+      for (const [key, value] of Object.entries(env)) spec.env[`RIFFET_CURSOR_${key}`] = value;
+      const assignments = Object.keys(env).map(key => `${key}="$RIFFET_CURSOR_${key}"`).join(' ');
+      spec.args[1] = assignments + ' ' + spec.args[1];
+    } else Object.assign(spec.env, env);
+  }
   const secret=spec.env.CURSOR_API_KEY;
-  return runProcess(spec.command,spec.args,{...options,env:spec.env}).then(result=>{
+  const onLine = options.onStdoutLine;
+  return runProcess(spec.command,spec.args,{...options,env:spec.env,
+    ...(secret && onLine ? { onStdoutLine: line => onLine(redactOutput(line, secret)) } : {}),
+  }).then(result=>{
     if(!secret)return result;
     const stdout=redactOutput(result.stdout,secret),stderr=redactOutput(result.stderr,secret);
     return {...result,stdout,stderr,stdoutData:Buffer.from(stdout),stderrData:Buffer.from(stderr)};

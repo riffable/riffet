@@ -14,7 +14,7 @@ import { hasTurnEnded, servingKey } from '../journal/ingest.js';
 import { DRAFT_KIND } from '../journal/journal.js';
 import { estimateTokens } from '../metrics/tokens.js';
 import { clientSupportsFeature, requireSessionVisibleToClient } from '../native/client-features.js';
-import { resolveNativeSessionInput } from '../native/session-input.js';
+import { requireSessionModel, resolveNativeSessionInput } from '../native/session-input.js';
 import type { RouteDeps } from '../routes/deps.js';
 import { quickChatProject } from './quick-chat.js';
 
@@ -31,34 +31,41 @@ async function inheritedModel(deps: RouteDeps, parent: IdentifiedSession, reques
   // A chat with no explicit choice may already have a dispatched choice. Keep that routing rather
   // than consulting whichever other conversation happened to be used most recently.
   const runs = deps.store.listRuns(parent.id);
-  const previousModel = runs.findLast(run => run.native?.resolvedConfig?.model)?.native?.resolvedConfig?.model
-    ?? runs.findLast(run => run.native?.config.model)?.native?.config.model;
+  const confirmed = runs.findLast(run => run.native?.resolvedConfig?.model)?.native?.resolvedConfig?.model;
+  const previousModel = confirmed ?? runs.findLast(run => run.native?.config.model)?.native?.config.model;
   let ref: AuxiliaryModelRef | undefined;
   let selection: ReturnType<typeof parseNativeModelSelection>;
   if (backendId === 'chat') {
     const value = parent.model ?? previousModel;
-    ref = value === undefined ? undefined : chatModelRef(value);
+    ref = value === undefined ? undefined : chatModelRef(value, parent.origin?.kind === 'discussion');
     selection = parseNativeModelSelection(value);
   } else {
-    if (!gatewayProtocol(backendId)) throw unavailable();
+    if (!gatewayProtocol(backendId) && !deps.nativeBackends.registry.get(backendId)?.streamDiscussion) throw unavailable();
     const profile = deps.nativeBackends.catalog.validateProfile(backendId, parent.backendProfileId);
     const defaults = deps.settings.getSettings().nativeBackendDefaults?.[backendId];
     const defaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
     const appliesDefaults = defaults?.profileId ? defaults.profileId === profile.id : profile.isDefault;
     const value = parent.model ?? previousModel ?? (appliesDefaults ? defaults?.model : undefined) ?? defaultModel;
     selection = parseNativeModelSelection(value);
-    const model = gatewayModelId(backendId, selection.model);
-    if (!model) throw unavailable();
+    const model = gatewayProtocol(backendId) ? gatewayModelId(backendId, selection.model)
+      : await deps.nativeBackends.catalog.resolveDiscussionModel(profile, value ?? '', confirmed);
+    if (!model && gatewayProtocol(backendId)) throw unavailable();
     ref = { backendId, profileId: profile.id, model };
   }
   if (!ref) throw unavailable();
   const inheritedProfileId = ref.profileId;
   const profile = deps.nativeBackends.catalog.validateProfile(ref.backendId, inheritedProfileId);
   if (requested !== undefined) {
-    const requestedRef = chatModelRef(requested);
+    const requestedRef = chatModelRef(requested, true);
     if (!requestedRef || requestedRef.backendId !== ref.backendId || requestedRef.profileId !== ref.profileId) throw unavailable();
-    ref = requestedRef;
+    ref = gatewayProtocol(ref.backendId) ? requestedRef : { ...requestedRef,
+      model: await deps.nativeBackends.catalog.validateDiscussionModel(profile, ref.model, requestedRef.model) };
     selection = parseNativeModelSelection(requested);
+  }
+  if (!gatewayProtocol(ref.backendId)) {
+    if (!deps.nativeBackends.catalog.discussionRunner(profile)) throw unavailable();
+    if (backendId === 'chat') await deps.nativeBackends.catalog.validateDiscussionModel(profile, ref.model, ref.model);
+    return chatModelValue(ref);
   }
   if (validate) {
     try { await profileModelEndpoint(ref, profile); } catch { throw unavailable(); }
@@ -188,7 +195,7 @@ async function capture(deps: RouteDeps, parent: Session, source: DiscussionSourc
     kept.unshift({ role: message.role, text });
     remaining -= estimateTokens(text) + 20;
   }
-  return JSON.stringify({ sessionTitle: parent.title, messages: kept });
+  return JSON.stringify({ sessionTitle: parent.title, messages: kept, sourceAttachment: parent.nativeRuntime?.attachment ?? null });
 }
 
 /** A durable child session and its immutable source are committed with the first question. */
@@ -205,10 +212,15 @@ export function registerDiscussionRoutes(app: FastifyInstance, deps: RouteDeps):
     const session = deps.store.getSession(request.params.id);
     requireSessionVisibleToClient(request.headers, session, id => deps.store.getProject(id));
     const model = await inheritedModel(deps, session, undefined, false);
-    const ref = chatModelRef(model)!;
+    const ref = chatModelRef(model, true)!;
     const profile = deps.nativeBackends.catalog.validateProfile(ref.backendId, ref.profileId);
     try {
-      const models = await profileChatModels(ref, profile, { effort: ref.effort });
+      const models = gatewayProtocol(ref.backendId) ? await profileChatModels(ref, profile, { effort: ref.effort })
+        : (await deps.nativeBackends.catalog.discussionModels(profile, ref.model)).map(item => {
+          const qualify = (value: string) => chatModelValue({ ...ref, model: value });
+          return { ...item, value: qualify(item.value), aliases: item.aliases?.map(qualify),
+            nativeVariants: item.nativeVariants?.map(variant => ({ ...variant, value: qualify(variant.value) })) };
+        });
       return { model, models, providerName: profile.name };
     } catch { throw new AppError('DISCUSSION_PROVIDER_UNAVAILABLE', 'The model provider is unavailable for side chats', 409); }
   });
@@ -219,7 +231,7 @@ export function registerDiscussionRoutes(app: FastifyInstance, deps: RouteDeps):
     const clientSessionId = requireString(body.clientSessionId, 'clientSessionId', 100);
     const commandId = requireString(body.commandId, 'commandId', 100);
     const text = requireString(body.text, 'text').trim();
-    const model = body.model === undefined ? undefined : requireString(body.model, 'model', 200);
+    const model = body.model === undefined ? undefined : requireSessionModel(body.model, true);
     const fingerprint = createHash('sha256').update(JSON.stringify({ parentId: request.params.id, source, commandId, text, model })).digest('hex');
     const previous = pending.get(clientSessionId) ?? Promise.resolve();
     const operation = deps.sessionCommands.submit(deps.store, clientSessionId, commandId, { operation: 'discussion', parentId: request.params.id, body }, () => previous.catch(() => undefined).then(async () => {
@@ -239,7 +251,7 @@ export function registerDiscussionRoutes(app: FastifyInstance, deps: RouteDeps):
       }
       const discussionModel = await inheritedModel(deps, parent, model);
       const project = quickChatProject(deps.store, deps.stateDir);
-      const input = await resolveNativeSessionInput(deps, { projectId: project.id, backendId: 'chat', mode: 'agent', model: discussionModel }, request.headers);
+      const input = await resolveNativeSessionInput(deps, { projectId: project.id, backendId: 'chat', mode: 'agent', model: discussionModel }, request.headers, project, 'discussion');
       const context = await capture(deps, parent, source);
       const result = deps.store.transaction(() => {
         // The parent may have been deleted, or its deletion begun, while its passage was captured.

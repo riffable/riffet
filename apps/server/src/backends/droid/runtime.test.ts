@@ -6,6 +6,7 @@ import type { Project, Session } from '../../../../../packages/contracts/src/ind
 import type { NativeControlMessage } from '../types.js';
 import type { NativeBackendHost } from '../types.js';
 import { DroidRuntime, droidAutonomy, droidModelInfos, droidModelValue, droidSettingsOverlay } from './runtime.js';
+import { streamDroidDiscussion } from './discussion.js';
 import { findDroidTranscript, readDroidSessionSettings } from './history.js';
 
 vi.mock('./history.js', async importOriginal => ({
@@ -57,7 +58,7 @@ describe('Droid models', () => {
 });
 
 /** A fake CLI exercises only the external protocol and process overlay, never a real Droid session. */
-async function harness(confirmBudget = true, backgroundChild = false, contextReplies?: Array<{ result: Record<string, unknown>; delayMs?: number }>, protocol: { settingsAck?: 'missing' | 'mismatch' | 'timeout'; mismatchedSettings?: Record<string, string>; initialModel?: string; driftModel?: string; routedModel?: string; holdSettingsModel?: string; holdTurnEnd?: boolean } = {}) {
+async function harness(confirmBudget = true, backgroundChild = false, contextReplies?: Array<{ result: Record<string, unknown>; delayMs?: number }>, protocol: { settingsAck?: 'missing' | 'mismatch' | 'timeout'; mismatchedSettings?: Record<string, string>; initialModel?: string; driftModel?: string; routedModel?: string; holdSettingsModel?: string; holdTurnEnd?: boolean; sideChatToolAllowed?: boolean } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'riffet-droid-test-'));
   const executable = join(directory, 'droid');
   const callsFile = join(directory, 'calls.jsonl');
@@ -86,6 +87,7 @@ if(contextReplies) fs.watchFile(${JSON.stringify(notificationsFile)},{interval:1
 readline.createInterface({input:process.stdin}).on('line', line => {
   const request=JSON.parse(line); log({id:request.id, method:request.method, params:request.params});
   let result={};
+  if(request.method==='droid.list_tools') result={tools:[{id:'read-cli',currentlyAllowed:protocol.sideChatToolAllowed===true}]};
   if(request.method==='droid.list_models') result={models:[{id:'builtin',isCustom:false},{id:'custom:tiny',isCustom:true},{id:'auto',isCustom:false,kind:'router'}]};
   if(request.method==='droid.initialize_session') {settings={...settings,...request.params,...(protocol.initialModel?{modelId:protocol.initialModel}:{})};result={sessionId:'riffet-fake-droid-budget',settings};}
   if(request.method==='droid.load_session') result={sessionId:request.params.sessionId,settings};
@@ -179,6 +181,20 @@ readline.createInterface({input:process.stdin}).on('line', line => {
   });
   return { runtime, profile, project, host, calls, send, configure, dispatches, releaseSettings: () => writeFile(releaseSettings, 'released'), emitNotification: (notification: Record<string, unknown>) => writeFile(notificationsFile, JSON.stringify(notification)), finishChild: () => writeFile(childRelease, 'finished'), get session() { return session; }, async close() { await runtime.close(); await rm(directory, { recursive: true, force: true }); } };
 }
+
+it('withholds a side-chat question when Droid still offers a tool', async () => {
+  const h = await harness(true, false, undefined, { sideChatToolAllowed: true });
+  vi.stubEnv('FACTORY_HOME_OVERRIDE', h.project.cwd);
+  try {
+    await expect(streamDroidDiscussion(h.profile, {
+      model: 'builtin', system: 'Answer with text only.', messages: [{ role: 'user', content: 'Follow-up' }],
+      idleTimeoutMs: 30_000, maxOutputTokens: 128, signal: AbortSignal.timeout(5_000), onDelta: () => {},
+    })).rejects.toThrow('all tools are disabled');
+    const calls = await h.calls();
+    expect(calls.filter(call => call.method).map(call => call.method)).toEqual(['droid.initialize_session', 'droid.list_tools']);
+    expect(calls[0]!.overlay.hooks.hooksDisabled).toBe(true);
+  } finally { vi.unstubAllEnvs(); await h.close(); }
+});
 
 describe('Droid context budget protocol', () => {
   it('keeps a replacement turn and its deferred settings when the previous turn ends late', async () => {

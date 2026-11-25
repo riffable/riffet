@@ -4,12 +4,16 @@ import { isNativeBackendId } from '../backends/registry.js';
 import type { NativeBackendService } from '../backends/service.js';
 import { AppError, requireString } from '../errors.js';
 import { defaultBackendForClient, requireBackendVisibleToClient } from './client-features.js';
-import { legacyDefaults, requestedNativeSessionId, type RequestedNativeSession } from '../session-identity.js';
+import { legacyDefaults, requestedNativeSessionId, sessionModelLimit, type RequestedNativeSession } from '../session-identity.js';
 import type { SettingsService } from '../settings/index.js';
 import type { Store } from '../store.js';
 import { readTerminalAppearance, resolveTerminalAppearance } from '../terminal/appearance.js';
 import { applicableExtensionsOff, extensionsOffList } from '../extensions/toggles.js';
 import { toolGroupList } from '../riffet-mcp/groups.js';
+
+export function requireSessionModel(value: unknown, discussion = false): string {
+  return requireString(value, 'model', sessionModelLimit(value, discussion));
+}
 
 /** What a caller may ask of a new native conversation; anything left out falls back to the backend's saved defaults. */
 export interface NativeSessionRequest extends RequestedNativeSession {
@@ -27,7 +31,7 @@ export interface NativeSessionRequest extends RequestedNativeSession {
  * path that opens a conversation on someone's behalf — an attempt, a handoff, a schedule — so all of
  * them start a backend the way a person picking it in the composer would.
  */
-export async function resolveNativeSessionInput(deps: { store: Store; settings: SettingsService; nativeBackends: NativeBackendService; auth?: { device(id: string): unknown } }, body: NativeSessionRequest, headers?: IncomingHttpHeaders, reservedProject?: Project): Promise<NativeSessionInput & { backendId: NativeBackendId; backendProfileId: string; mode: string }> {
+export async function resolveNativeSessionInput(deps: { store: Store; settings: SettingsService; nativeBackends: NativeBackendService; auth?: { device(id: string): unknown } }, body: NativeSessionRequest, headers?: IncomingHttpHeaders, reservedProject?: Project, purpose?: 'discussion'): Promise<NativeSessionInput & { backendId: NativeBackendId; backendProfileId: string; mode: string }> {
   const {store,settings,nativeBackends}=deps;
   const savedSettings=settings.getSettings();
   const project=reservedProject??store.getProject(requireString(body.projectId,'projectId',100));
@@ -53,7 +57,7 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   const nativeSessionId=nativeSessionIdValue===undefined?undefined:requireString(nativeSessionIdValue,'nativeSessionId',200);
   if(nativeSessionId!==undefined&&/[\0\r\n]/.test(nativeSessionId))throw new AppError('INVALID_NATIVE_SESSION_ID','Native session id contains invalid characters');
   if(nativeSessionId!==undefined)nativeBackends.catalog.validateNativeSessionId(backendId,nativeSessionId);
-  const requestedModel=body.model===undefined?((applyBackendDefaults?defaults?.model:undefined)||profileModel||legacyDefaults(backendId,savedSettings).model||undefined):requireString(body.model,'model',200);
+  const requestedModel=body.model===undefined?((applyBackendDefaults?defaults?.model:undefined)||profileModel||legacyDefaults(backendId,savedSettings).model||undefined):requireSessionModel(body.model,purpose==='discussion');
   const model=requestedModel===undefined?undefined:nativeBackends.catalog.normalizeModel(backendId,selectedProfile.id,requestedModel);
   // A backend whose modes do not include `agent` (TRAE CLI calls it `default`) starts in its first one.
   const fallbackMode=capabilities.supportsModeSelection&&!capabilities.modes.some(item=>item.id==='agent')?capabilities.modes[0]?.id??'agent':'agent';

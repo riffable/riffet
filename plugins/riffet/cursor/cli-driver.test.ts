@@ -1,8 +1,8 @@
-import { lstatSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { cursorCommand, resolveCursorLaunchProfile } from './cli-driver.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cursorCommand, resolveCursorLaunchProfile, runCursor } from './cli-driver.js';
 
 const directories:string[]=[];
 afterEach(()=>{for(const dir of directories.splice(0))rmSync(dir,{recursive:true,force:true});});
@@ -81,4 +81,23 @@ describe('Cursor Byte Relay transport',()=>{
     expect(lstatSync(path).isSymbolicLink()).toBe(true);
     expect(JSON.parse(readFileSync(target,'utf8'))).toEqual({model:'alpha',network:{useHttp1ForAgent:true}});
   });
+});
+
+it.skipIf(!existsSync('/bin/zsh'))('loads the shell launcher in the owner home and runs it in the discussion home', async () => {
+  const shellConfig = temporary(), discussionHome = temporary();
+  writeFileSync(join(shellConfig, '.zshrc'), [
+    'RIFFET_TEST_STARTUP_HOME="$HOME"',
+    'riffet_test_launcher() { print -r -- "$RIFFET_TEST_STARTUP_HOME" "$HOME" "$1"; }',
+  ].join('\n'));
+  vi.stubEnv('SHELL', '/bin/zsh');
+  try {
+    const profile = resolveCursorLaunchProfile({ executable: 'shell:riffet_test_launcher', configDir: discussionHome });
+    const result = await runCursor(profile, ['selected-model'], {
+      cwd: discussionHome, isolatedHome: discussionHome, env: { ZDOTDIR: shellConfig },
+    });
+    expect(result.code).toBe(0);
+    expect(result.stdout.trim()).toBe([process.env.HOME, discussionHome, 'selected-model'].join(' '));
+  } finally {
+    vi.unstubAllEnvs();
+  }
 });

@@ -2,10 +2,11 @@ import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeInteractionResult, NativeStatus } from '@contracts';
 import { isCliMissing, resolveCliExecutable, runProcess } from '@riffet/plugin-api/kit';
 import {
-  AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
+  AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentDiscussionRequest, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
   type AgentOpenResult, type AgentProfile, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
 } from '@riffet/plugin-api/experimental/agent';
 import { agyMode, agySelection, agyToolPermission, parseAgyProfile } from './config.js';
+import { streamAgyDiscussion } from './discussion.js';
 import { queueConfiguration } from './config-queue.js';
 import { interrupt, runtimeAction } from './control.js';
 import { attach } from './lifecycle.js';
@@ -38,6 +39,7 @@ export class AntigravityBackend implements AgentBackend {
     secrets: ['GEMINI_API_KEY'],
   };
   readonly terminal = { title: 'Antigravity', ready: (screen: string) => /\? for shortcuts|Antigravity|Gemini.*Flash/.test(screen) };
+  private readonly discussions = new AbortController();
   private readonly hub: Hub;
   private readonly runtimes: Hub['runtimes'];
 
@@ -104,6 +106,10 @@ export class AntigravityBackend implements AgentBackend {
 
   listModels(host: AgentHost, query: AgentModelQuery) {
     return listModels(this.hub, host, query);
+  }
+
+  streamDiscussion(host: AgentHost, profile: AgentProfile, request: AgentDiscussionRequest): Promise<void> {
+    return streamAgyDiscussion(this.hub, host, profile, { ...request, signal: AbortSignal.any([request.signal, this.discussions.signal]) });
   }
 
   async slashItems() {
@@ -215,6 +221,7 @@ export class AntigravityBackend implements AgentBackend {
   }
 
   close(host?: AgentHost): void {
+    this.discussions.abort();
     this.hub.closed = true;
     for (const [id, runtime] of this.hub.runtimes) this.detach(host ?? runtime.host, id);
   }

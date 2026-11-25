@@ -34,17 +34,21 @@ export function parseAgyModels(stdout: string): AgyModel[] {
   });
 }
 
+export function agyProcessEnvironment(profile: AgyProfile): NodeJS.ProcessEnv {
+  const inherited = { ...process.env };
+  for (const name of MANAGED_ENV) delete inherited[name];
+  const { env, secretEnv } = agyProfileEnvironment(profile);
+  return { ...inherited, ...env, ...secretEnv };
+}
+
 async function readNativeModels(hub: Hub, profile: AgyProfile): Promise<AgyModel[]> {
   // A private directory: listing must not write into the reader's own agy state, and needs none of it.
   const dir = join(hub.stateDir, 'catalog');
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  const { env, secretEnv } = agyProfileEnvironment(profile);
-  const inherited = { ...process.env };
-  for (const name of MANAGED_ENV) delete inherited[name];
   const result = await runProcess(
     profile.executable,
     [`--gemini_dir=${dir}`, '--settings', JSON.stringify(profile.hasApiKey ? { modelProvider: 'gemini' } : {}), '--log-file', devNull, 'models'],
-    { cwd: dir, env: { ...inherited, ...env, ...secretEnv }, timeoutMs: CATALOG_TIMEOUT_MS, maxOutputBytes: CATALOG_OUTPUT_BYTES },
+    { cwd: dir, env: agyProcessEnvironment(profile), timeoutMs: CATALOG_TIMEOUT_MS, maxOutputBytes: CATALOG_OUTPUT_BYTES },
   );
   return result.code === 0 ? parseAgyModels(result.stdout) : [];
 }

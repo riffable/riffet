@@ -1,3 +1,4 @@
+import type { AgentDiscussionRequest } from '@riffet/plugin-api/experimental/agent';
 import type {
   CapabilityReport, CommandObservation, CommandResult, ConfigFile, GatewayProtocol, LoadedExtensions, ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendId, NativeBackendProfile, NativeBackendUsage, ExtensionRuntimeReport, ExtensionActionRequest, ExtensionActionResult, ExtensionItem, ExtensionManagementCapabilities,
   NativeInteraction, NativeInteractionResponse, NativeInteractionResult,
@@ -578,6 +579,11 @@ export interface NativeBackendDriver {
    * and key in its own config or environment (`~/.claude/settings.json`, `~/.codex/config.toml`, …).
    */
   gatewayProfile?(profile: NativeBackendProfileConfig): NativeBackendProfileConfig | undefined;
+  streamDiscussion?(host: NativeBackendHost, profile: NativeBackendProfileConfig, request: AgentDiscussionRequest): Promise<void>;
+  /** Qualifies an ambiguous native selector using the source turn's confirmed model. Undefined means the provider cannot be pinned. */
+  resolveDiscussionModel?(profile: NativeBackendProfileConfig, model: string, confirmed?: string): string | undefined | Promise<string | undefined>;
+  /** Some native profiles contain credentials for several providers. Only models in the same scope can share a discussion. */
+  discussionModelScope?(profile: NativeBackendProfileConfig, model: string): string;
   /** Lists models for auxiliary jobs when this driver executes them directly instead of an HTTP gateway. */
   auxiliaryModels?(profile: NativeBackendProfileConfig, signal?: AbortSignal): Promise<ModelInfo[]>;
   /** Runs a single-turn text completion through this driver when no HTTP gateway exists. */

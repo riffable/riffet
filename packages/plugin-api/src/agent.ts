@@ -32,6 +32,23 @@ export type { RecordedUsageObservation, UsageObservation, UsageObservationTokens
 
 export const AGENT_PROTOCOL_VERSION = 1;
 
+/** An independent text-only turn. The owner supplies its history, cancellation and output budgets.
+ * Use the given profile and no project, tools, extensions or parent CLI session. An empty model
+ * selects the profile's native default; otherwise retain the native model and its parameters. */
+export interface AgentDiscussionRequest {
+  /** Identifies the source for a profile with a session-bound provider connection. Never resume its thread. */
+  sourceSessionId?: string;
+  /** Provider connection captured with the main turn. Null denotes a direct profile, undefined an older snapshot. */
+  sourceAttachment?: { hook: string; id: string } | null;
+  model: string;
+  system: string;
+  messages: { role: 'user' | 'assistant'; content: string }[];
+  signal: AbortSignal;
+  idleTimeoutMs: number;
+  maxOutputTokens: number;
+  onDelta(text: string): void;
+}
+
 /** Closed to the core's `NATIVE_BACKEND_IDS` until the identity is opened to namespaced ids. */
 export type AgentBackendId = NativeBackendId;
 
@@ -436,6 +453,11 @@ export interface AgentBackend {
    * irreversible write: if it throws, the run was cancelled and nothing may be written.
    */
   send(host: AgentHost, request: AgentSendRequest): Promise<AgentDelivery | void>;
+  /** Answers a side chat through this profile's own provider, without workspace or tool access. */
+  streamDiscussion?(host: AgentHost, profile: AgentProfile, request: AgentDiscussionRequest): Promise<void>;
+
+  /** Different keys identify separately credentialed providers inside the same native profile. */
+  discussionModelScope?(profile: AgentProfile, model: string): string;
 
   /**
    * Appends to exactly this active turn; never starts a turn or falls back to a queued send. A steer the

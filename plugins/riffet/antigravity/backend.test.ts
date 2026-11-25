@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { AgentContext, AgentHost, AgentInteractionReceipt, AgentRunRef, AgentSendRequest } from '@riffet/plugin-api/experimental/agent';
+import * as kit from '@riffet/plugin-api/kit';
 import { AntigravityBackend } from './backend.js';
 import { writeJson } from './bridge.js';
 import { interactionOf } from './interactions.js';
@@ -115,6 +116,35 @@ async function fixture() {
     writeJson(join(root, 'bridge', `${conversationId}.json`), { nonce: runtime.launch.nonce, at: 10, payload });
   return { backend, runtime, host, context, session, root, geminiDir, bridgeDir, cwd, pending, saved, emitEvent, emit, status, hook };
 }
+
+it('opens a side chat in a private scope, refuses an unexpected native agent and removes its files', async () => {
+  const stateDir = await mkdtemp(join(tmpdir(), 'riffet-agy-side-test-'));
+  directories.push(stateDir);
+  const backend = new AntigravityBackend({ stateDir });
+  const host = { modelSources: { resolve: async () => undefined }, error: (_code: string, message: string) => new Error(message) } as unknown as AgentHost;
+  let native = '';
+  const launch = vi.spyOn(kit, 'runProcess').mockImplementation(async (_file, args, options) => {
+    native = args.find(arg => arg.startsWith('--gemini_dir='))!.slice('--gemini_dir='.length);
+    expect(await readdir(options.cwd)).toEqual([]);
+    const settings = JSON.parse(args[args.indexOf('--settings') + 1]!);
+    expect(settings).toMatchObject({ toolPermission: 'strict', allowNonWorkspaceAccess: false });
+    const hooks = JSON.parse(await readFile(join(native, 'config', 'hooks.json'), 'utf8'));
+    expect(hooks.discussion.PreToolUse[0]).toMatchObject({ matcher: '*', hooks: [{ command: expect.stringContaining('"decision":"deny"') }] });
+    expect(await readFile(join(native, 'config', 'agents', 'riffet-discussion.md'), 'utf8')).toContain('tools: []');
+    options.onStdoutLine!(JSON.stringify({ event: 'init', init: { agent: 'default', permission_mode: 'strict' } }));
+    throw new Error('Unexpected native agent was accepted');
+  });
+  const onDelta = vi.fn();
+  const request = {
+    model: '', system: 'side question', messages: [{ role: 'user', content: 'question' }],
+    signal: new AbortController().signal, maxOutputTokens: 100, idleTimeoutMs: 1000, onDelta,
+  } satisfies Parameters<AntigravityBackend['streamDiscussion']>[2];
+  await expect(backend.streamDiscussion(host, { id: 'local', name: 'Account', config: {} }, request)).rejects.toThrow('Gemini API key');
+  expect(launch).not.toHaveBeenCalled();
+  await expect(backend.streamDiscussion(host, { id: 'p', name: 'Test', config: { sourceDir: stateDir, apiKey: 'test-key' } }, request)).rejects.toThrow('restricted side chat');
+  expect(onDelta).not.toHaveBeenCalled();
+  await expect(access(native)).rejects.toMatchObject({ code: 'ENOENT' });
+});
 
 it('persists the dispatch fence before the first paste and never retries terminal writes after failure', async () => {
   const f = await fixture(),

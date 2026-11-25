@@ -280,11 +280,11 @@ export function droidSettingsOverlay(desired: Pick<DroidSettings, 'modelId' | 'c
   return Object.keys(overlay).length ? overlay : undefined;
 }
 
-export function spawnDroid(profile: NativeBackendProfileConfig, cwd: string, settingsFile?: string): ChildProcess {
+export function spawnDroid(profile: NativeBackendProfileConfig, cwd: string, settingsFile?: string, detached = false): ChildProcess {
   const launch = launchCommand(profile);
   return spawn(launch.command, [...launch.args, 'exec', '--input-format', 'stream-jsonrpc', '--output-format', 'stream-jsonrpc', '--cwd', cwd, ...(settingsFile ? ['--settings', settingsFile] : [])], {
     cwd,
-    env: droidEnvironment(profile),
+    env: droidEnvironment(profile), detached,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 }

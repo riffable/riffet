@@ -19,7 +19,13 @@
 
 新建聊天默认继承主会话的 provider / profile、模型和 effort。模型选择器仅列出同一 provider / profile 下的模型，允许修改模型与 effort；已发送聊天也可在空闲时调整，下一轮使用新配置。已有聊天不随主会话后续改动自动切换，新的聊天继承主会话最新设置。provider 范围由服务端创建和配置接口共同校验，不能通过客户端参数切换。
 
-继续复用 chat 后端直接调用同一 provider。显式 API endpoint 读取原 profile；集成模型源复用 `launchSource`、`sourceCatalog`、命令认证和源声明的 headers。命令凭证按请求刷新，不进入 Session 或 Web。不能直接调用的 Cursor 私有协议、纯 CLI 登录配置会明确提示；不会回退到快速对话默认 provider。首版不开放工作区工具或托管联网搜索。
+Claude Code、Codex 和 DSH 复用 chat 后端调用原 profile 的网关。集成模型源沿用原地址、认证命令和请求头。凭证留在服务端。
+
+Cursor、Antigravity、Pi、Droid 和 TRAE CLI 用主会话的 Agent 和 profile 回答侧问。每轮传入冻结的来源快照和侧聊问答。停止侧聊只取消本轮回答。删除侧聊时，服务端也会回收该会话的后台摘要进程。
+
+- Antigravity 要求主会话的提供方或模型源已配置 Gemini API Key。原生 Google 登录只用于主会话。
+- Pi 和 Droid 的同一份配置可连接多个提供方。侧聊在创建时固定模型与提供方；旧会话缺少可确认的选择时，服务端会报告提供方不可用。
+- TRAE 使用原生侧问 `turn/btw`。主会话绑定专属路由时，侧聊保留该绑定；解绑、替换或离线后会提示不可用。
 
 Responses 的 effort 按原值发送，包含接口支持的 none、minimal、low、medium、high、xhigh、max；Anthropic 侧边聊天使用 adaptive thinking 与 `output_config.effort`。集成模型源只提供目录声明的档位，并保留当前已选值；显式 API 网关未声明档位时提供协议级选项。兼容网关是否支持相应模型参数仍以服务端响应为准，不静默降级。
 
@@ -47,11 +53,17 @@ Session 的 `origin.discussion` 保存锚点、引文、捕获时间、上下文
 - 服务端从已提交历史中找不到选区时，读取当前 journal 各实体的最新版本，包括仍在输出的 draft；已结束轮次遗留的 draft 不作为新的讨论来源。已创建讨论继续使用原快照。
 - 普通 fork 的续作简报和自动导航不用于旁路。聊天源记录和上下文读取机制可以复用，旁路有自己的截止边界与指令。
 
+## 插件 Agent
+
+提供 `AgentBackend.streamDiscussion(host, profile, request)` 即可接入。插件用给定 profile 回答，保留原生模型参数。请求携带纯文本历史、系统说明、取消信号和输出预算。实现须隔离工作区、工具、扩展和主会话，并在结束、报错或取消时回收本轮资源。插件停用会打断该插件正在进行的侧聊。
+
 ## 验证
 
 复用现有核心测试，扩展代表场景：父子会话隔离、上下文截止、同请求重试、副作用次数、快照持久化与重建、来源不可用、独立取消和归档策略。执行 TypeScript 检查、契约生成检查、受影响的历史与路由测试、Web 生产构建。UI 不新增快照或逐控件测试；实际界面验证边界在交付时记录。
 
-实际验证：TypeScript、国际化、契约和错误文案生成检查、Web 生产构建通过；受影响的 7 个核心测试文件、118 个用例通过，覆盖 provider 隔离、同 provider 模型与 effort 调整、继承顺序、命令认证和请求头。重定向测试使用本地 HTTP 服务和虚拟凭证；模型网关测试使用模拟 SSE 响应。没有调用真实模型，也没有进行浏览器操作或原生平台构建。Web 构建保留现有 `::highlight` CSS 优化器及大 chunk 提示。
+首版网关验证：TypeScript、国际化、契约和错误文案生成检查、Web 生产构建通过；受影响的 7 个核心测试文件、118 个用例通过，覆盖 provider 隔离、同 provider 模型与 effort 调整、继承顺序、命令认证和请求头。重定向测试使用本地 HTTP 服务和虚拟凭证；模型网关测试使用模拟 SSE 响应。没有调用真实模型，也没有进行浏览器操作或原生平台构建。Web 构建保留现有 `::highlight` CSS 优化器及大 chunk 提示。
+
+原生 Agent 验证覆盖了 Riffet 创建侧聊、继续追问和拒绝跨提供方的路由。Cursor 用已配置的提供方完成了真实问答。Antigravity、Pi、Droid 和 TRAE 使用真实 CLI 连接本地模拟模型服务，检查模型收到的上下文、工具限制和取消。
 
 用户可见字符串自检：
 

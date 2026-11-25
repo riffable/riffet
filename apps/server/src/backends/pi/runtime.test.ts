@@ -6,6 +6,8 @@ import { PassThrough } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NativeBackendHost, NativeBackendProfileConfig } from '../types.js';
 import { PiRuntime } from './runtime.js';
+import { PiBackendAdapter } from './index.js';
+import { rememberPiModels } from './models.js';
 
 vi.mock('node:child_process', async importOriginal => {
   const actual = await importOriginal<typeof import('node:child_process')>();
@@ -295,6 +297,17 @@ async function send(h: Harness, text = 'hello', runId = 'run-1', commandId = 'co
     commitDispatchFence: () => ({ id: runId }),
   });
 }
+
+it('pins ambiguous side-chat model names to the provider that served the parent', async () => {
+  const adapter = new PiBackendAdapter();
+  const profile: NativeBackendProfileConfig = { id: 'side-chat-providers', backendId: 'pi', name: 'pi', config: {} };
+  rememberPiModels(profile, ['first/model', 'second/model', 'first/unique'].map(value => ({ value, name: value, configOptions: [] })));
+  expect(await adapter.resolveDiscussionModel(profile, '', undefined)).toBeUndefined();
+  expect(await adapter.resolveDiscussionModel(profile, 'model')).toBeUndefined();
+  expect(await adapter.resolveDiscussionModel(profile, 'model', 'second/model[effort=high]')).toBe('second/model[effort=high]');
+  expect(await adapter.resolveDiscussionModel(profile, 'model[effort=low]', 'second/model[effort=high]')).toBe('second/model[effort=low]');
+  expect(await adapter.resolveDiscussionModel(profile, 'unique')).toBe('first/unique');
+});
 
 describe('pi runtime turn settlement', () => {
   it('does not finish on turn_end or agent_end; only agent_settled completes the confirmed turn', async () => {

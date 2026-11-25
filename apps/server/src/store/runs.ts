@@ -4,7 +4,7 @@ import type {
   NativeRunDetails, NativeRunInput, NativeTurnTarget, Run, RunMetrics,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
-import { restartObservation, type IdentifiedRun } from '../session-identity.js';
+import { NATIVE_MODEL_LIMIT, restartObservation, type IdentifiedRun } from '../session-identity.js';
 import { hitFromSession } from './derived-search.js';
 import {
   fingerprint, normalizeNativeConfig, now, PENDING_FORK_BRIEF_PREFIX, searchScope,
@@ -37,7 +37,10 @@ export function acceptNativeRun(
   contextSnapshots?: CapturedSessionReference[],
 ): IdentifiedRun {
   if (typeof commandId !== 'string' || !commandId || commandId.length > 200) throw new AppError('INVALID_COMMAND_ID', 'commandId must be a non-empty string up to 200 characters');
-  const normalizedInput = port.normalizeNativeInput(input), normalizedConfig = normalizeNativeConfig(config);
+  const normalizedInput = port.normalizeNativeInput(input);
+  // Ordinary requests need no session lookup before the transaction; long, qualified side-chat selectors do.
+  const owner = typeof config?.model === 'string' && config.model.length > NATIVE_MODEL_LIMIT ? port.getSession(sessionId) : undefined;
+  const normalizedConfig = normalizeNativeConfig(config, owner?.backendId === 'chat' && owner.origin?.kind === 'discussion');
   const idempotencyFingerprint = fingerprint(steer
     ? { input: normalizedInput, intent: 'steer', target: { nativeSessionId: steer.target.nativeSessionId, turnId: steer.target.turnId }, ...(steer.sourceRunId ? { sourceRunId: steer.sourceRunId } : {}) }
     : { input: normalizedInput, config: normalizedConfig });

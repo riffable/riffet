@@ -1,4 +1,4 @@
-import type { NativeBackendId, NativeRunDetails, Run, Session, AppSettings } from '../../../packages/contracts/src/index.js';
+import { isNativeBackendId, type NativeBackendId, type NativeRunDetails, type Run, type Session, type AppSettings } from '../../../packages/contracts/src/index.js';
 
 /*
  * Cursor was Riffet's first backend, and two of its habits are still in stored rows, in old
@@ -17,6 +17,14 @@ import type { NativeBackendId, NativeRunDetails, Run, Session, AppSettings } fro
 
 /** The backend of every stored row and legacy request that names none. This is identity, not the default of a new conversation (`defaultBackendForClient`). */
 export const LEGACY_DEFAULT_BACKEND_ID = 'cursor' as const satisfies NativeBackendId;
+
+export const NATIVE_MODEL_LIMIT = 200;
+
+/** Side chats prepend the backend and profile to the parent's native model selector. Only the selector uses the 200-character model budget. */
+export function sessionModelLimit(value: unknown, discussion: boolean): number {
+  const prefix = discussion && typeof value === 'string' ? /^([^:]+):([^:]{1,200}):/.exec(value) : undefined;
+  return NATIVE_MODEL_LIMIT + (prefix && isNativeBackendId(prefix[1]) ? prefix[0].length : 0);
+}
 
 interface IdentityFields { backendId?: NativeBackendId; nativeSessionId?: string; cursorSessionId?: string }
 

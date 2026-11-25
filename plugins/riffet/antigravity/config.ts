@@ -241,6 +241,15 @@ function withCustomModel(value: unknown, id: string): Record<string, unknown> {
   const models = agyRecord(config.customModels) ? config.customModels : {};
   return { ...config, customModels: { ...models, [id]: agyRecord(models[id]) ? models[id] : { modelName: id } } };
 }
+/** Only model settings are inherited in a side chat. Session hooks, tools and project files are private to the main conversation. */
+export async function discussionModelSettings(profile: AgyProfile, customModel?: string): Promise<Record<string, unknown>> {
+  const saved = await json(join(profile.sourceDir, 'antigravity-cli', 'settings.json'));
+  const settings = nativeSettings(Object.fromEntries(['model', 'modelProvider', 'customModelsConfig', 'useG1Credits']
+    .flatMap(key => saved?.[key] === undefined ? [] : [[key, saved[key]]])));
+  if (profile.hasApiKey) settings.modelProvider = 'gemini';
+  if (customModel) settings.customModelsConfig = withCustomModel(settings.customModelsConfig, customModel);
+  return settings;
+}
 function nativeSettings(value: Record<string, unknown> | undefined): Record<string, unknown> {
   const settings = Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => SETTINGS_KEYS.has(key)));
   const check = (current: unknown): void => {

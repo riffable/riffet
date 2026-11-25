@@ -42,7 +42,7 @@ export function droidSessionsRoot(): string {
 }
 
 /** Droid names a project's directory after its real path with every `/` turned into `-`. */
-function projectDirectory(root: string, cwd: string): string {
+export function droidProjectSessionDir(cwd: string, root = droidSessionsRoot()): string {
   let real = resolve(cwd);
   try { real = realpathSync(real); } catch { /* a missing workspace still has a predictable name */ }
   return join(root, real.replace(/[\\/]/g, '-'));
@@ -55,7 +55,7 @@ export async function findDroidTranscript(nativeSessionId: string, cwd: string, 
   validateDroidSessionId(nativeSessionId);
   const remembered = located.get(nativeSessionId);
   if (remembered && await exists(remembered)) return remembered;
-  const candidates = [join(projectDirectory(root, cwd), `${nativeSessionId}.jsonl`)];
+  const candidates = [join(droidProjectSessionDir(cwd, root), `${nativeSessionId}.jsonl`)];
   try {
     for (const entry of await readdir(root, { withFileTypes: true })) {
       if (entry.isDirectory()) candidates.push(join(root, entry.name, `${nativeSessionId}.jsonl`));

@@ -4,7 +4,7 @@ import { samePromptText, type NativeInteractionResponse, type NativeSlashItem, t
 import { AppError, estimatedTokens, isCliMissing, materializeNativeInput, queryDirectory, redactSensitiveText, resolveCliExecutable, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
-  type AgentControlMessage, type AgentDelivery, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
+  type AgentControlMessage, type AgentDelivery, type AgentDiscussionRequest, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
   type AgentPrewarmResult, type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentSessionView, type AgentStopOptions,
   type AgentTerminalBehaviour, type AgentTraits, type AgentTranscriptSource,
 } from '@riffet/plugin-api/experimental/agent';
@@ -13,6 +13,7 @@ import { CURSOR_LAUNCH_ENV, cursorApiFrontable, cursorLaunchProfileOf, setCursor
 import { cursorCapabilityReport, cursorNeedsLogin, describeCursorProfile, runCursorOperation } from './config.js';
 import { cursorPort, type CursorPort } from './host-port.js';
 import { CursorActivities } from './backend/activity.js';
+import { streamCursorDiscussion } from './backend/discussion.js';
 import { CURSOR_EXTENSION_LAYOUT } from './backend/extensions.js';
 import { probeCursorHookSteer } from './backend/launch-plugin.js';
 import { CursorLiveReceipts } from './backend/live-receipts.js';
@@ -590,6 +591,10 @@ export class CursorBackend implements AgentBackend {
       const next = await native.configure(port.getSession(context.session.id), patch);
       return { model: next.model, mode: next.mode, approval: next.approval, nativeSessionId: next.nativeSessionId, terminalId: next.terminalId };
     });
+  }
+
+  streamDiscussion(_host: AgentHost, profile: AgentProfile, request: AgentDiscussionRequest): Promise<void> {
+    return streamCursorDiscussion(cursorLaunchProfileOf(profile.config), request);
   }
 
   async listModels(host: AgentHost, query: AgentModelQuery) {

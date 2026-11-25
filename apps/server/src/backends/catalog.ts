@@ -1,3 +1,4 @@
+import { catalogEntry } from '../../../../packages/contracts/src/index.js';
 import { createHash } from 'node:crypto';
 import type {
   GatewayProtocol, LoadedExtensions, ModelInfo, NativeBackendCatalogEntry, NativeBackendId, NativeBackendUsage,
@@ -70,7 +71,7 @@ export function safeBackendReason(reason: string, profile: NativeBackendProfileC
     safe = safe.split(value).join('[REDACTED]');
   }
   return safe
-    .replace(/(\b(?:secret|token|password|credential|api[_-]?key|authorization)\b\s*[:=]\s*)([^\s,;}]+)/gi, '$1[REDACTED]')
+    .replace(/(\b(?:secret|token|password|credential|api[_-]?key|authorization)\b\s*[:=]\s*)(?:(?:Bearer|Basic)\s+)?[^\s,;}]+/gi, '$1[REDACTED]')
     .replace(/\bBearer\s+[^\s,;}]+/gi, 'Bearer [REDACTED]')
     .slice(0, 1000);
 }
@@ -254,6 +255,60 @@ export class BackendCatalog {
       ?? profiles[0];
     if (!selected || (profileId && selected.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'Native backend profile does not exist', 404, { backendId });
     return selected;
+  }
+
+  /** Bind the current driver and this exact profile; disabling a plugin withdraws its executor. */
+  discussionRunner(profile: NativeBackendProfileConfig) {
+    const driver = this.registry.get(profile.backendId);
+    const run = driver?.streamDiscussion?.bind(driver, this.host, profile);
+    if (!run) return undefined;
+    return async (request: Parameters<typeof run>[0]) => {
+      try { await run(request); }
+      catch (error) {
+        request.signal.throwIfAborted();
+        const reason = safeBackendReason(error instanceof Error ? error.message : 'The agent could not answer', profile);
+        if (error instanceof AppError) throw new AppError(error.code, reason, error.statusCode);
+        throw new Error(reason);
+      }
+    };
+  }
+
+  private sameDiscussionProvider(profile: NativeBackendProfileConfig, current: string, next: string): boolean {
+    const driver = this.registry.require(profile.backendId);
+    return driver.discussionModelScope?.(profile, current) === driver.discussionModelScope?.(profile, next);
+  }
+
+  async resolveDiscussionModel(profile: NativeBackendProfileConfig, model: string, confirmed?: string): Promise<string> {
+    const driver = this.registry.require(profile.backendId);
+    if (!driver.resolveDiscussionModel) return model;
+    const resolved = await driver.resolveDiscussionModel(profile, model, confirmed);
+    if (resolved === undefined) throw new AppError('DISCUSSION_PROVIDER_UNAVAILABLE', 'The source model provider cannot be determined', 409);
+    return resolved;
+  }
+
+  async validateDiscussionModel(profile: NativeBackendProfileConfig, current: string, next: string): Promise<string> {
+    // Existing discussions must never reinterpret a stored default/alias through a changed CLI configuration.
+    if (await this.resolveDiscussionModel(profile, current) !== current) throw new AppError('DISCUSSION_PROVIDER_UNAVAILABLE', 'The saved model provider cannot be determined', 409);
+    if (next === current) return current;
+    const resolved = await this.resolveDiscussionModel(profile, next, parseNativeModelSelection(current).model);
+    if (!this.sameDiscussionProvider(profile, current, resolved)) throw new AppError('DISCUSSION_PROVIDER_UNAVAILABLE', 'A side chat keeps its provider', 409);
+    const base = parseNativeModelSelection(resolved).model;
+    if (base === parseNativeModelSelection(current).model) return resolved;
+    const catalog = await this.discussionModels(profile, current);
+    if (!catalogEntry(catalog, base)) throw new AppError('INVALID_MODEL', 'Choose a model from the list', 400);
+    return resolved;
+  }
+
+  async discussionModels(profile: NativeBackendProfileConfig, current: string): Promise<ModelInfo[]> {
+    const driver = this.registry.require(profile.backendId);
+    const listed = await this.listModels(driver, undefined, profile).catch(() => []);
+    const models = curateModels(listed, profile, undefined, modelNormalizer(driver, profile))
+      .filter(model => this.sameDiscussionProvider(profile, current, model.value));
+    const selected = parseNativeModelSelection(current).model;
+    if (!catalogEntry(models, selected)) {
+      models.unshift({ value: selected, name: selected || profile.name, configOptions: [] });
+    }
+    return models;
   }
 
   /** A driver's capabilities, with whether its launches carry the Riffet MCP server. */

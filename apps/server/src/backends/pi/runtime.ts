@@ -13,25 +13,24 @@ import { activityEvent, activityId, withActivity } from '../../journal/activity.
 import { firstMessageTitlePatch, providerTitlePatch } from '../../session-title.js';
 import { childHasExited, waitForExit } from '../shared/child-process.js';
 import { DormancyClock } from '../shared/dormancy.js';
-import { nativeModelEffort, parseNativeModelSelection } from '../shared/model-selection.js';
 import type {
   NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage,
   NativeDispatchBinding,
 } from '../types.js';
 import { findPiTranscript, readPiTranscript, type PiEntry, type PiTranscript } from './history.js';
 import {
-  piDefaultModel, piLaunchCommand, piEnvironment, listPiModels, piModelInfos,
+  piDefaultModel, piLaunchCommand, piEnvironment, listPiModels, piModelInfos, piSelection,
   probePiCli, readPiSettings,
 } from './models.js';
 import { isPiPrompt, piTurnEndId, projectPiTurnEnd, type PiTurnOutcome } from './projection.js';
-import { piCustomEndpoint, piCustomModelId, piProviderExtension, piProviderId, piRiffetMcpExtension } from './provider.js';
+import { piCustomEndpoint, piProviderExtension, piProviderId, piRiffetMcpExtension } from './provider.js';
 import { PiTranscriptSource } from './transcript.js';
 import { PiRpcError, PiRpcTransport } from './transport.js';
 import { handlePiUpdate, reconcilePiEntries, restorePiDeliveries } from './runtime-reconcile.js';
 import {
   IDLE_STOP_MS, PROMPT_ACK_GRACE_MS, REQUEST_TIMEOUT_MS, START_TIMEOUT_MS, STDERR_TAIL,
   dropPending, errorMessage, isEntry, notify, piModelValue, piTurns, promptText, readReported,
-  record, sameSelection, splitModel, str, wake,
+  record, sameSelection, str, wake,
   type PiConversation, type PiDelivery, type PiDesired, type PiDraft, type PiProcess, type RecordValue,
 } from './runtime-shared.js';
 import { handlePiUiRequest, materializePiInput, piAnswerFor } from './runtime-ui.js';
@@ -184,9 +183,10 @@ export class PiRuntime {
     state.boundary = entries.entries.at(-1)?.id;
     const boundary = JSON.stringify({ v: 1, lastEntryId: state.boundary ?? null, leafId: entries.leafId ?? null });
     const dispatchAt = new Date().toISOString();
+    const modelId = desired.modelId ?? state.reported.modelId;
     const resolvedConfig: NativeRunConfig = {
       mode: 'agent',
-      ...(desired.modelId ? { model: this.modelValue(state, desired.provider, desired.modelId, desired.thinkingLevel) } : {}),
+      ...(modelId ? { model: this.modelValue(state, desired.provider ?? state.reported.provider, modelId, desired.thinkingLevel ?? state.reported.thinkingLevel) } : {}),
     };
     input.commitDispatchFence({
       backendId: 'pi',
@@ -311,7 +311,7 @@ export class PiRuntime {
     if (patch.mode !== undefined && patch.mode !== 'agent') throw new AppError('NATIVE_MODE_UNSUPPORTED', 'pi runs in agent mode only.', 400);
     if (patch.approval !== undefined) throw new AppError('NATIVE_APPROVAL_UNSUPPORTED', 'pi has no approval selector.', 400);
     const state = this.conversation(session, project, profile);
-    state.desired = patch.model === undefined ? undefined : await this.selectionOf(state, patch.model);
+    state.desired = patch.model === undefined ? undefined : await piSelection(state.profile, patch.model);
   }
 
   async rename(session: Session): Promise<void> {
@@ -391,29 +391,9 @@ export class PiRuntime {
     return piModelValue(piCustomEndpoint(state.profile) && provider === piProviderId(state.profile) ? undefined : provider, modelId, thinkingLevel);
   }
 
-  private async selectionOf(state: PiConversation, value: string | undefined): Promise<PiDesired | undefined> {
-    if (!value) return undefined;
-    const selection = parseNativeModelSelection(value);
-    let effort = nativeModelEffort(selection);
-    const custom = piCustomEndpoint(state.profile);
-    const split = custom ? { provider: piProviderId(state.profile), modelId: piCustomModelId(state.profile, selection.model) } : splitModel(selection.model);
-    let provider = split.provider;
-    if ((!provider || custom && !effort) && split.modelId) {
-      const models = await listPiModels(state.profile);
-      const model = models.find(model => model.value === split.modelId || model.value.endsWith(`/${split.modelId}`));
-      provider ??= splitModel(model?.value)?.provider;
-      if (custom) effort ??= model?.configOptions.find(option => option.id === 'effort')?.currentValue;
-    }
-    return {
-      ...(provider ? { provider } : {}),
-      ...(split.modelId ? { modelId: split.modelId } : {}),
-      ...(effort ? { thinkingLevel: effort } : {}),
-    };
-  }
-
   private async desiredSelection(state: PiConversation, config: NativeRunConfig): Promise<PiDesired> {
     const value = config.model ?? state.session.model ?? str(state.profile.config.defaultModel);
-    return await this.selectionOf(state, value || await piDefaultModel(state.profile)) ?? {};
+    return await piSelection(state.profile, value || await piDefaultModel(state.profile)) ?? {};
   }
 
   private async applySelection(state: PiConversation, proc: PiProcess, desired: PiDesired): Promise<void> {
