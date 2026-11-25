@@ -788,6 +788,4 @@ export const TEAM_BUDGET = {
   defaultDailyRuns: 30,
   /** Highest 24-hour background run cap a member may be configured to. */
   maxDailyRuns: 200,
-  /** Maximum characters of transcript read when extracting a member draft from a session. */
-  extractSourceChars: 60_000,
 } as const;

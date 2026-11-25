@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_AGENT_MEMBER_ID, TEAM_BUDGET, type AgentMember, type AgentMemberExtractDraft } from '@contracts';
+import { DEFAULT_AGENT_MEMBER_ID, TEAM_BUDGET, type AgentMember } from '@contracts';
 import { createApp } from '../app.js';
 import { OwnerService } from '../owner/index.js';
 import { classifyLinkRoute, linkPolicy } from '../links/policy.js';
@@ -257,20 +257,6 @@ describe('team members (docs/TEAM.md)', () => {
       title: '来自理财分析的咨询',
     });
     expect(await mcpToolsOf(server, calledQaSession.id)).not.toContain('agent_call');
-
-    // Verify deterministic extraction fallback from a regular session works without an auxiliary model.
-    const regularSession = server.store.createSession({
-      projectId: repoProject.id,
-      kind: 'native',
-      backendId: 'claude',
-      title: 'SCM 构建打包流程',
-    });
-    const extractRes = await server.call('POST', '/api/team/members/extract', { sessionId: regularSession.id });
-    expect(extractRes.statusCode, extractRes.body).toBe(200);
-    const draft = extractRes.json() as AgentMemberExtractDraft;
-    expect(draft.name).toBe('SCM 构建打包流程');
-    expect(draft.scope).toEqual({ kind: 'project', projectIds: [repoProject.id] });
-    expect(draft.instructions).toContain('SCM 构建打包流程');
 
     // Default member cannot be deleted, while custom members can.
     const delDefault = await server.call('DELETE', `/api/team/members/${DEFAULT_AGENT_MEMBER_ID}`);

@@ -1,7 +1,7 @@
 import { Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLingui } from '@lingui/react/macro';
-import { IconArchive, IconArchiveRestore, IconBot, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconMessagesSquare, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconServer, IconSettings2, IconTag, IconTrash2 } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconMessagesSquare, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconServer, IconSettings2, IconTag, IconTrash2 } from '@/components/icons';
 import { DEFAULT_AGENT_MEMBER_ID, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { AgentLogo } from '@/components/AgentLogo';
@@ -84,7 +84,6 @@ export interface HeaderProps extends HeaderSlots {
   onRename?: () => void;
   onEditTags?: () => void;
   onTogglePin?: () => void;
-  onExtractMember?: () => void;
   onOpenMemberConfig?: (memberId: string) => void;
   memberSessionsToggle?: { open: boolean; count: number; onToggle: () => void };
   onToggleArchive?: () => void;
@@ -108,7 +107,7 @@ function ActionMenuItem({ action, onSelect }: { action: HeaderAction; onSelect: 
   );
 }
 
-export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onExtractMember, onOpenMemberConfig, memberSessionsToggle, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, alertsKey, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
+export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onOpenMemberConfig, memberSessionsToggle, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, alertsKey, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
   const { t } = useLingui();
   const infoHint = useShortcutHint('sessionInfo');
   const label = useBackendLabel();
@@ -175,7 +174,6 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   const sessionActions: HeaderAction[] = session ? [
     ...(onRename ? [{ id: 'rename', icon: <IconPencilLine />, label: t`重命名`, onSelect: onRename }] : []),
     ...(onEditTags ? [{ id: 'tags', icon: <IconTag />, label: t`编辑标签`, onSelect: onEditTags }] : []),
-    ...(onExtractMember && !quickChat && !session.archivedAt && !isAssistantMain ? [{ id: 'extract-member', icon: <IconBot />, label: t`提炼为成员`, onSelect: onExtractMember }] : []),
     ...(onTogglePin ? [{ id: 'pin', icon: session.pinnedAt ? <IconPinOff /> : <IconPin />, label: session.pinnedAt ? t`取消置顶` : t`置顶会话`, onSelect: onTogglePin }] : []),
   ] : [];
   const archiveAction: HeaderAction | undefined = session && onToggleArchive

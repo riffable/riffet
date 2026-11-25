@@ -1224,6 +1224,21 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       ...(parent ? { backendId: sessionBackend(parent), sessionId: parent.id } : {}),
     };
   }, [session.origin?.kind, parentMember, parent, labelOf, t]);
+  const resolveCallSender = useCallback((callId: string, agentName: string): CallSenderInfo => {
+    const called = findSession?.(callId);
+    const member = called?.agentMemberId
+      ? teamMembers.find((item) => item.id === called.agentMemberId)
+      : teamMembers.find((item) => item.name === agentName);
+    if (member) {
+      return { kind: 'member', name: member.name, member, sessionId: callId };
+    }
+    return {
+      kind: 'agent',
+      name: agentName || (called ? (called.displayTitle ?? called.title ?? labelOf(sessionBackend(called))) : t`其他 Agent`),
+      ...(called ? { backendId: sessionBackend(called) } : {}),
+      sessionId: callId,
+    };
+  }, [findSession, teamMembers, labelOf, t]);
   // Call sessions already attribute each message bubble to the calling member/Agent (`callSender`),
   // so only fork and handoff sessions need a top lineage banner.
   const lineage = parentId && session.origin?.kind !== 'call' ? (
@@ -1375,6 +1390,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           onOpenSession={onOpenSession}
           newTopicDivider={assistantMain}
           callSender={callSender}
+          resolveCallSender={resolveCallSender}
           owner={owner}
           timeline={visibleTimeline}
           timelineVersion={native.timelineVersion}

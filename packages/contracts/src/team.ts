@@ -124,19 +124,6 @@ export interface AgentMemberUserProfile {
   updatedAt?: string;
 }
 
-export interface AgentMemberExtractDraft {
-  name: string;
-  description: string;
-  instructions: string;
-  initialMemory: string;
-  scope: AgentMemberScope;
-  sessionMode: AgentMemberSessionMode;
-  target?: AgentMemberTarget;
-  capabilities: AgentMemberCapabilities;
-  generatedBy?: string;
-  fallbackReason?: string;
-}
-
 export function defaultMemberCapabilities(scope: AgentMemberScopeKind): AgentMemberCapabilities {
   if (scope === 'global') {
     return { workspace: false, taskBoard: true, delegations: true, memberCalls: true, externalTools: true, workbenchAdmin: true };

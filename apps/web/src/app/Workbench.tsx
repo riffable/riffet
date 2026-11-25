@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { SETTING_DEFAULTS, type AgentMember, type AgentMemberExtractDraft, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
+import { SETTING_DEFAULTS, type AgentMember, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
 import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -244,7 +244,6 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     return undefined;
   }, [teamMembers, selectedMemberId, session?.agentMemberId, project]);
   const [createMemberOpen, setCreateMemberOpen] = useState(false);
-  const [extractDraft, setExtractDraft] = useState<AgentMemberExtractDraft>();
   const [editingMemberId, setEditingMemberId] = useState<string>();
   const editingMember = useMemo(() => editingMemberId ? teamMembers.find((item) => item.id === editingMemberId) : undefined, [teamMembers, editingMemberId]);
   // Each conversation keeps its own side panel; swapped before paint so the one entered never shows the last one's.
@@ -406,16 +405,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     const entries = catalog.peekProfiles(project?.id ?? '', homeBackendId, profiles, remoteHomeServerId || undefined);
     return entries.length ? entries : undefined;
   }, [profilesCurrent, session, quickChat, project, projectlessTasks, remoteHomeServerId, catalogBackends, homeBackendId, catalog]);
-  const extractMemberFromSession = useCallback((target: Session) => {
-    toast.info(t`正在从会话提炼角色规则…`);
-    void api.extractTeamMember(target.id).then((draft) => {
-      setExtractDraft(draft);
-      setCreateMemberOpen(true);
-    }, (error: unknown) => {
-      toast.error(errorMessage(error, t`无法提炼成员`));
-    });
-  }, [t]);
-  const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap, onExtractMember: extractMemberFromSession });
+  const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap });
   useGlobalShortcuts(desktop, newSession);
   // A new conversation that starts from a quote (a collaboration's conclusion): added to the new-session draft, kept with
   // what was already written there, and the reader says what to do with it.
@@ -695,7 +685,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       activeMemberId={anyPageOpen ? '' : activeMember?.id ?? ''}
       onSelectMember={openMember}
       onNewMemberSession={openNewMemberSession}
-      onCreateMember={() => { setExtractDraft(undefined); setCreateMemberOpen(true); ui.setMobileSidebar(false); }}
+      onCreateMember={() => { setCreateMemberOpen(true); ui.setMobileSidebar(false); }}
       onEditMember={(member) => { setEditingMemberId(member.id); ui.setMobileSidebar(false); }}
       onTogglePinMember={togglePinMember}
       onDeleteMember={deleteMember}
@@ -1238,8 +1228,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       <CreateMemberDialog
         open={createMemberOpen}
         projects={projects}
-        draft={extractDraft}
-        onClose={() => { setCreateMemberOpen(false); setExtractDraft(undefined); }}
+        onClose={() => setCreateMemberOpen(false)}
         onCreated={(member) => {
           lists.upsertTeamMember(member);
           void loadBootstrap().then(() => openMember(member), () => openMember(member));

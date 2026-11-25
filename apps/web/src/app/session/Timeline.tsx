@@ -164,7 +164,7 @@ export type MessageSender =
   | { kind: 'owner'; owner?: { name?: string; avatar?: { url: string } } }
   | CallSenderInfo;
 
-export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, sender, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, sender, branch, markdown = false, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
   /** Same-turn agent output already follows this prompt, proving the CLI received it. */
@@ -175,6 +175,10 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   from?: 'coordinator' | 'peer';
   /** Identifies who sent this turn in multi-party/called conversations (avatar + restrained low-saturation bubble tint). */
   sender?: MessageSender;
+  /** Optional git branch reported alongside an agent call result. */
+  branch?: string;
+  /** Renders the bubble body as Markdown (used for async call-result deliveries from another Agent). */
+  markdown?: boolean;
   text: string;
   attachments: UserAttachment[];
   references?: CapturedSessionReference[];
@@ -200,7 +204,11 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   const delivery = run?.native && !taskOutcome && !failureShown && !indicatorOwnsSend ? nativeDeliveryLabel(run, stopShown, hasTurnOutput) : '';
   const rest = useRestReveal();
   // A message that is nothing but a quote stays as it was written: there would be no bubble to hang the chip from.
-  const quoted = useMemo(() => { const split = splitQuotes(text); return split.body.trim() ? split : { quotes: [], body: text }; }, [text]);
+  const quoted = useMemo(() => {
+    if (markdown) return { quotes: [], body: text };
+    const split = splitQuotes(text);
+    return split.body.trim() ? split : { quotes: [], body: text };
+  }, [markdown, text]);
   const [errorOpen, setErrorOpen] = useRemembered(`delivery-error:${run?.id ?? ''}`, false);
   // While it is on its way the status says enough; the time returns once it has arrived or settled.
   const sending = Boolean(delivery && run && ['submitting', 'queued', 'starting', 'sent'].includes(sendPhase(run) ?? ''));
@@ -215,41 +223,47 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   const peerSender = sender && sender.kind !== 'owner' ? sender : undefined;
   const senderAvatar = !sender ? null
     : sender.kind === 'owner'
-      ? <OwnerAvatar owner={sender.owner} size={24} className="mt-1 shrink-0" />
+      ? <OwnerAvatar owner={sender.owner} size={16} className="shrink-0" />
       : sender.kind === 'member' && sender.member
-        ? <MemberAvatar member={sender.member} size={24} className="mt-1 shrink-0" />
+        ? <MemberAvatar member={sender.member} size={16} className="shrink-0" />
         : (
-          <span className="mt-1 grid size-6 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
-            {sender.backendId ? <AgentLogo backend={sender.backendId} size={14} /> : <IconBot aria-hidden className="size-3.5" />}
+          <span className="grid size-4 shrink-0 place-items-center rounded-full bg-accent-soft text-accent">
+            {sender.backendId ? <AgentLogo backend={sender.backendId} size={11} /> : <IconBot aria-hidden className="size-3" />}
           </span>
         );
   return (
     <div className="flex flex-col items-end gap-1.5">
-      <div className={cn('flex max-w-[min(82%,560px)] items-start', sender ? 'gap-2' : 'gap-1')}>
-        <div className={cn(
-          'min-w-0 whitespace-pre-wrap break-words rounded-3xl px-4 py-2.5 text-base text-fg',
-          peerSender ? 'bg-accent-soft ring-1 ring-inset ring-accent/15' : 'bg-bubble',
-        )}>
+      <div className={cn(
+        'min-w-0 break-words rounded-3xl px-4 py-2.5 text-base text-fg',
+        markdown ? 'max-w-[min(88%,640px)]' : 'max-w-[min(82%,560px)] whitespace-pre-wrap',
+        peerSender ? 'bg-accent-soft ring-1 ring-inset ring-accent/15' : 'bg-bubble',
+      )}>
+        {markdown ? (
+          <Markdown text={quoted.body} />
+        ) : (
           <MessageWithMentions
             text={quoted.body}
             agents={run?.native?.input.agents}
             files={run?.native?.input.context}
             sessions={references ?? run?.native?.contextSnapshots}
           />
-        </div>
-        {senderAvatar}
+        )}
       </div>
       <MessageQuotes quotes={quoted.quotes} />
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {!resources && <MentionedAgents agents={unwrittenMentions(quoted.body, run?.native?.input.agents)} />}
-      {(text || time || delivery || peerSender) && (
-        <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', sender && 'pr-8', statusRow, !footerPinned && !delivery && !from && !peerSender && !resources && revealOnOwnHover)}>
+      {(text || time || delivery || sender) && (
+        <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !sender && !resources && revealOnOwnHover)}>
           {peerSender && (
             peerSender.sessionId && onOpenSession
-              ? <button type="button" onClick={() => onOpenSession(peerSender.sessionId!)} className="inline-flex items-center gap-1 text-fg-2 underline-offset-2 hover:text-fg hover:underline">{peerSender.name}</button>
-              : <span className="inline-flex items-center gap-1 text-fg-2">{peerSender.name}</span>
+              ? <button type="button" onClick={() => onOpenSession(peerSender.sessionId!)} className="inline-flex items-center gap-1.5 text-fg-2 underline-offset-2 hover:text-fg hover:underline">{senderAvatar}{peerSender.name}</button>
+              : <span className="inline-flex items-center gap-1.5 text-fg-2">{senderAvatar}{peerSender.name}</span>
           )}
+          {!peerSender && sender?.kind === 'owner' && (
+            <span className="inline-flex items-center gap-1.5 text-fg-2">{senderAvatar}{sender.owner?.name}</span>
+          )}
+          {branch && <span className="font-mono text-fg-4">{branch}</span>}
           {!peerSender && from && <span className="inline-flex items-center gap-1"><IconBot aria-hidden className="size-3" />{from === 'coordinator' ? <Trans>主对话</Trans> : <Trans>另一个 Agent</Trans>}</span>}
           {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充</Trans></span>}
           {delivery && (deliveryError ? <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'inline-flex items-center gap-0.5 text-fg-3 hover:text-fg')}>{delivery}<IconChevronRight aria-hidden className={cn('size-3 transition-transform', errorOpen && 'rotate-90')} /></button> : <span role="status" className="min-w-0 [overflow-wrap:anywhere]">{delivery}</span>)}

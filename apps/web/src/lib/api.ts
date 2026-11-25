@@ -3,7 +3,7 @@ import { msg } from '@lingui/core/macro';
 import { withShownTitle } from './shown-title';
 import type {
   ListRevisions, SessionListDelta,
-  AgentMember, AgentMemberCreate, AgentMemberExtractDraft, AgentMemberList, AgentMemberUpdate, AgentMemberUserProfile,
+  AgentMember, AgentMemberCreate, AgentMemberList, AgentMemberUpdate, AgentMemberUserProfile,
   AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, PluginApprovalDecision, PluginApprovalList, PluginApprovalResult, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
@@ -1126,7 +1126,6 @@ export const api = {
   createTeamMember: (body: AgentMemberCreate) => request<AgentMember>('/api/team/members', json('POST', body)),
   updateTeamMember: (id: string, body: AgentMemberUpdate) => request<AgentMember>(`/api/team/members/${encodeURIComponent(id)}`, json('PATCH', body)),
   deleteTeamMember: (id: string) => request<void>(`/api/team/members/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  extractTeamMember: (sessionId: string) => request<AgentMemberExtractDraft>('/api/team/members/extract', json('POST', { sessionId })),
   teamUserProfile: () => request<AgentMemberUserProfile>('/api/team/user-profile'),
   saveTeamUserProfile: (text: string) => request<AgentMemberUserProfile>('/api/team/user-profile', json('PUT', { text })),
   teamMemberInstructions: (id: string) => request<AssistantInstructions>(`/api/team/members/${encodeURIComponent(id)}/instructions`),

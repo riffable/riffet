@@ -584,14 +584,6 @@ msgstr "创建和更新任务状态"
 msgid "创建定时唤醒、委托与通知"
 msgstr "创建定时唤醒、委托与通知"
 
-#: src/app/team/CreateMemberDialog.tsx
-msgid "创建成员"
-msgstr "创建成员"
-
-#: src/app/team/CreateMemberDialog.tsx
-msgid "初始记忆"
-msgstr "初始记忆"
-
 #: src/app/team/MemberConfigDialog.tsx
 #: src/app/Workbench.tsx
 msgid "删除"
@@ -1019,10 +1011,6 @@ msgstr "工作台管理"
 msgid "已中断"
 msgstr "已中断"
 
-#: src/app/team/CreateMemberDialog.tsx
-msgid "已从会话提炼规则与初始记忆"
-msgstr "已从会话提炼规则与初始记忆"
-
 #. placeholder {0}: latest.name
 #: src/app/team/MemberConfigDialog.tsx
 msgid "已保存「{0}」"
@@ -1386,15 +1374,6 @@ msgstr "提供商没填地址和 Key 时使用"
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "提供模型源"
 msgstr "提供模型源"
-
-#: src/app/team/CreateMemberDialog.tsx
-msgid "提炼为团队成员"
-msgstr "提炼为团队成员"
-
-#: src/app/Header.tsx
-#: src/app/Sidebar.tsx
-msgid "提炼为成员"
-msgstr "提炼为成员"
 
 #: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1816,10 +1795,6 @@ msgstr "无法打开该 Worktree"
 msgid "无法打开这个目录"
 msgstr "无法打开这个目录"
 
-#: src/app/Workbench.tsx
-msgid "无法提炼成员"
-msgstr "无法提炼成员"
-
 #: src/app/plugins/PluginSharesBlock.tsx
 msgid "无法撤下"
 msgstr "无法撤下"
@@ -2177,10 +2152,6 @@ msgstr "模型请求与密钥发往插件指定的地址"
 #: src/app/ProjectHome.tsx
 msgid "模型选择已保留，目录恢复前暂不能发送。"
 msgstr "模型选择已保留，目录恢复前暂不能发送。"
-
-#: src/app/Workbench.tsx
-msgid "正在从会话提炼角色规则…"
-msgstr "正在从会话提炼角色规则…"
 
 #: src/app/Header.tsx
 msgid "正在停止"

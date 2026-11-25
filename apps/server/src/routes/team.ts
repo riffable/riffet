@@ -8,7 +8,6 @@ import {
   OWNER_AVATAR_MAX_BYTES,
   type AgentMember,
   type AgentMemberCreate,
-  type AgentMemberExtractDraft,
   type AgentMemberList,
   type AgentMemberUpdate,
   type AgentMemberUserProfile,
@@ -17,8 +16,7 @@ import {
   type AssistantMemory,
   type Session,
 } from '../../../../packages/contracts/src/index.js';
-import { AppError, requireString } from '../errors.js';
-import { requireSessionVisibleToClient } from '../native/client-features.js';
+import { AppError } from '../errors.js';
 import type { RouteDeps } from './deps.js';
 
 /** Enough JSON body room for a 1 MiB base64 avatar upload alongside member metadata and rules. */
@@ -51,16 +49,6 @@ export function registerTeamRoutes(app: FastifyInstance, deps: RouteDeps): void 
   app.delete<{ Params: { id: string } }>('/api/team/members/:id', async (request, reply) => {
     team().delete(request.params.id);
     reply.code(204);
-  });
-
-  app.post<{ Body: { sessionId?: unknown } }>('/api/team/members/extract', async (request): Promise<AgentMemberExtractDraft> => {
-    const sessionId = requireString(request.body?.sessionId, 'sessionId', 200);
-    const session = deps.store.getSession(sessionId);
-    requireSessionVisibleToClient(request.headers, session, id => deps.store.getProject(id));
-    if (!deps.extractTeamMember) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
-    const controller = new AbortController();
-    request.raw.once('close', () => controller.abort());
-    return deps.extractTeamMember(sessionId, controller.signal);
   });
 
   app.get('/api/team/user-profile', async (): Promise<AgentMemberUserProfile> => team().userProfile());

@@ -584,14 +584,6 @@ msgstr ""
 msgid "创建定时唤醒、委托与通知"
 msgstr ""
 
-#: src/app/team/CreateMemberDialog.tsx
-msgid "创建成员"
-msgstr ""
-
-#: src/app/team/CreateMemberDialog.tsx
-msgid "初始记忆"
-msgstr ""
-
 #: src/app/team/MemberConfigDialog.tsx
 #: src/app/Workbench.tsx
 msgid "删除"
@@ -1019,10 +1011,6 @@ msgstr ""
 msgid "已中断"
 msgstr ""
 
-#: src/app/team/CreateMemberDialog.tsx
-msgid "已从会话提炼规则与初始记忆"
-msgstr ""
-
 #. placeholder {0}: latest.name
 #: src/app/team/MemberConfigDialog.tsx
 msgid "已保存「{0}」"
@@ -1385,15 +1373,6 @@ msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "提供模型源"
-msgstr ""
-
-#: src/app/team/CreateMemberDialog.tsx
-msgid "提炼为团队成员"
-msgstr ""
-
-#: src/app/Header.tsx
-#: src/app/Sidebar.tsx
-msgid "提炼为成员"
 msgstr ""
 
 #: src/app/plugins/PluginsNav.tsx
@@ -1816,10 +1795,6 @@ msgstr ""
 msgid "无法打开这个目录"
 msgstr ""
 
-#: src/app/Workbench.tsx
-msgid "无法提炼成员"
-msgstr ""
-
 #: src/app/plugins/PluginSharesBlock.tsx
 msgid "无法撤下"
 msgstr ""
@@ -2176,10 +2151,6 @@ msgstr ""
 
 #: src/app/ProjectHome.tsx
 msgid "模型选择已保留，目录恢复前暂不能发送。"
-msgstr ""
-
-#: src/app/Workbench.tsx
-msgid "正在从会话提炼角色规则…"
 msgstr ""
 
 #: src/app/Header.tsx

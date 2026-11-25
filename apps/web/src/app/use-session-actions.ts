@@ -45,7 +45,7 @@ export function clearContext(ui: UiStore): void {
  * follows creation: replaying unconfirmed create requests, adopting the PTY, and keeping the
  * first-run seed available until the session view no longer needs it.
  */
-export function useSessionActions({ loaded, project, session, sessions, terminals, homeBackendId, homeProfileId, loadBootstrap, onExtractMember }: {
+export function useSessionActions({ loaded, project, session, sessions, terminals, homeBackendId, homeProfileId, loadBootstrap }: {
   loaded: boolean;
   project: ProjectRecord | undefined;
   session: Session | undefined;
@@ -55,7 +55,6 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   homeBackendId: NativeBackendId;
   homeProfileId: string | undefined;
   loadBootstrap: () => Promise<Bootstrap>;
-  onExtractMember?: (session: Session) => void;
 }) {
   const { t } = useLingui();
   const { lists, nav, ui, handlers, settings: settingsStore, workItems } = useStores();
@@ -428,8 +427,6 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         upsertSession(await api.updateSession(target.id, { tags: parseTags(value) }));
       } else if (action === 'delete') {
         await requestSessionDeletion(target);
-      } else if (action === 'extract-member') {
-        onExtractMember?.(target);
       } else if (action === 'work-item') {
         const result = await api.setSessionWorkItem(target.id, { workItemId: 'new' });
         upsertSession(result.session);

@@ -1,10 +1,10 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { isAssistantBackend, memberChoice, type AgentMember, type AgentMemberExtractDraft, type AgentMemberScope, type AgentMemberScopeKind, type AgentMemberSessionMode, type AgentMemberTarget } from '@contracts';
+import { isAssistantBackend, memberChoice, type AgentMember, type AgentMemberScope, type AgentMemberScopeKind, type AgentMemberSessionMode, type AgentMemberTarget } from '@contracts';
 import { IconChevronDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Field, fieldClass, Input, Segmented, Select, Textarea } from '@/components/ui/controls';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, type ProjectRecord } from '@/lib/api';
 import { useDiscardGuard } from '@/lib/dialogs';
 import { isAssistantProject, regularProjects } from '@/lib/project-family';
@@ -20,8 +20,6 @@ const fill = 'w-full [&>[role=radio]]:flex-1';
 interface Props {
   open: boolean;
   projects: ProjectRecord[];
-  /** Pre-filled draft returned from `/api/team/members/extract` when promoting an existing session. */
-  draft?: AgentMemberExtractDraft;
   onClose: () => void;
   onCreated: (member: AgentMember) => void;
 }
@@ -30,7 +28,7 @@ interface Props {
  * Creation dialog for a standing team member (docs/TEAM.md §7.2):
  * two-column workspace layout with identity + AGENTS.md on the left, runtime settings on the right.
  */
-export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }: Props) {
+export function CreateMemberDialog({ open, projects, onClose, onCreated }: Props) {
   const { t } = useLingui();
   const instructionsId = useId();
   const backends = useCatalog((state) => state.backends);
@@ -45,28 +43,26 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
   const [scopeKind, setScopeKind] = useState<AgentMemberScopeKind>('personal');
   const [projectId, setProjectId] = useState('');
   const [sessionMode, setSessionMode] = useState<AgentMemberSessionMode>('continuous');
-  const [memorySeed, setMemorySeed] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setAvatar({ kind: 'none' });
-    setName(draft?.name ?? '');
-    setTarget(memberChoice(draft?.target, isolatedBackends));
-    setInstructions(draft?.instructions ?? '');
-    setScopeKind(draft?.scope.kind ?? 'personal');
-    setProjectId(draft?.scope.kind === 'project' ? (draft.scope.projectIds?.[0] ?? codeProjects[0]?.id ?? '') : (codeProjects[0]?.id ?? ''));
-    setSessionMode(draft?.sessionMode ?? 'continuous');
-    setMemorySeed(draft?.initialMemory ?? '');
+    setName('');
+    setTarget(memberChoice(undefined, isolatedBackends));
+    setInstructions('');
+    setScopeKind('personal');
+    setProjectId(codeProjects[0]?.id ?? '');
+    setSessionMode('continuous');
     setError('');
-  }, [open, draft]);
+  }, [open]);
 
   // Fill a default agent/model once the backend catalog finishes loading after the dialog opens.
   useEffect(() => {
     if (!open || target || !isolatedBackends.length) return;
-    setTarget(memberChoice(draft?.target, isolatedBackends));
-  }, [open, target, draft, isolatedBackends]);
+    setTarget(memberChoice(undefined, isolatedBackends));
+  }, [open, target, isolatedBackends]);
 
   const effectiveProjectId = scopeKind === 'project' && projectId ? projectId : fallbackProjectId;
   const { picker, pick, params, withParam } = useAgentModelChoice({
@@ -78,9 +74,8 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
 
   const dirty = open && (
     avatar.kind !== 'none'
-    || name.trim() !== (draft?.name ?? '')
-    || instructions !== (draft?.instructions ?? '')
-    || memorySeed !== (draft?.initialMemory ?? '')
+    || name.trim() !== ''
+    || instructions !== ''
   );
   const discard = useDiscardGuard(dirty, busy);
 
@@ -111,7 +106,7 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
           ...(target.profileId ? { profileId: target.profileId } : {}),
           ...(target.model ? { model: target.model } : {}),
         }
-        : draft?.target;
+        : undefined;
       const avatarInput = avatarInputFromDraft(avatar);
       const member = await api.createTeamMember({
         name: trimmed,
@@ -119,9 +114,7 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
         scope,
         sessionMode,
         ...(instructions.trim() ? { instructions: instructions.trim() } : {}),
-        ...(memorySeed.trim() ? { initialMemory: memorySeed.trim() } : {}),
         ...(chosenTarget ? { target: chosenTarget } : {}),
-        ...(draft?.capabilities ? { capabilities: draft.capabilities } : {}),
       });
       toast.success(t`已创建「${member.name}」`);
       onCreated(member);
@@ -135,10 +128,9 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) discard.close(onClose); }}>
-      <DialogContent size="workspace" mobileFullscreen {...(!draft ? { 'aria-describedby': undefined } : {})} className="overflow-hidden md:h-[min(640px,calc(100dvh-64px))]">
+      <DialogContent size="workspace" mobileFullscreen aria-describedby={undefined} className="overflow-hidden md:h-[min(640px,calc(100dvh-64px))]">
         <DialogHeader className="px-6 pb-4 pt-6 md:px-7">
-          <DialogTitle>{draft ? <Trans>提炼为团队成员</Trans> : <Trans>新建成员</Trans>}</DialogTitle>
-          {draft && <DialogDescription><Trans>已从会话提炼规则与初始记忆</Trans></DialogDescription>}
+          <DialogTitle><Trans>新建成员</Trans></DialogTitle>
         </DialogHeader>
         <DialogBody className="grid flex-1 gap-x-8 gap-y-6 px-6 pb-6 md:grid-cols-[minmax(0,1fr)_20rem] md:px-7">
           <div className="flex min-w-0 flex-col gap-5">
@@ -168,18 +160,6 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
                 className="min-h-60 flex-1 resize-none font-mono text-xs leading-relaxed md:min-h-80"
               />
             </div>
-
-            {draft && (
-              <Field label={t`初始记忆`}>
-                <Textarea
-                  value={memorySeed}
-                  rows={4}
-                  spellCheck={false}
-                  onChange={(event) => setMemorySeed(event.target.value)}
-                  className="font-mono text-xs leading-relaxed"
-                />
-              </Field>
-            )}
           </div>
 
           <div className="flex min-w-0 flex-col gap-5 max-md:edge-t max-md:pt-5 md:edge-l md:pl-8">
@@ -238,7 +218,7 @@ export function CreateMemberDialog({ open, projects, draft, onClose, onCreated }
         <DialogFooter className="edge-t px-6 py-4 md:px-7">
           <Button variant="ghost" onClick={() => discard.close(onClose)}><Trans>取消</Trans></Button>
           <Button variant="primary" busy={busy} onClick={() => void submit()}>
-            {draft ? <Trans>创建成员</Trans> : <Trans>创建</Trans>}
+            <Trans>创建</Trans>
           </Button>
         </DialogFooter>
       </DialogContent>

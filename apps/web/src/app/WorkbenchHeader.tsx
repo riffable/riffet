@@ -107,7 +107,6 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
           onRename: () => handlers.sessionAction(session, 'rename'),
           onEditTags: () => handlers.sessionAction(session, 'tags'),
           onTogglePin: () => handlers.sessionAction(session, 'pin'),
-          onExtractMember: () => handlers.sessionAction(session, 'extract-member'),
         }),
         onToggleArchive: () => handlers.sessionAction(session, 'archive'),
         ...(deletable ? { onDelete: () => handlers.sessionAction(session, 'delete'), deleteDisabled: deleting } : {}),

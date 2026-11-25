@@ -81,7 +81,6 @@ import { AssistantBoard, Supervision, Verification, WorkItemService, assistantIn
 import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
 import { AgentTeamService } from './assistant/team.js';
-import { extractMemberFromSession } from './assistant/extract.js';
 import { AssistantRuns } from './assistant/runs.js';
 import { AssistantDelegations } from './assistant/delegations.js';
 import { createAssistantWorkbenchQueries, workbenchReads } from './assistant/workbench-queries.js';
@@ -653,7 +652,7 @@ export async function createApp(options: AppOptions = {}) {
       },
     },
   });
-  const deps:RouteDeps={profile,team:()=>team,extractTeamMember:(sessionId,signal)=>extractMemberFromSession({store,settings:()=>settings.getSettings(),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),transcript:async id=>{const events=await nativeBackends.contextTranscript(id,CONTEXT_LIMITS.bytes,AbortSignal.timeout(CONTEXT_LIMITS.timeoutMs));if(!events?.length)return '';return assistantSearch.extractIndexable(id,events.map((event,index)=>({sequence:index+1,sessionId:id,type:event.type,data:event.data,createdAt:event.createdAt}))).map(item=>`${item.kind==='user'?'User':item.kind==='assistant'?'Assistant':'Tool'}: ${item.text}`).join('\n\n');},recordAuxiliaryCall},sessionId,signal),links:()=>linksRef,bindWorkbench:(request,session,run)=>{
+  const deps:RouteDeps={profile,team:()=>team,links:()=>linksRef,bindWorkbench:(request,session,run)=>{
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     const member=team.resolveFor(project,session);

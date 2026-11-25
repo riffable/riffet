@@ -584,14 +584,6 @@ msgstr "Create and update task board items"
 msgid "创建定时唤醒、委托与通知"
 msgstr "Create scheduled wake-ups, delegations, and notifications"
 
-#: src/app/team/CreateMemberDialog.tsx
-msgid "创建成员"
-msgstr "Create member"
-
-#: src/app/team/CreateMemberDialog.tsx
-msgid "初始记忆"
-msgstr "Initial memory"
-
 #: src/app/team/MemberConfigDialog.tsx
 #: src/app/Workbench.tsx
 msgid "删除"
@@ -1019,10 +1011,6 @@ msgstr "Workbench admin"
 msgid "已中断"
 msgstr "Interrupted"
 
-#: src/app/team/CreateMemberDialog.tsx
-msgid "已从会话提炼规则与初始记忆"
-msgstr "Extracted rules and initial memory from the conversation"
-
 #. placeholder {0}: latest.name
 #: src/app/team/MemberConfigDialog.tsx
 msgid "已保存「{0}」"
@@ -1386,15 +1374,6 @@ msgstr "Used when a provider leaves its own address and key blank"
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "提供模型源"
 msgstr "Provide model sources"
-
-#: src/app/team/CreateMemberDialog.tsx
-msgid "提炼为团队成员"
-msgstr "Extract as team member"
-
-#: src/app/Header.tsx
-#: src/app/Sidebar.tsx
-msgid "提炼为成员"
-msgstr "Extract as member"
 
 #: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1816,10 +1795,6 @@ msgstr "Couldn't open that Worktree"
 msgid "无法打开这个目录"
 msgstr "Couldn't open this folder"
 
-#: src/app/Workbench.tsx
-msgid "无法提炼成员"
-msgstr "Unable to extract member"
-
 #: src/app/plugins/PluginSharesBlock.tsx
 msgid "无法撤下"
 msgstr "Couldn't unpublish"
@@ -2177,10 +2152,6 @@ msgstr "Model requests and the key go to an address the plugin chooses"
 #: src/app/ProjectHome.tsx
 msgid "模型选择已保留，目录恢复前暂不能发送。"
 msgstr "Your model choice is kept; sending stays unavailable until the catalog is back."
-
-#: src/app/Workbench.tsx
-msgid "正在从会话提炼角色规则…"
-msgstr "Extracting member rules from conversation…"
 
 #: src/app/Header.tsx
 msgid "正在停止"

@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconBot, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, WORK_ITEM_STATUSES, type AgentMember, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -44,7 +44,7 @@ import { isDefaultMember, sortTeamMembers } from './work-items/assistant';
 import { MemberAvatar } from './team/MemberAvatar';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
-export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item' | 'extract-member';
+export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item';
 
 interface Props {
   projects: ProjectRecord[];
@@ -311,9 +311,6 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
           {!hideTags && (session.workItemId
             ? <TaskStatusSub workItemId={session.workItemId} />
             : <DropdownMenuItem onSelect={() => onAction(session, 'work-item')}><IconSquareKanban /><Trans>转为任务</Trans></DropdownMenuItem>)}
-          {!hideTags && !session.archivedAt && (
-            <DropdownMenuItem onSelect={() => onAction(session, 'extract-member')}><IconBot /><Trans>提炼为成员</Trans></DropdownMenuItem>
-          )}
           <DropdownMenuItem onSelect={() => onAction(session, 'pin')}>{session.pinnedAt ? <><IconPinOff /><Trans>取消置顶</Trans></> : <><IconPin /><Trans>置顶会话</Trans></>}</DropdownMenuItem>
           {tabsOn && !mobile && !session.archivedAt && (kept
             ? <DropdownMenuItem onSelect={() => tabs.close(session.id)}><IconX /><Trans>移出标签栏</Trans></DropdownMenuItem>
