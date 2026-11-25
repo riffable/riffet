@@ -27,7 +27,6 @@
 
 - 不在 Android/iOS 上运行服务端、tmux、Agent CLI 或模型。手机作为能力端时，规划与决策仍由服务端会话里的 Agent 完成。
 - 不做公网推送中继（FCM / Firebase Functions，或替用户转发 APNs 的中转服务）。iOS 的后台通知由持有 APNs 密钥的服务端直接发给 Apple，Android 仍靠前台服务。见「通知」；可预知的设备调用由预约唤醒覆盖（DEVICES.md §3）。
-- 不自建 TLS 与证书指纹固定。见「网络接入」。
 - 不做多用户、多租户或共享访问。Riffet 是单用户的。
 - 不把时间线投影下沉到服务端。见「时间线的第二实现」。
 
@@ -708,10 +707,10 @@ FCM 中转被明确排除：它需要一个公网可达的中继服务和 Google
 
 ## 网络接入
 
-推荐 Tailscale，不自建 TLS。
+当前：推荐 Tailscale，服务端自己不提供 TLS。
 
 服务端只监听 loopback，由 `tailscale serve` 终结 TLS 并注入身份头，得到 HTTPS、跨网段访问和稳定主机名。
-自签证书加指纹固定虽然可行，但要求客户端实现证书 pinning，并让服务端承担证书生命周期，收益不抵成本。
+「不自建 TLS、不做证书固定」的决定已被 [TRANSPORT-SECURITY.md](TRANSPORT-SECURITY.md) 取代：服务器提供自己的证书，原生客户端在配对时固定指纹并用设备密钥做双向 TLS，尚未实现。
 
 **绝不要 `tailscale funnel`**：那会把端口暴露到公网，而 `serve` 只对私有 tailnet 开放。
 

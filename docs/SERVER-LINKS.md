@@ -302,7 +302,7 @@ SSH 的注意点：
 
 devbox 是多人共用的机器时，建议只开「devbox 允许 Mac」。
 
-浏览器到入口服务器这一段没有 TLS，这是现有缺口（[SECURITY.md](SECURITY.md) 已知缺口第 1 条），链接管不到。这一段继续用 Tailscale、SSH 隧道或 HTTPS 反向代理。
+浏览器到入口服务器这一段没有 TLS，这是现有缺口（[SECURITY.md](SECURITY.md) 已知缺口第 1 条），链接管不到。目前这一段继续用 Tailscale、SSH 隧道或 HTTPS 反向代理；客户端加密、互联入站分级与本机转发访问对端的方案见 [TRANSPORT-SECURITY.md](TRANSPORT-SECURITY.md)。
 
 ## 9. 连不通时
 
