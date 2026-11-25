@@ -347,8 +347,13 @@ final class PerfMonitor: NSObject {
         }
     }
 
+    /// Every stage of the run loop, not only waking and sleeping: while frames or a stream keep it
+    /// busy it may not sleep for a long time, and a span from one wake to the next sleep then joined
+    /// many short pieces of work into one false stall. A stall is one stretch of work between two
+    /// stages, which is what holds a frame back.
     private func addRunLoopObserver() {
         let activities = CFRunLoopActivity.afterWaiting.rawValue | CFRunLoopActivity.beforeWaiting.rawValue
+            | CFRunLoopActivity.beforeTimers.rawValue | CFRunLoopActivity.beforeSources.rawValue
         let observer = CFRunLoopObserverCreateWithHandler(nil, activities, true, Int.max) { [weak self] _, activity in
             MainActor.assumeIsolated { self?.runLoop(activity) }
         }
@@ -358,20 +363,18 @@ final class PerfMonitor: NSObject {
 
     private func runLoop(_ activity: CFRunLoopActivity) {
         let now = CACurrentMediaTime()
-        if activity == .afterWaiting {
-            iterationStart = now
-            return
+        // The span since the last stage was work unless the loop went to sleep in between.
+        if iterationStart > 0 {
+            let busy = now - iterationStart
+            store.busy(busy)
+            recentBusy.append((now, busy))
+            while let first = recentBusy.first, now - first.at > 1 { recentBusy.removeFirst() }
         }
-        guard iterationStart > 0 else { return }
-        let busy = now - iterationStart
-        iterationStart = 0
-        if let input = pendingInput {
+        iterationStart = activity == .beforeWaiting ? 0 : now
+        if activity == .beforeWaiting, let input = pendingInput {
             pendingInput = nil
             awaitingFrame = input
         }
-        store.busy(busy)
-        recentBusy.append((now, busy))
-        while let first = recentBusy.first, now - first.at > 1 { recentBusy.removeFirst() }
     }
 
     /// Times the next frame after [kind] happens (a toggle the benchmark performs, for instance).

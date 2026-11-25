@@ -741,8 +741,7 @@ struct RowBuilder {
         let effectiveOpen = ui.toolRunChoice(id) ?? (!followedByContent || allDisclosures.contains { ui.isOpen($0) })
         ui.noteToolRun(id, items: run.map(\.key), disclosures: allDisclosures)
         let summary = toolRunSummary(items: tools, root: root, stale: !turnActive, presentations: presentations)
-        let names = summary.counts.prefix(2).map { Self.toolRunCountLabel($0) }.joined(separator: String(localized: "、"))
-        let title = summary.counts.count > 2 ? String(localized: "\(names)等") : names
+        let title = summary.title
         var runInline: [DisclosureSpec.Piece] = []
         if summary.totalAdded > 0 { runInline.append(.init(text: "+\(summary.totalAdded)", font: style.mono(12), color: style.color(\.success))) }
         if summary.totalRemoved > 0 { runInline.append(.init(text: "−\(summary.totalRemoved)", font: style.mono(12), color: style.color(\.danger))) }
@@ -778,19 +777,6 @@ struct RowBuilder {
 
     /// A call's one-line height.
     private var callRow: CGFloat { style.row }
-
-    /// The web's `toolRunSummary` wording with counts, one category at a time.
-    private static func toolRunCountLabel(_ entry: ToolRunCount) -> String {
-        let count = Int(entry.count)
-        switch entry.bucket {
-        case "read": return String(localized: "读取 \(count) 个文件")
-        case "edit": return String(localized: "编辑 \(count) 个文件")
-        case "search": return String(localized: "搜索 \(count) 次")
-        case "execute": return String(localized: "运行 \(count) 条命令")
-        case "fetch": return String(localized: "获取 \(count) 次")
-        default: return String(localized: "调用 \(count) 个工具")
-        }
-    }
 
     /// Left-dark / right-muted core object piece for a unified 4-slot tool row.
     private func toolDetailPiece(_ row: ToolRowPresentation, secondaryOverride: String? = nil) -> DisclosureSpec.Piece {

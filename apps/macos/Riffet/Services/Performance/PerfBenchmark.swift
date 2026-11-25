@@ -146,8 +146,11 @@ final class PerfBenchmark {
         try? await Task.sleep(for: .milliseconds(400))
         monitor.page = "bench.sidebar"
         monitor.activityOverride = .interact
+        // The drawn sidebar answers the workbench's own toggle, as its button and ⌘B do; the split
+        // view's `toggleSidebar:` reaches nothing in it.
+        let workbench = AppModel.shared.workbench
         for _ in 0..<4 {
-            NSApp.sendAction(#selector(NSSplitViewController.toggleSidebar(_:)), to: nil, from: nil)
+            NotificationCenter.default.post(name: .riffetToggleSidebar, object: workbench)
             try? await Task.sleep(for: .milliseconds(800))
         }
         monitor.activityOverride = nil

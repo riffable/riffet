@@ -97,19 +97,11 @@ function bucketForPresentation(presentation: ToolRowPresentation): RunBucket {
   }
 }
 
-function formatRunBucket(bucket: RunBucket, count: number): string {
-  switch (bucket) {
-    case 'execute': return i18n._(msg`运行 ${count} 条命令`);
-    case 'read': return i18n._(msg`读取 ${count} 个文件`);
-    case 'edit': return i18n._(msg`修改 ${count} 个文件`);
-    case 'search': return i18n._(msg`搜索 ${count} 次`);
-    case 'fetch': return i18n._(msg`访问 ${count} 个页面`);
-    case 'other': return i18n._(msg`调用 ${count} 次工具`);
-  }
-}
+/** The rows' own verbs, so the run's header reads like its rows: `Read 3 · Search 2`. */
+const RUN_VERB: Record<RunBucket, string> = { execute: 'Run', read: 'Read', edit: 'Edit', search: 'Search', fetch: 'Fetch', other: 'Tool' };
 
 /**
- * Action wording and counts for a tool run, derived from the same unified row presentation
+ * Verbs and counts for a tool run, derived from the same unified row presentation
  * (`describeToolRow`) so a shell `rg` counts as a search and a file-editing `python3` counts as an edit.
  */
 export function toolRunSummary(items: Extract<TimelineItem, { kind: 'tool' }>[], root?: string): { label: string; kind: string } {
@@ -146,8 +138,7 @@ export function toolRunSummary(items: Extract<TimelineItem, { kind: 'tool' }>[],
   if (editTotal > 0) counts.set('edit', editTotal);
   if (readTotal > 0) counts.set('read', readTotal);
   const ordered = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  const summary = ordered.slice(0, 2).map(([bucket, count]) => formatRunBucket(bucket, count)).join(' · ');
-  const label = ordered.length > 2 ? i18n._(msg`${summary}等`) : summary || i18n._(msg`调用工具`);
+  const label = ordered.map(([bucket, count]) => `${RUN_VERB[bucket]} ${count}`).join(' · ') || 'Tool';
   const top = ordered[0]?.[0] ?? 'other';
   return { label, kind: top };
 }

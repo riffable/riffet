@@ -202,16 +202,24 @@ private final class UpdateChannels: NSObject, SPUUpdaterDelegate {
 /// chosen. The session list carries no first message or summary, and an index must not cost a request.
 @MainActor
 enum SpotlightIndex {
-    private static var indexed: [String: String] = [:]
     private static var pending: (sessions: [Session], projects: [Project])?
-    private static let domain = "io.github.riffable.sessions"
+    private static var started = false
+    private nonisolated static let domain = "io.github.riffable.sessions"
+    /// Reading every conversation's fields and building the items took tens of milliseconds on the
+    /// main thread every few seconds while a turn ran; the list's objects are immutable, so the work
+    /// runs here. [indexed] is touched only on this queue.
+    private nonisolated static let queue = DispatchQueue(label: "riffet.spotlight", qos: .utility)
+    private nonisolated(unsafe) static var indexed: [String: String] = [:]
 
     /// Forgets everything indexed: the server was left, forgotten or replaced, and its conversations
     /// must not stay searchable.
     static func clear() {
-        indexed = [:]
         pending = nil
-        CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain])
+        started = false
+        queue.async {
+            indexed = [:]
+            CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain])
+        }
     }
 
     /// Indexes at most every few seconds: the list changes on every frame of a running turn.
@@ -219,16 +227,19 @@ enum SpotlightIndex {
         let idle = pending == nil
         pending = (sessions, projects)
         guard idle else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + (indexed.isEmpty ? 1 : 5)) {
+        let delay: Double = started ? 5 : 1
+        started = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             MainActor.assumeIsolated {
                 guard let next = pending else { return }
                 pending = nil
-                update(sessions: next.sessions, projects: next.projects)
+                nonisolated(unsafe) let sessions = next.sessions, projects = next.projects
+                queue.async { update(sessions: sessions, projects: projects) }
             }
         }
     }
 
-    static func update(sessions: [Session], projects: [Project]) {
+    private nonisolated static func update(sessions: [Session], projects: [Project]) {
         let names = Dictionary(projects.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         var items: [CSSearchableItem] = []
         var current: [String: String] = [:]

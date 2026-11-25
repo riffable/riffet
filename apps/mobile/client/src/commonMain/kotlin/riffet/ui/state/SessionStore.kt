@@ -751,7 +751,9 @@ class SessionStore(
     fun listsChanged(data: String?) {
         val revision = data?.let { Regex("\"revision\"\\s*:\\s*(\\d+)").find(it)?.groupValues?.get(1)?.toLongOrNull() }
         val projects = data?.let { Regex("\"projects\"\\s*:\\s*(\\d+)").find(it)?.groupValues?.get(1)?.toLongOrNull() }
+        val workItems = data?.let { Regex("\"workItems\"\\s*:\\s*(\\d+)").find(it)?.groupValues?.get(1)?.toLongOrNull() }
         lists.refreshProjects(projects)
+        if (workItems != null) lists.refreshWorkItems(workItems)
         if (!lists.listsMoved(revision)) return
         scope.launch {
             try {

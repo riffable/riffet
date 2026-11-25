@@ -80,9 +80,9 @@ fun visibleGroups(
         .filter { showArchived || it.archivedAt == null }
         .filter { it.projectId in projectMap }
         .groupBy { projectMap.getValue(it.projectId).id }
-    return projectMap.values.distinctBy { it.id }
+    val groups = projectMap.values.distinctBy { it.id }
         .mapNotNull { project ->
-            val scoped = byProject[project.id].orEmpty().sortedWith(sessionOrder)
+            val scoped = sortSessions(byProject[project.id].orEmpty())
             val projectHit = matchesProject(project, needle)
             val visible = if (projectHit) scoped else scoped.filter { matchesSession(it, needle) }
             if ((!projectHit || project.id == PROJECTLESS_GROUP_ID) && visible.isEmpty()) {
@@ -91,7 +91,11 @@ fun visibleGroups(
                 ProjectGroup(project, visible, forceOpen = needle.isNotEmpty() && !projectHit)
             }
         }
-        .sortedWith(projectOrder)
+    // Each group's keys are read once, not on every comparison (a group's newest activity is a scan of it).
+    return groups
+        .map { group -> Triple(group, newestActivity(group), instant(group.project.updatedAt)) }
+        .sortedWith(compareByDescending<Triple<ProjectGroup, Long, Long>> { it.second }.thenByDescending { it.third })
+        .map { it.first }
 }
 
 /** One label band of the time layout: the shape `Sidebar.tsx`'s `timeline` memo builds. */
@@ -155,8 +159,8 @@ fun timeBuckets(
             needle.isEmpty() ||
                 "${session.shownTitle} ${session.tags.joinToString(" ")} ${project.name}".lowercase().contains(needle)
         }
-        .sortedWith(sessionOrder)
 
+    // `timeBands` orders them; sorting here as well sorted the list twice.
     return timeBands(matches, dayStartMillis)
 }
 
@@ -168,7 +172,7 @@ fun timeBuckets(
 fun timeBands(sessions: List<Session>, dayStartMillis: Long): List<TimeBucket> {
     val labels = mutableListOf<String>()
     val bands = mutableListOf<MutableList<Session>>()
-    for (session in sessions.sortedWith(sessionOrder)) {
+    for (session in sortSessions(sessions)) {
         val label = timeBucketLabel(session, dayStartMillis)
         if (labels.lastOrNull() != label) {
             labels.add(label)
@@ -246,17 +250,6 @@ fun isUnread(session: Session): Boolean {
 /** Finished, failed or stopped with output the owner has not seen yet: the rows the Unread filter lists. */
 fun isDoneUnseen(session: Session): Boolean =
     (session.state == SessionState.IDLE || session.state == SessionState.FAILED || session.state == SessionState.INTERRUPTED) && isUnread(session)
-
-private val sessionOrder = Comparator<Session> { a, b -> compareSessions(a, b) }
-
-private val projectOrder = Comparator<ProjectGroup> { a, b ->
-    val byActivity = newestActivity(b).compareTo(newestActivity(a))
-    if (byActivity != 0) {
-        byActivity
-    } else {
-        instant(b.project.updatedAt).compareTo(instant(a.project.updatedAt))
-    }
-}
 
 /** The project's newest conversation activity; a project with no visible sessions ranks last. */
 private fun newestActivity(group: ProjectGroup): Long =

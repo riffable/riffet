@@ -8,7 +8,6 @@ import RiffetKit
 struct CustomSidebar: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
-    @Environment(\.customSidebarPeeking) private var peeking
     @AppStorage(WorkbenchSidebar.collapsedProjectsKey) private var collapsed = ""
     @State private var renaming: Session?
     @State private var renameText = ""
@@ -41,14 +40,7 @@ struct CustomSidebar: View {
 
     // MARK: Header
 
-    private func toggleButton() -> some View {
-        Button { NotificationCenter.default.post(name: .riffetToggleSidebar, object: workbench) } label: {
-            Image(icon: peeking ? "pin" : "sidebar.left")
-        }
-        .buttonStyle(IconButtonStyle())
-        .help(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
-        .accessibilityLabel(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
-    }
+    private func toggleButton() -> some View { SidebarToggleButton(workbench: workbench) }
 
     /// The top row runs level with the traffic lights (`CustomChrome.titleRow`).
     private func headerHeight(_ style: StyleSpec) -> CGFloat { CustomChrome.titleRow(style) }
@@ -87,7 +79,8 @@ struct CustomSidebar: View {
     }
 
     private func treeActions(_ style: StyleSpec) -> some View {
-        VStack(spacing: Space.xxs) {
+        // The same height and pitch as the conversations below, as on the web.
+        VStack(spacing: 0) {
             CustomNavRow(symbol: "square.and.pencil", title: String(localized: "新会话"), style: style) { workbench.showHome() }
                 .help("新会话 (⌘N)")
             CustomNavRow(symbol: "magnifyingglass", title: String(localized: "搜索内容"), trailing: "⌘K", style: style) {
@@ -199,7 +192,7 @@ struct CustomSidebar: View {
             lines.append(.project(group, open: open))
             guard open else { continue }
             let slice = workbench.sidebar.slice(for: group)
-            lines += slice.sessions.map { .session($0, indented: true) }
+            lines += slice.sessions.map { .session($0) }
             if slice.hiddenCount > 0 { lines.append(.expand(group, hidden: slice.hiddenCount)) }
             else if slice.canCollapse { lines.append(.collapse(group)) }
             if group.sessions.isEmpty { lines.append(.empty(group)) }
@@ -240,7 +233,7 @@ struct CustomSidebar: View {
         var lines: [SidebarLine] = []
         for (index, bucket) in buckets.enumerated() where !bucket.sessions.isEmpty {
             lines.append(.label(bucket.label, first: index == 0))
-            lines += bucket.sessions.map { .session($0, indented: false) }
+            lines += bucket.sessions.map { .session($0) }
         }
         return lines
     }
@@ -268,23 +261,23 @@ struct CustomSidebar: View {
             }
         case .empty:
             Text("暂无会话").font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4)
-                .padding(.leading, Space.sm + Space.xxs + 16 + Space.sm)
+                .padding(.leading, Space.sm + 16 + Space.sm)
                 .frame(height: style.layout.sidebarRow)
-        case let .session(session, indented):
-            sessionRow(session, style: style, indented: indented)
+        case let .session(session):
+            sessionRow(session, style: style)
         }
     }
 
     // MARK: Rows
 
-    private func sessionRow(_ session: Session, style: StyleSpec, indented: Bool) -> some View {
+    private func sessionRow(_ session: Session, style: StyleSpec) -> some View {
         let project = workbench.project(session.projectId)
         let now = Int64(workbench.minute.timeIntervalSince1970 * 1000)
         return CustomSessionRow(
             session: session,
             info: { sessionHoverInfo(session: session, project: project?.name, models: workbench.catalogs.cached(for: session)?.models ?? [], now: now) },
             selected: workbench.sidebarRowSelected(session),
-            indented: indented,
+            taskStatus: session.workItemId.flatMap { workbench.sidebar.taskStatuses[$0] },
             activity: relativeLabel(value: activityAt(session: session), now: now),
             style: style,
             menu: workbench.sidebarRowMenu(for: session, rename: { renameText = session.title; renaming = session }, editTags: { taggingSession = session }),
@@ -313,6 +306,27 @@ struct CustomSidebar: View {
     }
 }
 
+extension CustomSidebar: Equatable {
+    /// Everything it shows comes from the workbench it observes and its own state.
+    nonisolated static func == (lhs: CustomSidebar, rhs: CustomSidebar) -> Bool { lhs.workbench === rhs.workbench }
+}
+
+/// The header's toggle, a pin while the sidebar peeks. It reads the peeking state itself: read in
+/// `CustomSidebar`, every open or close re-evaluated the whole list in the animation's first frame.
+private struct SidebarToggleButton: View {
+    let workbench: Workbench
+    @Environment(\.customSidebarPeeking) private var peeking
+
+    var body: some View {
+        Button { NotificationCenter.default.post(name: .riffetToggleSidebar, object: workbench) } label: {
+            Image(icon: peeking ? "pin" : "sidebar.left")
+        }
+        .buttonStyle(IconButtonStyle())
+        .help(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
+        .accessibilityLabel(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
+    }
+}
+
 /// The filter button. Each place it appears (the project tree's title, the first time label) owns
 /// its anchor: switching the arrangement swaps one for the other, and a shared anchor would be left
 /// pointing at the one that went away.
@@ -335,7 +349,7 @@ private enum SidebarLine: Identifiable {
     case expand(ProjectGroup, hidden: Int)
     case collapse(ProjectGroup)
     case empty(ProjectGroup)
-    case session(Session, indented: Bool)
+    case session(Session)
 
     var id: String {
         switch self {
@@ -344,7 +358,7 @@ private enum SidebarLine: Identifiable {
         case let .expand(group, _): "expand:" + group.project.id
         case let .collapse(group): "collapse:" + group.project.id
         case let .empty(group): "empty:" + group.project.id
-        case let .session(session, _): session.id
+        case let .session(session): session.id
         }
     }
 }

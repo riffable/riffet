@@ -219,7 +219,7 @@
 | 底部面板 | 移动端的底部面板 | `cubic-bezier(0.32, 0.72, 0, 1)` |
 
 - Android 的 ios 风格用 `cubic-bezier(0.25, 0.1, 0.25, 1)`，与 material3 的标准曲线不同，这是风格差异，不是漂移。
-- Mac 用 SwiftUI 的 `snappy` / `smooth`，iOS 用弹簧（`RiffetMotion`）。弹簧不换算成贝塞尔，按平台习惯，档位与上表对应。
+- Mac 用 SwiftUI 的 `snappy` / `smooth`，iOS 用弹簧（`RiffetMotion`）。弹簧不换算成贝塞尔，按平台习惯，档位与上表对应。例外是整列滑动（Mac 的侧栏开合、内容区跟随）：行程长，弹簧收尾的逐像素爬行很显眼，用 `Motion.slide`（`medium` 时长、`standard` 曲线），准时停下。
 
 ### 7.3 规则
 

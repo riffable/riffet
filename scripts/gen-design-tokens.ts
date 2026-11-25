@@ -149,9 +149,15 @@ const outputs: Record<string, (text: string, file: string) => string> = {
   },
   'apps/macos/Riffet/Theme/Controls.swift': (text, file) => {
     text = swift(file, text, 'motion', [
-      '/// The three animation tiers (docs/design/macos-native.md 3.1); nothing in the app picks a free duration.',
+      '/// The animation tiers (docs/design/macos-native.md 3.1); nothing in the app picks a free duration.',
       'enum Motion {',
-      ...Object.entries(MAC_MOTION).flatMap(([tier, { spring, duration, use }]) => [`    /// ${use}`, `    static let ${tier} = Animation.${spring}(duration: ${MOTION_DURATION[duration] / 1000})`]),
+      ...Object.entries(MAC_MOTION).flatMap(([tier, motion]) => {
+        const seconds = MOTION_DURATION[motion.duration] / 1000;
+        const animation = 'spring' in motion
+          ? `Animation.${motion.spring}(duration: ${seconds})`
+          : `Animation.timingCurve(${MOTION_EASING[motion.curve].join(', ')}, duration: ${seconds})`;
+        return [`    /// ${motion.use}`, `    static let ${tier} = ${animation}`];
+      }),
       '}',
     ]);
     return swift(file, text, 'space', [

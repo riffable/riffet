@@ -11,6 +11,7 @@ import riffet.contracts.SessionControlSnapshot
 import riffet.contracts.Project
 import riffet.contracts.Run
 import riffet.contracts.Session
+import riffet.contracts.WorkItemSummary
 import riffet.core.StoredSubagent
 
 /** The project/session list, from `GET /api/bootstrap` or, until that answers, from the device. */
@@ -29,6 +30,8 @@ data class SessionListState(
     val cachedAt: Long? = null,
     /** The server deletes conversations (`session-delete-v1`); learned from the bootstrap. */
     val canDeleteSessions: Boolean = false,
+    /** Task summaries, matched to conversations by `Session.workItemId`; null when unknown or the server has no task board. */
+    val workItems: List<WorkItemSummary>? = null,
 )
 
 /** The lifecycle of the one native stream this store holds open. */

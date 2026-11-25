@@ -124,10 +124,6 @@ msgstr ""
 msgid "{skipped} 行未改动"
 msgstr ""
 
-#: src/app/session/toolView.ts
-msgid "{summary}等"
-msgstr ""
-
 #: src/app/session/Markdown.tsx
 msgid "{title} · 预览不可用"
 msgstr ""
@@ -405,10 +401,6 @@ msgstr ""
 
 #: src/app/session/Attempts.tsx
 msgid "保留"
-msgstr ""
-
-#: src/app/session/toolView.ts
-msgid "修改 {count} 个文件"
 msgstr ""
 
 #: src/app/session/Activities.tsx
@@ -1243,10 +1235,6 @@ msgstr ""
 msgid "提问节选：{content}"
 msgstr ""
 
-#: src/app/session/toolView.ts
-msgid "搜索 {count} 次"
-msgstr ""
-
 #: src/app/session/ComposerMenus.tsx
 msgid "搜索中…"
 msgstr ""
@@ -2009,10 +1997,6 @@ msgstr ""
 msgid "计划"
 msgstr ""
 
-#: src/app/session/toolView.ts
-msgid "访问 {count} 个页面"
-msgstr ""
-
 #: src/app/session/DictationBar.tsx
 msgid "识别失败：{message}"
 msgstr ""
@@ -2048,16 +2032,8 @@ msgstr ""
 msgid "请重新选择文件"
 msgstr ""
 
-#: src/app/session/toolView.ts
-msgid "读取 {count} 个文件"
-msgstr ""
-
 #: src/app/session/marks.tsx
 msgid "读取图片失败"
-msgstr ""
-
-#: src/app/session/toolView.ts
-msgid "调用 {count} 次工具"
 msgstr ""
 
 #: src/app/session/agentCalls.tsx
@@ -2066,10 +2042,6 @@ msgstr ""
 
 #: src/app/session/ToolsPicker.tsx
 msgid "调用其他 Agent"
-msgstr ""
-
-#: src/app/session/toolView.ts
-msgid "调用工具"
 msgstr ""
 
 #. placeholder {0}: usage.cost.currency
@@ -2122,10 +2094,6 @@ msgstr ""
 
 #: src/app/session/TimelineTools.tsx
 msgid "输出过大，只显示末尾"
-msgstr ""
-
-#: src/app/session/toolView.ts
-msgid "运行 {count} 条命令"
 msgstr ""
 
 #: src/app/session/Attempts.tsx

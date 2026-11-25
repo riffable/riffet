@@ -4,7 +4,9 @@ import RiffetKit
 struct WorkbenchView: View {
     @Bindable var workbench: Workbench
     @Environment(\.palette) private var palette
-    @State private var columns: NavigationSplitViewVisibility
+    /// Whether the drawn sidebar shows. Not read in this body: a toggle would rebuild the whole
+    /// workspace in the slide's first frame. `CustomWorkbench`, the header and the panel's handle read it.
+    @State private var sidebarState: SidebarState
     /// The panel opening, not the reader, hid the sidebar; closing the panel then shows it again.
     @State private var sidebarAutoCollapsed = false
     /// The sidebar as the reader left it, restored at launch.
@@ -15,9 +17,6 @@ struct WorkbenchView: View {
     @State private var shownSessionId: String?
     @State private var width: CGFloat = 1360
     @State private var detailHeight: CGFloat = 800
-    /// The conversation column's width as last laid out, read when the panel changes. A box, not
-    /// state: a window resize writes it every frame, and nothing draws from it.
-    @State private var detailWidth = ColumnWidthBox()
     /// The side panel's width as the reader dragged it; 0 until then, when the style's own applies.
     @AppStorage("riffet.inspector-width") private var storedInspectorWidth: Double = 0
     @AppStorage("riffet.terminal-height") private var terminalHeight: Double = 240
@@ -27,15 +26,14 @@ struct WorkbenchView: View {
     /// The drawn sidebar's width, which the panel's room is reckoned against there.
     @AppStorage(CustomChrome.sidebarWidthKey) private var customSidebarWidth: Double = 0
     /// The side panel's space beside the conversation. It follows `inspectorShown` in the same update
-    /// in which a narrow window's sidebar yields to the panel, so the transcript changes width once.
+    /// in which a narrow window's sidebar yields to the panel, so both move on one curve.
     @State private var panelReserved: Bool
     /// The panel's last change came from its own toggle, not from a page or conversation covering
     /// or uncovering it: only that one slides.
     @State private var panelSlides = false
-    /// How far the conversation is drawn from where its column now puts it, while the panel slides:
-    /// the column takes its new width in one step, and the content glides there with the panel
-    /// instead of jumping ahead of it.
-    @State private var panelShift: CGFloat = 0
+    /// The terminal dock's space below the conversation, following `terminalProject` the same way.
+    @State private var terminalReserved = false
+    @State private var terminalSlides = false
     /// The service alert's height above the content, which a page rising over the header passes.
     @State private var bannerHeight: CGFloat = 0
 
@@ -43,8 +41,9 @@ struct WorkbenchView: View {
         _workbench = Bindable(workbench)
         // A conversation window has no sidebar: its layout stays on the detail column.
         let visible = workbench.role == .main && (UserDefaults.standard.object(forKey: "riffet.sidebar-visible") as? Bool ?? true)
-        _columns = State(initialValue: visible ? .all : .detailOnly)
+        _sidebarState = State(initialValue: SidebarState(shown: visible))
         _panelReserved = State(initialValue: Self.panelShown(in: workbench) && !UserDefaults.standard.bool(forKey: InspectorFloat.floatingKey))
+        _terminalReserved = State(initialValue: Self.terminalProject(in: workbench) != nil)
     }
 
     /// The view is a conversation window (`Workbench.Role.window`): the conversation, its panel and
@@ -73,6 +72,21 @@ struct WorkbenchView: View {
         var floating = false
     }
 
+    /// Whether the terminal dock shows, with what besides its own toggle decides it.
+    private struct TerminalPlacement: Equatable {
+        var shown: Bool
+        var page: WorkbenchPage?
+        var terminalPage: Bool
+        var project: String?
+    }
+
+    private var terminalPlacement: TerminalPlacement {
+        TerminalPlacement(
+            shown: terminalProject != nil, page: workbench.page, terminalPage: workbench.showsTerminalPage,
+            project: workbench.currentProject?.id
+        )
+    }
+
     private var panelPlacement: PanelPlacement {
         PanelPlacement(
             shown: inspectorShown && !floating, page: workbench.page, attempts: workbench.attemptGroupSelection != nil,
@@ -89,7 +103,7 @@ struct WorkbenchView: View {
             if isWindow {
                 workspace.toolbar { toolbar }.toolbarBackgroundVisibility(toolbarBackground, for: .windowToolbar)
             } else {
-                CustomWorkbench(workbench: workbench, sidebarShown: columns != .detailOnly) {
+                CustomWorkbench(workbench: workbench, sidebar: sidebarState) {
                     workspace
                 }
             }
@@ -112,42 +126,32 @@ struct WorkbenchView: View {
             let shown = new.shown
             // Sidebar, transcript and inspector do not all fit a narrow window; the sidebar yields,
             // and comes back only if the panel took it away, not if the reader had hidden it.
-            var sidebarMoved = false
+            // `sidebarMoved`: the sidebar folds (true) or comes back (false) with the panel.
+            var sidebarMoved: Bool?
             if shown {
-                if width < sidebarColumnWidth + 420 + inspectorWidth, columns != .detailOnly {
-                    sidebarMoved = true
-                    sidebarAutoCollapsed = true
-                    columns = .detailOnly
-                }
+                if width < sidebarColumnWidth + 420 + inspectorWidth, sidebarState.shown { sidebarMoved = true }
             } else if sidebarAutoCollapsed {
-                sidebarMoved = true
-                sidebarAutoCollapsed = false
-                columns = .all
+                sidebarMoved = false
             }
             // Only the reader's toggle slides; a page or another conversation shows or hides it at once.
             var toggled = old
             toggled.shown = shown
             let slides = toggled == new
             if slides != panelSlides { panelSlides = slides }
-            panelReserved = shown
-            // The reading column starts where it was and follows the panel: it moves by as much as its
-            // centring moves, half the panel's room while it has that much slack, less (or nothing)
-            // when it already fills the column. A sidebar folding in the same step snaps instead.
-            if slides, !maximized, !reduceMotion, !sidebarMoved {
-                let reading = CGFloat(DisplayPreferences.shared.contentWidth) + TranscriptStyle.gutterWidth * 2
-                let before = detailWidth.value
-                let after = before + (shown ? -panelRoom : panelRoom)
-                let shift = max(0, (before - reading) / 2) - max(0, (after - reading) / 2)
-                if abs(shift) > 0.5 {
-                    panelShift = shift
-                    DispatchQueue.main.async { withAnimation(panelAnimation) { panelShift = 0 } }
-                }
+            // The conversation's column follows the panel frame by frame, as it follows the sidebar.
+            let change = {
+                if let sidebarMoved { setSidebar(!sidebarMoved, auto: true) }
+                panelReserved = shown
             }
+            if slides, !reduceMotion { slide(change) } else { change() }
         }
-        .onChange(of: columns) { _, columns in
-            // Showing the sidebar by hand ends the automatic collapse; only the reader's choice is kept.
-            if sidebarAutoCollapsed, columns != .detailOnly { sidebarAutoCollapsed = false }
-            if !sidebarAutoCollapsed { sidebarVisible = columns != .detailOnly }
+        .onChange(of: terminalPlacement) { old, new in
+            guard old.shown != new.shown else { return }
+            var toggled = old
+            toggled.shown = new.shown
+            let slides = toggled == new
+            if slides != terminalSlides { terminalSlides = slides }
+            if slides, !reduceMotion { slide { terminalReserved = new.shown } } else { terminalReserved = new.shown }
         }
         .disabled(searchPresented || importRequest != nil)
         .accessibilityHidden(searchPresented || importRequest != nil)
@@ -248,10 +252,9 @@ struct WorkbenchView: View {
     }
 
     /// The conversation or page with the side panel and the terminal dock: the split view's detail
-    /// column, or the whole of a conversation window. The panel and the dock take their space in one
-    /// step and slide over it (or, closing, over the conversation that has already taken the space
-    /// back): every frame of a width or height animation would re-measure the whole transcript and
-    /// composer, which takes seconds on a long conversation.
+    /// column, or the whole of a conversation window. The panel and the dock slide in as the
+    /// conversation's column gives them room, on the sidebar's curve: while the reading column keeps
+    /// its width the transcript only moves its rows, and a narrower one is laid out off the main thread.
     private var workspace: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -274,17 +277,14 @@ struct WorkbenchView: View {
                     .accessibilityHidden(coverRise > 0)
                 detail
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Drawn shifted, not laid out again: an offset moves the rendered column only.
-                    .offset(x: panelShift)
                     .overlay { floatingPanel }
-                if terminalProject != nil {
-                    PanelResizeHandle(size: $terminalHeight, limit: terminalHeightLimit, minimum: 140, axis: .vertical)
-                    Color.clear.frame(height: terminalPanelHeight)
+                if terminalReserved {
+                    PanelResizeHandle(size: $terminalHeight, limit: { terminalHeightLimit }, minimum: 140, axis: .vertical)
                 }
+                Color.clear.frame(height: terminalReserved ? terminalPanelHeight : 0)
             }
                 .overlay(alignment: .bottom) { terminalDock }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { detailHeight = $0 }
-                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { detailWidth.value = $0 }
                 .frame(minWidth: 420, maxWidth: .infinity, maxHeight: .infinity)
                 .background { if !drawn { canvasBackdrop } }
                 .modifier(CustomCard(drawn: drawn))
@@ -293,13 +293,11 @@ struct WorkbenchView: View {
                 .opacity(maximized ? 0 : 1)
                 .allowsHitTesting(!maximized)
                 .accessibilityHidden(maximized)
-            if panelReserved {
-                // Painted up under the toolbar like the conversation's own canvas: otherwise the
-                // window's glass shows there until the panel has slid in over it.
-                Color.clear
-                    .frame(width: panelRoom)
-                    .background { if !drawn { canvasBackdrop } }
-            }
+            // Painted up under the toolbar like the conversation's own canvas: otherwise the
+            // window's glass shows there until the panel has slid in over it.
+            Color.clear
+                .frame(width: panelReserved ? panelRoom : 0)
+                .background { if !drawn && panelReserved { canvasBackdrop } }
         }
         .overlay(alignment: .trailing) { sidePanel }
     }
@@ -311,7 +309,7 @@ struct WorkbenchView: View {
 
     /// The drawn title bar over the conversation's column.
     private var customHeader: some View {
-        CustomHeader(workbench: workbench, sidebarShown: columns != .detailOnly) { runtimeNotice }
+        CustomHeader(workbench: workbench) { runtimeNotice }
     }
 
     /// A clear window gets a separate titlebar fill from the system; hiding it lets the canvas run up
@@ -358,7 +356,7 @@ struct WorkbenchView: View {
             if panelReserved {
                 HStack(spacing: 0) {
                     if !maximized {
-                        PanelResizeHandle(size: Binding(get: { inspectorWidth }, set: { storedInspectorWidth = $0 }), limit: max(300, width - 420 - (columns == .detailOnly ? 0 : sidebarColumnWidth)), drawn: !drawn)
+                        PanelResizeHandle(size: Binding(get: { inspectorWidth }, set: { storedInspectorWidth = $0 }), limit: { [sidebarState] in max(300, width - 420 - (sidebarState.shown ? sidebarColumnWidth : 0)) }, drawn: !drawn)
                             .frame(width: drawn ? Space.sm : 1)
                     }
                     InspectorView(workbench: workbench, tab: inspectorTab, maximized: maximized, toggleFloating: {
@@ -374,12 +372,14 @@ struct WorkbenchView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
-        // Only the panel's own insertion and removal animate: a transform, no layout per frame.
+        // Only the panel's own toggle animates it; a page covering it takes it away at once.
         .transaction(value: panelReserved) { $0.animation = animation }
     }
 
     /// The bottom terminal of the current project, when it is on screen.
-    private var terminalProject: Project? {
+    private var terminalProject: Project? { Self.terminalProject(in: workbench) }
+
+    private static func terminalProject(in workbench: Workbench) -> Project? {
         guard workbench.terminalDock.shown, workbench.page == nil, !workbench.showsTerminalPage else { return nil }
         return workbench.currentProject
     }
@@ -387,8 +387,9 @@ struct WorkbenchView: View {
     private var terminalPanelHeight: CGFloat { min(max(terminalHeight, 140), terminalHeightLimit) }
 
     private var terminalDock: some View {
-        let project = terminalProject
-        let animation = panelAnimation
+        // Closing, it keeps its project until its room goes, so that it leaves on the same curve.
+        let project = terminalReserved ? terminalProject ?? workbench.currentProject : nil
+        let animation = terminalSlides ? panelAnimation : nil
         return ZStack(alignment: .bottom) {
             if let project {
                 TerminalPanel(workbench: workbench, project: project, session: workbench.showingHome ? nil : workbench.selected)
@@ -407,7 +408,7 @@ struct WorkbenchView: View {
         reduceMotion ? .opacity : .move(edge: edge)
     }
 
-    private var panelAnimation: Animation { .snappy(duration: reduceMotion ? 0.15 : 0.22) }
+    private var panelAnimation: Animation { reduceMotion ? Motion.fast : CustomChrome.sidebarMotion }
 
     private var maximized: Bool { workbench.inspectorMaximized && !floating }
 
@@ -429,10 +430,33 @@ struct WorkbenchView: View {
         return workbench.showsTerminalPage ? "terminal" : "transcript"
     }
 
+    /// The reader's toggle: the sidebar and the content move together on one curve. The transcript
+    /// only shifts its rows while its reading column keeps its width, so the frames stay cheap.
+    /// Reduced motion: the content takes its place at once and the sidebar fades.
     private func toggleSidebar() {
         guard !isWindow else { return }
-        sidebarAutoCollapsed = false
-        columns = columns == .detailOnly ? .all : .detailOnly
+        setSidebar(!sidebarState.shown, auto: false, animated: !reduceMotion)
+    }
+
+    /// Shows or hides the sidebar. [auto]: the panel's room decided it, and only the reader's own
+    /// choice is remembered for the next launch; showing it again ends the automatic collapse.
+    /// [animated]: the slide, during which the moving views take no pointer (their hover regions
+    /// would be hit-tested again on every frame).
+    private func setSidebar(_ shown: Bool, auto: Bool, animated: Bool = false) {
+        sidebarAutoCollapsed = auto && !shown
+        if !sidebarAutoCollapsed { sidebarVisible = shown }
+        let state = sidebarState
+        if animated { slide { state.shown = shown } } else { state.shown = shown }
+    }
+
+    /// Runs [change] on the sidebar's curve; the window's views take no pointer until it settles.
+    private func slide(_ change: () -> Void) {
+        let state = sidebarState
+        let slide = state.beginSlide()
+        withAnimation(CustomChrome.sidebarMotion, completionCriteria: .logicallyComplete, change) {
+            state.endSlide(slide)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { MainActor.assumeIsolated { state.endSlide(slide) } }
     }
 
     /// The open conversation stays built under the home page and the one-level pages once it has been
@@ -877,11 +901,6 @@ struct SessionTitleView: View {
             Text("出错").foregroundStyle(palette.danger).fadesIn()
         }
     }
-}
-
-/// A width kept for reading, outside SwiftUI's change tracking.
-private final class ColumnWidthBox {
-    var value: CGFloat = 800
 }
 
 /// Subagents and background tasks of the open conversation (`SessionWorkActions.tsx`), as sections
@@ -1546,7 +1565,8 @@ extension DisplayPreferences {
 /// The divider for the side inspector or bottom terminal dock.
 struct PanelResizeHandle: View {
     @Binding var size: Double
-    let limit: CGFloat
+    /// The largest size, read as the drag starts and moves rather than when the view is built.
+    let limit: () -> CGFloat
     var minimum: Double = 300
     var axis: Axis = .horizontal
     /// Off between two cards: the gap is the edge, and only the pointer shows it can be dragged.
@@ -1570,17 +1590,17 @@ struct PanelResizeHandle: View {
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { value in
-                        let origin = start ?? min(max(size, minimum), Double(limit))
+                        let origin = start ?? min(max(size, minimum), Double(limit()))
                         start = origin
                         let translation = axis == .horizontal ? value.translation.width : value.translation.height
-                        size = min(max(origin - translation, minimum), Double(limit))
+                        size = min(max(origin - translation, minimum), Double(limit()))
                     }
                     .onEnded { _ in start = nil }
             )
             .accessibilityElement()
             .accessibilityLabel(axis == .horizontal ? "检查器宽度" : "终端高度")
             .accessibilityAdjustableAction { direction in
-                size = min(max(size + (direction == .increment ? 20 : -20), minimum), Double(limit))
+                size = min(max(size + (direction == .increment ? 20 : -20), minimum), Double(limit()))
             }
     }
 }

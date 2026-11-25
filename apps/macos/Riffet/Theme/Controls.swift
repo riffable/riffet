@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 // BEGIN GENERATED motion (scripts/gen-design-tokens.ts)
-/// The three animation tiers (docs/design/macos-native.md 3.1); nothing in the app picks a free duration.
+/// The animation tiers (docs/design/macos-native.md 3.1); nothing in the app picks a free duration.
 enum Motion {
     /// Hover, press, a check, an icon changing shape.
     static let fast = Animation.snappy(duration: 0.15)
@@ -10,6 +10,8 @@ enum Motion {
     static let standard = Animation.snappy(duration: 0.2)
     /// Panels, a sidebar's content, sheets, the search panel.
     static let expressive = Animation.smooth(duration: 0.3)
+    /// A column sliding beside the content (the sidebar, with the content following): ends on time, no settle.
+    static let slide = Animation.timingCurve(0.2, 0, 0, 1, duration: 0.25)
 }
 // END GENERATED motion
 
@@ -177,17 +179,20 @@ struct IconButtonStyle: ButtonStyle {
     var size: CGFloat = 26
     /// The place this button leads to is the one on screen.
     var active = false
+    /// A round wash, for a label that is itself round (an avatar).
+    var round = false
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
-        IconBody(configuration: configuration, size: size, active: active, palette: palette, enabled: enabled)
+        IconBody(configuration: configuration, size: size, active: active, round: round, palette: palette, enabled: enabled)
     }
 
     private struct IconBody: View {
         let configuration: Configuration
         let size: CGFloat
         let active: Bool
+        let round: Bool
         let palette: Palette
         let enabled: Bool
         @State private var hovering = false
@@ -198,7 +203,7 @@ struct IconButtonStyle: ButtonStyle {
                 .foregroundStyle(enabled ? (hovering || active ? palette.fg : palette.fg3) : palette.fg4)
                 .frame(width: size, height: size)
                 .background(
-                    RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                    RoundedRectangle(cornerRadius: round ? size / 2 : Radius.control, style: .continuous)
                         .fill(configuration.isPressed || active ? palette.bgActive : hovering ? palette.bgHover : .clear)
                 )
                 .contentShape(Rectangle())

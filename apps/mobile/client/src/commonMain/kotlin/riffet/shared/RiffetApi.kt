@@ -31,6 +31,7 @@ import riffet.contracts.AgentIds
 import riffet.contracts.ApiError
 import riffet.contracts.AuthStatus
 import riffet.contracts.Bootstrap
+import riffet.contracts.WorkItemSummary
 import riffet.contracts.NativeBackendId
 import riffet.contracts.Session
 import riffet.contracts.TerminalInfo
@@ -92,6 +93,11 @@ class RiffetApi(
 
     @Throws(Exception::class)
     suspend fun bootstrap(): Bootstrap = get("/api/bootstrap").decode()
+
+    /** `GET /api/work-items`, reduced to what the conversation list shows; an older server answers 404. */
+    @Throws(Exception::class)
+    suspend fun workItemSummaries(): List<WorkItemSummary> =
+        get("/api/work-items").decode<WorkItemSummaryList>().items
 
     /** `POST /api/pairing/code`, authenticated by the current device token. */
     @Throws(Exception::class)
@@ -319,3 +325,6 @@ internal fun NativeBackendId.wire(): String = AgentIds.wire(this)
 
 /** Names the contract extensions this build understands; the server withholds the rest. */
 internal const val FeaturesHeader = "X-Riffet-Features"
+
+@kotlinx.serialization.Serializable
+internal class WorkItemSummaryList(val items: List<WorkItemSummary> = emptyList())

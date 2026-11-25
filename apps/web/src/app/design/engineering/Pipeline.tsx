@@ -10,7 +10,7 @@ const response = (stiffness: number) => Math.round((2 * Math.PI / Math.sqrt(stif
 
 /** Source lines and the lines `gen:tokens` writes from them, computed from the same constants. */
 function useTargets() {
-  const mac = (tier: keyof typeof MAC_MOTION) => `static let ${tier} = Animation.${MAC_MOTION[tier].spring}(duration: ${MOTION_DURATION[MAC_MOTION[tier].duration] / 1000})`;
+  const mac = (tier: 'fast' | 'standard') => `static let ${tier} = Animation.${MAC_MOTION[tier].spring}(duration: ${MOTION_DURATION[MAC_MOTION[tier].duration] / 1000})`;
   return {
     sources: [
       { file: 'design-tokens.ts', lines: [`standard: [${MOTION_EASING.standard.join(', ')}],`, `fast: ${MOTION_DURATION.fast},`, `spring: '${MAC_MOTION.fast.spring}', duration: 'fast',`] },

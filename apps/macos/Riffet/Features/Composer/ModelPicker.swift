@@ -72,12 +72,14 @@ struct ModelControls: View {
             }
             open.toggle()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Text(verbatim: modelLabel(catalog: activeModels, value: selection).ifEmpty("Select model"))
                     .lineLimit(1)
                     .frame(maxWidth: compact ? 120 : 220, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
+                // A size below the model's name, as on the web: the name and each setting read apart.
                 ForEach(params, id: \.id) { mark($0) }
+                    .font(.riffet(size: S(DisplayPreferences.shared.style.text.secondary - 1)))
                 if loading { Spinner(size: .mini) }
             }
         }

@@ -24,7 +24,8 @@ struct CustomSidebarFooter: View {
                         }
                     }
             }
-            .buttonStyle(IconButtonStyle())
+            // A ring around the avatar, as the web's `rounded-full`, not the square wash of the icon buttons.
+            .buttonStyle(IconButtonStyle(size: Space.xl + Space.xs, round: true))
             .background(MenuAnchorView(anchor: menuAnchor))
             .help(SidebarFooterSupport.menuHelp(workbench))
             .accessibilityLabel(SidebarFooterSupport.menuHelp(workbench))

@@ -95,7 +95,7 @@ final class Workbench {
         Workbench(store: host.installDetached(), host: host, baseURL: detachedURL, local: false, connected: false)
     }
 
-    private(set) var list = SessionListState(projects: [], sessions: [], settings: nil, backendRevision: 0, loading: false, loaded: false, error: nil, cachedAt: nil, canDeleteSessions: false)
+    private(set) var list = SessionListState(projects: [], sessions: [], settings: nil, backendRevision: 0, loading: false, loaded: false, error: nil, cachedAt: nil, canDeleteSessions: false, workItems: nil)
     /// The list's backend revision on its own: model catalogs follow it, not every list frame.
     private(set) var backendRevision: Int64 = 0
     /// The list's settings and projects on their own, written only when they change: a session

@@ -72,20 +72,6 @@
     <string name="timeline_terminal_output">Terminal output · %1$s</string>
 
     <!-- Tool runs -->
-    <string name="timeline_tool_run_count_read">Read %1$d files</string>
-    <string name="timeline_tool_run_count_read_one">Read 1 file</string>
-    <string name="timeline_tool_run_count_edit">Edited %1$d files</string>
-    <string name="timeline_tool_run_count_edit_one">Edited 1 file</string>
-    <string name="timeline_tool_run_count_search">%1$d searches</string>
-    <string name="timeline_tool_run_count_search_one">1 search</string>
-    <string name="timeline_tool_run_count_execute">Ran %1$d commands</string>
-    <string name="timeline_tool_run_count_execute_one">Ran 1 command</string>
-    <string name="timeline_tool_run_count_fetch">%1$d fetches</string>
-    <string name="timeline_tool_run_count_fetch_one">1 fetch</string>
-    <string name="timeline_tool_run_count_other">%1$d tool calls</string>
-    <string name="timeline_tool_run_count_other_one">1 tool call</string>
-    <string name="timeline_tool_run_pair">%1$s, %2$s</string>
-    <string name="timeline_tool_run_more">%1$s, and more</string>
 
     <!-- Turn process header -->
     <string name="timeline_process_working">Working · %1$s</string>

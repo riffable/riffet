@@ -315,7 +315,19 @@ data class ToolRunSummary(
     val primaryIcon: String,
     val totalAdded: Int,
     val totalRemoved: Int,
-)
+) {
+    /** The run's header, in the rows' own verbs: `Read 3 · Search 2` (web `toolRunSummary`). */
+    val title: String get() = counts.joinToString(" · ") { "${toolRunVerb(it.bucket)} ${it.count}" }.ifEmpty { "Tool" }
+}
+
+private fun toolRunVerb(bucket: String): String = when (bucket) {
+    "read" -> "Read"
+    "edit" -> "Edit"
+    "search" -> "Search"
+    "execute" -> "Run"
+    "fetch" -> "Fetch"
+    else -> "Tool"
+}
 
 private fun bucketForRow(row: ToolRowPresentation): String = when {
     row.verb == "List" -> "search"

@@ -124,10 +124,6 @@ msgstr "{running} active"
 msgid "{skipped} 行未改动"
 msgstr "{skipped} unchanged lines"
 
-#: src/app/session/toolView.ts
-msgid "{summary}等"
-msgstr "{summary}, and more"
-
 #: src/app/session/Markdown.tsx
 msgid "{title} · 预览不可用"
 msgstr "{title} · Preview unavailable"
@@ -406,10 +402,6 @@ msgstr "Side chat"
 #: src/app/session/Attempts.tsx
 msgid "保留"
 msgstr "Keep"
-
-#: src/app/session/toolView.ts
-msgid "修改 {count} 个文件"
-msgstr "{count, plural, one {# file edited} other {# files edited}}"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
@@ -1243,10 +1235,6 @@ msgstr "Request excerpt: {0}"
 msgid "提问节选：{content}"
 msgstr "Request excerpt: {content}"
 
-#: src/app/session/toolView.ts
-msgid "搜索 {count} 次"
-msgstr "{count, plural, one {# search} other {# searches}}"
-
 #: src/app/session/ComposerMenus.tsx
 msgid "搜索中…"
 msgstr "Searching…"
@@ -2009,10 +1997,6 @@ msgstr "Rules"
 msgid "计划"
 msgstr "Plan"
 
-#: src/app/session/toolView.ts
-msgid "访问 {count} 个页面"
-msgstr "{count, plural, one {# page fetched} other {# pages fetched}}"
-
 #: src/app/session/DictationBar.tsx
 msgid "识别失败：{message}"
 msgstr "Couldn't transcribe: {message}"
@@ -2048,17 +2032,9 @@ msgstr "Request didn't complete"
 msgid "请重新选择文件"
 msgstr "Select the file again"
 
-#: src/app/session/toolView.ts
-msgid "读取 {count} 个文件"
-msgstr "{count, plural, one {# file read} other {# files read}}"
-
 #: src/app/session/marks.tsx
 msgid "读取图片失败"
 msgstr "Couldn't read the image"
-
-#: src/app/session/toolView.ts
-msgid "调用 {count} 次工具"
-msgstr "{count, plural, one {# tool call} other {# tool calls}}"
 
 #: src/app/session/agentCalls.tsx
 msgid "调用 Agent"
@@ -2067,10 +2043,6 @@ msgstr "Call an Agent"
 #: src/app/session/ToolsPicker.tsx
 msgid "调用其他 Agent"
 msgstr "Call other Agents"
-
-#: src/app/session/toolView.ts
-msgid "调用工具"
-msgstr "Use tools"
 
 #. placeholder {0}: usage.cost.currency
 #. placeholder {1}: usage.cost.amount.toFixed(2)
@@ -2123,10 +2095,6 @@ msgstr "Output token count"
 #: src/app/session/TimelineTools.tsx
 msgid "输出过大，只显示末尾"
 msgstr "Output is too large; showing the end only"
-
-#: src/app/session/toolView.ts
-msgid "运行 {count} 条命令"
-msgstr "{count, plural, one {# command} other {# commands}}"
 
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx

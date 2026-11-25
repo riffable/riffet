@@ -177,6 +177,171 @@ struct SessionStateMark: View {
     }
 }
 
+/// The 16-wide slot before a sidebar conversation's title (web `SessionIndicator`, patterns.md 「侧栏导航」):
+/// one mark by priority — in the terminal, running, waiting, a failure or a result not yet seen, the
+/// task's status ring — so every title starts on the same line as the navigation labels.
+struct SessionLeadingMark: View {
+    let session: Session
+    let unread: Bool
+    /// The status of the task the conversation belongs to (`WorkItemSummary.status`).
+    let taskStatus: String?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let running = SessionStatePill.running(session.state)
+        // A ZStack, not a Group: a Group hands its frame to each child, and with no mark the slot
+        // would take no width and the title would slide left.
+        ZStack {
+            if session.terminalHold != nil {
+                Image(icon: "terminal")
+                    .font(.riffet(size: S(DisplayPreferences.shared.style.text.label - 1)))
+                    .foregroundStyle(palette.fg3)
+                    .help("在终端中")
+            } else if running, let taskStatus {
+                WorkItemStatusIcon(status: taskStatus, running: true)
+            } else if running {
+                Spinner(size: .mini).help("运行中").accessibilityLabel("运行中")
+            } else if session.state == .waiting {
+                dot(palette.warning)
+            } else if unread {
+                dot(session.state == .failed ? palette.danger : palette.accent).accessibilityLabel("未读")
+            } else if let taskStatus {
+                WorkItemStatusIcon(status: taskStatus)
+            }
+        }
+        .frame(width: 16, height: 16)
+    }
+
+    private func dot(_ color: Color) -> some View {
+        Circle().fill(color).frame(width: 7, height: 7)
+    }
+}
+
+/// A task's status ring (web `StatusIcon`, docs/TASK-BOARD.md §9): it fills as the work advances,
+/// each status in its own colour. `running`: the outer ring opens into an arc and turns around the
+/// still fill, so the row needs no spinner beside it.
+struct WorkItemStatusIcon: View {
+    let status: String
+    var running = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let tone = tone
+        ZStack {
+            if running {
+                TurningArc(color: NSColor(tone))
+            } else if status != "done" {
+                Circle().inset(by: 1.5)
+                    .stroke(tone, style: StrokeStyle(lineWidth: 1.25, dash: status == "todo" ? [1.4, 2] : []))
+            }
+            switch status {
+            case "doing": sector(to: 90).fill(tone)
+            case "review": sector(to: 180).fill(tone)
+            case "watching": Circle().fill(tone).frame(width: 4, height: 4)
+            case "done":
+                if !running { Circle().fill(tone).frame(width: 12.2, height: 12.2) }
+                check.stroke(running ? tone : palette.bg, style: StrokeStyle(lineWidth: 1.3, lineCap: .round, lineJoin: .round))
+            case "cancelled":
+                Path { $0.move(to: CGPoint(x: 4.6, y: 9.4)); $0.addLine(to: CGPoint(x: 9.4, y: 4.6)) }
+                    .stroke(tone, style: StrokeStyle(lineWidth: 1.25, lineCap: .round))
+            default: EmptyView()
+            }
+        }
+        .frame(width: 14, height: 14)
+        .accessibilityElement()
+        .accessibilityLabel(running ? "\(label) · \(String(localized: "运行中"))" : label)
+        .help(label)
+    }
+
+    /// The fill from twelve o'clock clockwise to [degrees] past three o'clock: half for 进行中, three quarters for 待验收.
+    private func sector(to degrees: Double) -> Path {
+        Path { path in
+            let center = CGPoint(x: 7, y: 7)
+            path.move(to: center)
+            path.addArc(center: center, radius: 3.4, startAngle: .degrees(-90), endAngle: .degrees(degrees), clockwise: false)
+            path.closeSubpath()
+        }
+    }
+
+    private var check: Path {
+        Path { path in
+            path.move(to: CGPoint(x: 4.5, y: 7.2))
+            path.addLine(to: CGPoint(x: 6.2, y: 8.9))
+            path.addLine(to: CGPoint(x: 9.6, y: 5.4))
+        }
+    }
+
+    private var tone: Color {
+        switch status {
+        case "doing": palette.accent
+        case "watching": palette.fg3
+        case "review": palette.warning
+        case "done": palette.success
+        default: palette.fg4
+        }
+    }
+
+    private var label: String {
+        switch status {
+        case "todo": String(localized: "待办")
+        case "doing": String(localized: "进行中")
+        case "watching": String(localized: "观测中")
+        case "review": String(localized: "待验收")
+        case "done": String(localized: "完成")
+        case "cancelled": String(localized: "无需关注")
+        default: status
+        }
+    }
+}
+
+/// The running status ring's open arc, turned by Core Animation: a repeating SwiftUI animation would
+/// redraw the whole window every frame (docs/MACOS.md「性能规范」P2).
+private struct TurningArc: NSViewRepresentable {
+    let color: NSColor
+
+    /// Keeps the added layer at the screen's scale: AppKit sets it only on the layers it owns.
+    final class ArcView: NSView {
+        override func viewDidChangeBackingProperties() {
+            super.viewDidChangeBackingProperties()
+            let scale = window?.backingScaleFactor ?? 2
+            layer?.sublayers?.forEach { $0.contentsScale = scale }
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = ArcView(frame: NSRect(x: 0, y: 0, width: 14, height: 14))
+        view.wantsLayer = true
+        let arc = CAShapeLayer()
+        arc.frame = view.bounds
+        arc.path = CGPath(ellipseIn: view.bounds.insetBy(dx: 1.5, dy: 1.5), transform: nil)
+        arc.fillColor = nil
+        arc.lineWidth = 1.25
+        arc.lineCap = .round
+        arc.strokeEnd = 0.7
+        arc.contentsScale = NSScreen.main?.backingScaleFactor ?? 2
+        view.layer?.addSublayer(arc)
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let turn = CABasicAnimation(keyPath: "transform.rotation.z")
+            turn.fromValue = 0
+            turn.toValue = -2 * Double.pi
+            turn.duration = 1
+            // motion-loop: a task conversation running, as the web's `animate-spin`; still under Reduce Motion
+            turn.repeatCount = .infinity
+            turn.isRemovedOnCompletion = false
+            arc.add(turn, forKey: "turn")
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        (view.layer?.sublayers?.first as? CAShapeLayer)?.strokeColor = color.cgColor
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
+        CGSize(width: 14, height: 14)
+    }
+}
+
 /// What a sidebar row says in words: only the states that need the reader. Running is the agent
 /// mark breathing, not a word or a spinner (docs/design/macos-native.md 1.2).
 struct SessionStatePill: View {

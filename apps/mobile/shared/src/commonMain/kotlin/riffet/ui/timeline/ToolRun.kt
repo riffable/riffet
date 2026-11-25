@@ -33,9 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.rememberResourceEnvironment
-import org.jetbrains.compose.resources.stringResource
 import riffet.core.TimelineItem
-import riffet_mobile.shared.generated.resources.*
 
 /*
  * Ported from `ToolRun` in apps/web/src/app/session/TranscriptView.tsx (the Mac's `toolRun`).
@@ -80,9 +78,7 @@ internal fun ToolRun(
 
     val open = choice ?: !followedByContent
 
-    val names = summary.counts.take(2).map { toolRunCountLabel(it) }
-    val pair = if (names.size == 2) stringResource(Res.string.timeline_tool_run_pair, names[0], names[1]) else names.firstOrNull().orEmpty()
-    val title = if (summary.counts.size > 2) stringResource(Res.string.timeline_tool_run_more, pair) else pair
+    val title = summary.title
     val expandMillis = motionDuration(rememberReducedMotion(), motion.MEDIUM)
 
     Column(Modifier.fillMaxWidth()) {
@@ -138,12 +134,3 @@ internal fun ToolRun(
     }
 }
 
-@Composable
-private fun toolRunCountLabel(entry: ToolRunCount): String = when (entry.bucket) {
-    "read" -> if (entry.count == 1) stringResource(Res.string.timeline_tool_run_count_read_one) else stringResource(Res.string.timeline_tool_run_count_read, entry.count)
-    "edit" -> if (entry.count == 1) stringResource(Res.string.timeline_tool_run_count_edit_one) else stringResource(Res.string.timeline_tool_run_count_edit, entry.count)
-    "search" -> if (entry.count == 1) stringResource(Res.string.timeline_tool_run_count_search_one) else stringResource(Res.string.timeline_tool_run_count_search, entry.count)
-    "execute" -> if (entry.count == 1) stringResource(Res.string.timeline_tool_run_count_execute_one) else stringResource(Res.string.timeline_tool_run_count_execute, entry.count)
-    "fetch" -> if (entry.count == 1) stringResource(Res.string.timeline_tool_run_count_fetch_one) else stringResource(Res.string.timeline_tool_run_count_fetch, entry.count)
-    else -> if (entry.count == 1) stringResource(Res.string.timeline_tool_run_count_other_one) else stringResource(Res.string.timeline_tool_run_count_other, entry.count)
-}

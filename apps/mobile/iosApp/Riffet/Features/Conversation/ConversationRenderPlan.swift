@@ -287,16 +287,14 @@ struct ConversationEntryView: View {
     }
 }
 
-/// One line naming what a run of calls did ("读取 3 个文件、运行 2 条命令 +12 −4"); the calls themselves open beneath it.
+/// One line naming what a run of calls did (`Read 3 · Run 2 +12 −4`); the calls themselves open beneath it.
 struct ConversationToolRunHeader: View {
     let run: ConversationRenderPlan.ToolRun
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var title: String {
-        let names = run.summary.counts.prefix(2).map(Self.countLabel).joined(separator: String(localized: "、", bundle: .riffet))
-        return run.summary.counts.count > 2 ? String(localized: "\(names)等", bundle: .riffet) : names
-    }
+    /// The rows' own verbs with counts (`Read 3 · Run 2`), as on the web.
+    private var title: String { run.summary.title }
     var body: some View {
         Button {
             readAction()
@@ -323,16 +321,5 @@ struct ConversationToolRunHeader: View {
         }
         .buttonStyle(RiffetDimPressStyle())
         .accessibilityValue(run.open ? String(localized: "已展开", bundle: .riffet) : String(localized: "已折叠", bundle: .riffet))
-    }
-    private static func countLabel(_ entry: ToolRunCount) -> String {
-        let count = Int(entry.count)
-        switch entry.bucket {
-        case "read": return String(localized: "读取 \(count) 个文件", bundle: .riffet)
-        case "edit": return String(localized: "编辑 \(count) 个文件", bundle: .riffet)
-        case "search": return String(localized: "搜索 \(count) 次", bundle: .riffet)
-        case "execute": return String(localized: "运行 \(count) 条命令", bundle: .riffet)
-        case "fetch": return String(localized: "获取 \(count) 次", bundle: .riffet)
-        default: return String(localized: "调用 \(count) 个工具", bundle: .riffet)
-        }
     }
 }

@@ -534,7 +534,7 @@ Release 是同一条路径，Gradle 负责增量。不额外维护 XCFramework �
 设置 →「诊断与性能」→「性能监测」打开记录（默认关闭，关闭时不运行任何东西）：
 
 - 用 `CADisplayLink` 记录帧间隔，按页面（转录、首页、统计、终端）和场景（滚动、流式、交互、空闲）分别统计
-  p50/p95/p99、每秒卡顿毫秒数和掉帧数；用 runloop 观察者记录主线程阻塞（超过 50 ms 记一次）；记录从点击或按键到
+  p50/p95/p99、每秒卡顿毫秒数和掉帧数；用 runloop 观察者记录主线程阻塞（两个 runloop 阶段之间连续工作超过 50 ms 记一次；不按「唤醒到下次休眠」算，动画和流式输出时 runloop 可能一直不休眠，那样会把许多短任务连成一次假卡顿）；记录从点击或按键到
   下一帧上屏的延迟；`Perf.measure` 的阶段耗时同时出现在 Instruments（subsystem `io.github.riffable.mac`）里。
 - 悬浮读数显示帧率、每秒卡顿、最差帧、主线程占用和最近一次点击到上屏的延迟。
 - 报告导出到 `~/Library/Application Support/Riffet/perf/`，带构建类型（Debug/Release）、机型、系统和屏幕刷新率。
@@ -639,10 +639,13 @@ open -a apps/macos/build/Release/Riffet.app "riffet://perf/bench?session=<会话
    渲染指针图像，而跟踪区域一移动就会重设。悬停与光标由 `TranscriptController` 用列表上唯一的跟踪区域分发，提示用
    `FragmentView.help`。块内滚动只用 `ScrollStrip`（系统滚动视图，手势在开始时决定归块还是归转录），它的
    滚动条带来的重复光标设置由 `CursorGuard` 去重。
-4. **SwiftUI 不做每帧动画。** 不用 `.repeatForever`（用 Core Animation，见 `applyShimmer`），不用 `ProgressView` 小转圈
-   （用 `Spinner`），页面和面板之间不加 `.animation`：动画的每一帧都会重新布局整个窗口。
-   预期内的尺寸变化仍要过渡（布局稳定性，见 [WEB.md](WEB.md) 2026-11-02 一节），做法按代价选：侧边检查器与终端坞
-   先一次留出位置，面板作为覆盖层滑入滑出（`.transaction`，转录宽度只变一次）；左侧栏仍是一次切换，内容淡入；
+4. **动画只让该动的东西逐帧变化。** 不用 `.repeatForever`（用 Core Animation，见 `applyShimmer`），不用 `ProgressView` 小转圈
+   （用 `Spinner`），不在会随流式输出变化的状态上挂 `.animation`（每次更新都会带着整窗过渡）。动画和性能不冲突，
+   位置变化要连续，不用硬切代替过渡：先确认逐帧变化的部分便宜（转录在阅读列宽度不变时只移动行，见
+   `TranscriptController.widthChanged`；页头、输入框是小块 SwiftUI），再让相关的部分走同一个事务、同一条曲线。
+   预期内的尺寸变化都要过渡（布局稳定性，见 [WEB.md](WEB.md) 2026-11-02 一节）：左侧栏由使用者开合时，侧栏和内容区
+   在同一个 `withAnimation(CustomChrome.sidebarMotion)` 里一起移动，拖动侧栏边缘时内容区等松手再变；侧边检查器与终端坞
+   由使用者开合时同样走 `WorkbenchView.slide`，面板滑入的同时内容区逐帧让出位置，页面盖住时一次到位；
    输入框上方的卡片与输入框高度用一次性的 `ComposerMotion.resize`（0.18s），转录在这期间逐帧跟随底部。
    刷新时保留上一份值（模型目录、额度、diff），不先清空再加载。开启「减少动态效果」时位移动画关闭，只保留淡入淡出。
    切换会话是一次组装（`Workbench.assembledSession`）：转录行与实时状态都到达，或等满 400ms，才算组装完成。完成前转录列

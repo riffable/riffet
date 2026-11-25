@@ -30,8 +30,50 @@ enum CustomChrome {
     /// The header's square controls, a little shorter than the header (28 in a 44pt one).
     static func control(_ style: StyleSpec) -> CGFloat { (style.layout.header * 0.64).rounded() }
 
+    /// The sidebar's slide, shared by the sidebar and the content beside it so they move as one.
+    static let sidebarMotion = Motion.slide
+
     static func clamp(_ width: Double) -> Double {
         min(max(width, sidebarWidths.lowerBound), sidebarWidths.upperBound)
+    }
+}
+
+/// Whether the drawn sidebar shows, apart from the view that owns it so that only the views drawing
+/// the sidebar's room re-render when it changes.
+@MainActor
+@Observable
+final class SidebarState {
+    var shown: Bool
+    /// Slides under way (sidebar, side panel, terminal): while one runs the window's views take no pointer.
+    private(set) var sliding = 0
+    @ObservationIgnored private var slides: Set<Int> = []
+    @ObservationIgnored private var nextSlide = 0
+
+    init(shown: Bool) { self.shown = shown }
+
+    func beginSlide() -> Int {
+        nextSlide += 1
+        slides.insert(nextSlide)
+        sliding = slides.count
+        return nextSlide
+    }
+
+    /// Ends [slide] once: from its animation's completion or, should that never come (the window
+    /// closed mid-slide), from a fallback after its duration, so the window never stays unclickable.
+    func endSlide(_ slide: Int) {
+        guard slides.remove(slide) != nil else { return }
+        sliding = slides.count
+    }
+}
+
+/// Nothing under the pointer moves into or out of a hover while the sidebar slides: hit-testing every
+/// hover region again on each frame cost more than drawing it. Its own view, so that the count
+/// changing at the slide's start and end re-renders this modifier only.
+private struct SlideHitTesting: ViewModifier {
+    let sidebar: SidebarState
+
+    func body(content: Content) -> some View {
+        content.allowsHitTesting(sidebar.sliding == 0)
     }
 }
 
@@ -48,7 +90,7 @@ extension EnvironmentValues {
 struct CustomWorkbench<Content: View>: View {
     let workbench: Workbench
     /// The reader's (or the panel's) choice.
-    let sidebarShown: Bool
+    let sidebar: SidebarState
     @ViewBuilder let content: Content
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -59,13 +101,15 @@ struct CustomWorkbench<Content: View>: View {
     @State private var peeking = false
     @State private var peek = SidebarPeek()
 
+    private var sidebarShown: Bool { sidebar.shown }
+
     var body: some View {
         let style = DisplayPreferences.shared.style
         let width = CustomChrome.sidebarWidth(stored: storedSidebarWidth, style: style)
         ZStack(alignment: .leading) {
             PaletteCanvasBackground(opacity: DisplayPreferences.shared.sidebarTint)
-            // The content takes its width in one step; the sidebar slides over the space it leaves,
-            // so the transcript is laid out once, not on every frame of the slide or the drag.
+            // The content follows the sliding sidebar frame by frame (the toggle's animation); a
+            // drag of the sidebar's edge moves only the sidebar, and the content waits for its end.
             HStack(spacing: 0) {
                 Color.clear
                     .frame(width: sidebarShown ? width : 0)
@@ -78,6 +122,7 @@ struct CustomWorkbench<Content: View>: View {
             }
             sidebar(style, width: draggedWidth ?? width)
         }
+        .modifier(SlideHitTesting(sidebar: sidebar))
         .environment(\.customSidebarShown, sidebarShown)
         .environment(\.customSidebarPeeking, peeking && !sidebarShown)
         .onChange(of: sidebarShown) { peek.cancel(); peeking = false }
@@ -119,7 +164,9 @@ struct CustomWorkbench<Content: View>: View {
     /// Always built: hiding moves it off the window's edge, so its list, scroll position and sheets stay.
     private func sidebar(_ style: StyleSpec, width: CGFloat) -> some View {
         let visible = sidebarShown || peeking
-        return CustomSidebar(workbench: workbench)
+        // Compared by its workbench: this body runs on every toggle, and the list (each row and its
+        // menu) need not be rebuilt for a change of place.
+        return CustomSidebar(workbench: workbench).equatable()
             .frame(width: width)
             .frame(maxHeight: .infinity)
             // The sidebar's top row is title bar too: its gaps move the window.
@@ -142,8 +189,8 @@ struct CustomWorkbench<Content: View>: View {
             // Off-screen, it must not take Tab focus either; its state stays.
             .disabled(!visible)
             .accessibilityHidden(!visible)
-            // A transform only, no layout per frame.
-            .transaction(value: visible) { $0.animation = reduceMotion ? Motion.fast : Motion.standard }
+            // The same curve as the content's (`CustomChrome.sidebarMotion`); peeking slides it alone.
+            .transaction(value: visible) { $0.animation = reduceMotion ? Motion.fast : CustomChrome.sidebarMotion }
     }
 }
 

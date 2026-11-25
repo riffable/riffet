@@ -100,6 +100,8 @@ struct LiveBrandMark: View {
     var once = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// An inactive window's marks hold still (docs/design/system/macos.md §7); the loop resumes at the pose its clock is at.
+    @Environment(\.appearsActive) private var appearsActive
     @State private var settled = false
     @State private var picked = LiveBrandStyle.random()
     @State private var startedAt = Date()
@@ -123,20 +125,15 @@ struct LiveBrandMark: View {
         } else {
             let current = style ?? picked
             GeometryReader { geo in
-                // motion-loop: ambient brand mark in the logo slot, static under Reduce Motion
-                TimelineView(.animation(minimumInterval: nil, paused: !visible || settled)) { timeline in
-                    Canvas { context, size in
-                        let now = timeline.date
-                        let raw = max(0, now.timeIntervalSince(startedAt))
-                        // The loop's drawn pose lasts from 78% to 92% of its 4.2 s; a first pass at 1.75x ends there.
-                        let elapsed = once ? min(raw * 1.75, 3.5) : raw
-                        let bounce = bounceAt.map { now.timeIntervalSince($0) } ?? 1
-                        LiveBrandMark.draw(context: context, size: size, style: current, elapsed: elapsed,
-                                           bounce: bounce, now: now, model: model, front: front, back: back)
-                    }
-                    .frame(width: geo.size.width * Self.spill, height: geo.size.height * Self.spill)
-                    .frame(width: geo.size.width, height: geo.size.height)
-                }
+                // Its own hosting view: each frame of the loop updates that small graph only. Drawn in
+                // the window's graph, every frame re-rendered the whole window's display list and took
+                // about 30% of the main thread while the new-session page was on screen.
+                IsolatedHost(content: LiveBrandCanvas(
+                    style: current, once: once, startedAt: startedAt, bounceAt: bounceAt,
+                    paused: !visible || settled || !appearsActive, model: model, front: front, back: back
+                ))
+                .frame(width: geo.size.width * Self.spill, height: geo.size.height * Self.spill)
+                .frame(width: geo.size.width, height: geo.size.height)
             }
             .background(LiveBrandProbe(probe: model.probe, visible: $visible))
             .contentShape(Rectangle())
@@ -157,6 +154,55 @@ struct LiveBrandMark: View {
         startedAt = Date()
         bounceAt = Date()
     }
+}
+
+/// The mark's animated drawing, the root of `IsolatedHost`; everything it reads is passed in,
+/// as the host's graph does not inherit the window's environment.
+private struct LiveBrandCanvas: View {
+    let style: LiveBrandStyle
+    let once: Bool
+    let startedAt: Date
+    let bounceAt: Date?
+    let paused: Bool
+    let model: LiveBrandModel
+    let front: Color
+    let back: Color
+
+    var body: some View {
+        // At most 60 frames a second: an ambient mark gains nothing from 120 on a ProMotion screen,
+        // and each frame is still a view update and commit on the main thread; only the
+        // rasterizing runs off it.
+        // motion-loop: ambient brand mark in the logo slot, static under Reduce Motion
+        TimelineView(.animation(minimumInterval: 1.0 / 60, paused: paused)) { timeline in
+            Canvas(rendersAsynchronously: true) { context, size in
+                let now = timeline.date
+                let raw = max(0, now.timeIntervalSince(startedAt))
+                // The loop's drawn pose lasts from 78% to 92% of its 4.2 s; a first pass at 1.75x ends there.
+                let elapsed = once ? min(raw * 1.75, 3.5) : raw
+                let bounce = bounceAt.map { now.timeIntervalSince($0) } ?? 1
+                LiveBrandMark.draw(context: context, size: size, style: style, elapsed: elapsed,
+                                   bounce: bounce, now: now, model: model, front: front, back: back)
+            }
+        }
+    }
+}
+
+/// A SwiftUI view in a hosting view of its own, so that its own updates (a timeline's frames) stay
+/// in its graph instead of re-rendering the window's. It takes no pointer; the caller handles taps.
+struct IsolatedHost<Content: View>: NSViewRepresentable {
+    let content: Content
+
+    final class Host: NSHostingView<Content> {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+
+    func makeNSView(context: Context) -> Host {
+        let host = Host(rootView: content)
+        host.sizingOptions = []
+        return host
+    }
+
+    func updateNSView(_ host: Host, context: Context) { host.rootView = content }
 }
 
 // MARK: - Keyframes

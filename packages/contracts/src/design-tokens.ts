@@ -47,11 +47,14 @@ export const MOTION_EASING = {
 } as const satisfies Record<string, readonly [number, number, number, number]>;
 
 /**
- * The Mac's three animation tiers (docs/design/macos-native.md §3.1): SwiftUI springs whose
- * perceived duration is a web duration, so a hover on the Mac takes as long as on the web.
+ * The Mac's animation tiers (docs/design/macos-native.md §3.1): SwiftUI springs whose perceived
+ * duration is a web duration, so a hover on the Mac takes as long as on the web; and one curve for a
+ * column that slides, which must stop at its duration (a spring's settle reads as a crawl over a
+ * long travel).
  */
 export const MAC_MOTION = {
   fast: { spring: 'snappy', duration: 'fast', use: 'Hover, press, a check, an icon changing shape.' },
   standard: { spring: 'snappy', duration: 'base', use: 'Cross-fades, menus and popovers, the selection pill sliding.' },
   expressive: { spring: 'smooth', duration: 'slow', use: "Panels, a sidebar's content, sheets, the search panel." },
-} as const satisfies Record<string, { spring: 'snappy' | 'smooth'; duration: keyof typeof MOTION_DURATION; use: string }>;
+  slide: { curve: 'standard', duration: 'medium', use: 'A column sliding beside the content (the sidebar, with the content following): ends on time, no settle.' },
+} as const satisfies Record<string, ({ spring: 'snappy' | 'smooth' } | { curve: keyof typeof MOTION_EASING }) & { duration: keyof typeof MOTION_DURATION; use: string }>;

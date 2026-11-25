@@ -14,6 +14,8 @@ final class WorkbenchSidebar {
     /// The sidebar's rows, recomputed only when the list or the reader's filters change.
     private(set) var groups: [ProjectGroup] = []
     private(set) var buckets: [TimeBucket] = []
+    /// Each task's status by its id, for the rows of the conversations that belong to one.
+    private(set) var taskStatuses: [String: String] = [:]
     /// How the reader arranged the sidebar (`PROJECT` or `TIME`).
     var layout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout") ?? "TIME" {
         didSet { UserDefaults.standard.set(layout, forKey: "riffet.sidebar-layout"); rebuild() }
@@ -115,6 +117,8 @@ final class WorkbenchSidebar {
     private func rebuild() {
         guard let list else { return }
         let projects = list.projects.filter { !$0.isBuiltInQuickChat && !$0.isAssistant }
+        let statuses = Dictionary((list.workItems ?? []).map { ($0.id, $0.status) }, uniquingKeysWith: { first, _ in first })
+        if statuses != taskStatuses { taskStatuses = statuses }
         // Quick chats have their own page and are in no sidebar list.
         let open = workbench?.selected?.id
         let sessions = list.sessions.filter {

@@ -11002,11 +11002,6 @@
         }
       }
     },
-    "%@等" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@, and more" } }
-      }
-    },
     "主题" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Theme" } }
@@ -11612,78 +11607,6 @@
             "plural" : {
               "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld line" } },
               "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld lines" } }
-            }
-          }
-        }
-      }
-    },
-    "读取 %lld 个文件" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "Read %lld file" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "Read %lld files" } }
-            }
-          }
-        }
-      }
-    },
-    "编辑 %lld 个文件" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "Edited %lld file" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "Edited %lld files" } }
-            }
-          }
-        }
-      }
-    },
-    "搜索 %lld 次" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld search" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld searches" } }
-            }
-          }
-        }
-      }
-    },
-    "运行 %lld 条命令" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "Ran %lld command" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "Ran %lld commands" } }
-            }
-          }
-        }
-      }
-    },
-    "获取 %lld 次" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld fetch" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld fetches" } }
-            }
-          }
-        }
-      }
-    },
-    "调用 %lld 个工具" : {
-      "localizations" : {
-        "en" : {
-          "variations" : {
-            "plural" : {
-              "one" : { "stringUnit" : { "state" : "translated", "value" : "%lld tool call" } },
-              "other" : { "stringUnit" : { "state" : "translated", "value" : "%lld tool calls" } }
             }
           }
         }

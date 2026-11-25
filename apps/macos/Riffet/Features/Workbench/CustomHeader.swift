@@ -8,7 +8,7 @@ import RiffetKit
 struct CustomHeader<Status: View>: View {
     let workbench: Workbench
     /// With the sidebar hidden the traffic lights sit over the header, and the sidebar's toggle comes here.
-    let sidebarShown: Bool
+    @Environment(\.customSidebarShown) private var sidebarShown
     /// A plugin's runtime notice for the conversation, the toolbar's own view.
     @ViewBuilder let status: Status
     @Environment(\.palette) private var palette

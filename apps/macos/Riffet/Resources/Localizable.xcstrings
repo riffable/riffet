@@ -141,6 +141,26 @@
         }
       }
     },
+    "观测中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watching"
+          }
+        }
+      }
+    },
+    "无需关注": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No longer needed"
+          }
+        }
+      }
+    },
     "%lld 个插件": {
       "localizations": {
         "en": {
@@ -4496,16 +4516,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@When existing sessions take effect is determined by the native Agent."
-          }
-        }
-      }
-    },
-    "%@等": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@, and more"
           }
         }
       }
@@ -24541,138 +24551,6 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld lines"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "搜索 %lld 次": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld search"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld searches"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "编辑 %lld 个文件": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Edited %lld file"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Edited %lld files"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "获取 %lld 次": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld fetch"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld fetches"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "读取 %lld 个文件": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Read %lld file"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Read %lld files"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "调用 %lld 个工具": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld tool call"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld tool calls"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "运行 %lld 条命令": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Ran %lld command"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Ran %lld commands"
                 }
               }
             }

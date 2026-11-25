@@ -110,6 +110,12 @@ internal class SessionLists(
     private var projectsRevision: Long? = null
     private var projectsRevisionLoaded = false
     private var requestedProjectsRevision: Long? = null
+    private var workItemRefreshJob: Job? = null
+    private var workItemReads = 0L
+    private var workItemApplied = 0L
+    private var workItemsRevision: Long? = null
+    private var workItemsRevisionLoaded = false
+    private var requestedWorkItemsRevision: Long? = null
 
     /** The validator of the last session list read, sent as `If-None-Match` by the next one. */
     private var sessionsEtag: String? = null
@@ -156,6 +162,34 @@ internal class SessionLists(
         job.start()
     }
 
+    /** Task summaries have their own revision; an older server never pushes one, so this is not called for it. */
+    fun refreshWorkItems(revision: Long?) {
+        if (unauthenticated.value || revision == null || workItemsRevisionLoaded && revision == workItemsRevision) return
+        if (workItemRefreshJob?.isActive == true && requestedWorkItemsRevision == revision) return
+        workItemRefreshJob?.cancel()
+        requestedWorkItemsRevision = revision
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            refreshJob?.takeIf { it.isActive }?.join()
+            if (unauthenticated.value) return@launch
+            if (workItemsRevisionLoaded && revision == workItemsRevision) return@launch
+            val read = ++workItemReads
+            try {
+                val items = withContext(background) { api.workItemSummaries() }
+                if (read != workItemReads || read <= workItemApplied) return@launch
+                workItemApplied = read
+                workItemsRevision = revision
+                workItemsRevisionLoaded = true
+                _list.update { it.copy(workItems = items) }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Throwable) {
+                if (error is RiffetUnauthenticatedException) signedOut()
+            }
+        }
+        workItemRefreshJob = job
+        job.start()
+    }
+
     fun applySavedSettings(settings: AppSettings) {
         settingsWrites++
         _list.update { it.copy(settings = settings) }
@@ -180,6 +214,7 @@ internal class SessionLists(
             try {
                 val read = ++listReads
                 val writesAtStart = settingsWrites
+                val workItemRead = ++workItemReads
                 val projectRead = ++projectReads
                 val projectWritesAtStart = projectWrites
                 // Decoding the whole list took the caller's (main) thread for tens of milliseconds.
@@ -190,12 +225,18 @@ internal class SessionLists(
                 if (fresh) listApplied = read
                 val freshProjects = projectRead == projectReads && projectRead > projectApplied && projectWritesAtStart == projectWrites
                 if (freshProjects) projectApplied = projectRead
+                val freshWorkItems = bootstrap.workItemSummaries != null && workItemRead == workItemReads && workItemRead > workItemApplied
+                if (freshWorkItems) workItemApplied = workItemRead
                 listDelta = bootstrap.protocol?.features?.contains(LIST_DELTA_FEATURE) == true
                 bootstrap.revisions?.let { revisions ->
                     if (fresh) sessionsEtag = "W/\"${revisions.sessions}\""
                     if (freshProjects) {
                         projectsRevision = revisions.projects
                         projectsRevisionLoaded = true
+                    }
+                    if (freshWorkItems) {
+                        workItemsRevision = revisions.workItems
+                        workItemsRevisionLoaded = revisions.workItems != null
                     }
                 }
                 lateinit var sessions: List<Session>
@@ -211,6 +252,7 @@ internal class SessionLists(
                         loading = false,
                         loaded = true,
                         canDeleteSessions = bootstrap.protocol?.features?.contains(DELETE_FEATURE) == true,
+                        workItems = if (freshWorkItems) bootstrap.workItemSummaries else state.workItems,
                     )
                 }
                 scheduleListSave()
@@ -677,6 +719,11 @@ internal class SessionLists(
         projectReads++
         projectsRevision = null
         projectsRevisionLoaded = false
+        workItemRefreshJob?.cancel()
+        workItemRefreshJob = null
+        workItemReads++
+        workItemsRevision = null
+        workItemsRevisionLoaded = false
         prefetchJob?.cancel()
         prefetchJob = null
         knownStates = null

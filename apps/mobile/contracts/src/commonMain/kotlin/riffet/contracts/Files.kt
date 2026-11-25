@@ -173,7 +173,13 @@ data class Bootstrap(
     val protocol: BootstrapProtocol? = null,
     /** The list revisions this snapshot was read at (`list-delta`); absent from an older server. */
     val revisions: ListRevisions? = null,
+    /** Task summaries; absent from a server without the task board. */
+    val workItemSummaries: List<WorkItemSummary>? = null,
 )
+
+/** A task as the conversation list shows it; [status] stays a string so a new status does not break decoding. */
+@Serializable
+data class WorkItemSummary(val id: String, val number: Long = 0, val status: String)
 
 @Serializable
 data class ListRevisions(val sessions: Long, val terminals: Long, val projects: Long, val workItems: Long? = null)
