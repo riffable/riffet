@@ -251,50 +251,22 @@ private fun joinsToolRun(item: TimelineItem): Boolean =
  * Which turns are open, kept per process row and outliving the row's own composition — the header
  * is a lazy item now, so state remembered inside it would be lost the moment it scrolls away.
  *
- * Running and failed process blocks open by default. Completed and interrupted work folds,
- * including work with no answer. Explicit reading choices survive run-state transitions.
+ * A block stays open until it may fold itself (`TimelineRow.Process.canAutoFold`, the web's rule):
+ * running, stopped, steered, failed or unknown turns, unfinished tools and work with no answer stay
+ * open. Only the reader's explicit choice is remembered; everything else follows the grouping.
  */
 @Stable
 internal class ProcessFolds {
-    private class Fold(var open: Boolean, var manual: Boolean, var running: Boolean, var issues: Int)
-
-    private val folds = HashMap<String, Fold>()
+    private val choices = HashMap<String, Boolean>()
 
     /** Bumped on every manual toggle so a layout keyed on it is rebuilt. */
     var version by mutableIntStateOf(0)
         private set
 
-    /** Applies run-state transitions from a fresh grouping. Idempotent for the same rows. */
-    fun sync(rows: List<TimelineRow>) {
-        for (row in rows) {
-            if (row !is TimelineRow.Process) continue
-            val fold = folds[row.key]
-            if (fold == null) {
-                folds[row.key] = Fold(
-                    open = row.running || row.issueCount > 0,
-                    manual = false,
-                    running = row.running,
-                    issues = row.issueCount,
-                )
-                continue
-            }
-            if (!fold.manual && row.running != fold.running) {
-                fold.open = row.running || row.issueCount > 0
-            }
-            if (row.issueCount != fold.issues && row.issueCount > 0 && !fold.manual) fold.open = true
-            fold.running = row.running
-            fold.issues = row.issueCount
-        }
-    }
-
-    fun isOpen(row: TimelineRow.Process): Boolean = folds[row.key]?.open ?: (row.running || row.issueCount > 0)
+    fun isOpen(row: TimelineRow.Process): Boolean = choices[row.key] ?: !row.canAutoFold
 
     fun toggle(row: TimelineRow.Process) {
-        val fold = folds.getOrPut(row.key) {
-            Fold(open = isOpen(row), manual = false, running = row.running, issues = row.issueCount)
-        }
-        fold.manual = true
-        fold.open = !fold.open
+        choices[row.key] = !isOpen(row)
         version += 1
     }
 }

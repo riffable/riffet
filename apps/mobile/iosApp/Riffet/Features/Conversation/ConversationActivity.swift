@@ -165,6 +165,7 @@ struct ConversationActivityStopButton: View {
 func conversationActivityStatus(_ activity: NativeActivity, view: ActivityView) -> String? {
     if view.stopping { return String(localized: "停止中", bundle: .riffet) }
     if view.running { return String(localized: "运行中", bundle: .riffet) }
+    if ActivityPresentationKt.activityFailed(activity: activity) { return String(localized: "失败", bundle: .riffet) }
     switch activity.status {
     case .completed: return String(localized: "已完成", bundle: .riffet)
     case .failed: return String(localized: "失败", bundle: .riffet)

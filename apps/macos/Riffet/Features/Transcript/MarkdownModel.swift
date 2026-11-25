@@ -563,35 +563,31 @@ func nativeString(_ value: String) -> String {
 }
 
 /// Show delivery progress and problems; a confirmed send needs no success label.
-func nativeDeliveryLabel(_ run: Run, stopShown: Bool = true) -> String {
-    TimelineFormatKt.deliveryLabel(run: run, stopShown: stopShown) ?? ""
+func nativeDeliveryLabel(_ run: Run, stopShown: Bool = true, hasTurnOutput: Bool = false) -> String {
+    TimelineFormatKt.deliveryLabel(run: run, stopShown: stopShown, hasTurnOutput: hasTurnOutput) ?? ""
 }
 
-/// Running, failed and interrupted process blocks open by default; only work that completed
-/// normally folds, as on the web (`TurnProcess`). Explicit choices and the completed-process
-/// preference take priority. A block with an expanded detail or active text selection when it ends
-/// stays open, as if the reader had opened it.
+/// A block stays open until it may fold itself (`TimelineRowProcess.canAutoFold`, the web's rule):
+/// running, stopped, steered, failed or unknown turns, unfinished tools and work with no answer stay
+/// open. Explicit choices and the completed-process preference take priority. A block with an
+/// expanded detail or active text selection when it becomes foldable stays open, as if the reader
+/// had opened it.
 /// Not thread-safe; the transcript reads and writes it under its own lock.
 final class ProcessFolds {
     /// Subagent detail views can show completed tool work by default, while the main transcript
     /// keeps the compact web-style default. Explicit reading choices override this preference.
     private let completedProcessesOpen: Bool
 
-    /// What `sync` reads off a process row.
+    /// What `sync` reads off a process row: whether it must stay open.
     struct State: Equatable {
         let key: String
-        let running: Bool
-        let issues: Int
-        var endsTurn = false
-        var interrupted = false
+        let held: Bool
     }
 
     private struct Fold: Equatable {
         var open: Bool
         var manual: Bool
-        var running: Bool
-        var issues: Int
-        var interrupted = false
+        var held: Bool
     }
 
     private var folds: [String: Fold] = [:]
@@ -601,38 +597,27 @@ final class ProcessFolds {
     }
 
     static func states(_ rows: [any TimelineRow]) -> [State] {
-        rows.compactMap { ($0 as? TimelineRowProcess).map { State(key: nativeString($0.key), running: $0.running, issues: Int($0.issueCount), endsTurn: $0.endsTurn, interrupted: $0.interrupted) } }
+        rows.compactMap { ($0 as? TimelineRowProcess).map { State(key: nativeString($0.key), held: !$0.canAutoFold) } }
     }
 
-    /// Applies run-state transitions from a fresh grouping; returns the keys whose open state changed.
+    /// Applies fold-rule transitions from a fresh grouping; returns the keys whose open state changed.
     @discardableResult
     func sync(_ states: [State], reading: (String) -> Bool = { _ in false }) -> Set<String> {
         var changed: Set<String> = []
         for state in states {
             guard var fold = folds[state.key] else {
-                folds[state.key] = Fold(
-                    open: opens(state.running, state.issues, state.interrupted),
-                    manual: false,
-                    running: state.running,
-                    issues: state.issues,
-                    interrupted: state.interrupted
-                )
+                folds[state.key] = Fold(open: opens(state.held), manual: false, held: state.held)
                 continue
             }
             let before = fold
-            if !fold.manual && state.running != fold.running {
-                if !state.running && reading(state.key) && fold.open {
+            if !fold.manual && state.held != fold.held {
+                if !state.held && reading(state.key) && fold.open {
                     fold.manual = true
                 } else {
-                    fold.open = opens(state.running, state.issues, state.interrupted)
+                    fold.open = opens(state.held)
                 }
             }
-            if state.issues != fold.issues && state.issues > 0 && !fold.manual { fold.open = true }
-            // The stop can be recorded after the block stopped running.
-            if state.interrupted && !fold.interrupted && !fold.manual { fold.open = true }
-            fold.running = state.running
-            fold.issues = state.issues
-            fold.interrupted = state.interrupted
+            fold.held = state.held
             if fold != before {
                 folds[state.key] = fold
                 if fold.open != before.open { changed.insert(state.key) }
@@ -642,23 +627,23 @@ final class ProcessFolds {
     }
 
     func isOpen(_ row: TimelineRowProcess) -> Bool {
-        isOpen(key: nativeString(row.key), running: row.running, issues: Int(row.issueCount), endsTurn: row.endsTurn, interrupted: row.interrupted)
+        isOpen(key: nativeString(row.key), held: !row.canAutoFold)
     }
 
-    func isOpen(key: String, running: Bool, issues: Int, endsTurn: Bool = false, interrupted: Bool = false) -> Bool {
-        folds[key]?.open ?? opens(running, issues, interrupted)
+    func isOpen(key: String, held: Bool) -> Bool {
+        folds[key]?.open ?? opens(held)
     }
 
-    private func opens(_ running: Bool, _ issues: Int, _ interrupted: Bool) -> Bool {
-        running || issues > 0 || interrupted || completedProcessesOpen
+    private func opens(_ held: Bool) -> Bool {
+        held || completedProcessesOpen
     }
 
     func toggle(_ row: TimelineRowProcess) {
-        toggle(key: nativeString(row.key), running: row.running, issues: Int(row.issueCount), endsTurn: row.endsTurn, interrupted: row.interrupted)
+        toggle(key: nativeString(row.key), held: !row.canAutoFold)
     }
 
-    func toggle(key: String, running: Bool, issues: Int, endsTurn: Bool = false, interrupted: Bool = false) {
-        var fold = folds[key] ?? Fold(open: isOpen(key: key, running: running, issues: issues, endsTurn: endsTurn, interrupted: interrupted), manual: false, running: running, issues: issues, interrupted: interrupted)
+    func toggle(key: String, held: Bool) {
+        var fold = folds[key] ?? Fold(open: isOpen(key: key, held: held), manual: false, held: held)
         fold.manual = true
         fold.open.toggle()
         folds[key] = fold

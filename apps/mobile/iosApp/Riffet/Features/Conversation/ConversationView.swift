@@ -62,7 +62,8 @@ struct ConversationView: View {
     /// What the details panel asked for, run once the panel has been dismissed.
     @State private var afterDetails: (() -> Void)?
     @State private var processExpansion: [String: Bool] = [:]
-    @State private var runningProcesses: Set<String> = []
+    /// Process blocks the fold rule keeps open (`canAutoFold` false), to see the pass one may fold.
+    @State private var heldProcesses: Set<String> = []
     @State private var disclosureState = ConversationDisclosureState()
     @State private var rowCache = TranscriptRowCache()
     @State private var presence = PagePresence()
@@ -87,7 +88,7 @@ struct ConversationView: View {
     private var lastVersion: String { guard workbench.presentation?.sessionId == sessionID, let item = workbench.grouping?.items.last else { return "" }; return "\(item.key)|\(ObjectIdentifier(item as AnyObject))" }
     /// Changes when the rows held are replaced or grow, e.g. by the page a find step loaded.
     private var findWindow: String { "\(workbench.grouping?.items.first?.key ?? "")|\(workbench.grouping?.items.count ?? 0)" }
-    private var processVersion: [String] { rows.compactMap { $0 as? TimelineRowProcess }.map { "\($0.key)|\($0.running)|\($0.endsTurn)|\($0.issueCount)|\($0.interrupted)" } }
+    private var processVersion: [String] { rows.compactMap { $0 as? TimelineRowProcess }.map { "\($0.key)|\($0.running)|\($0.endsTurn)|\($0.issueCount)|\($0.canAutoFold)" } }
     private var scrollAccessibilityValue: String {
         let position = !ready ? String(localized: "正在加载", bundle: .riffet) : atBottom ? String(localized: "已到会话结尾", bundle: .riffet) : String(localized: "正在回看历史", bundle: .riffet)
         #if DEBUG
@@ -640,20 +641,20 @@ struct ConversationView: View {
     }
 
     /// The expansion this entries pass must use, derived in the same pass that
-    /// observes the rows: a process that has just stopped running keeps the
-    /// openness it had while live when the reader is in history, rather than
+    /// observes the rows: a process that has just become foldable keeps the
+    /// openness it had while held when the reader is in history, rather than
     /// folding in this pass and being re-opened by `updateProcessExpansion`
     /// after it — two snapshots, one visible slide of everything above.
     private func effectiveProcessExpansion() -> [String: Bool] {
         var expanded = processExpansion
         // Hashing every process key each pass costs more than the rest of the plan (Kotlin strings,
-        // ios-performance.md §2.13); only the pass right after a process stops has anything to do.
-        guard !runningProcesses.isEmpty else { return expanded }
+        // ios-performance.md §2.13); only the pass right after a process becomes foldable has anything to do.
+        guard !heldProcesses.isEmpty else { return expanded }
         let processes = rows.compactMap { $0 as? TimelineRowProcess }
-        let stopped = runningProcesses.subtracting(processes.filter(\.running).map(\.key))
+        let stopped = heldProcesses.subtracting(processes.filter { !$0.canAutoFold }.map(\.key))
         guard !stopped.isEmpty else { return expanded }
         let scope = workbench.baseURL.absoluteString + "|" + sessionID
-        for process in processes where process.issueCount == 0 && stopped.contains(process.key) {
+        for process in processes where stopped.contains(process.key) {
             if disclosureState.hasOpenDetail(in: process, scope: scope) && expanded[process.key] != false {
                 expanded[process.key] = true
             }
@@ -664,21 +665,20 @@ struct ConversationView: View {
     private func updateProcessExpansion() {
         let processes = rows.compactMap { $0 as? TimelineRowProcess }
         let scope = workbench.baseURL.absoluteString + "|" + sessionID
-        let running = Set(processes.filter(\.running).map(\.key))
+        let held = Set(processes.filter { !$0.canAutoFold }.map(\.key))
         if !processExpansion.isEmpty {
             let keys = Set(processes.map(\.key))
             processExpansion = processExpansion.filter { keys.contains($0.key) }
         }
-        let stopped = runningProcesses.subtracting(running)
+        let stopped = heldProcesses.subtracting(held)
         for process in stopped.isEmpty ? [] : processes {
-            if stopped.contains(process.key),
-               process.issueCount == 0 && processExpansion[process.key] == nil {
+            if stopped.contains(process.key), processExpansion[process.key] == nil {
                 if disclosureState.hasOpenDetail(in: process, scope: scope) {
                     processExpansion[process.key] = true
                 }
             }
         }
-        runningProcesses = running
+        heldProcesses = held
     }
 
     private var hapticPhase: String {

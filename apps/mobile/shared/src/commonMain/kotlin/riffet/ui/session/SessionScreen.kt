@@ -388,7 +388,6 @@ fun SessionScreen(
         if (!entered) previous.layout ?: TimelineLayout(emptyList(), IntArray(0))
         else {
             val rows = grouping?.rows.orEmpty()
-            folds.sync(rows)
             traced("riffet.timeline.layout") { layoutTimeline(rows, previous.layout, folds::isOpen) }.also { previous.layout = it }
         }
     }

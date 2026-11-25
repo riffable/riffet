@@ -94,7 +94,7 @@ internal fun ActivityRow(item: TimelineItem.Activity) {
     }
 
     var confirming by remember { mutableStateOf(false) }
-    val outcome = if (background) backgroundOutcome(activity.status) else null
+    val outcome = if (background) backgroundOutcome(activity) else null
     val tokens = if (background) null else compactionTokens(activity)
     TimelineDisclosure(
         modifier = Modifier.visualWorkVisibility(visibility),
@@ -274,9 +274,9 @@ internal fun StopConfirmation(warning: String?, onConfirm: () -> Unit, onDismiss
  * ended without saying how). Null while it runs, and for a task that completed or was stopped —
  * those say nothing on the row.
  */
-internal fun backgroundOutcome(status: NativeActivityStatus): Boolean? = when (status) {
-    NativeActivityStatus.FAILED -> true
-    NativeActivityStatus.UNKNOWN -> false
+internal fun backgroundOutcome(activity: NativeActivity): Boolean? = when {
+    activityFailed(activity) -> true
+    activity.status == NativeActivityStatus.UNKNOWN -> false
     else -> null
 }
 

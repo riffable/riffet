@@ -46,7 +46,7 @@ struct ConversationTimelineRow: View, Equatable {
         switch onEnum(of: row) {
         case let .single(single):
             VStack(alignment: .leading, spacing: 8) {
-                ConversationTimelineItem(item: single.item, workbench: workbench, projectID: projectID, active: single.footer == .held, parentItems: parentItems, speed: speed, showsFooter: single.footer == .shown)
+                ConversationTimelineItem(item: single.item, workbench: workbench, projectID: projectID, active: single.footer == .held, parentItems: parentItems, speed: speed, showsFooter: single.footer == .shown, stopShown: single.stopped, hasTurnOutput: single.settled)
                 if (single.item is TimelineItemStatus || single.item is TimelineItemTool), single.footer == .shown {
                     ConversationCopyActions(text: single.answerText ?? "", endedAt: ServerTime.date(timelineItemTime(item: single.item)), speed: speed)
                 }
@@ -158,7 +158,7 @@ private struct ConversationProcess: View {
             else { expanded = newValue }
         }
     }
-    private var open: Bool { expansion ?? (focusedRow == row.key || row.running || row.issueCount > 0) }
+    private var open: Bool { expansion ?? (focusedRow == row.key || !row.canAutoFold) }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ConversationProcessHeader(row: row, open: open) {
@@ -229,8 +229,10 @@ struct ConversationProcessHeader: View {
             }
         } else if live {
             Text("处理中")
-        } else if row.interrupted {
-            Text("已中断")
+        } else if row.stopped, let start, let end = ServerTime.date(row.endedAt), end > start {
+            Text("已停止 · \(conversationElapsed(from: start, to: end))")
+        } else if row.stopped {
+            Text("已停止")
         } else if let start, let end = ServerTime.date(row.endedAt), end > start {
             Text("已处理 · \(conversationElapsed(from: start, to: end))")
         } else {
@@ -240,7 +242,8 @@ struct ConversationProcessHeader: View {
     private var statusText: String {
         if live, let start { return String(localized: "处理中 · \(conversationElapsed(from: start, to: Date()))", bundle: .riffet) }
         if live { return String(localized: "处理中", bundle: .riffet) }
-        if row.interrupted { return String(localized: "已中断", bundle: .riffet) }
+        if row.stopped, let start, let end = ServerTime.date(row.endedAt), end > start { return String(localized: "已停止 · \(conversationElapsed(from: start, to: end))", bundle: .riffet) }
+        if row.stopped { return String(localized: "已停止", bundle: .riffet) }
         if let start, let end = ServerTime.date(row.endedAt), end > start { return String(localized: "已处理 · \(conversationElapsed(from: start, to: end))", bundle: .riffet) }
         return String(localized: "已处理", bundle: .riffet)
     }
@@ -265,6 +268,9 @@ struct ConversationTimelineItem: View {
     var parentItems: [any TimelineItem]? = nil
     var speed: SpeedTag? = nil
     var showsFooter = true
+    /// A prompt's delivery inputs from its row: 已停止 only when it ends the stopped turn, and received once output follows.
+    var stopShown = true
+    var hasTurnOutput = false
     var body: some View {
         switch onEnum(of: item) {
         case let .user(user):
@@ -301,8 +307,8 @@ struct ConversationTimelineItem: View {
                         }
                     }
                 }
-                if let run = user.run, !user.failureShown, !nativeDeliveryLabel(run).isEmpty {
-                    let status = Label { Text(nativeDeliveryLabel(run)) } icon: {
+                if let run = user.run, !user.failureShown, case let label = nativeDeliveryLabel(run, stopShown: stopShown, hasTurnOutput: hasTurnOutput), !label.isEmpty {
+                    let status = Label { Text(label) } icon: {
                         if run.native?.intent == "steer" { Image(systemName: "arrow.turn.up.right") }
                     }
                     Group {

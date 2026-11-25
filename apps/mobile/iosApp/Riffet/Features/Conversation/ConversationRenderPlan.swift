@@ -80,7 +80,7 @@ enum ConversationRenderPlan {
             switch onEnum(of: row) {
             case let .process(process):
                 let key = nativeKey(process.key)
-                let open = expanded[key] ?? (focusedRow == key || process.running || process.issueCount > 0)
+                let open = expanded[key] ?? (focusedRow == key || !process.canAutoFold)
                 result.append(Entry(id: key, rowKey: key, topSpacing: spacing, isLastInRow: false, content: .processHeader(process, open: open)))
                 if open { appendChildren(of: process, key: key, scope: scope, readingAbove: readingAbove, disclosureState: disclosureState, root: root, to: &result) }
                 if process.settled, process.endsTurn, let answer = process.answerText, !answer.isEmpty {

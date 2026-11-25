@@ -112,7 +112,6 @@ internal fun SubagentScreen(
         if (entering) previous.layout ?: TimelineLayout(emptyList(), IntArray(0))
         else {
             val rows = grouping?.rows.orEmpty()
-            folds.sync(rows)
             layoutTimeline(rows, previous.layout, folds::isOpen).also { previous.layout = it }
         }
     }

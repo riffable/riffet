@@ -11,6 +11,7 @@ import riffet.contracts.NativeActivity
 import riffet.contracts.NativeActivityKind
 import riffet.contracts.NativeActivityStatus
 import riffet.contracts.NativeJob
+import riffet.contracts.NativeJobStatus
 import riffet.contracts.TurnOutlineV3
 import riffet.core.LineDiff
 import riffet.core.TimelineItem
@@ -214,6 +215,21 @@ fun currentToolActivity(item: TimelineItem.Tool): NativeActivity? {
 }
 
 /**
+ * The web's `toolItemLiveness`: a call still reported active is unfinished once nothing can finish
+ * it ([stale]), and one whose state never arrived is unfinished outright.
+ */
+fun toolItemLiveness(item: TimelineItem.Tool, stale: Boolean): ToolLiveness {
+    val job = item.job
+    val activity = currentToolActivity(item)
+    val status = job?.status?.wire ?: activity?.status?.wire ?: text(item.event.data["status"]) ?: text(item.event.data["state"])
+    val reportedActive = status != null && (status == "stopping" || status in activeToolStates)
+    val active = if (job != null) job.status == NativeJobStatus.RUNNING else reportedActive && (activity != null || !stale)
+    return ToolLiveness(active = active, incomplete = status == "unknown" || (reportedActive && !active))
+}
+
+data class ToolLiveness(val active: Boolean, val incomplete: Boolean)
+
+/**
  * [item] as a host renders it. [stale] is true when nothing in the session is running any more, so
  * a call still marked pending is reported as unfinished rather than spinning forever.
  */
@@ -230,7 +246,7 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
     val status = liveStatus ?: view.status
     val active = status in activeToolStates || status == "running" || status == "stopping"
     val running = active && (liveStatus != null || !stale)
-    val failed = status == "failed"
+    val failed = status == "failed" || (activity != null && activityFailed(activity))
     val isCommand = isCommandTitle(view.title, view.command)
     val subagent = item.event.data["subagent"] as? JsonObject
     fun meaningful(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }?.takeUnless {

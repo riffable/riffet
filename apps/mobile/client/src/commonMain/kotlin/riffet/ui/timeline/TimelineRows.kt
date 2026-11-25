@@ -94,6 +94,13 @@ sealed interface TimelineRow {
         val interrupted: Boolean = false,
         /** The turn was stopped while this block was its end: the header reads Stopped, once for the turn. */
         val stopped: Boolean = false,
+        /** An answer, or a settled question or plan review, follows this block in its turn. */
+        val followedByAnswer: Boolean = false,
+        /**
+         * The web's `canAutoFold`: only a normal completion folds by itself. A running, stopped,
+         * steered, failed or unknown turn, an unfinished tool, or a missing answer keeps it open.
+         */
+        val canAutoFold: Boolean = false,
         /** The block carries the footer only when its turn ends on it without an answer. */
         override val footer: TurnFooter = TurnFooter.NONE,
     ) : TimelineRow
@@ -189,8 +196,10 @@ fun buildTimelineGrouping(
     val interruptedTurns = HashSet<String>()
     val outcomeUnknownTurns = HashSet<String>()
     val finalAnswerIndexByTurn = HashMap<String, Int>()
+    val lastSteerIndexByTurn = HashMap<String, Int>()
     items.forEachIndexed { index, item ->
         if (item is TimelineItem.Assistant && item.phase == AssistantPhase.FINAL_ANSWER) finalAnswerIndexByTurn[turnKeys[index]] = index
+        if (item is TimelineItem.User && item.run?.native?.intent == "steer") lastSteerIndexByTurn[turnKeys[index]] = index
         if (item is TimelineItem.User && item.run?.native?.intent != "steer") {
             if (item.run?.native?.stage == "turn_outcome_unknown") {
                 outcomeUnknownTurns.add(turnKeys[index])
@@ -239,6 +248,21 @@ fun buildTimelineGrouping(
         return item.phase?.let { it == AssistantPhase.COMMENTARY } ?: assistantBeforeProcess[index]
     }
 
+    // The web's `followedByAnswer`: prose outside a process, or a question or plan review that has
+    // settled, comes later in the turn.
+    fun followedByAnswer(last: Int, turnKey: String): Boolean {
+        val turnEnd = analysis.lastIndexByTurn[turnKey] ?: return false
+        val stale = turnKey !in activeTurns
+        return ((last + 1)..turnEnd).any { index ->
+            if (turnKeys[index] != turnKey) return@any false
+            when (val later = items[index]) {
+                is TimelineItem.Assistant -> later.phase?.let { it != AssistantPhase.COMMENTARY } ?: !assistantBeforeProcess[index]
+                is TimelineItem.Tool -> later.isInteractionTool() && toolItemLiveness(later, stale).let { !it.active && !it.incomplete }
+                else -> false
+            }
+        }
+    }
+
     fun endsTurn(index: Int): Boolean {
         val next = items.getOrNull(index + 1)
         return next == null ||
@@ -270,6 +294,8 @@ fun buildTimelineGrouping(
             processRow(
                 items, first, groupLastIndex, groupTurnKey, activeTurns, turnKeys, analysis.lastIndexByTurn, processingTurn,
                 groupTurnKey in interruptedTurns, groupTurnKey in outcomeUnknownTurns, groupTurnKey in finalAnswerIndexByTurn,
+                beforeSteer = groupLastIndex < (lastSteerIndexByTurn[groupTurnKey] ?: -1),
+                followedByAnswer = followedByAnswer(groupLastIndex, groupTurnKey),
             ),
             first,
             groupLastIndex,
@@ -397,6 +423,9 @@ private fun processRow(
     interrupted: Boolean,
     outcomeUnknown: Boolean = false,
     hasFinalAnswer: Boolean,
+    /** Work the reader steered after stays open, as the web keeps it (`lastSteerIndexByTurn`). */
+    beforeSteer: Boolean = false,
+    followedByAnswer: Boolean,
 ): TimelineRow.Process {
     val grouped = items.subList(first, last + 1).toList()
     val turnActive = turnKey in activeTurns
@@ -420,6 +449,12 @@ private fun processRow(
     // A turn that stopped on a tool, as an interrupted one does, has no answer row to carry the
     // copy action, so its footer copies the turn's latest prose — what that row would have copied.
     val answerText = if (settled) latestAnswerText(items, turnKeys, last) else null
+    val issueCount = (first..(lastIndexByTurn[turnKey] ?: last)).count {
+        val item = items[it]
+        turnKeys[it] == turnKey && item is TimelineItem.Status && item.tone == StatusTone.DANGER
+    }
+    val held = interrupted || outcomeUnknown || beforeSteer
+    val hasIncompleteTools = grouped.any { it is TimelineItem.Tool && toolItemLiveness(it, stale = !running).incomplete }
     return TimelineRow.Process(
         key = "process:${grouped.first().key}",
         turnKey = turnKey,
@@ -429,16 +464,15 @@ private fun processRow(
         settled = settled,
         endsTurn = ends,
         toolCount = grouped.count { isToolRunItem(it) },
-        issueCount = (first..(lastIndexByTurn[turnKey] ?: last)).count {
-            val item = items[it]
-            turnKeys[it] == turnKey && item is TimelineItem.Status && item.tone == StatusTone.DANGER
-        },
+        issueCount = issueCount,
         startedAt = timelineItemTime(grouped.first { it !is TimelineItem.Activity }),
         endedAt = timelineItemTime(grouped.last { it !is TimelineItem.Activity }),
         answerText = answerText,
-        // Both interrupted and outcome-unknown turns stay expanded; only a confirmed stop labels "已停止".
-        interrupted = interrupted || outcomeUnknown,
+        // Interrupted, outcome-unknown and steered-after work stays expanded; only a confirmed stop labels "已停止".
+        interrupted = held,
         stopped = interrupted && !outcomeUnknown && ends,
+        followedByAnswer = followedByAnswer,
+        canAutoFold = !running && !held && issueCount == 0 && followedByAnswer && !hasIncompleteTools,
         footer = footerOf(carries, settled),
     )
 }
@@ -500,12 +534,16 @@ fun updateTimelineGrouping(
                 item = items[first],
                 answerText = if ((row.item is TimelineItem.Status || row.item is TimelineItem.Tool) && row.settled) latestAnswerText(items, previous.turnKeys, first) else null,
             )
+            // `interrupted` folds in the turn's stop, an unknown outcome and a later steer; any of
+            // them keeps it true here, and a stop that ends the turn keeps `stopped` too.
             is TimelineRow.Process -> processRow(
                 items, first, last, row.turnKey,
                 previous.activeTurns, previous.turnKeys, previous.lastIndexByTurn, previous.processingTurn,
-                interrupted = row.interrupted && (row.stopped || !row.endsTurn),
-                outcomeUnknown = row.interrupted && !row.stopped && row.endsTurn,
+                interrupted = row.stopped,
+                outcomeUnknown = row.interrupted && !row.stopped,
                 hasFinalAnswer = row.turnKey in previous.finalAnswerTurns,
+                // A patch moves no boundary and leaves question and plan tools alone (`patchable`).
+                followedByAnswer = row.followedByAnswer,
             )
             // Notices are never patched (see `patchable`), so a trigger row never gets here.
             is TimelineRow.Trigger -> row
@@ -524,7 +562,8 @@ private fun patchable(before: TimelineItem, after: TimelineItem): Boolean {
     return when (after) {
         is TimelineItem.Assistant -> before is TimelineItem.Assistant && before.phase == after.phase
         is TimelineItem.Thought -> before is TimelineItem.Thought && before.channel == after.channel
-        is TimelineItem.Tool -> before is TimelineItem.Tool && before.isInteractionTool() == after.isInteractionTool()
+        // A question or plan review settling decides whether the work before it is followed by an answer.
+        is TimelineItem.Tool -> before is TimelineItem.Tool && !before.isInteractionTool() && !after.isInteractionTool()
         is TimelineItem.Plan -> before is TimelineItem.Plan
         is TimelineItem.Image -> before is TimelineItem.Image
         is TimelineItem.Status -> before is TimelineItem.Status && before.tone == after.tone

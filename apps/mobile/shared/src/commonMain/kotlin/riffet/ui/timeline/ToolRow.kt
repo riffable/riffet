@@ -361,11 +361,11 @@ private fun RegularToolRow(
     val active = status in activeToolStates || status == "running" || status == "stopping"
     val running = active && (liveStatus != null || !stale)
     val dangling = active && !running
-    val failed = status == "failed"
+    val failed = status == "failed" || (activity != null && activityFailed(activity))
     var confirming by remember { mutableStateOf(false) }
     // Failures are conveyed by the danger-tinted icon alone; only an unfinished call needs a word.
     val outcome = when {
-        activity?.kind == NativeActivityKind.BACKGROUND_TASK -> backgroundOutcome(activity.status)?.takeIf { !it }
+        activity?.kind == NativeActivityKind.BACKGROUND_TASK -> backgroundOutcome(activity)?.takeIf { !it }
         dangling -> false
         else -> null
     }

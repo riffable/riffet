@@ -41,7 +41,7 @@ final class TranscriptUIStore: @unchecked Sendable {
     }
 
     func processOpen(_ row: TimelineRowProcess, key: String) -> Bool {
-        locked { folds.isOpen(key: key, running: row.running, issues: Int(row.issueCount), endsTurn: row.endsTurn, interrupted: row.interrupted) }
+        locked { folds.isOpen(key: key, held: !row.canAutoFold) }
     }
 
     /// Applies a grouping's run states; the rows whose block opened or closed get a new version.
@@ -53,7 +53,7 @@ final class TranscriptUIStore: @unchecked Sendable {
 
     func toggleProcess(_ row: TimelineRowProcess, key: String) {
         locked {
-            folds.toggle(key: key, running: row.running, issues: Int(row.issueCount), endsTurn: row.endsTurn, interrupted: row.interrupted)
+            folds.toggle(key: key, held: !row.canAutoFold)
             versions[key, default: 0] += 1
         }
     }
@@ -393,7 +393,7 @@ struct RowBuilder {
             case let .single(single):
                 live = single.footer == .held
                 collectsChapters = single.item is TimelineItemAssistant
-                height = singleItem(single.item, footer: single.footer, answerText: single.answerText, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, stopped: single.stopped, x: x, y: top, width: w)
+                height = singleItem(single.item, footer: single.footer, answerText: single.answerText, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, stopped: single.stopped, settled: single.settled, x: x, y: top, width: w)
                 if let user = single.item as? TimelineItemUser { message = user.text }
                 if let assistant = single.item as? TimelineItemAssistant { message = assistant.text }
                 if single.settled, let answer = single.answerText { message = answer }
@@ -427,9 +427,10 @@ struct RowBuilder {
     // MARK: Messages
 
     /// [stopped]: the turn was stopped and this row ends it, so it is the one that says so.
-    private mutating func singleItem(_ item: any TimelineItem, footer: TurnFooter, answerText: String?, runId: String?, speed: SpeedTag?, stopped: Bool = false, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    /// [settled] on a prompt: output of its turn already follows it, so it was received.
+    private mutating func singleItem(_ item: any TimelineItem, footer: TurnFooter, answerText: String?, runId: String?, speed: SpeedTag?, stopped: Bool = false, settled: Bool = false, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         switch onEnum(of: item) {
-        case let .user(user): return userMessage(user, stopShown: stopped, x: x, y: y, width: width)
+        case let .user(user): return userMessage(user, stopShown: stopped, hasTurnOutput: settled, x: x, y: y, width: width)
         case let .assistant(assistant): return assistantMessage(assistant, footer: footer, runId: runId, speed: speed, stopped: stopped, x: x, y: y, width: width)
         default:
             var height = processItem(item, running: false, turnActive: !stale, x: x, y: y, width: width)
@@ -442,7 +443,7 @@ struct RowBuilder {
         }
     }
 
-    private mutating func userMessage(_ item: TimelineItemUser, stopShown: Bool = true, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    private mutating func userMessage(_ item: TimelineItemUser, stopShown: Bool = true, hasTurnOutput: Bool = false, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let limit = max(120, width - 96)
         var cursor = y
         let attachments = Array(item.attachments)
@@ -535,7 +536,7 @@ struct RowBuilder {
         }
         // Status, its actions, time and copy share one line at the message's trailing edge; what
         // does not fit wraps leftwards beneath, and an opened error reads under the line.
-        var footerStatus = userStatus(item, stopShown: stopShown)
+        var footerStatus = userStatus(item, stopShown: stopShown, hasTurnOutput: hasTurnOutput)
         var actions: [(CGSize, Fragment.Kind)] = []
         var error: (id: String, text: String)?
         let metaFont = style.font(11)
@@ -591,7 +592,7 @@ struct RowBuilder {
     }
 
     /// A turn stopped after the prompt arrived says so where it ends; [stopShown] is false then.
-    private func userStatus(_ item: TimelineItemUser, stopShown: Bool = true) -> (String, NSColor)? {
+    private func userStatus(_ item: TimelineItemUser, stopShown: Bool = true, hasTurnOutput: Bool = false) -> (String, NSColor)? {
         guard !item.failureShown else { return nil }
         guard let run = item.run else { return nil }
         guard run.native != nil else {
@@ -602,7 +603,7 @@ struct RowBuilder {
             default: return nil
             }
         }
-        let label = nativeDeliveryLabel(run, stopShown: stopShown)
+        let label = nativeDeliveryLabel(run, stopShown: stopShown, hasTurnOutput: hasTurnOutput)
         guard !label.isEmpty else { return nil }
         switch run.native?.delivery {
         case .failed: return (label, style.color(\.danger))

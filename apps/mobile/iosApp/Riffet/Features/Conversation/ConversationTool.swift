@@ -49,7 +49,7 @@ struct ConversationTool: View {
         let activity = currentToolActivity(item: item)
         let stats: String?
         if let activity, activity.kind == .backgroundTask, let activityState {
-            stats = activity.status == .failed ? nil : conversationActivityStatus(activity, view: activityState)
+            stats = ActivityPresentationKt.activityFailed(activity: activity) ? nil : conversationActivityStatus(activity, view: activityState)
         } else {
             stats = activityState?.stats
         }

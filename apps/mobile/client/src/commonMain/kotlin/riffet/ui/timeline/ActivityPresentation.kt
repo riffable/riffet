@@ -42,6 +42,11 @@ data class ActivityView(
     val summary: String get() = listOfNotNull(label, subject, stats).joinToString(" · ")
 }
 
+/** A task that failed, or that completed with a non-zero exit code, as the web reads it. */
+fun activityFailed(activity: NativeActivity): Boolean =
+    activity.status == NativeActivityStatus.FAILED ||
+        (activity.status == NativeActivityStatus.COMPLETED && activity.task?.exitCode.let { it != null && it != 0L })
+
 /** [activity] as it reads at [nowMillis]; [stopping] is the optimistic mark of a stop request out. */
 fun activityView(activity: NativeActivity, stopping: Boolean = false, nowMillis: Long = 0L): ActivityView {
     val status = activity.status
@@ -51,7 +56,7 @@ fun activityView(activity: NativeActivity, stopping: Boolean = false, nowMillis:
     val canStop = running && !isStopping && activity.stop != null
     val tone = when {
         running -> ActivityTone.ACTIVE
-        status == NativeActivityStatus.FAILED -> ActivityTone.FAILED
+        activityFailed(activity) -> ActivityTone.FAILED
         status == NativeActivityStatus.COMPLETED -> ActivityTone.DONE
         else -> ActivityTone.MUTED
     }
