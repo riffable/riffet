@@ -363,6 +363,12 @@ export async function buildSharePackage(options: SharePackageOptions): Promise<{
         for (const item of child) {
           if (!item || typeof item !== 'object' || Array.isArray(item)) { attachments.push(item); continue; }
           const attachment = item as Record<string, unknown>;
+          // A frozen upload already has its bytes. Its CLI path can point to an expired or different copy.
+          if (typeof attachment.id === 'string' && attachmentIds.has(attachment.id) && snapshot.resources[attachment.id]) {
+            delete attachment.path;
+            delete attachment.src;
+            delete attachment.data;
+          }
           const source = typeof attachment.path === 'string' ? attachment.path : typeof attachment.src === 'string' ? attachment.src
             : typeof attachment.data === 'string' && typeof attachment.mimeType === 'string' ? `data:${attachment.mimeType};base64,${attachment.data}`
             : typeof attachment.id === 'string' && (/^data:/i.test(attachment.id) || path.isAbsolute(attachment.id)) ? attachment.id : undefined;

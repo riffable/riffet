@@ -649,14 +649,70 @@ describe('timeline projection contract', () => {
     expect(row.attachments).toEqual([{ id: 'img-id', name: 'img-id' }, { id: 'pdf-id', name: 'pdf-id' }]);
   });
 
-  it('keeps native path attachments when the Run has no upload ids, deriving the name from the path', () => {
+  it.each([
+    { echo: 'a label without an id', extra: [{ name: 'Attachment 1', type: 'image', mimeType: 'image/png' }] },
+    { echo: 'only the PDF', extra: [] },
+  ])('keeps all uploads in order when the CLI echoes $echo', ({ extra }) => {
+    const pdf = { id: 'pdf-id', name: 'report.pdf', mimeType: 'application/pdf' };
+    const events = [ev(1, 'user_message_chunk', text('See attachments', {
+      attachments: [pdf, ...extra],
+    }), { nativeId: 'msg-u1' })];
+    const runs = [nativeRun('run-1', 'completed', 'See attachments', 1, {
+      input: { text: 'See attachments', attachmentIds: ['img-id', 'pdf-id', 'text-id'], context: [] }, nativeMessageId: 'msg-u1',
+    })];
+    const [row] = timelineRows(buildTimeline(projectEvents(events), runs));
+    if (row?.kind !== 'user') throw new Error('expected a user row');
+    expect(row.attachments).toEqual([{ id: 'img-id', name: 'img-id' }, pdf, { id: 'text-id', name: 'text-id' }]);
+  });
+
+  it('places an upload-only message at its native record even when the CLI echoes no attachment details', () => {
+    const events = [ev(1, 'user_message_chunk', text(''), { nativeId: 'msg-u1' })];
+    const runs = [nativeRun('run-1', 'completed', '', 1, {
+      input: { text: '', attachmentIds: ['img-id'], context: [] }, nativeMessageId: 'msg-u1',
+    })];
+    const rows = timelineRows(buildTimeline(projectEvents(events), runs));
+    expect(rows).toMatchObject([{ kind: 'user', text: '', attachments: [{ id: 'img-id', name: 'img-id' }], event: { nativeId: 'msg-u1' } }]);
+  });
+
+  it('matches an unconfirmed prompt only within its native chat and with compatible upload ids', () => {
+    const image = 'a1000000-0000-4000-8000-000000000001';
+    const pdf = 'b1000000-0000-4000-8000-000000000002';
+    const otherImage = 'c1000000-0000-4000-8000-000000000003';
+    const send = (id: string, second: number, attachmentIds: string[], chat: Partial<NativeRunDetails>) =>
+      nativeRun(id, 'interrupted', 'See attachment', second, { ...chat, delivery: 'input_sent', input: { text: 'See attachment', attachmentIds, context: [] } });
+    const sends = [
+      send('correct', 1, [image, pdf], { nativeSessionId: 'chat' }),
+      send('different-upload', 2, [otherImage], { nativeSessionId: 'chat' }),
+      send('different-chat', 3, [image], { cursorSessionId: 'previous-chat' }),
+    ];
+    const receipt = (attachment: Record<string, string>, runs: Run[]) => {
+      const events = [ev(4, 'user_message_chunk', text('See attachment', { attachments: [attachment] }), { nativeId: 'receipt' })];
+      return timelineRows(buildTimeline(projectEvents(events), runs, undefined, undefined, 'chat')).find(row => row.event.nativeId === 'receipt');
+    };
+    const photo = { id: image, name: 'photo.png' };
+    expect(receipt(photo, sends)).toMatchObject({ runId: 'correct', attachments: [photo, { id: pdf, name: pdf }] });
+    const unmatched = receipt(photo, sends.slice(1));
+    expect(unmatched).toMatchObject({ attachments: [photo] });
+    expect(unmatched?.runId).toBeUndefined();
+    expect(receipt({ name: 'Attachment 1' }, [sends[0]!])).toMatchObject({ runId: 'correct' });
+  });
+
+  it('keeps native attachments when the Run has no upload ids', () => {
     const events = [ev(1, 'user_message_chunk', text('看图', {
-      attachments: [{ type: 'image', path: '/tmp/cursor/shot.png', mimeType: 'image/png' }],
+      attachments: [
+        { type: 'image', path: '/tmp/cursor/shot.png', mimeType: 'image/png' },
+        { id: 'saved-id' },
+        { name: 'Attachment 1', type: 'image', mimeType: 'image/png' },
+      ],
     }), { runId: 'run-1' })];
     const runs = [appRun('run-1', 'completed', '看图', 1)];
     const row = timelineRows(buildTimeline(projectEvents(events), runs))[0]!;
     if (row.kind !== 'user') throw new Error('expected a user row');
-    expect(row.attachments).toEqual([{ name: 'shot.png', path: '/tmp/cursor/shot.png', type: 'image', mimeType: 'image/png' }]);
+    expect(row.attachments).toEqual([
+      { name: 'shot.png', path: '/tmp/cursor/shot.png', type: 'image', mimeType: 'image/png' },
+      { id: 'saved-id', name: 'saved-id' },
+      { name: 'Attachment 1', type: 'image', mimeType: 'image/png' },
+    ]);
   });
 
   it('reuses a user row only while its attachments stay identical', () => {

@@ -928,6 +928,8 @@ frame-summary.json                     捕获帧的分片与错误复放
 
 ### 26.2 当前交付行为
 
+- 时间线按原生步骤的接收对象展示通知。`NOTIFY_USER` 取 `notificationContent`；`SYSTEM_MESSAGE` 只取面向用户的 `renderInfo` 展示字段。`renderInfo.hidden`、`agentMessage.hideFromUser` 标记为真的消息，以及 `EPHEMERAL_MESSAGE`，只留在原生记录中。错误按用户可见性展示，后台任务状态来自对应工具的执行记录。旧时间线在下次同步时撤回已显示的内部消息。
+- 选择 Sandbox 时，本次启动的设置同时写入 `toolPermission: "proceed-in-sandbox"` 和 `enableTerminalSandbox: true`。切换到其他权限选项后，终端沙箱开关沿用会话原生设置。[agy 终端沙箱配置](https://antigravity.google/docs/sandbox?tab=cli#cli-configuration)
 - 四端新增 builtin `antigravity` 和 `antigravity-agent` feature。旧客户端不会收到不认识的 backend；保存旧客户端设置不会删除隐藏的 Antigravity 配置。
 - 自定义提供商固定使用 `google-generative-ai`。探测复用 Gemini `/v1beta/models`，Key 不回显。
 - 填了服务地址或选了模型源的 provider，模型目录就是 `host.modelSources.models(profileId, 'google-generative-ai')`：模型源按 Gemini 协议给出的目录，或宿主读该地址 `GET …/v1beta/models` 的结果；读不到时不退回 agy 的列表。agy 自带列表里的模型网关未必提供，且 agy 按自己的名字请求（如 `gemini-4-hydrogen-high` 请求 `gemini-4-hydrogen`）。未配服务地址时，目录来自私有 `--gemini_dir` 下的 `agy models`（按认证方式与可执行文件缓存 5 分钟）。网关 ID 与 agy 模型家族同名时沿用 agy 的变体，同一模型的 `-low/-medium/-high/-xhigh/-max` 变体合成一项并带 effort 选项，选择仍存原生变体 ID。`enabledModels` 中 agy 不认识的 ID（网关自有名称，如 `gemini-4-hydrogen-sonar`）在 API Key 模式下写入本次启动 `--settings` 的 `customModelsConfig.customModels.<id>.modelName`，effort 经 `--effort` 传入，只开放 low/medium/high（1.5.10 对自定义模型拒绝 xhigh/max）。只传 `--model` 时 agy 会静默回退到 settings 中保存的模型（1.5.8/1.5.10 实测）。

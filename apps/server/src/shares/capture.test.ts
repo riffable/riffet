@@ -31,11 +31,12 @@ describe('frozen share capture', () => {
 
   it('keeps reading content and receipt attachments while excluding provider and execution state', async () => {
     const events: NativeWorkbenchEvent[] = [{ sequence: 1, nativeId: 'message', sessionId: session.id, runId: 'run', type: 'user_message_chunk', data: { content: { type: 'text', text: 'Question' }, apiKey: 'secret' }, raw: { apiKey: 'secret', attachments: [{ id: 'file', name: 'x.png', token: 'secret' }] }, createdAt: at }];
-    const run: Run = { id: 'run', sessionId: session.id, commandId: 'command', prompt: 'Question', state: 'running', createdAt: at, updatedAt: at, native: { input: { text: 'Question', attachmentIds: ['file'], context: [{ path: '/private/workspace' }] }, config: { mode: 'agent', model: 'private-provider' }, fingerprint: 'private-fingerprint', delivery: 'observed', attempt: 1, configRevision: 4, nativeMessageId: 'message', nativeSessionId: 'thread', terminalId: 'private-terminal', renderedText: 'private-runtime-context' } };
+    const run: Run = { id: 'run', sessionId: session.id, commandId: 'command', prompt: 'Question', state: 'running', createdAt: at, updatedAt: at, native: { input: { text: 'Question', attachmentIds: ['file', 'screenshot'], context: [{ path: '/private/workspace' }] }, config: { mode: 'agent', model: 'private-provider' }, fingerprint: 'private-fingerprint', delivery: 'observed', attempt: 1, configRevision: 4, nativeMessageId: 'message', nativeSessionId: 'thread', terminalId: 'private-terminal', renderedText: 'private-runtime-context' } };
+    const otherChat = { ...run, native: { ...run.native!, nativeSessionId: 'previous-thread', input: { text: 'Question', attachmentIds: ['private-file'], context: [] } } };
     const readShareTranscript = vi.fn(async () => ({ events, subagents: [], warnings: [] }));
-    const snapshot = await captureShareSnapshot({ store: { getSession: () => session, listRuns: () => [run] } as never, nativeBackends: { readShareTranscript } as never }, session.id);
+    const snapshot = await captureShareSnapshot({ store: { getSession: () => session, listRuns: () => [run, otherChat] } as never, nativeBackends: { readShareTranscript } as never }, session.id);
     expect(readShareTranscript).toHaveBeenCalledOnce();
-    expect(snapshot.events[0]).toMatchObject({ nativeId: 'message', data: { attachments: [{ id: 'file', name: 'x.png' }] } });
+    expect(snapshot.events[0]!.data.attachments).toEqual([{ id: 'file', name: 'x.png' }, { id: 'screenshot', name: 'screenshot' }]);
     expect(snapshot.runs).toEqual([]);
     expect(snapshot.subagents).toEqual([]);
     expect(readShareTranscript).toHaveBeenCalledWith(session.id, expect.objectContaining({ messagesOnly: true }));

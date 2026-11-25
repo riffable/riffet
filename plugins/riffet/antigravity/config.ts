@@ -454,6 +454,8 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
     input.customModel ? { customModelsConfig: withCustomModel(settings.customModelsConfig, input.customModel) } : {},
     mode !== undefined ? { agentMode: mode } : {},
     permission !== undefined ? { toolPermission: permission } : {},
+    // agy requires both the approval policy and the terminal sandbox setting to let sandboxed commands proceed.
+    permission === 'proceed-in-sandbox' ? { enableTerminalSandbox: true } : {},
   );
   await write(settingsPath, settings);
   return { root, geminiDir, bridgeDir, settingsPath, logPath, ...(trustAdded ? { trustAdded } : {}) };

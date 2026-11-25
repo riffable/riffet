@@ -1,4 +1,5 @@
 import type { NativeWorkbenchEvent, Run, Session, ShareModelInfo, ShareSnapshot, ShareTurn, ShareTurnCatalog, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { messageAttachments } from '../../../../packages/timeline/src/model.js';
 import { isInteractionToolData } from '../../../../packages/timeline/src/toolTitle.js';
 import { AppError } from '../errors.js';
 import type { Store } from '../store.js';
@@ -118,13 +119,8 @@ function readingEvent(source: WorkbenchEvent, run?: Run): NativeWorkbenchEvent {
   }
   if (source.data.replayId) data.replayId = source.data.replayId;
   if (kind === 'agent_message_chunk') data.phase = 'final_answer';
-  const rawAttachments = source.raw && typeof source.raw === 'object' ? (source.raw as Record<string, unknown>).attachments : undefined;
-  const attachments = source.data.attachments ?? rawAttachments;
-  if (Array.isArray(attachments) && attachments.length) data.attachments = attachments.flatMap(value => {
-    if (!value || typeof value !== 'object') return [];
-    return [Object.fromEntries(Object.entries(value).filter(([key]) => ['id', 'name', 'mimeType', 'width', 'height', 'type', 'path'].includes(key)))];
-  });
-  else if (kind === 'user_message_chunk' && run?.native?.input.attachmentIds.length) data.attachments = run.native.input.attachmentIds.map(id => ({ id, name: id }));
+  const attachments = messageAttachments(source, kind === 'user_message_chunk' ? run?.native?.input.attachmentIds : undefined);
+  if (attachments.length) data.attachments = attachments;
   const native = source as Partial<NativeWorkbenchEvent>;
   return {
     sequence: source.sequence, sessionId: source.sessionId, type: kind, data: structuredClone(data), createdAt: source.createdAt,
@@ -136,12 +132,11 @@ function readingEvent(source: WorkbenchEvent, run?: Run): NativeWorkbenchEvent {
 
 /** Only exact receipts, commands and native identities can join a response to an execution. */
 function modelFacts(session: IdentifiedSession, transcript: NativeShareTranscript, events: NativeWorkbenchEvent[], runs: Run[]): Record<string, ShareModelInfo> {
-  const backend = session.backendId, chat = session.nativeSessionId;
-  const candidates = runs.filter(run => (!run.native?.nativeSessionId || run.native.nativeSessionId === chat) && (!run.native?.backendId || run.native.backendId === backend));
-  const byId = new Map(candidates.map(run => [run.id, run]));
+  const backend = session.backendId;
+  const byId = new Map(runs.map(run => [run.id, run]));
   const byReceipt = new Map<string, Run[]>(), byCommand = new Map<string, Run[]>(), byTurn = new Map<string, Run[]>();
   const index = (map: Map<string, Run[]>, key: string | undefined, run: Run) => { if (key) map.set(key, [...(map.get(key) ?? []), run]); };
-  for (const run of candidates) {
+  for (const run of runs) {
     index(byReceipt, run.native?.nativeMessageId, run);
     index(byCommand, run.commandId, run);
     index(byTurn, run.native?.nativeTurnId, run);
@@ -188,7 +183,10 @@ export async function captureShareSnapshot(deps: CaptureDependencies, sessionId:
   const session = deps.store.getSession(sessionId);
   const selection = options.selection ?? { mode: 'all' };
   if (selection.mode === 'selected' && selection.nativeChatId !== undefined && selection.nativeChatId !== session.nativeSessionId) throw new AppError('SHARE_HISTORY_CHANGED', 'The conversation history changed; generate the preview again', 409);
-  const runs = deps.store.listRuns(sessionId).filter(run => run.state !== 'queued' && (!run.native || !['queued', 'preparing'].includes(run.native.delivery)));
+  const runs = deps.store.listRuns(sessionId).filter(run => run.state !== 'queued'
+    && (!run.native || !['queued', 'preparing'].includes(run.native.delivery))
+    && (!run.native?.nativeSessionId || run.native.nativeSessionId === session.nativeSessionId)
+    && (!run.native?.backendId || run.native.backendId === session.backendId));
   const byReceipt = new Map(runs.flatMap(run => run.native?.nativeMessageId ? [[run.native.nativeMessageId, run] as const] : []));
   const byCommand = new Map(runs.map(run => [run.commandId, run]));
   const capturedAt = new Date().toISOString();

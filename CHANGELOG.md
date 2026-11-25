@@ -31,6 +31,9 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- Antigravity conversations now show user-facing notices and errors while keeping internal restart reminders out of the timeline.
+- Images uploaded to an Antigravity conversation keep their previews after sending and when reopening or sharing the conversation.
+- Selecting Sandbox for Antigravity enables its terminal sandbox. Commands that run inside it can proceed without a prompt, and explicit approval rules still apply.
 - Cursor conversations now use a consistent stop-then-send flow instead of direct follow-up replacement, eliminating hook deadlocks during stop/interrupt, unconfirmed turn-replacement stalls, and permanently blocked queues after an uncertain message is followed by a completed turn; releasing terminal control or reconnecting a terminal also resumes pending queue dispatch automatically.
 - Closing an image preview on the web and macOS now clears the backdrop smoothly ahead of the returning thumbnail instead of leaving a dark or frosted veil behind until the shrink finishes.
 - On the web, code citation blocks and fenced code blocks written inside a nested list now stay indented with their list item instead of resetting to column zero and breaking subsequent sub-items.

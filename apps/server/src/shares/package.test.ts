@@ -59,8 +59,12 @@ describe('share package resource freezing', () => {
     await writeFile(path.join(projectDirectory, 'private.txt'), 'do not publish');
     const project = store.getProject(store.getSession(sessionId).projectId);
     const attachment = await workspace.upload(project, { name: 'notes.html', mimeType: 'text/html', dataBase64: Buffer.from('<p>notes</p>').toString('base64') });
+    const screenshot = await workspace.upload(project, { name: 'upload.png', mimeType: 'image/png', dataBase64: png.toString('base64') });
     const original = snapshot(`![screen](<${imagePath}>)\n[private](private.txt)\n\`![code](missing.png)\`\n\n![reference][screen]\n\n[screen]: <${imagePath}>`);
-    original.events[0]!.data.attachments = [{ id: attachment.id, name: attachment.name }];
+    original.events[0]!.data.attachments = [
+      { id: attachment.id, name: attachment.name },
+      { id: screenshot.id, name: screenshot.name, type: 'image', path: 'expired-cli-copy.png' },
+    ];
     original.events.push({ ...original.events[0]!, nativeId: 'tool-image', data: { content: [{ type: 'image', path: imagePath }] } });
     original.events.push({ ...original.events[0]!, nativeId: 'native-user-image', data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'Screenshot' }, attachments: [{ type: 'image', path: imagePath }, { type: 'image', path: 'missing.png' }] } });
     const { hash, warnings } = await build(original);
@@ -71,6 +75,8 @@ describe('share package resource freezing', () => {
     expect(frozen.events[0]!.data.content).toMatchObject({ text: expect.stringContaining('[private](private.txt)') });
     expect(JSON.stringify(original.events)).toContain(imagePath);
     expect(JSON.stringify(frozen.events)).not.toContain(imagePath);
+    expect(frozen.events[0]!.data.attachments).toContainEqual({ id: screenshot.id, name: screenshot.name, type: 'image' });
+    expect(frozen.resources[screenshot.id]).toMatchObject({ name: screenshot.name, mimeType: 'image/png' });
     expect((frozen.events[1]!.data.content as Array<{ path: string }>)[0]!.path).toMatch(/^\.\/attachments\//);
     const nativeAttachments = frozen.events[2]!.data.attachments as Array<{ id: string; name: string; mimeType?: string; size?: number }>;
     expect(nativeAttachments[0]).toMatchObject({ id: expect.stringMatching(/^\.\/attachments\//), name: 'screen.png', mimeType: 'image/png', size: png.length });

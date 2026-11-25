@@ -39,6 +39,7 @@ co-change:
 - 读 `journal.db` 的日志与 blob，写 `derived.db` 的 `timeline_*` 表（测试里与 journal 同库）。空闲超过 `SERVER_BUDGET.coldTimelineDays` 且无人打开的会话，行被丢弃，下次打开从 journal 重折叠；预算见 `packages/contracts/src/budgets.ts#SERVER_BUDGET`。
 - 折叠结果的契约是 `packages/contracts/src/sync.ts#SYNC_BUDGET` 与 `TimelineRow`；Kotlin 解码器的共享数据由 `pnpm gen:timeline-fixtures`（`scripts/gen-timeline-fixtures.ts`）生成，Web 转写的回放用 `scripts/replay-transcript.ts`。
 - 折叠规则的场景测试在 `packages/timeline/src/projectEvents.test.ts`；性能基线 `scripts/bench-timeline.ts`。
+- CLI 只回传附件名称或路径时，已关联的消息按 `Run.native.input.attachmentIds` 的上传顺序显示附件。回执中的名称、类型按上传 ID 匹配；直接在 CLI 发送的附件沿用原生记录。
 
 ## 排障
 

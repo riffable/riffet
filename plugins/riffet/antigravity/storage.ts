@@ -3,7 +3,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { AGY_ID, AGY_STEP_LIMIT, type AgyRecord, type AgySnapshot } from './protocol.js';
 
-// Field numbers are taken from agy 1.5.6's embedded protobuf descriptors. Only
+// Field numbers are taken from agy 1.5.6 and 1.5.10's embedded protobuf descriptors. Only
 // transcript data is decoded: configs, credentials and model signatures never leave the store.
 type Wire = bigint | Uint8Array;
 type Fields = Map<number, Wire[]>;
@@ -75,6 +75,9 @@ function num(f: Fields, n: number, fallback = 0): number {
   const value = uint(f, n);
   if (typeof value === 'string') refuse('protobuf integer exceeds safe range');
   return value ?? fallback;
+}
+function optionalBool(f: Fields, n: number): boolean | undefined {
+  return f.has(n) ? num(f, n) !== 0 : undefined;
 }
 function sub(f: Fields, n: number): Fields {
   const b = blob(f, n);
@@ -150,6 +153,17 @@ function tool(f: Fields): AgyRecord {
 }
 function error(f: Fields): AgyRecord {
   return compact({ userErrorMessage: str(f, 1), shortError: str(f, 2), fullError: str(f, 3), modelErrorMessage: str(f, 9) });
+}
+function renderInfo(f: Fields): AgyRecord {
+  return compact({
+    title: str(f, 1),
+    markdown: str(f, 2),
+    hidden: optionalBool(f, 4),
+    contentBlocks: repeated(f, 10).flatMap(block => {
+      const markdown = str(block, 1);
+      return markdown ? [{ markdown }] : [];
+    }),
+  });
 }
 function image(f: Fields): AgyRecord {
   return compact({ base64Data: str(f, 1), mimeType: str(f, 2), caption: str(f, 3), uri: str(f, 4) });
@@ -235,6 +249,7 @@ const kinds: Record<number, [string, number, string]> = {
   21: ['RUN_COMMAND', 28, 'runCommand'],
   23: ['CHECKPOINT', 30, 'checkpoint'],
   38: ['MCP_TOOL', 47, 'mcpTool'],
+  82: ['NOTIFY_USER', 94, 'notifyUser'],
   90: ['EPHEMERAL_MESSAGE', 103, 'ephemeralMessage'],
   98: ['CONVERSATION_HISTORY', 111, 'conversationHistory'],
   101: ['SYSTEM_MESSAGE', 114, 'systemMessage'],
@@ -263,7 +278,7 @@ function payload(kind: number, f: Fields): AgyRecord {
         media: repeated(f, 20).map(media),
       });
     case 17:
-      return { error: error(sub(f, 3)) };
+      return compact({ error: error(sub(f, 3)), shouldShowUser: optionalBool(f, 5), shouldShowModel: optionalBool(f, 4) });
     case 21:
       return compact({
         commandLine: str(f, 23) ?? str(f, 1),
@@ -295,10 +310,17 @@ function payload(kind: number, f: Fields): AgyRecord {
       });
     case 23:
       return compact({ sessionSummary: str(f, 5), conversationTitle: str(f, 10), modelSummarizationFailed: !!num(f, 16) });
+    case 82:
+      return compact({ notificationContent: str(f, 2) });
     case 90:
       return compact({ content: str(f, 1) });
     case 101:
-      return compact({ message: str(f, 1), eventType: str(f, 3) });
+      return compact({
+        message: str(f, 1),
+        renderInfo: f.has(2) ? renderInfo(sub(f, 2)) : undefined,
+        eventType: str(f, 3),
+        agentMessage: f.has(4) ? compact({ hideFromUser: optionalBool(sub(f, 4), 11) }) : undefined,
+      });
     case 127:
       return invoke(f);
     case 138:
@@ -349,8 +371,10 @@ function decodeStep(row: AgyRecord): AgyRecord {
     ['permissions', 133],
     ['task_details', 148],
   ] as const) {
-    const b = asBlob(row[column]);
-    if (!Buffer.from(b).equals(Buffer.from(blob(f, n) ?? []))) refuse(`${column} disagrees with payload`);
+    const embedded = blob(f, n);
+    // agy 1.5.10 can store permission grants only in the full step payload.
+    if (column === 'permissions' && row[column] === null) continue;
+    if (!Buffer.from(asBlob(row[column])).equals(Buffer.from(embedded ?? []))) refuse(`${column} disagrees with payload`);
   }
   if (f.has(6)) refuse('embedded subtrajectory');
   const status = statusNames[row.status];
