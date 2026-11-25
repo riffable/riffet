@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Shift-click the settings gear in the desktop web sidebar to open Settings in a new browser window.
 - Open a side chat from a passage in a Cursor, Antigravity, Pi, Droid, or TRAE CLI conversation and follow up using the same provider.
 - The Mac app now has a single interface style, Riffet. The Native and Line styles and the Interface style setting are gone; anyone who picked them now sees Riffet.
 - Agent answers on iPhone are easier to read. Lines are evenly spaced, and paragraphs and list items have clear gaps between them. Inline code is set in a smaller monospace face with no gray box behind it. File names are underlined with a dashed line instead of being shown as blue links.

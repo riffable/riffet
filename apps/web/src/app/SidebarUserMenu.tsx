@@ -38,16 +38,22 @@ export function SidebarSettingsButton({ backend, onOpen }: { backend?: NativeBac
   return (
     <Tip label={label} side="top">
       <Button
+        asChild
         size="icon-sm"
         variant="quiet"
         aria-label={ariaLabel}
         onPointerEnter={preloadSettings}
         onFocus={preloadSettings}
-        onClick={onOpen}
         className="relative"
       >
-        <IconSettings />
-        {backendNotice && <StatusDot tone="warning" className="absolute right-1 bottom-1 ring-2 ring-canvas" />}
+        <a href="/settings" onClick={event => {
+          if (event.defaultPrevented || event.button !== 0 || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) return;
+          event.preventDefault();
+          onOpen();
+        }}>
+          <IconSettings />
+          {backendNotice && <StatusDot tone="warning" className="absolute right-1 bottom-1 ring-2 ring-canvas" />}
+        </a>
       </Button>
     </Tip>
   );
