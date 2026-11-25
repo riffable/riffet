@@ -91,6 +91,8 @@ export interface ServiceMonitorSnapshot {
     pid: number; version: string; nodeVersion: string; platform: string; arch: string;
     startedAt: string; uptimeSec: number;
     cpuPercent: number; rssBytes: number; heapUsedBytes: number; heapTotalBytes: number; externalBytes: number;
+    /** Active server memory profile (`full` hub or `lite` low-footprint node). */
+    profile?: 'full' | 'lite';
   };
   host: { hostname: string; cpuModel: string; cpuCount: number; loadAvg: [number, number, number]; totalMemBytes: number; freeMemBytes: number; uptimeSec: number };
   eventLoop: { p50Ms: number; p99Ms: number; maxMs: number; utilization: number; stalls: number; lastStallAt?: string; recentLagMs: number };
@@ -108,6 +110,8 @@ export interface ServiceMonitorSnapshot {
   processes: ServiceProcess[];
   /** Absent until the reclaimer's first pass, a couple of minutes after the service starts. */
   agentProcesses?: AgentProcessReport;
+  /** Server-side caches registered in `ServerCacheRegistry` (docs/guide/performance.md §3.1). */
+  caches?: ClientCacheSample[];
   /** Clients that reported in the last six hours (§4), most recent first. */
   clients?: ClientMetrics[];
 }

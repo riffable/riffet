@@ -204,6 +204,7 @@ export interface StorePort {
   appendEvent(sessionId: string, type: string, data: Record<string, unknown>, extra?: { runId?: string; raw?: unknown }): WorkbenchEvent;
   nameFromMessage(sessionId: string, prompt: string): void;
   runChanged(run: Run): void;
+  sessionsChanged(ids: readonly string[]): void;
   projectsChanged(classified?: string): void;
   terminalsChanged(): void;
   marksChanged(): void;

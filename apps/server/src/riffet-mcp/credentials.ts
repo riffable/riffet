@@ -76,18 +76,32 @@ export class RiffetMcpCredentials {
     return this.credentialFile(sessionId);
   }
 
+  private readCredential(file: string): string | undefined {
+    try {
+      const saved = JSON.parse(readFileSync(file, 'utf8')) as { credential?: unknown };
+      return typeof saved.credential === 'string' ? saved.credential : undefined;
+    } catch { return undefined; }
+  }
+
+  private httpEndpoint(credential: string | undefined): { url: string; headers: Record<string, string> } | undefined {
+    if (!this.url || !credential || process.env.RIFFET_MCP_TRANSPORT === 'stdio') return undefined;
+    return { url: `${this.url}/api/riffet-mcp/http`, headers: { Authorization: `Bearer ${credential}` } };
+  }
+
   /**
    * A credential for a CLI started before its conversation exists (a warm one, `WarmPool`): it opens
    * nothing until `adopt` gives it to the conversation that takes the CLI, and `revoke(owner)` ends it.
    * Its file stays where the CLI was told, so adopting needs no relaunch.
    */
-  provisional(): { owner: string; command: string; args: string[]; credentialFile: string } {
+  provisional(): { owner: string; command: string; args: string[]; credentialFile: string; http?: { url: string; headers: Record<string, string> } } {
     const owner = `${PROVISIONAL}${randomBytes(8).toString('hex')}`;
     const id = randomBytes(8).toString('hex'), secret = randomBytes(32).toString('base64url');
+    const credential = `wkm_${id}_${secret}`;
     this.store.setSetting(CREDENTIALS, { ...this.rows(), [id]: { hash: hashSecret(secret), sessionId: owner, createdAt: new Date().toISOString(), folder: owner } });
-    this.writeFile(owner, `wkm_${id}_${secret}`, owner);
+    this.writeFile(owner, credential, owner);
     const credentialFile = this.credentialFile(owner);
-    return { owner, command: this.nodePath, args: [riffetMcpShimPath, '--credential', credentialFile], credentialFile };
+    const http = this.httpEndpoint(credential);
+    return { owner, command: this.nodePath, args: [riffetMcpShimPath, '--credential', credentialFile], credentialFile, ...(http ? { http } : {}) };
   }
 
   /** Gives a provisional credential to `sessionId`, which must hold none of its own. */
@@ -113,10 +127,11 @@ export class RiffetMcpCredentials {
     renameSync(temporary, file);
   }
 
-  /** The command line a CLI spawns for this conversation's Riffet MCP server. */
-  command(sessionId: string): { command: string; args: string[]; credentialFile: string } {
+  /** The command line (and optional Streamable HTTP spec) a CLI uses for this conversation's Riffet MCP server. */
+  command(sessionId: string): { command: string; args: string[]; credentialFile: string; http?: { url: string; headers: Record<string, string> } } {
     const credentialFile = this.ensure(sessionId);
-    return { command: this.nodePath, args: [riffetMcpShimPath, '--credential', credentialFile], credentialFile };
+    const http = this.httpEndpoint(this.readCredential(credentialFile));
+    return { command: this.nodePath, args: [riffetMcpShimPath, '--credential', credentialFile], credentialFile, ...(http ? { http } : {}) };
   }
 
   /** Revokes the conversation's credential and removes its file; a later launch with tool groups issues a new one. */

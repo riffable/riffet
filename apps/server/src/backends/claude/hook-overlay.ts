@@ -124,7 +124,10 @@ export class ClaudeHookOverlay {
     const riffetMcp = draft ? draft.riffetMcp : this.deps.host.riffetMcp?.server(this.deps.session().id);
     if (riffetMcp) {
       this.mcpConfigFile = join(this.tempDir!, 'mcp.json');
-      await writeFile(this.mcpConfigFile, `${JSON.stringify({ mcpServers: { [riffetMcp.name]: { type: 'stdio', command: riffetMcp.command, args: riffetMcp.args } } })}\n`, { mode: 0o600 });
+      const serverEntry = riffetMcp.http
+        ? { type: 'http', url: riffetMcp.http.url, headers: riffetMcp.http.headers }
+        : { type: 'stdio', command: riffetMcp.command, args: riffetMcp.args };
+      await writeFile(this.mcpConfigFile, `${JSON.stringify({ mcpServers: { [riffetMcp.name]: serverEntry } })}\n`, { mode: 0o600 });
     } else this.mcpConfigFile = undefined;
     // Extensions this conversation switched off (docs/EXTENSIONS.md): read from the session record, so a change applies at the next launch like its tool groups.
     const record = draft ? undefined : this.deps.host.getSession(this.deps.session().id);

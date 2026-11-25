@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { configure, resolveLaunchOptions, saveLaunchConfig, validateLaunchOptions, serve, type LaunchOptions } from './launch.js';
+import { argsFor, configure, resolveLaunchOptions, saveLaunchConfig, validateLaunchOptions, serve, type LaunchOptions } from './launch.js';
 import { createApp } from '../app.js';
 vi.mock('../app.js',()=>({createApp:vi.fn()}));
 describe('persistent server launch configuration',()=>{
@@ -56,6 +56,24 @@ describe('persistent server launch configuration',()=>{
       expect(readFileSync(join(stateDir,'server-config.json'),'utf8')).toBe(before);
       expect(existsSync(join(stateDir,'daemon.json'))).toBe(false);
       expect(existsSync(join(stateDir,'server.lock'))).toBe(false);
+    }finally{rmSync(stateDir,{recursive:true,force:true});}
+  });
+  it('validates and preserves --profile and --idle-exit in saved launch args',()=>{
+    const stateDir=mkdtempSync(join(tmpdir(),'riffet-launch-profile-'));
+    try {
+      const {command,opts}=options(['--profile','lite','--idle-exit','30m'],stateDir);
+      const resolved=resolveLaunchOptions(opts,command);
+      expect(()=>validateLaunchOptions(resolved)).not.toThrow();
+      const args=argsFor(resolved);
+      expect(args).toContain('--profile');
+      expect(args).toContain('lite');
+      expect(args).toContain('--idle-exit');
+      expect(args).toContain('30m');
+
+      const badProfile=options(['--profile','ultra'],stateDir);
+      expect(()=>validateLaunchOptions(badProfile.opts)).toThrow('--profile');
+      const badIdle=options(['--idle-exit','forever'],stateDir);
+      expect(()=>validateLaunchOptions(badIdle.opts)).toThrow('--idle-exit');
     }finally{rmSync(stateDir,{recursive:true,force:true});}
   });
 });

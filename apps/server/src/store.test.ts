@@ -673,4 +673,31 @@ describe('native backend session identity', () => {
       expect(() => store.getProject(created.id)).toThrow();
     } finally { store.close(); }
   });
+
+  it('prunes old exited terminals and detaches stale terminalId from cold sessions without losing nativeSessionId', () => {
+    const store = new Store(':memory:');
+    try {
+      const project = store.createProject('/tmp/prune-terminals', 'Prune terminals');
+      const oldAt = '2026-10-01T00:00:00.000Z';
+      const cutoff = '2026-11-01T00:00:00.000Z';
+
+      store.saveTerminal({ id: 'term-cold', projectId: project.id, title: 'cold', kind: 'native', state: 'exited', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: oldAt });
+      store.saveTerminal({ id: 'term-working', projectId: project.id, title: 'working', kind: 'native', state: 'exited', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: oldAt });
+      store.saveTerminal({ id: 'term-active-run', projectId: project.id, title: 'run', kind: 'native', state: 'exited', persistent: true, epoch: 1, cols: 80, rows: 24, createdAt: oldAt });
+
+      const cold = store.createSession({ projectId: project.id, kind: 'native', nativeSessionId: 'native-cold', terminalId: 'term-cold' });
+      const working = store.createSession({ projectId: project.id, kind: 'native', nativeSessionId: 'native-working', terminalId: 'term-working' });
+      store.updateSession(working.id, { state: 'running' });
+      const withRun = store.createSession({ projectId: project.id, kind: 'native', nativeSessionId: 'native-run', terminalId: 'term-active-run' });
+      const activeRun = store.acceptNativeRun(withRun.id, 'cmd-1', { text: 'hi', attachmentIds: [], context: [] }, { mode: 'agent' });
+      store.transitionNativeRun(activeRun.id, ['queued'], { delivery: 'observed', terminalId: 'term-active-run' }, { state: 'running' });
+
+      expect(store.pruneExitedTerminals(cutoff)).toBe(1);
+      expect(store.listTerminals().map(t => t.id).sort()).toEqual(['term-active-run', 'term-working']);
+      expect(store.getSession(cold.id).terminalId).toBeUndefined();
+      expect(store.getSession(cold.id).nativeSessionId).toBe('native-cold');
+      expect(store.getSession(working.id).terminalId).toBe('term-working');
+      expect(store.getSession(withRun.id).terminalId).toBe('term-active-run');
+    } finally { store.close(); }
+  });
 });

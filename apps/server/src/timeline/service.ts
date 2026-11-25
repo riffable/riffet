@@ -51,6 +51,11 @@ export interface TimelineDeps {
   stepRows?: number;
   /** Lanes kept folded in memory; a lane past it folds its open turn again when next needed. */
   hotLanes?: number;
+  /** Bounded LRU cap for subagent summaries and file-change digests; defaults to `SERVER_BUDGET.timelineSummaryEntries`. */
+  summaryEntries?: number;
+  /** Bounded LRU cap for expanded truncated row payloads; defaults to `STORAGE_BUDGET`. */
+  expandedRowCacheEntries?: number;
+  expandedRowCacheBytes?: number;
   debounceMs?: number;
   /** How long an empty rebuilt log waits for replacement rows before folding and emitting `reset`. */
   rebuildSettleMs?: number;
@@ -367,15 +372,17 @@ export class TimelineService {
   }
 
   private cacheExpanded(cacheKey: string, bytes: Buffer): void {
+    const maxEntries = this.deps.expandedRowCacheEntries ?? STORAGE_BUDGET.expandedRowCacheEntries;
+    const maxBytes = this.deps.expandedRowCacheBytes ?? STORAGE_BUDGET.expandedRowCacheBytes;
     const existing = this.expandedCache.get(cacheKey);
     if (existing) {
       this.expandedCacheBytes -= existing.length;
       this.expandedCache.delete(cacheKey);
     }
-    if (bytes.length > STORAGE_BUDGET.expandedRowCacheBytes) return;
+    if (bytes.length > maxBytes) return;
     this.expandedCache.set(cacheKey, bytes);
     this.expandedCacheBytes += bytes.length;
-    while (this.expandedCache.size > STORAGE_BUDGET.expandedRowCacheEntries || this.expandedCacheBytes > STORAGE_BUDGET.expandedRowCacheBytes) {
+    while (this.expandedCache.size > maxEntries || this.expandedCacheBytes > maxBytes) {
       const oldest = this.expandedCache.keys().next().value;
       if (oldest === undefined) break;
       const evicted = this.expandedCache.get(oldest)!;
@@ -625,6 +632,27 @@ export class TimelineService {
     if (queued) for (const id of [...this.dropping]) if (owned(id)) this.dropping.delete(id);
   }
 
+  /** Observability snapshot for `ServerCacheRegistry`. */
+  cacheStats(): { count: number; bytes: number; limitBytes: number } {
+    return {
+      count: this.hot.size + this.summaries.size + this.laneFileChanges.size + this.expandedCache.size,
+      bytes: this.expandedCacheBytes,
+      limitBytes: this.deps.expandedRowCacheBytes ?? STORAGE_BUDGET.expandedRowCacheBytes,
+    };
+  }
+
+  /** Drops idle hot lanes, cached subagent summaries, file-change digests, and expanded row payloads. */
+  trimCaches(): void {
+    this.clearExpandedFor();
+    this.summaries.clear();
+    this.staleSummaries.clear();
+    this.laneFileChanges.clear();
+    for (const id of [...this.hot.keys()]) {
+      if (this.listeners.has(id) || this.work.has(id) || this.pendingResets.has(id)) continue;
+      this.hot.delete(id);
+    }
+  }
+
   close(): void {
     this.closed = true;
     this.deps.journal.setFallbackBlobResolver(undefined);
@@ -818,9 +846,10 @@ export class TimelineService {
   }
 
   private putSummaryCache(id: string, summary: SubagentProgress): void {
+    const cap = this.deps.summaryEntries ?? SERVER_BUDGET.timelineSummaryEntries;
     this.summaries.delete(id);
     this.summaries.set(id, summary);
-    while (this.summaries.size > SERVER_BUDGET.timelineSummaryEntries) {
+    while (this.summaries.size > cap) {
       const oldest = this.summaries.keys().next().value as string | undefined;
       if (!oldest) break;
       this.summaries.delete(oldest);
@@ -878,9 +907,10 @@ export class TimelineService {
         byPath.set(change.path, current ? { ...current, added: current.added + change.added, removed: current.removed + change.removed } : change);
       }
     }
+    const cap = this.deps.summaryEntries ?? SERVER_BUDGET.timelineSummaryEntries;
     this.laneFileChanges.delete(id);
     this.laneFileChanges.set(id, read);
-    while (this.laneFileChanges.size > SERVER_BUDGET.timelineSummaryEntries) {
+    while (this.laneFileChanges.size > cap) {
       const oldest = this.laneFileChanges.keys().next().value as string | undefined;
       if (!oldest) break;
       this.laneFileChanges.delete(oldest);

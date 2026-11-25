@@ -3,9 +3,10 @@ import type { DatabaseSync } from 'node:sqlite';
 import { MESSAGE_SEARCH_BUDGET, STORAGE_BUDGET } from '../../../../packages/contracts/src/index.js';
 import type { IdentifiedSession } from '../session-identity.js';
 import { openSqliteDatabase, quickCheckDatabase, type StorageLayoutPaths } from '../sqlite-storage.js';
+import type { ServerProfile } from '../memory/profile.js';
 import { now, type IndexedMessageRow, type MessageSearchHit, type StorePort } from './shared.js';
 
-export function openDerivedDatabase(layout: StorageLayoutPaths | undefined): DatabaseSync {
+export function openDerivedDatabase(layout: StorageLayoutPaths | undefined, profile: ServerProfile = 'full'): DatabaseSync {
   const derivedPath = layout?.derived ?? ':memory:';
   const init = (db: DatabaseSync) => {
     db.exec(`
@@ -23,7 +24,7 @@ export function openDerivedDatabase(layout: StorageLayoutPaths | undefined): Dat
   };
   let opened: DatabaseSync | undefined;
   try {
-    opened = openSqliteDatabase(derivedPath, { role: 'derived' });
+    opened = openSqliteDatabase(derivedPath, { role: 'derived', profile });
     if (derivedPath !== ':memory:' && !quickCheckDatabase(opened)) {
       throw new Error('derived.db failed PRAGMA quick_check');
     }
@@ -33,7 +34,7 @@ export function openDerivedDatabase(layout: StorageLayoutPaths | undefined): Dat
     if (derivedPath === ':memory:') throw error;
     console.warn('[riffet] derived.db could not be opened or failed integrity check; recreating rebuildable cache:', error);
     for (const suffix of ['', '-wal', '-shm']) rmSync(`${derivedPath}${suffix}`, { force: true });
-    return init(openSqliteDatabase(derivedPath, { role: 'derived' }));
+    return init(openSqliteDatabase(derivedPath, { role: 'derived', profile }));
   }
 }
 

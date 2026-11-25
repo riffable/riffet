@@ -17,6 +17,9 @@ import { registerPluginViewFrame } from './plugins/view-frame.js';
 import { applyProcessEnvironment, expandHome } from './environment.js';
 import { Store } from './store.js';
 import { startWalCheckpoints } from './wal-checkpoint.js';
+import { configureExecWorker, execWorkerStats, trimExecWorker } from './exec.js';
+import { ServerCacheRegistry } from './memory/cache-registry.js';
+import { serverProfileBudget, type ServerProfile } from './memory/profile.js';
 import { startIntegrityCheck } from './storage/integrity.js';
 import { Auth, FILE_SITE_ROUTE, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
 import { AppError, requireString } from './errors.js';
@@ -150,7 +153,7 @@ import { LINK_TUNNEL_ROUTE, registerLinkRoutes } from './routes/links.js';
 import { ChannelService, channelProvider } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
 import { registerChannelRoutes } from './channels/routes.js';
-import { RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
+import { RIFFET_MCP_HTTP_ROUTE, RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
 import { CouncilService } from './council/service.js';
 import { AgentCallService } from './agent-calls/service.js';
 import { registerAgentCallRoutes } from './routes/agent-calls.js';
@@ -158,6 +161,8 @@ import { AgentSeats, councilProject } from './council/seats.js';
 import { registerCouncilRoutes } from './routes/council.js';
 
 export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; token?:string; auth?:boolean; allowedHosts?:string[]; webRoot?:string; logger?:boolean; instanceId?:string;
+  /** Runtime memory profile: `full` (default hub) or `lite` (low-footprint peer node). */
+  profile?:ServerProfile;
   /** The trusted launcher may provide the system Documents directory; saved settings win. */
   taskWorkspaceDefaultRoot?:string;
   /** CPU-profile severe event-loop stalls into `<stateDir>/diagnostics`; only the served daemon does. */
@@ -173,6 +178,9 @@ export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; t
   /** Replaces the built-in IM providers (docs/design/channels.md); tests only. */
   channelProviders?:ChannelProvider[]; }
 export async function createApp(options: AppOptions = {}) {
+  const profile:ServerProfile=options.profile??'full';
+  const profileBudget=serverProfileBudget(profile);
+  const lite=profile==='lite';
   const stateDir=resolve(options.stateDir??join(homedir(),'.local/share/riffet'));
   await mkdir(stateDir,{recursive:true,mode:0o700});
   migratePluginStorage(stateDir);
@@ -180,25 +188,28 @@ export async function createApp(options: AppOptions = {}) {
   // Resolve the daemon's environment before anything reads it: settings fall back to process.env,
   // and a backend CLI is resolved against PATH.
   await applyProcessEnvironment({stateDir});
+  configureExecWorker({idleMs:profileBudget.execWorkerIdleMs});
   const legacyCliPath=options.cliPath??process.env.RIFFET_CLI??'cursor-agent';
   // A config that is about to be saved is checked by the driver of the backend it belongs to.
   const settings:SettingsService=new SettingsService({cliPath:legacyCliPath,stateDir,validateProfileConfig:(backendId,config)=>nativeBackends.catalog.validateProfileConfig(backendId,config),consumesModelSources:backendId=>nativeBackends.catalog.consumesProtocols(backendId).length>0});
   const themes=new ThemeService({stateDir});
   const owner=new OwnerService({stateDir,avatarStyles:()=>plugins});
-  const store=new Store(join(stateDir,'workbench.db')); store.recoverInterruptedRuns();
+  const store=new Store(join(stateDir,'workbench.db'),{profile}); store.recoverInterruptedRuns();
   // 会话标题规则 (docs/SESSION-TITLES.md): read on every session write, so kept as of the last save rather than read from disk.
   const titleRuleConfig=(value:import('../../../packages/contracts/src/index.js').AppSettings)=>({rules:value.titleRules,timeZone:value.assistant?.timeZone});
   let titleRules=titleRuleConfig(settings.getSettings());
   store.configureTitleRules(()=>titleRules);
   store.refreshDisplayTitles();
-  // Checkpoints of all three write-ahead logs run on one worker thread, not inside whichever commit crosses the limit.
+  // Checkpoints of all three write-ahead logs run on one worker thread (full) or inline when idle (lite).
   const stopWalCheckpoints=startWalCheckpoints(
     store.layout
       ? [{ db: store.db, path: store.layout.control }, { db: store.journalDb, path: store.layout.journal }, { db: store.derivedDb, path: store.layout.derived }]
       : [{ db: store.db, path: store.path }],
+    undefined,
+    { mode: lite ? 'inline' : 'worker', idleMs: profileBudget.walWorkerIdleMs },
   );
-  // The two databases that cannot be rebuilt are scanned once in a worker after start; a failure is logged, nothing is deleted.
-  const cancelIntegrityCheck=startIntegrityCheck(stateDir,{enabled:store.layout!==undefined});
+  // The two databases that cannot be rebuilt are scanned once in a worker after start; skipped in lite mode.
+  const cancelIntegrityCheck=startIntegrityCheck(stateDir,{enabled:store.layout!==undefined && !lite});
   const contextReferences:SessionReferenceService=new SessionReferenceService(store,stateDir,(id,maxBytes,signal):Promise<import('../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]|undefined>=>nativeBackends.contextTranscript(id,maxBytes,signal));
   const taskWorkspaces=new TaskWorkspaceService({store,settings,stateDir,defaultRoot:options.taskWorkspaceDefaultRoot??process.env.RIFFET_TASK_WORKSPACE_ROOT,
     deniedRoots:()=>[
@@ -382,7 +393,8 @@ export async function createApp(options: AppOptions = {}) {
   const loopbackBinding=['127.0.0.1','localhost','::1'].includes((options.host??'127.0.0.1').replace(/^\[|\]$/g,'').toLowerCase());
   const allowOutsideRead=(headers?:import('node:http').IncomingHttpHeaders)=>settings.getSettings().allowOutsideRead??(loopbackBinding&&!proxiedRequest(headers));
   const effectiveSettings=async(headers?:import('node:http').IncomingHttpHeaders)=>({...await effectiveSettingsForClient(headers,settings.getSettings(),nativeBackends),allowOutsideRead:allowOutsideRead(headers)});
-  const monitor=new ServiceMonitor({store,terminal,streams,agentProcesses:()=>reclaimerRef?.report()});
+  const cacheRegistry=new ServerCacheRegistry();
+  const monitor=new ServiceMonitor({store,terminal,streams,profile,agentProcesses:()=>reclaimerRef?.report(),caches:()=>cacheRegistry.report()});
   monitor.observe(app);
   app.addHook('onRequest',async(request,reply)=>{
     // A connection that came through a server link (docs/SERVER-LINKS.md §4): the tunnel authenticated it, so only
@@ -402,8 +414,8 @@ export async function createApp(options: AppOptions = {}) {
     if (isApiRequest(request)) {
       reply.header('Cache-Control','no-store');
       const route=request.routeOptions?.url ?? apiRoutePath(request.url);
-      // The Riffet MCP shim presents its conversation-bound credential to its own route only.
-      if (route===RIFFET_MCP_ROUTE) return;
+      // The Riffet MCP shim or direct HTTP client presents its conversation-bound credential to its own route only.
+      if (route===RIFFET_MCP_ROUTE||route===RIFFET_MCP_HTTP_ROUTE) return;
       if (auth.sharePreview(request)) return;
       // The token in the path is the credential; the route refuses a missing or stale one itself.
       if (route===FILE_SITE_ROUTE) return;
@@ -452,9 +464,14 @@ export async function createApp(options: AppOptions = {}) {
   const nativeRuns=(id:string)=>[...new Map([...store.listRecentNativeRuns(id).reverse(),...store.listUnfinishedNativeRuns(id)].map(run=>[run.id,run])).values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   // Sync v3 (docs/SYNC-V3.md): the journal folded into timeline rows in L2 `derived.db`, and each backend's transcript read into L1 `journal.db`.
   const timeline=new TimelineService({db:store.derivedDb,journal:store.journal,listRuns:id=>store.listRuns(id),onRunChanged:listener=>store.onRunChanged(listener),
+    hotLanes:profileBudget.timelineHotLanes,summaryEntries:profileBudget.timelineSummaryEntries,
+    expandedRowCacheEntries:profileBudget.expandedRowCacheEntries,expandedRowCacheBytes:profileBudget.expandedRowCacheBytes,
     listJobs:id=>nativeBackends.listJobs(id),onJobChanged:listener=>nativeBackends.onJobChanged(listener),
     activity:id=>store.sessionActivity(id),
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
+  cacheRegistry.register({name:'store',stats:()=>store.cacheStats(),trim:()=>store.trimCaches()});
+  cacheRegistry.register({name:'timeline',stats:()=>timeline.cacheStats(),trim:()=>timeline.trimCaches()});
+  cacheRegistry.register({name:'exec-worker',stats:()=>execWorkerStats(),trim:()=>trimExecWorker()});
   // Canvas summaries are written on request, one turn at a time (docs/PLUGIN_ARCHITECTURE.md, canvas).
   const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>resolveAuxiliaryModel(settings.getSettings(),'summary'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);},record:recordAuxiliaryCall});
   const sessionMedia=new SessionMedia(sessionId=>timeline.namedPaths(sessionId),sessionId=>timeline.revision(sessionId),sessionId=>timeline.ready(sessionId,'main'),
@@ -487,8 +504,8 @@ export async function createApp(options: AppOptions = {}) {
     }catch{return undefined;}
   },subscribeControlRefresh:listener=>{controlRefreshListeners.add(listener);return ()=>{controlRefreshListeners.delete(listener);};}});
   // Needs the timeline, so it is built here rather than beside orchestration. Unfinished turn cards are taken over once connected.
-  const channels=new ChannelService({store,settings,nativeBackends,dispatch,sessionCommands,sessionLock,timeline,ingest,workspace,owner,stateDir,...(options.channelProviders?{providers:()=>options.channelProviders!}:{providers:()=>plugins.imChannels().map(({id,provider})=>channelProvider(id,provider)),onProvidersChanged:listener=>plugins.onChange(listener)})});
-  void channels.start().catch(error=>console.warn('[riffet] channels failed to start',error));
+  const channels=new ChannelService({store,settings,nativeBackends,dispatch,sessionCommands,sessionLock,timeline,ingest,workspace,owner,stateDir,...(options.channelProviders?{providers:()=>options.channelProviders!}:{providers:()=>plugins.imChannels().map(({id,title,provider})=>channelProvider(id,provider,title)),onProvidersChanged:listener=>plugins.onChange(listener)})});
+  if(!lite)void channels.start().catch(error=>console.warn('[riffet] channels failed to start',error));
   const externalSessions=new ExternalSessions({store,settings,nativeBackends,auth});
   const terminalHolds=new TerminalHolds({store,nativeBackends,runtime:sessionLock,log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
   terminalHolds.start();
@@ -557,7 +574,7 @@ export async function createApp(options: AppOptions = {}) {
       },
     },
   });
-  const deps:RouteDeps={links:()=>linksRef,bindWorkbench:(request,session,run)=>{
+  const deps:RouteDeps={profile,links:()=>linksRef,bindWorkbench:(request,session,run)=>{
     if((!request.headers['x-riffet-workbench'] && !request.headers.authorization) || session.origin?.kind==='assistant') return;
     const project=store.getProject(session.projectId);
     if(project.system==='assistant' && project.mainSessionId===session.id) workbenchAppearance.bind(request,run);
@@ -567,7 +584,7 @@ export async function createApp(options: AppOptions = {}) {
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
   // Unauthenticated on purpose: iOS reads it here to match a push to its server before it signs in; it is an id, not a credential.
   const serverId=readServerId(stateDir);
-  app.get('/health',async()=>({ok:true,version:SERVER_VERSION,build:SERVER_BUILD,instanceId:options.instanceId,serverId,managedBy:LAUNCHED_BY,protocol:PROTOCOL_INFO}));
+  app.get('/health',async()=>({ok:true,version:SERVER_VERSION,build:SERVER_BUILD,instanceId:options.instanceId,serverId,managedBy:LAUNCHED_BY,profile,protocol:PROTOCOL_INFO}));
   registerUpdateRoutes(app,stateDir);
   registerServiceRoutes(app,deps);
   registerProjectRoutes(app,deps);
@@ -647,11 +664,13 @@ export async function createApp(options: AppOptions = {}) {
     try{riffetMcpCredentials.setUrl(`http://${host}:${address.port}`);}catch(error){app.log.warn({err:error},'Riffet MCP credential refresh failed');}
   });
 
-  registerWebAssets(app, options.webRoot, documentProofs);
-  // The math page and its KaTeX assets: the same engine the web bundle uses, for clients that have
-  // no TeX renderer of their own (see `math-assets.ts`).
-  registerMathAssets(app);
-  registerDiagramAssets(app);
+  if(!lite){
+    registerWebAssets(app, options.webRoot, documentProofs);
+    // The math page and its KaTeX assets: the same engine the web bundle uses, for clients that have
+    // no TeX renderer of their own (see `math-assets.ts`).
+    registerMathAssets(app);
+    registerDiagramAssets(app);
+  }
   registerContentPreview(app);
   registerPluginViewFrame(app);
   app.addHook('preClose',async()=>{for(const stream of streams)stream.end();});
@@ -747,11 +766,13 @@ export async function createApp(options: AppOptions = {}) {
     supervised:sessionId=>{const run=runs.bySession(sessionId);return run?.job==='supervise'&&run.subject?{workItemId:run.subject,runId:run.id}:undefined;},
     delegations:{list:()=>delegations.list(),create:input=>delegations.create(input),update:(id,input)=>delegations.update(id,input),end:(id,by)=>delegations.end(id,by)},
   };
-  const stopAssistantWork=[runs.watch(),delegations.start(),consolidation.start(),supervision.start(),verification.start()];
+  const stopAssistantWork:Array<()=>void>=lite?[]:[runs.watch(),delegations.start(),consolidation.start(),supervision.start(),verification.start()];
   // Tasks whose last prerequisite was done while the server was stopping (docs/TASK-BOARD.md §4.4).
-  const resumeWaiting=setTimeout(()=>{try{workItems.resumeWaiting();}catch(error){console.warn('[riffet] waiting tasks were not started',error instanceof Error?error.message:error);}},15_000);
-  resumeWaiting.unref?.();
-  stopAssistantWork.push(()=>clearTimeout(resumeWaiting));
+  if(!lite){
+    const resumeWaiting=setTimeout(()=>{try{workItems.resumeWaiting();}catch(error){console.warn('[riffet] waiting tasks were not started',error instanceof Error?error.message:error);}},15_000);
+    resumeWaiting.unref?.();
+    stopAssistantWork.push(()=>clearTimeout(resumeWaiting));
+  }
   // docs/ASSISTANT.md §8.2: the capability packs of the enabled plugins are kept in `packs/`; the main conversation's CLI restarts when they change.
   let packProblemIds=new Set<string>();
   let packSync:Promise<unknown>=Promise.resolve();
@@ -764,16 +785,30 @@ export async function createApp(options: AppOptions = {}) {
     for(const [id,problem] of result.problems)plugins.setAssistantPackProblem(id,problem);
     if(result.changed){const id=assistantMain();if(id)reclaimer.restartWhenRested(id);}
   }).catch(error=>console.warn('[riffet] plugin capability packs were not synced',error));};
-  stopAssistantWork.push(plugins.onChange(syncPacks));
-  syncPacks();
-  workItems.retitleBriefConversations();
-  workItems.dropComposerItems();
+  if(!lite){
+    stopAssistantWork.push(plugins.onChange(syncPacks));
+    syncPacks();
+    workItems.retitleBriefConversations();
+    workItems.dropComposerItems();
+  }
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),
     archive:sessionId=>patchSession(deps,sessionId,{archived:true}),
     log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
-  quickChats.start();
-  statsBackfill.start();
-  titles.start();
+  if(!lite){
+    quickChats.start();
+    statsBackfill.start();
+    titles.start();
+  }
+  const stopCacheTrim=cacheRegistry.startAutoTrim({
+    isBusy:()=>{
+      if(streams.size>0||terminal.viewerCount()>0||monitor.inFlightRequests>0)return true;
+      const sessions=store.stateCounts().sessions;
+      return ['starting','running','waiting','cancelling'].some(state=>(sessions[state]??0)>0);
+    },
+    idleMs:profileBudget.idleTrimMs,
+    rssSoftLimitBytes:profileBudget.steadyFootprintBytes,
+    pressure:()=>reclaimer.report()?.pressure??'normal',
+  });
   const pruneOldExitedTerminals=()=>{
     const terminalCutoff=new Date(Date.now()-SERVER_BUDGET.exitedTerminalRetentionDays*86_400_000).toISOString();
     try{store.pruneExitedTerminals(terminalCutoff);}catch(error){app.log.warn({err:error},'terminal pruning failed');}
@@ -809,12 +844,12 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['code-index',()=>workspace.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['cache-trim',()=>stopCacheTrim()],['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['code-index',()=>workspace.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,links,registeredRoutes,workItems,pluginApprovals,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,profile,cacheRegistry,links,registeredRoutes,workItems,pluginApprovals,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */

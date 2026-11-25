@@ -205,6 +205,10 @@ export const SERVER_BUDGET = {
   timelineHotLanes: 16,
   /** Bounded LRU cap for subagent summaries and file-change digests cached in `TimelineService`. */
   timelineSummaryEntries: 256,
+  /** Idle duration (ms) with no live streams, terminals or running turns before server caches & SQLite memory trim. */
+  idleTrimMs: 5 * 60_000,
+  /** Idle duration (ms) before the one-shot command worker (`exec.ts`) exits to free its V8 isolate. */
+  execWorkerIdleMs: 120_000,
   /** Largest single native transcript a background job (usage backfill) reads; larger ones are skipped. */
   backgroundReadBytes: 32 * MIB,
   /** Native transcripts kept parsed in memory for reuse, counted by file size. */
@@ -213,6 +217,52 @@ export const SERVER_BUDGET = {
   forkTranscriptBytes: 64 * MIB,
   /** An event-loop block this long is a defect: it is logged and profiled (`loop-health.ts`). */
   loopBlockMs: 200,
+} as const;
+
+/** Total host RAM ceiling (bytes) at or below which `--profile=auto` selects the low-footprint `lite` profile. */
+export const SERVER_PROFILE_AUTO_RAM_BYTES = 4 * 1024 * MIB;
+
+/**
+ * Per-profile server memory & cache ceilings (`full` hub vs `lite` low-footprint peer node).
+ * All values are integers so `pnpm gen:budgets` exports them cleanly across platforms.
+ */
+export const SERVER_PROFILE_BUDGET = {
+  full: {
+    controlCacheBytes: 16 * MIB,
+    journalCacheBytes: 32 * MIB,
+    derivedCacheBytes: 16 * MIB,
+    controlMmapBytes: 32 * MIB,
+    journalMmapBytes: 64 * MIB,
+    derivedMmapBytes: 32 * MIB,
+    timelineHotLanes: 16,
+    timelineSummaryEntries: 256,
+    expandedRowCacheEntries: 64,
+    expandedRowCacheBytes: 16 * MIB,
+    parsedTranscriptBytes: 64 * MIB,
+    execWorkerIdleMs: 120_000,
+    walWorkerIdleMs: 120_000,
+    idleTrimMs: 5 * 60_000,
+    steadyFootprintBytes: 512 * MIB,
+    v8MaxOldSpaceMb: 0,
+  },
+  lite: {
+    controlCacheBytes: 4 * MIB,
+    journalCacheBytes: 6 * MIB,
+    derivedCacheBytes: 2 * MIB,
+    controlMmapBytes: 0,
+    journalMmapBytes: 0,
+    derivedMmapBytes: 0,
+    timelineHotLanes: 4,
+    timelineSummaryEntries: 32,
+    expandedRowCacheEntries: 16,
+    expandedRowCacheBytes: 4 * MIB,
+    parsedTranscriptBytes: 16 * MIB,
+    execWorkerIdleMs: 15_000,
+    walWorkerIdleMs: 0,
+    idleTrimMs: 2 * 60_000,
+    steadyFootprintBytes: 160 * MIB,
+    v8MaxOldSpaceMb: 192,
+  },
 } as const;
 
 /** Database storage layout, compression, compaction and incremental reclaim budgets (docs/guide/performance.md §3.7). */

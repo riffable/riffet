@@ -1,8 +1,9 @@
 import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { STORAGE_BUDGET } from '../../../packages/contracts/src/budgets.js';
+import { SERVER_PROFILE_BUDGET, STORAGE_BUDGET } from '../../../packages/contracts/src/budgets.js';
 import { eventLoopBusy } from './loop-health.js';
+import type { ServerProfile } from './memory/profile.js';
 
 /**
  * Physical layout of the three SQLite databases and external Tier-2 blob pool rooted beside `workbench.db`:
@@ -44,29 +45,39 @@ export function storageLayoutForControlDb(controlDbPath: string): StorageLayoutP
 
 export type SqliteStoreRole = 'control' | 'journal' | 'derived';
 
-/** Per-role page cache (KiB, negative for SQLite PRAGMA cache_size) and mmap ceiling (bytes), sized from `STORAGE_BUDGET`. */
-const ROLE_TUNING: Record<SqliteStoreRole, { cacheKiB: number; mmapBytes: number }> = {
-  control: { cacheKiB: Math.floor(STORAGE_BUDGET.controlCacheBytes / 1024), mmapBytes: STORAGE_BUDGET.controlMmapBytes },
-  journal: { cacheKiB: Math.floor(STORAGE_BUDGET.journalCacheBytes / 1024), mmapBytes: STORAGE_BUDGET.journalMmapBytes },
-  derived: { cacheKiB: Math.floor(STORAGE_BUDGET.derivedCacheBytes / 1024), mmapBytes: STORAGE_BUDGET.derivedMmapBytes },
-};
+/** Per-role page cache (KiB, negative for SQLite PRAGMA cache_size) and mmap ceiling (bytes), sized from `SERVER_PROFILE_BUDGET`. */
+function roleTuning(role: SqliteStoreRole, profile: ServerProfile): { cacheKiB: number; mmapBytes: number } {
+  const budget = SERVER_PROFILE_BUDGET[profile];
+  if (role === 'control') return { cacheKiB: Math.floor(budget.controlCacheBytes / 1024), mmapBytes: budget.controlMmapBytes };
+  if (role === 'journal') return { cacheKiB: Math.floor(budget.journalCacheBytes / 1024), mmapBytes: budget.journalMmapBytes };
+  return { cacheKiB: Math.floor(budget.derivedCacheBytes / 1024), mmapBytes: budget.derivedMmapBytes };
+}
 
-/** Opens a SQLite database with incremental auto-vacuum, WAL mode, NORMAL durability, and role-tuned cache/mmap settings. */
+/** Opens a SQLite database with incremental auto-vacuum, WAL mode, NORMAL durability, and role/profile-tuned cache/mmap settings. */
 export function openSqliteDatabase(
   path: string,
-  options: { foreignKeys?: boolean; timeout?: number; role?: SqliteStoreRole } = {},
+  options: { foreignKeys?: boolean; timeout?: number; role?: SqliteStoreRole; profile?: ServerProfile } = {},
 ): DatabaseSync {
   const isDisk = path !== ':memory:';
+  const profile = options.profile ?? 'full';
   if (isDisk) mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path, { timeout: options.timeout ?? 5000 });
   if (isDisk) chmodSync(path, 0o600);
-  const tuning = options.role ? ROLE_TUNING[options.role] : undefined;
+  const tuning = options.role ? roleTuning(options.role, profile) : undefined;
   const cachePragma = tuning ? ` PRAGMA cache_size=-${tuning.cacheKiB};` : '';
   const mmapPragma = isDisk && tuning ? ` PRAGMA mmap_size=${tuning.mmapBytes};` : '';
+  const tempStore = profile === 'lite' ? 'FILE' : 'MEMORY';
   db.exec(
-    `PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA temp_store=MEMORY;${cachePragma}${mmapPragma}${options.foreignKeys ? ' PRAGMA foreign_keys=ON;' : ''}`,
+    `PRAGMA auto_vacuum=INCREMENTAL; PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA temp_store=${tempStore};${cachePragma}${mmapPragma}${options.foreignKeys ? ' PRAGMA foreign_keys=ON;' : ''}`,
   );
   return db;
+}
+
+/** Releases as much non-essential SQLite page cache memory as possible back to the OS allocator. */
+export function shrinkSqliteMemory(db: DatabaseSync): void {
+  try {
+    db.exec('PRAGMA shrink_memory');
+  } catch { /* connection closed or read-only */ }
 }
 
 /** Runs SQLite's lightweight planner statistics refresh (`PRAGMA optimize`); safe to call on idle maintenance and before close. */

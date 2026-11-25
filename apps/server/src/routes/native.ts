@@ -194,6 +194,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     return dispatch.continue(request.params.id,request.params.runId,ids as string[]);
   });
   app.post<{Body:{projectId:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;claimId?:string}}>('/api/native/prewarm',async(request)=>{
+    if(deps.profile==='lite')return {state:'skipped',reason:'lite_profile'};
     const body=request.body;
     const project=store.getProject(requireString(body?.projectId,'projectId',100));
     if(body.backendId!==undefined)requireBackendVisibleToClient(request.headers,body.backendId);

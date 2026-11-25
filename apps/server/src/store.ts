@@ -21,7 +21,8 @@ import {
   applyNativeSessionIdPatch, normalizeRunIdentity, normalizeSessionIdentity,
   type IdentifiedRun, type IdentifiedSession,
 } from './session-identity.js';
-import { openSqliteDatabase, optimizeDatabase, storageLayoutForControlDb, type StorageLayoutPaths } from './sqlite-storage.js';
+import { openSqliteDatabase, optimizeDatabase, shrinkSqliteMemory, storageLayoutForControlDb, type StorageLayoutPaths } from './sqlite-storage.js';
+import type { ServerProfile } from './memory/profile.js';
 import * as derivedSearch from './store/derived-search.js';
 import * as maintenance from './store/maintenance.js';
 import * as runsApi from './store/runs.js';
@@ -126,7 +127,10 @@ export class Store {
    */
   private titleRules: () => { rules?: readonly TitleRule[]; timeZone?: string } = () => ({});
 
-  constructor(readonly path: string) {
+  readonly profile: ServerProfile;
+
+  constructor(readonly path: string, options: { profile?: ServerProfile } = {}) {
+    this.profile = options.profile ?? 'full';
     this.layout = storageLayoutForControlDb(path);
     if (path !== ':memory:') {
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
@@ -134,7 +138,7 @@ export class Store {
         try { migrateStorageLayout(path); } catch (error) { console.error('[riffet] storage layout migration failed:', error); throw error; }
       }
     }
-    this.db = openSqliteDatabase(path, { foreignKeys: true, role: 'control' });
+    this.db = openSqliteDatabase(path, { foreignKeys: true, role: 'control', profile: this.profile });
     const schemaVersion = (this.sql('PRAGMA user_version').get() as { user_version: number }).user_version;
     if (schemaVersion > SCHEMA_VERSION) { this.db.close(); throw new AppError('DATABASE_VERSION_NEWER', 'This workbench database requires a newer Riffet version', 409); }
     this.db.exec(`
@@ -165,7 +169,7 @@ export class Store {
       CREATE INDEX IF NOT EXISTS agent_call_turns_call ON agent_call_turns(call_id, created_at);
       CREATE INDEX IF NOT EXISTS agent_call_turns_caller ON agent_call_turns(caller_session_id, created_at);
       CREATE INDEX IF NOT EXISTS agent_call_turns_pending ON agent_call_turns(background) WHERE delivered_at IS NULL;`);
-    this.journalDb = openSqliteDatabase(this.layout?.journal ?? ':memory:', { role: 'journal' });
+    this.journalDb = openSqliteDatabase(this.layout?.journal ?? ':memory:', { role: 'journal', profile: this.profile });
     this.journal = new Journal(
       this.journalDb,
       undefined,
@@ -176,7 +180,7 @@ export class Store {
         enclosingTransaction: { active: () => this.depth > 0, onSettle: fn => { if (this.depth) this.txCoordinators.push(fn); else fn(true); } },
       },
     );
-    this.derivedDb = derivedSearch.openDerivedDatabase(this.layout);
+    this.derivedDb = derivedSearch.openDerivedDatabase(this.layout, this.profile);
     this.port = {
       db: this.db, journalDb: this.journalDb, derivedDb: this.derivedDb, layout: this.layout, journal: this.journal,
       sql: text => this.sql(text),
@@ -214,6 +218,7 @@ export class Store {
       appendEvent: (sessionId, type, data, extra) => this.appendEvent(sessionId, type, data, extra),
       nameFromMessage: (sessionId, prompt) => this.nameFromMessage(sessionId, prompt),
       runChanged: run => this.runChanged(run),
+      sessionsChanged: ids => this.sessionsChanged(ids),
       projectsChanged: classified => this.projectsChanged(classified),
       terminalsChanged: () => this.terminalsChanged(),
       marksChanged: () => this.marksChanged(),
@@ -746,6 +751,20 @@ export class Store {
     return workspaceRecords.saveNativeInteractionReceipt(this.port, sessionId, requestId, receipt);
   }
 
+  shrinkMemory(): void {
+    shrinkSqliteMemory(this.db);
+    shrinkSqliteMemory(this.journalDb);
+    shrinkSqliteMemory(this.derivedDb);
+  }
+  trimCaches(): void {
+    this.sessionCache = undefined;
+    this.terminalCache = undefined;
+    this.projectCache = undefined;
+    this.shrinkMemory();
+  }
+  cacheStats(): { count: number } {
+    return { count: (this.sessionCache?.length ?? 0) + (this.terminalCache?.length ?? 0) + (this.projectCache?.size ?? 0) };
+  }
   close() {
     derivedSearch.noteMessageIndexShape(this.port);
     optimizeDatabase(this.derivedDb);

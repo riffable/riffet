@@ -48,7 +48,7 @@ if (added.size && !update) {
 const LAYERS = [
   ['base', ['assistant-capability.ts', 'errors.ts', 'exec.ts', 'version.ts', 'environment.ts', 'compat.ts', 'server-log.ts', 'server-id.ts', 'mdns-name.ts',
     'connection-addresses.ts', 'discovery.ts', 'service-files.ts', 'loop-health.ts', 'pairing.ts', 'auth.ts',
-    'clientLogs.ts', 'sqlite-storage.ts', 'wal-checkpoint.ts', 'session-identity.ts', 'session-title.ts', 'metrics', 'prompts', 'links']],
+    'clientLogs.ts', 'sqlite-storage.ts', 'wal-checkpoint.ts', 'session-identity.ts', 'session-title.ts', 'memory', 'metrics', 'prompts', 'links']],
   ['kernel-fact', ['store.ts', 'store', 'settings', 'journal']],
   ['kernel-engine', ['timeline', 'terminal', 'agent-host', 'backends']],
   ['kernel-wire', ['sync', 'native', 'auxiliary']],

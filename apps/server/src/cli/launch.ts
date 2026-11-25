@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { AGENT_PROCESS_BUDGET } from '../../../../packages/contracts/src/index.js';
 import { isTempStateDir } from '../terminal/orphans.js';
 import { createApp } from '../app.js';
+import { isServerProfileInput, parseIdleExitMs, resolveServerProfile, serverProfileBudget, type ServerProfileInput } from '../memory/profile.js';
 import { claimStateDirectory } from '../compat.js';
 import { COMPACTION_WAIT_MS, compactionRunning, runRequestedCompaction, runStorageMigrationIfNeeded } from '../storage/compaction.js';
 import { startDiscovery, type DiscoveryHandle } from '../discovery.js';
@@ -23,6 +24,7 @@ import { CliError, MARK, UsageError, duration, err, hint, note, out, printLines,
 export interface LaunchOptions {
   stateDir: string; host: string; port: string; cli: string; allowHost?: string[];
   workspace?: string; auth?: boolean; mdns?: boolean; dev?: boolean;
+  profile?: string; idleExit?: string;
 }
 
 const collect = (value: string, previous: string[] = []) => [...previous, value];
@@ -39,6 +41,8 @@ export function configure(command: Command): Command {
     .option('--no-auth', 'no token for this computer (loopback only)')
     .option('--allow-host <hostname>', 'also accept this hostname; repeatable', collect)
     .option('--workspace <path>', 'add this directory as a project')
+    .addOption(new Option('--profile <profile>', 'memory profile: full, lite, or auto').env('RIFFET_PROFILE').default('full'))
+    .addOption(new Option('--idle-exit <duration>', 'stop after being idle for this duration (e.g. 30m, 2h, 0 to disable)').env('RIFFET_IDLE_EXIT'))
     .addOption(new Option('--mdns', 'advertise on the local network').hideHelp())
     .option('--no-mdns', 'do not advertise on the local network')
     .addOption(new Option('--cli <command>', 'Cursor executable or shell:<function>').env('RIFFET_CLI').default('cursor-agent').hideHelp())
@@ -95,6 +99,13 @@ export function validateLaunchOptions(options: LaunchOptions): void {
     try { directory = statSync(realpathSync(resolve(options.workspace))).isDirectory(); } catch { /* reported below */ }
     if (!directory) throw new UsageError(`--workspace is not a directory: ${options.workspace}`);
   }
+  if (options.profile !== undefined && !isServerProfileInput(options.profile)) {
+    throw new UsageError(`--profile must be full, lite, or auto, not ${options.profile}`);
+  }
+  if (options.idleExit !== undefined) {
+    try { parseIdleExitMs(options.idleExit); }
+    catch (error) { throw new UsageError(error instanceof Error ? error.message : String(error)); }
+  }
 }
 
 export function saveLaunchConfig(options: LaunchOptions, args: string[]): void {
@@ -107,6 +118,8 @@ export function argsFor(options: LaunchOptions): string[] {
   const args = ['serve', '--state-dir', stateDir(options.stateDir), '--host', options.host, '--port', options.port, '--cli', options.cli];
   for (const host of options.allowHost ?? []) args.push('--allow-host', host);
   if (options.workspace) args.push('--workspace', resolve(options.workspace));
+  if (options.profile && options.profile !== 'full') args.push('--profile', options.profile);
+  if (options.idleExit !== undefined) args.push('--idle-exit', options.idleExit);
   args.push(options.auth === false ? '--no-auth' : '--auth');
   if (options.mdns === false) args.push('--no-mdns');
   return args;
@@ -139,13 +152,15 @@ export async function serve(options: LaunchOptions): Promise<void> {
   // Development reads the plugin index `pnpm build:site` wrote, when there is one and nothing else was asked for.
   const localIndex = fileURLToPath(new URL('../../../../dist/site/plugins/index.json', import.meta.url));
   if (options.dev && !process.env.RIFFET_PLUGIN_INDEX?.trim() && existsSync(localIndex)) process.env.RIFFET_PLUGIN_INDEX = pathToFileURL(localIndex).href;
+  const profile = resolveServerProfile(options.profile as ServerProfileInput | undefined);
+  const idleExitMs = parseIdleExitMs(options.idleExit);
   const began = Date.now();
   let services: Awaited<ReturnType<typeof createApp>> | undefined;
   let discovery: DiscoveryHandle | undefined;
   const path = join(dir, 'daemon.json');
   let record: DaemonRecord;
   try {
-    services = await createApp({ stateDir: dir, cliPath: options.cli, host: options.host, port, auth: options.auth !== false, allowedHosts: options.allowHost ?? [], webRoot, instanceId, profileStalls: true });
+    services = await createApp({ stateDir: dir, cliPath: options.cli, host: options.host, port, auth: options.auth !== false, allowedHosts: options.allowHost ?? [], webRoot, instanceId, profile, profileStalls: true });
     if (cwd) services.store.createProject(cwd, dirname(cwd) === cwd ? cwd : cwd.split('/').at(-1)!);
     await services.app.listen({ host: options.host, port });
     const address = services.app.server.address();
@@ -162,7 +177,8 @@ export async function serve(options: LaunchOptions): Promise<void> {
     process.stdout.write(`\n  ${out.dim('Press Ctrl+C to stop')}\n`);
   } else {
     // The log of a background server: one plain line, stamped by stampServerOutput.
-    console.log(`[riffet] ${SERVER_VERSION} listening on ${serverUrl(record)} (pid ${process.pid}, ${options.auth === false ? 'no token on loopback' : 'token required'})`);
+    const profileTag = profile === 'lite' ? ', profile lite' : '';
+    console.log(`[riffet] ${SERVER_VERSION} listening on ${serverUrl(record)} (pid ${process.pid}, ${options.auth === false ? 'no token on loopback' : 'token required'}${profileTag})`);
   }
   if (options.dev && process.env.RIFFET_PLUGIN_INDEX) console.log(`[riffet] plugin index: ${process.env.RIFFET_PLUGIN_INDEX}`);
   let shuttingDown = false;
@@ -174,28 +190,32 @@ export async function serve(options: LaunchOptions): Promise<void> {
     finally { releaseState(); clearTimeout(timeout); process.exit(0); }
   };
   process.on('SIGINT', () => void stop()); process.on('SIGTERM', () => void stop());
-  if (isTempStateDir(dir)) stopWhenUnused(services, () => void stop());
+  const effectiveIdleExitMs = idleExitMs ?? (isTempStateDir(dir) ? AGENT_PROCESS_BUDGET.tempInstanceIdleMinutes * 60_000 : undefined);
+  if (effectiveIdleExitMs !== undefined && effectiveIdleExitMs > 0) {
+    stopWhenUnused(services, effectiveIdleExitMs, isTempStateDir(dir) && idleExitMs === undefined ? 'temp instance unused' : 'idle-exit timeout reached', () => void stop());
+  }
   // Node exits on an unhandled rejection; one stray background promise must not take every session down with it.
   process.on('unhandledRejection', reason => console.error('[riffet] unhandled rejection:', reason));
 }
 
 /**
- * A service whose state directory is in the system temp directory is a test's, a probe's or a demo's:
- * it exits once nothing has used it for `AGENT_PROCESS_BUDGET.tempInstanceIdleMinutes` — no request,
- * no open connection, no turn going (docs/guide/performance.md §3.10).
+ * Exits cleanly once nothing has used the server for `idleMs` — no request, no open connection,
+ * no terminal viewer, and no active turn. Used for temp instances (docs/guide/performance.md §3.10)
+ * and explicit `--idle-exit` scale-to-zero deployments.
  */
-function stopWhenUnused(services: Awaited<ReturnType<typeof createApp>>, stop: () => void) {
-  const idleMs = AGENT_PROCESS_BUDGET.tempInstanceIdleMinutes * 60_000;
+function stopWhenUnused(services: Awaited<ReturnType<typeof createApp>>, idleMs: number, reason: string, stop: () => void) {
   let usedAt = Date.now();
   services.app.server.on('request', () => { usedAt = Date.now(); });
+  const intervalMs = Math.max(1_000, Math.min(60_000, Math.floor(idleMs / 2)));
   const timer = setInterval(() => {
     services.app.server.getConnections((error, open) => {
       const sessions = services.store.stateCounts().sessions;
       const working = ['starting', 'running', 'waiting', 'cancelling'].some(state => (sessions[state] ?? 0) > 0);
-      if (working || (!error && open > 0)) usedAt = Date.now();
-      else if (Date.now() - usedAt >= idleMs) { clearInterval(timer); console.log('[riffet] temp instance unused; stopping'); stop(); }
+      const viewers = services.terminal.viewerCount() > 0;
+      if (working || viewers || (!error && open > 0)) usedAt = Date.now();
+      else if (Date.now() - usedAt >= idleMs) { clearInterval(timer); console.log(`[riffet] ${reason}; stopping`); stop(); }
     });
-  }, 60_000);
+  }, intervalMs);
   timer.unref();
 }
 
@@ -219,7 +239,12 @@ export async function start(options: LaunchOptions, report: { quietIfRunning?: b
   }
   const log = join(dir, 'server.log');
   const fd = openSync(log, 'a', 0o600);
-  const child = spawn(process.execPath, [...process.execArgv, entry, ...argsFor(options)], { cwd: process.cwd(), env: { ...process.env, RIFFET_MANAGED_BY: 'cli' }, detached: true, stdio: ['ignore', fd, fd] });
+  const execArgv = [...process.execArgv];
+  const resolvedProfile = resolveServerProfile(options.profile as ServerProfileInput | undefined);
+  if (resolvedProfile === 'lite' && !execArgv.some(arg => arg.startsWith('--max-old-space-size'))) {
+    execArgv.push(`--max-old-space-size=${serverProfileBudget('lite').v8MaxOldSpaceMb}`);
+  }
+  const child = spawn(process.execPath, [...execArgv, entry, ...argsFor(options)], { cwd: process.cwd(), env: { ...process.env, RIFFET_MANAGED_BY: 'cli' }, detached: true, stdio: ['ignore', fd, fd] });
   child.unref();
   closeSync(fd);
   const progress = spinner('Starting Riffet');

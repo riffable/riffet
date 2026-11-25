@@ -29,7 +29,7 @@ export const entry = import.meta.url.endsWith('.ts')
 export const installRoot = entry.endsWith('.ts') ? resolve(dirname(entry), '../../..') : resolve(dirname(entry), '..');
 
 export interface DaemonRecord { pid: number; port: number; host: string; instanceId: string; startedAt: string; args: string[] }
-export interface Health { ok?: boolean; version?: string; build?: BuildInfo; instanceId?: string; managedBy?: 'cli' | 'launchd' | 'app' | string }
+export interface Health { ok?: boolean; version?: string; build?: BuildInfo; instanceId?: string; managedBy?: 'cli' | 'launchd' | 'app' | string; profile?: 'full' | 'lite' }
 
 export function stateDir(path: string): string {
   const dir = resolve(path);

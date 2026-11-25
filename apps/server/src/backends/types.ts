@@ -239,7 +239,8 @@ export interface NativeStandingHost {
  * be given its own arguments per process (Cursor's shared plugin directory) runs the shim without `--credential` and
  * names the file in `RIFFET_MCP_CREDENTIAL_FILE` instead.
  */
-export interface RiffetMcpServerSpec { name: string; command: string; args: string[]; credentialFile: string }
+export interface RiffetMcpHttpSpec { url: string; headers: Record<string, string> }
+export interface RiffetMcpServerSpec { name: string; command: string; args: string[]; credentialFile: string; http?: RiffetMcpHttpSpec }
 
 export interface NativeRiffetMcpHost {
   /**

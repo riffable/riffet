@@ -243,8 +243,10 @@ export function hasNativePermissions(settings: Record<string, unknown> | undefin
 }
 
 /** The config override that offers the Riffet MCP server to a thread, or none when the host has no such server. */
-export function riffetMcpOverride(server: { name: string; command: string; args: string[] } | undefined): Record<string, unknown> {
-  return server ? { [`mcp_servers.${server.name}`]: { command: server.command, args: server.args, ...RIFFET_MCP_EXPOSURE } } : {};
+export function riffetMcpOverride(server: { name: string; command: string; args: string[]; http?: { url: string; headers: Record<string, string> } } | undefined): Record<string, unknown> {
+  if (!server) return {};
+  if (server.http) return { [`mcp_servers.${server.name}`]: { url: server.http.url, http_headers: server.http.headers, ...RIFFET_MCP_EXPOSURE } };
+  return { [`mcp_servers.${server.name}`]: { command: server.command, args: server.args, ...RIFFET_MCP_EXPOSURE } };
 }
 
 function unquoteToml(raw: string): string | undefined {

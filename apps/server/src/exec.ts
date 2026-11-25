@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { SHARE_ENV, Worker } from 'node:worker_threads';
+import { SERVER_BUDGET } from '../../../packages/contracts/src/budgets.js';
 
 /**
  * One-shot commands (`tmux`, `ps`, `lsof`, `pgrep`) run from a worker thread, so creating the process and
@@ -70,10 +71,47 @@ let worker: Worker | undefined;
 /** Set once a worker could not be started; commands then run on the calling thread as before. */
 let unavailable = false;
 let lastId = 0;
+let idleMs: number = SERVER_BUDGET.execWorkerIdleMs;
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
 const waiting = new Map<number, Waiting>();
+
+function clearIdleTimer(): void {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = undefined; }
+}
+
+function scheduleIdleShutdown(): void {
+  clearIdleTimer();
+  if (!worker || waiting.size || idleMs <= 0) return;
+  idleTimer = setTimeout(() => {
+    idleTimer = undefined;
+    trimExecWorker();
+  }, idleMs);
+  idleTimer.unref();
+}
+
+/** Configures how long an idle command worker stays resident before exiting to free its V8 isolate. */
+export function configureExecWorker(options: { idleMs: number }): void {
+  idleMs = Math.max(0, options.idleMs);
+  if (!waiting.size) scheduleIdleShutdown();
+}
+
+/** Terminates the idle command worker immediately; safe no-op while commands are in flight. */
+export function trimExecWorker(): void {
+  clearIdleTimer();
+  if (!worker || waiting.size) return;
+  const target = worker;
+  worker = undefined;
+  void target.terminate().catch(() => undefined);
+}
+
+/** Observability stats for `ServerCacheRegistry`. */
+export function execWorkerStats(): { count: number } {
+  return { count: worker ? 1 : 0 };
+}
 
 function lost(from: Worker, error: Error): void {
   if (worker !== from) return;
+  clearIdleTimer();
   worker = undefined;
   const pending = [...waiting.values()];
   waiting.clear();
@@ -90,7 +128,10 @@ function ensureWorker(): Worker | undefined {
     if (!entry) return;
     waiting.delete(reply.id);
     // An idle worker does not keep a one-shot CLI command alive; one with a command in flight does.
-    if (!waiting.size) created.unref();
+    if (!waiting.size) {
+      created.unref();
+      scheduleIdleShutdown();
+    }
     if (reply.failure) entry.reject(new ExecError(reply.failure, reply.stdout, reply.stderr));
     else entry.resolve({ stdout: reply.stdout, stderr: reply.stderr });
   });
@@ -119,6 +160,7 @@ function onCallingThread(command: string, args: string[], options: ExecOptions):
 export function exec(command: string, args: string[], options: ExecOptions = {}): Promise<{ stdout: string; stderr: string }> {
   const target = ensureWorker();
   if (!target) return onCallingThread(command, args, options);
+  clearIdleTimer();
   const { input, ...rest } = options;
   const id = ++lastId;
   return new Promise((resolve, reject) => {
@@ -127,7 +169,7 @@ export function exec(command: string, args: string[], options: ExecOptions = {})
     try { target.postMessage({ id, command, args, options: rest, input }); }
     catch (error) {
       waiting.delete(id);
-      if (!waiting.size) target.unref();
+      if (!waiting.size) { target.unref(); scheduleIdleShutdown(); }
       reject(error instanceof Error ? error : new Error(String(error)));
     }
   });

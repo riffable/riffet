@@ -43,8 +43,12 @@ interface PsRow { pid: number; ppid: number; cpu: number; rssKiB: number; elapse
 
 export interface ServiceMonitorDeps {
   store: Store; terminal: TerminalService; streams: Set<ServerResponse>;
+  /** Active server memory profile (`full` or `lite`). */
+  profile?: 'full' | 'lite';
   /** The reclaimer's last pass (docs/guide/performance.md §3.10). */
   agentProcesses?: () => AgentProcessReport | undefined;
+  /** Server-side registered caches (`ServerCacheRegistry`). */
+  caches?: () => ClientCacheSample[];
 }
 
 /**
@@ -68,6 +72,8 @@ export class ServiceMonitor {
   readonly clients = new ClientMetricsStore();
 
   constructor(private readonly deps: ServiceMonitorDeps) {}
+
+  get inFlightRequests(): number { return this.inFlight; }
 
   /** Before the auth hook, so refused requests are counted too. */
   observe(app: FastifyInstance): void {
@@ -127,12 +133,14 @@ export class ServiceMonitor {
     const sessions = (...states: string[]) => states.reduce((sum, state) => sum + (counts.sessions[state] ?? 0), 0);
     const terminalsTotal = Object.values(counts.terminals).reduce((sum, n) => sum + n, 0);
     const [load1, load5, load15] = loadavg() as [number, number, number];
+    const caches = this.deps.caches?.();
     return {
       generatedAt: new Date(now).toISOString(),
       process: {
         pid: process.pid, version: SERVER_VERSION, nodeVersion: process.version, platform: process.platform, arch: process.arch,
         startedAt: new Date(this.startedAt).toISOString(), uptimeSec: Math.round(process.uptime()),
         cpuPercent, rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal, externalBytes: memory.external,
+        ...(this.deps.profile ? { profile: this.deps.profile } : {}),
       },
       host: { hostname: hostname(), cpuModel: cores[0]?.model.trim() ?? '', cpuCount: cores.length, loadAvg: [round(load1), round(load5), round(load15)],
         totalMemBytes: totalmem(), freeMemBytes: freemem(), uptimeSec: Math.round(uptime()) },
@@ -147,6 +155,7 @@ export class ServiceMonitor {
       series: [...this.series],
       processes: (await this.processes()).slice(0, PROCESSES_SHOWN),
       ...(agentProcesses ? { agentProcesses } : {}),
+      ...(caches?.length ? { caches } : {}),
       clients: this.clients.list(now),
     };
   }

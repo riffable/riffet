@@ -179,20 +179,48 @@ export function referencedAttachmentIds(port: StorePort, since: string): Set<str
   return new Set([...rows, ...terminalRows, ...followUpRows].flatMap(row => typeof row.id === 'string' ? [row.id] : []));
 }
 
-/** Drops exited terminal records created before `before` that nothing points at any more. */
+/**
+ * Drops exited terminal records created before `before` that nothing active needs any more.
+ * Cold non-running sessions whose `terminalId` still points at such an old exited terminal are
+ * detached from that dead `terminalId` (their `nativeSessionId` is untouched so resuming still works).
+ */
 export function pruneExitedTerminals(port: StorePort, before: string): number {
-  const referenced = new Set<string>();
-  for (const row of port.sql(`SELECT json_extract(json,'$.terminalId') AS id FROM sessions WHERE json_extract(json,'$.terminalId') IS NOT NULL`).all() as Array<{ id: string }>) referenced.add(row.id);
-  for (const run of port.listUnfinishedNativeRuns()) if (run.native?.terminalId) referenced.add(run.native.terminalId);
+  const activeRunTerminals = new Set<string>();
+  for (const run of port.listUnfinishedNativeRuns()) if (run.native?.terminalId) activeRunTerminals.add(run.native.terminalId);
+  const oldExited = new Set(
+    (port.sql(`SELECT id FROM terminals WHERE json_extract(json,'$.state')='exited' AND json_extract(json,'$.createdAt')<?`).all(before) as Array<{ id: string }>)
+      .map(row => row.id),
+  );
+  if (!oldExited.size) return 0;
+
+  const referenced = new Set<string>(activeRunTerminals);
+  const detachSessions: Array<{ id: string; json: string }> = [];
+  for (const row of port.sql(`SELECT id, json FROM sessions WHERE json_extract(json,'$.terminalId') IS NOT NULL`).all() as Array<{ id: string; json: string }>) {
+    let parsed: { terminalId?: string; state?: string };
+    try { parsed = JSON.parse(row.json) as { terminalId?: string; state?: string }; } catch { continue; }
+    const terminalId = parsed.terminalId;
+    if (!terminalId) continue;
+    const isWorking = parsed.state === 'starting' || parsed.state === 'running' || parsed.state === 'waiting' || parsed.state === 'cancelling';
+    if (!isWorking && oldExited.has(terminalId) && !activeRunTerminals.has(terminalId)) {
+      const { terminalId: _drop, ...rest } = parsed as Record<string, unknown>;
+      detachSessions.push({ id: row.id, json: JSON.stringify(rest) });
+    } else {
+      referenced.add(terminalId);
+    }
+  }
+
   const remove = port.sql('DELETE FROM terminals WHERE id=?');
+  const updateSession = port.sql('UPDATE sessions SET json=? WHERE id=?');
   let removed = 0;
   port.transaction(() => {
-    for (const row of port.sql(`SELECT id FROM terminals WHERE json_extract(json,'$.state')='exited' AND json_extract(json,'$.createdAt')<?`).all(before) as Array<{ id: string }>) {
-      if (referenced.has(row.id)) continue;
-      removed += Number(remove.run(row.id).changes);
-      port.sql('DELETE FROM settings WHERE key LIKE ?').run(`terminal-paste:${row.id}:%`);
+    for (const item of detachSessions) updateSession.run(item.json, item.id);
+    for (const id of oldExited) {
+      if (referenced.has(id)) continue;
+      removed += Number(remove.run(id).changes);
+      port.sql('DELETE FROM settings WHERE key LIKE ?').run(`terminal-paste:${id}:%`);
     }
   });
+  if (detachSessions.length) port.sessionsChanged(detachSessions.map(item => item.id));
   if (removed) port.terminalsChanged();
   return removed;
 }

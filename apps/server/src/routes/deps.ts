@@ -38,6 +38,8 @@ export type NativeMessageBody = { commandId?: string; text: string; attachments?
 
 /** What `createApp` hands every route group: its services and the request helpers they share. */
 export interface RouteDeps {
+  /** Active server memory profile (`full` hub vs `lite` low-footprint node). */
+  profile?: 'full' | 'lite';
   /** The 助理's delegations (docs/ASSISTANT.md §7.3); made after the routes' dependencies. */
   assistantDelegations?: () => AssistantDelegations | undefined;
   /** The 助理's background runs (docs/ASSISTANT.md §7.1); made after the routes' dependencies. */

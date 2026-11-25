@@ -595,6 +595,11 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     ];
   }
 
+  /** Verifies a conversation-bound Bearer credential and returns its owner id (session id or provisional owner). */
+  authenticate(authorization: string | undefined): string {
+    return this.deps.credentials.authenticate(authorization);
+  }
+
   /** One JSON-RPC method the shim forwards, for the conversation its credential names. `signal` ends when the shim's request does. */
   async handle(authorization: string | undefined, method: unknown, params: unknown, signal?: AbortSignal): Promise<unknown> {
     const sessionId = this.deps.credentials.authenticate(authorization);
