@@ -39,6 +39,8 @@ struct ModelControls: View {
     var remembered: [String: String] = [:]
     /// Re-reads the catalogs as the popup opens, so model membership is as fresh as the quota read.
     var refresh: (() async -> Void)?
+    /// Where the panel opens: above a composer at the window's foot, below one high on the page.
+    var popupEdge: PopupEdge = .above
     let choose: (String) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.compactControls) private var compact
@@ -88,7 +90,7 @@ struct ModelControls: View {
         .help(modelSelectionSummary(catalog: activeModels, selection: selection))
         .accessibilityLabel("选择模型")
         .accessibilityValue(modelSelectionSummary(catalog: activeModels, selection: selection))
-        .anchoredPopup(isPresented: $open, inset: PopoverSurface<EmptyView>.inset) {
+        .anchoredPopup(isPresented: $open, edge: popupEdge, inset: PopoverSurface<EmptyView>.inset) {
             PopoverSurface {
                 ModelPanel(catalog: catalog, selection: selection, resolved: resolved, params: params, loaded: loadedKey == usageKey ? loaded : nil,
                            reserveAccountUsage: reserveAccountUsage, loadingUsage: loadingUsage,

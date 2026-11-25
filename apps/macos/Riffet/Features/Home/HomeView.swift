@@ -288,7 +288,9 @@ struct HomeView: View {
                         scope: "\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")|\(workbench.catalogs.connectionRevision)",
                         usageStoreKey: "\(workbench.baseURL.absoluteString)|\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")",
                         remembered: workbench.settings?.defaultsFor(agent: backend)?.profileModels ?? [:],
-                        refresh: { await loadCatalog(reload: true, quietly: true); await loadProfileCatalogs() }
+                        refresh: { await loadCatalog(reload: true, quietly: true); await loadProfileCatalogs() },
+                        // Below, as the agent menu beside it opens.
+                        popupEdge: .below
                     ) { value in
                         chooseModel(value, inProvider: resolvedProfileId)
                     }
@@ -315,6 +317,8 @@ struct HomeView: View {
                 composerSection(project, choices: choices)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .animation(Motion.expressive, value: setupIncomplete)
+                    // The composer's menu opens below it, over the quick actions that follow.
+                    .zIndex(1)
                 tail(project)
             }
             .frame(maxWidth: 720)
