@@ -3,15 +3,36 @@
 // A provider turns platform events into `InboundMessage` / `InboundAction` and renders what the channel layer hands it.
 // It never reaches sessions, bindings or identities: the core owns them, the gate and the store.
 
-import type { NativeInteraction } from '@riffet/contracts';
-import type { ChannelAccountInfo, ChannelCardOptions, ChannelConnectionStatus, ChannelKind } from '@riffet/contracts';
+import type {
+  ChannelAccountIdentity, ChannelCardCapabilities, ChannelCardOptions, ChannelConnectionStatus,
+  ChannelFieldSpec, ChannelKind, ChannelProviderHints, NativeInteraction,
+} from '@riffet/contracts';
 
-export type { ChannelConnectionStatus, ChannelKind };
+export type {
+  ChannelAccountIdentity, ChannelCardCapabilities, ChannelConnectionStatus,
+  ChannelFieldSpec, ChannelKind, ChannelProviderHints,
+};
 
+/** One configured bot, with its private secrets. Secrets never leave the server. */
+export interface ChannelAccount {
+  id: string;
+  kind: ChannelKind;
+  /** Non-secret platform configuration values keyed by `ChannelFieldSpec.key`. */
+  config: Record<string, string>;
+  /** Secret values keyed by `ChannelFieldSpec.key`. */
+  secrets: Record<string, string>;
+  enabled: boolean;
+  source: 'scan' | 'manual';
+}
 
-/** One configured bot, with its secret. The secret never leaves the server. */
-export interface ChannelAccount extends Omit<ChannelAccountInfo, 'secretSet' | 'status' | 'links' | 'botName' | 'avatarUrl' | 'card'> {
-  appSecret: string;
+/** What a provider declares so the host can render setup forms, card toggles and hints without knowing the platform. */
+export interface ChannelProviderMeta {
+  /** Manual setup / credential fields; empty if the platform only uses `register`. */
+  fields: ChannelFieldSpec[];
+  /** Card customization toggles supported by this platform. Omitted when the platform has no card settings. */
+  card?: ChannelCardCapabilities;
+  /** Short platform-specific onboarding and management facts. */
+  hints?: ChannelProviderHints;
 }
 
 /**
@@ -198,6 +219,10 @@ export interface ChannelConnection {
   /** The bot's display name on the platform, once known. */
   readonly botName?: string;
   readonly avatarUrl?: string;
+  /** Optional copyable identifier learned after connecting (e.g. Telegram `@bot_username`). */
+  readonly identity?: ChannelAccountIdentity;
+  /** Optional deep links learned after connecting (merged over `provider.links`). */
+  readonly links?: { open?: string; console?: string };
   openTurn(address: ChannelAddress, view: TurnView, anchor?: ReplyAnchor): Promise<TurnSurface>;
   /** Takes a surface persisted before a restart over again; undefined when it cannot. */
   resumeTurn(address: ChannelAddress, state: SurfaceState): Promise<TurnSurface | undefined>;
@@ -224,9 +249,16 @@ export interface ProviderHealth { activated?: boolean; missingScopes?: string[];
 
 /** The result of a platform's scan-to-create (or re-authorize) flow. */
 export interface ProviderRegistration {
-  appId: string;
-  appSecret: string;
-  domain: ChannelAccount['domain'];
+  /** Stable platform identifier for deduplicating re-authorization of the same bot (e.g. Feishu App ID). */
+  externalId?: string;
+  config?: Record<string, string>;
+  secrets?: Record<string, string>;
+  /** @deprecated Legacy Feishu registration fields; prefer `externalId` / `config` / `secrets`. */
+  appId?: string;
+  /** @deprecated */
+  appSecret?: string;
+  /** @deprecated */
+  domain?: string;
   /** The platform user who scanned: becomes a bound identity of the new bot. */
   userId?: string;
 }
@@ -234,10 +266,16 @@ export interface ProviderRegistration {
 /** One IM platform, keyed in `Contributions.imChannels` by the id declared in `contributes.imChannels`. */
 export interface ImChannelProvider {
   capabilities: { edit: boolean; actions: 'forms' | 'buttons' | 'none'; threads: boolean };
+  /** Describes manual fields, card options and platform hints for the settings UI. */
+  meta?: ChannelProviderMeta;
   connect(account: ChannelAccount, context: ChannelContext): Promise<ChannelConnection>;
-  /** Scan-to-create: calls `ready` with the URL to show, resolves once the user confirmed. `appId` re-authorizes that bot. */
-  register?(input: { appId?: string; ownerName?: string; signal: AbortSignal; ready: (url: string, expiresInSeconds: number) => void }): Promise<ProviderRegistration>;
+  /** Scan-to-create: calls `ready` with the URL to show, resolves once the user confirmed. `externalId` re-authorizes that bot. */
+  register?(input: { externalId?: string; appId?: string; ownerName?: string; signal: AbortSignal; ready: (url: string, expiresInSeconds: number) => void }): Promise<ProviderRegistration>;
   /** Live checks with the stored credentials; never throws. */
   health?(account: ChannelAccount): Promise<ProviderHealth>;
-  links(account: Pick<ChannelAccount, 'appId' | 'domain'>, missingScopes?: string[]): { open?: string; console?: string; grant?: string };
+  links?(account: Pick<ChannelAccount, 'id' | 'config' | 'source'>, missingScopes?: string[]): { open?: string; console?: string; grant?: string };
+  /** Optional short badge shown beside the bot name in the list (e.g. "Lark"). */
+  badge?(account: Pick<ChannelAccount, 'config'>): string | undefined;
+  /** Optional copyable identifier shown under the bot name on the detail page (e.g. Feishu App ID). */
+  identity?(account: Pick<ChannelAccount, 'config'>, connection?: ChannelConnection): ChannelAccountIdentity | undefined;
 }

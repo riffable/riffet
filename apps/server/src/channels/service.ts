@@ -29,11 +29,11 @@ export type { ChannelDeps };
 
 const withKind = new WeakMap<ImChannelProvider, Map<string, ChannelProvider>>();
 /** The same object for the same provider and declaration, so a reconnect is needed only when the platform really changed. */
-export function channelProvider(kind: string, provider: ImChannelProvider): ChannelProvider {
+export function channelProvider(kind: string, provider: ImChannelProvider, title?: ChannelProvider['title']): ChannelProvider {
   let byKind = withKind.get(provider);
   if (!byKind) { byKind = new Map(); withKind.set(provider, byKind); }
   let wrapped = byKind.get(kind);
-  if (!wrapped) { wrapped = Object.assign(Object.create(provider) as ImChannelProvider, { kind }); byKind.set(kind, wrapped); }
+  if (!wrapped) { wrapped = Object.assign(Object.create(provider) as ImChannelProvider, { kind, ...(title ? { title } : {}) }); byKind.set(kind, wrapped); }
   return wrapped;
 }
 
@@ -141,7 +141,20 @@ export class ChannelService {
   }
 
   state(): ChannelsState {
-    return { providers: this.deps.providers().map(item => ({ id: item.kind, register: Boolean(item.register) })), accounts: this.bindings.accounts().map(account => this.accounts.info(account)), identities: this.identities.list(), chats: this.bindings.chats() };
+    return {
+      providers: this.deps.providers().map(item => ({
+        id: item.kind,
+        title: item.title ?? { en: item.kind.slice(item.kind.lastIndexOf('/') + 1) },
+        register: Boolean(item.register),
+        fields: item.meta?.fields ?? [],
+        capabilities: item.capabilities,
+        ...(item.meta?.card ? { card: item.meta.card } : {}),
+        ...(item.meta?.hints ? { hints: item.meta.hints } : {}),
+      })),
+      accounts: this.bindings.accounts().map(account => this.accounts.info(account)),
+      identities: this.identities.list(),
+      chats: this.bindings.chats(),
+    };
   }
 
   createAccount(input: ChannelAccountInput): Promise<ChannelAccountInfo> { return this.accounts.createAccount(input); }
@@ -276,7 +289,8 @@ export class ChannelService {
       try {
         const session = this.deps.store.getSession(sessionId);
         const phase = this.deps.nativeBackends.status(sessionId).phase;
-        lines.push(`会话：${session.displayTitle ?? session.title}`, `状态：${phase === 'busy' ? '进行中' : phase === 'attention' ? '等待回答' : '空闲'}`, `模型：${[session.backendId, session.model].filter(Boolean).join(' · ') || '默认'}`);
+        const readableModel = this.models.modelName(session) ?? session.model;
+        lines.push(`会话：${session.displayTitle ?? session.title}`, `状态：${phase === 'busy' ? '进行中' : phase === 'attention' ? '等待回答' : '空闲'}`, `模型：${[session.backendId, readableModel].filter(Boolean).join(' · ') || '默认'}`);
       } catch { lines.push('会话：已不存在'); }
     } else lines.push('会话：新消息会开新会话');
     if (chat.chatType === 'group') lines.push(chat.flat ? '整群共用一个会话' : '按话题分会话');

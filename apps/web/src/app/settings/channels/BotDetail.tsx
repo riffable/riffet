@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { ChannelAccountInfo, ChannelChat, ChannelHealth, ChannelsState } from '@contracts';
+import type { ChannelAccountInfo, ChannelChat, ChannelHealth, ChannelProviderInfo, ChannelsState } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { IconArrowLeft, IconCopy, IconEllipsis, IconExternalLink, IconKey, IconMessagesSquare, IconRefreshCw, IconRotateCcw, IconTrash2, IconUser } from '@/components/icons';
 import { Select, Switch } from '@/components/ui/controls';
@@ -10,10 +10,11 @@ import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { copyWithToast } from '@/lib/files';
 import { formatDate } from '@/lib/i18n/format';
+import { localizedText } from '@/lib/plugins';
 import { useLists } from '../../state/stores';
 import { SettingsGroup, SettingsLinkRow, SettingsRow } from '../SettingsLayout';
 import type { AddBotMode } from './AddBotDialog';
-import { BindCodeView, BotAvatar, botName, CheckItem, useChannelHealth } from './shared';
+import { BindCodeView, BotAvatar, botName, CheckItem, providerName, providerOf, useChannelHealth } from './shared';
 
 const external = (href: string | undefined) => href ? { href, target: '_blank', rel: 'noreferrer' } : undefined;
 
@@ -27,17 +28,27 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
   onOpenCard: () => void;
   onDialog: (mode: AddBotMode) => void;
 }) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const projects = useLists((current) => current.projects);
   const { health, loading, refresh } = useChannelHealth(account);
   const [bindOpen, setBindOpen] = useState(false);
+  const provider = providerOf(state, account.kind);
+  const platform = providerName(provider, i18n.locale, account.kind);
+  const regionLabel = account.badge || platform;
   const identities = state.identities.filter((item) => item.account === account.id);
   const chats = state.chats.filter((item) => item.account === account.id);
   const open = external(account.links.open);
   const consoleLink = external(account.links.console);
+  const hasCardSettings = Boolean(provider?.card && Object.values(provider.card).some(Boolean));
+  const hasManualFields = (provider?.fields.length ?? 0) > 0;
+  const deleteNote = localizedText(provider?.hints?.deleteNote, [i18n.locale]);
+  const identityLabel = account.identity ? localizedText(account.identity.label, [i18n.locale]) ?? '' : '';
+
+  const displayName = botName(account, platform);
+  const bound = identities.length > 0;
 
   const remove = async () => {
-    if (await confirmDialog({ title: t`删除 ${botName(account)}？`, description: t`飞书里的应用不会被删除`, confirmLabel: t`删除`, destructive: true })) {
+    if (await confirmDialog({ title: t`删除 ${displayName}？`, ...(deleteNote ? { description: deleteNote } : {}), confirmLabel: t`删除`, destructive: true })) {
       await run(async () => { await api.deleteChannelAccount(account.id); onBack(); }, t`无法删除`);
     }
   };
@@ -55,22 +66,25 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
       <div className="flex items-center gap-3 max-md:flex-wrap">
         <BotAvatar account={account} size="lg" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-base font-semibold text-fg" title={botName(account)}>{botName(account)}</span>
+          <span className="truncate text-base font-semibold text-fg" title={displayName}>{displayName}</span>
           <span className="flex items-center gap-1 text-xs text-fg-3">
-            <span className="select-text truncate font-mono">{account.appId}</span>
-            <Button size="icon-xs" variant="quiet" aria-label={t`复制 App ID`} onClick={() => void copyWithToast(account.appId)}><IconCopy /></Button>
-            <span>· {account.domain === 'lark' ? 'Lark' : t`飞书`}</span>
+            {account.identity && <>
+              <span className="select-text truncate font-mono">{account.identity.value}</span>
+              <Button size="icon-xs" variant="quiet" aria-label={identityLabel ? t`复制 ${identityLabel}` : t`复制`} onClick={() => void copyWithToast(account.identity!.value)}><IconCopy /></Button>
+              <span>·</span>
+            </>}
+            <span>{regionLabel}</span>
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {open && <Button asChild variant="secondary"><a {...open}><Trans>在飞书中打开</Trans><IconExternalLink /></a></Button>}
+          {open && <Button asChild variant="secondary"><a {...open}><Trans>在 {platform} 中打开</Trans><IconExternalLink /></a></Button>}
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="icon" variant="quiet" aria-label={t`更多`} disabled={busy}><IconEllipsis /></Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {state.providers.some((provider) => provider.id === account.kind && provider.register) && <DropdownMenuItem onSelect={() => onDialog({ kind: 'reauthorize', account })}><IconRotateCcw /><Trans>重新扫码授权</Trans></DropdownMenuItem>}
-              <DropdownMenuItem onSelect={() => onDialog({ kind: 'replace', account })}><IconKey /><Trans>更换凭据</Trans></DropdownMenuItem>
+              {provider?.register && <DropdownMenuItem onSelect={() => onDialog({ kind: 'reauthorize', account })}><IconRotateCcw /><Trans>重新扫码授权</Trans></DropdownMenuItem>}
+              {hasManualFields && <DropdownMenuItem onSelect={() => onDialog({ kind: 'replace', account })}><IconKey /><Trans>更换凭据</Trans></DropdownMenuItem>}
               {consoleLink && <DropdownMenuItem asChild><a {...consoleLink}><IconExternalLink /><Trans>打开开发者后台</Trans></a></DropdownMenuItem>}
-              <DropdownMenuSeparator />
+              {(provider?.register || hasManualFields || consoleLink) && <DropdownMenuSeparator />}
               <DropdownMenuItem variant="danger" onSelect={() => void remove()}><IconTrash2 /><Trans>删除</Trans></DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -78,13 +92,23 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
       </div>
     </div>
 
-    {health && <Checklist account={account} health={health} loading={loading} onRefresh={() => void refresh()} />}
+    {health && <Checklist
+      account={account}
+      provider={provider}
+      platform={platform}
+      health={health}
+      bound={bound}
+      loading={loading}
+      onRefresh={() => void refresh()}
+      onBind={() => setBindOpen(true)}
+      onEditConfig={hasManualFields ? () => onDialog({ kind: 'replace', account, expandAdvanced: true }) : undefined}
+    />}
 
     <SettingsGroup>
       <SettingsRow title={t`启用`}>
         <Switch aria-label={t`启用`} checked={account.enabled} disabled={busy} onCheckedChange={(enabled) => void run(() => api.updateChannelAccount(account.id, { enabled }), t`无法保存`)} />
       </SettingsRow>
-      <SettingsLinkRow title={t`卡片`} onClick={onOpenCard} />
+      {hasCardSettings && <SettingsLinkRow title={t`卡片`} onClick={onOpenCard} />}
     </SettingsGroup>
 
     <SettingsGroup title={t`可以使用的人`} action={<Button size="xs" variant="ghost" disabled={busy} onClick={() => setBindOpen(true)}><Trans>添加</Trans></Button>}>
@@ -136,7 +160,7 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
         ['/status', t`查看项目、会话和模型`],
         ['/flat on|off', t`群里共用一个会话，或按话题分会话`],
         [t`/bind <码>`, t`用这里生成的绑定码绑定账号，只在私聊`],
-        ['/help', t`在飞书里列出这些命令`],
+        ['/help', t`在聊天里列出这些命令`],
       ].map(([usage, description]) => <div key={usage} className="flex items-baseline gap-4 py-2.5 max-md:flex-col max-md:gap-0.5">
         <code className="w-32 shrink-0 font-mono text-xs text-fg">{usage}</code>
         <span className="min-w-0 text-sm text-fg-2">{description}</span>
@@ -146,24 +170,40 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
     <Dialog open={bindOpen} onOpenChange={setBindOpen}>
       <DialogContent aria-describedby={undefined}>
         <DialogHeader><DialogTitle><Trans>可以使用的人</Trans></DialogTitle></DialogHeader>
-        <DialogBody className="pb-5">{bindOpen && <BindCodeView accountId={account.id} />}</DialogBody>
+        <DialogBody className="pb-5">{bindOpen && <BindCodeView accountId={account.id} platformName={platform} openUrl={account.links.open} />}</DialogBody>
       </DialogContent>
     </Dialog>
   </div>;
 }
 
 /** The server's live self-check; hidden once everything passes. */
-function Checklist({ account, health, loading, onRefresh }: { account: ChannelAccountInfo; health: ChannelHealth; loading: boolean; onRefresh: () => void }) {
-  const { t } = useLingui();
+function Checklist({ account, provider, platform, health, bound, loading, onRefresh, onBind, onEditConfig }: {
+  account: ChannelAccountInfo;
+  provider?: ChannelProviderInfo;
+  platform: string;
+  health: ChannelHealth;
+  bound: boolean;
+  loading: boolean;
+  onRefresh: () => void;
+  onBind: () => void;
+  onEditConfig?: () => void;
+}) {
+  const { t, i18n } = useLingui();
   const missing = health.missingScopes ?? [];
   const lastEventAt = health.lastEventAt ?? account.status.lastEventAt;
   const grant = external(health.grantUrl);
   const consoleLink = external(account.links.console);
+  const manualStepText = localizedText(provider?.hints?.manualSetupStep, [i18n.locale]);
   const connection = account.status.state;
   const connectionState = health.connected ? 'ok' : connection === 'connecting' ? 'busy' : account.enabled ? 'bad' : 'todo';
-  if (health.connected && health.activated !== false && missing.length === 0 && lastEventAt && !health.needsLongConnection) return null;
+  if (health.connected && health.activated !== false && missing.length === 0 && bound && lastEventAt && !health.needsLongConnection) return null;
   return <SettingsGroup title={t`待完成`} action={<Button size="icon-xs" variant="quiet" aria-label={t`重新检查`} onClick={onRefresh} busy={loading}><IconRefreshCw /></Button>}>
-    <CheckItem state={connectionState} title={<Trans>连接飞书</Trans>} detail={connectionState === 'bad' ? account.status.error : undefined} />
+    <CheckItem
+      state={connectionState}
+      title={<Trans>连接 {platform}</Trans>}
+      detail={connectionState === 'bad' ? account.status.error : undefined}
+      action={connectionState === 'bad' && onEditConfig && <Button size="sm" onClick={onEditConfig}><Trans>修改配置</Trans></Button>}
+    />
     {health.activated !== undefined && <CheckItem state={health.activated ? 'ok' : 'bad'} title={<Trans>启用机器人</Trans>} />}
     {health.missingScopes !== undefined && <CheckItem
       state={missing.length ? 'bad' : 'ok'}
@@ -171,7 +211,13 @@ function Checklist({ account, health, loading, onRefresh }: { account: ChannelAc
       detail={missing.length ? <span className="select-text font-mono">{missing.join(' ')}</span> : undefined}
       action={missing.length > 0 && grant && <Button asChild size="sm"><a {...grant}><Trans>去申请</Trans><IconExternalLink /></a></Button>}
     />}
-    {health.needsLongConnection && <CheckItem state="bad" title={<Trans>把事件订阅改为长连接</Trans>} action={consoleLink && <Button asChild size="sm"><a {...consoleLink}><Trans>打开开发者后台</Trans><IconExternalLink /></a></Button>} />}
-    <CheckItem state={lastEventAt ? 'ok' : 'todo'} title={<Trans>收到第一条消息</Trans>} detail={lastEventAt ? undefined : t`在飞书私聊机器人发一条消息`} />
+    {health.needsLongConnection && manualStepText && <CheckItem state="bad" title={manualStepText} action={consoleLink && <Button asChild size="sm"><a {...consoleLink}><Trans>打开开发者后台</Trans><IconExternalLink /></a></Button>} />}
+    <CheckItem
+      state={bound ? 'ok' : 'todo'}
+      title={<Trans>绑定你的 {platform} 账号</Trans>}
+      detail={bound ? undefined : t`未绑定的账号发来的消息会被忽略`}
+      action={!bound && <Button size="sm" onClick={onBind}><Trans>生成绑定码</Trans></Button>}
+    />
+    <CheckItem state={lastEventAt ? 'ok' : 'todo'} title={<Trans>收到第一条消息</Trans>} detail={lastEventAt ? undefined : t`在 ${platform} 私聊机器人发一条消息`} />
   </SettingsGroup>;
 }

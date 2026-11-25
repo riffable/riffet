@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Added the built-in Telegram Bot plugin (`channel-telegram`) alongside the renamed Feishu Bot plugin (`channel-feishu`, compatible with existing accounts): talk to Riffet conversations in Telegram private chats, groups, and topics with streaming replies, inline buttons for approvals and `/model` / `/project` / `/help`, and optional HTTP proxy support. Settings › Bots now guides setup across platforms, collapses advanced proxy and API base fields until needed, includes account binding in the setup checklist with inline edit actions on connection failure, and widens form dialogs from 448 px to 512 px.
 - Shift-click the settings gear in the desktop web sidebar to open Settings in a new browser window.
 - Open a side chat from a passage in a Cursor, Antigravity, Pi, Droid, or TRAE CLI conversation and follow up using the same provider.
 - The Mac app now has a single interface style, Riffet. The Native and Line styles and the Interface style setting are gone; anyone who picked them now sees Riffet.

@@ -134,7 +134,7 @@
     "packages/plugin-api/src/kit/config-documents.ts": 1,
     "plugins/riffet/antigravity/config.ts": 1,
     "plugins/riffet/cursor/backend/launch-plugin.ts": 1,
-    "plugins/riffet/feishu/openapi.ts": 2
+    "plugins/riffet/channel-feishu/openapi.ts": 2
   },
   "staticDictionary": {
     "apps/macos/Riffet/App/SidebarViewPrefs.swift": 1,

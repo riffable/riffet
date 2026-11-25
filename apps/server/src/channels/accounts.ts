@@ -8,15 +8,19 @@ import type {
 } from '../../../../packages/contracts/src/channels.js';
 import { AppError, requireString } from '../errors.js';
 import { atomicWritePrivateFile, readPrivateSettingsFile } from '../settings/private-file.js';
-import { channelKind, mergeCard, type CardPatch, type StoredAccount } from './bindings.js';
+import { accountConfig, channelKind, mergeCard, type CardPatch, type StoredAccount } from './bindings.js';
 import {
   errorMessage, HEALTH_TTL_MS, REGISTRATION_KEEP_MS, REGISTRATION_READY_MS,
   type ChannelSharedState, type Registration, type Runtime,
 } from './shared.js';
-import type { ChannelAccount, ChannelConnection, ChannelContext, ChannelProvider, InboundAction, InboundMessage, ProviderRegistration, ActionReply } from './types.js';
+import type {
+  ActionReply, ChannelAccount, ChannelConnection, ChannelContext, ChannelProvider,
+  InboundAction, InboundMessage, ProviderRegistration,
+} from './types.js';
 
 const CARD_FIELDS = ['header', 'process', 'stopButton'] as const;
 const FOOTER_FIELDS = ['model', 'changes', 'context', 'elapsed'] as const;
+const MAX_FIELD_LEN = 500;
 
 function validCard(value: unknown): CardPatch {
   const record = (item: unknown, fields: readonly string[], where: string): Record<string, boolean> => {
@@ -32,6 +36,37 @@ function validCard(value: unknown): CardPatch {
   const top = record(value, CARD_FIELDS, '');
   const footer = (value as { footer?: unknown }).footer;
   return { ...top, ...(footer === undefined ? {} : { footer: record(footer, FOOTER_FIELDS, '.footer') }) };
+}
+
+function stringMap(value: unknown, label: string): Record<string, string> {
+  if (value === undefined) return {};
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new AppError('INVALID_INPUT', `${label} must be an object`);
+  const out: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== 'string') throw new AppError('INVALID_INPUT', `${label}.${key} must be a string`);
+    if (item.length > MAX_FIELD_LEN) throw new AppError('INVALID_INPUT', `${label}.${key} is too long`);
+    out[key] = item.trim();
+  }
+  return out;
+}
+
+function incomingConfig(input: Partial<ChannelAccountInput>): Record<string, string> {
+  const out = stringMap(input.config, 'config');
+  if (input.appId !== undefined) out.appId = requireString(input.appId, 'appId', MAX_FIELD_LEN).trim();
+  if (input.domain !== undefined) out.domain = requireString(input.domain, 'domain', MAX_FIELD_LEN).trim();
+  return out;
+}
+
+function incomingSecrets(input: Partial<ChannelAccountInput>): Record<string, string> {
+  const out = stringMap(input.secrets, 'secrets');
+  if (input.appSecret !== undefined) out.appSecret = requireString(input.appSecret, 'appSecret', MAX_FIELD_LEN).trim();
+  return out;
+}
+
+function primaryExternalId(provider: ChannelProvider | undefined, config: Record<string, string>): string | undefined {
+  const immutable = provider?.meta?.fields.find(field => field.kind === 'text' && field.immutable);
+  if (immutable && config[immutable.key]) return config[immutable.key];
+  return config.appId || undefined;
 }
 
 export class ChannelAccounts {
@@ -51,14 +86,29 @@ export class ChannelAccounts {
 
   secretPath(id: string): string { return join(this.state.deps.stateDir, 'channels', `${id}.secret`); }
 
-  writeSecret(id: string, secret: string): void {
-    mkdirSync(join(this.state.deps.stateDir, 'channels'), { recursive: true, mode: 0o700 });
-    atomicWritePrivateFile(this.secretPath(id), secret);
+  readSecrets(id: string): Record<string, string> {
+    const raw = readPrivateSettingsFile(this.secretPath(id))?.trim();
+    if (!raw) return {};
+    if (raw.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1].length > 0));
+        }
+      } catch { /* fall through to legacy plain secret */ }
+    }
+    // Pre-generalization Feishu secret files stored the raw appSecret as plain text.
+    return { appSecret: raw };
   }
 
-  domain(value: unknown): 'feishu' | 'lark' {
-    if (value !== 'feishu' && value !== 'lark') throw new AppError('INVALID_CHANNEL_DOMAIN', 'domain must be feishu or lark');
-    return value;
+  writeSecrets(id: string, secrets: Record<string, string>): void {
+    const cleaned = Object.fromEntries(Object.entries(secrets).filter(([, value]) => value.length > 0));
+    if (!Object.keys(cleaned).length) {
+      try { rmSync(this.secretPath(id), { force: true }); } catch { /* nothing to remove */ }
+      return;
+    }
+    mkdirSync(join(this.state.deps.stateDir, 'channels'), { recursive: true, mode: 0o700 });
+    atomicWritePrivateFile(this.secretPath(id), JSON.stringify(cleaned));
   }
 
   account(id: string): StoredAccount {
@@ -67,19 +117,116 @@ export class ChannelAccounts {
     return account;
   }
 
+  private resolveFields(
+    provider: ChannelProvider | undefined,
+    rawConfig: Record<string, string>,
+    rawSecrets: Record<string, string>,
+    previous?: { config: Record<string, string>; secrets: Record<string, string> },
+  ): { config: Record<string, string>; secrets: Record<string, string> } {
+    const fields = provider?.meta?.fields;
+    if (!fields?.length) {
+      const config = { ...(previous?.config ?? {}) };
+      for (const [key, value] of Object.entries(rawConfig)) { if (value) config[key] = value; else delete config[key]; }
+      const secrets = { ...(previous?.secrets ?? {}) };
+      for (const [key, value] of Object.entries(rawSecrets)) { if (value) secrets[key] = value; else delete secrets[key]; }
+      return { config, secrets };
+    }
+    const config: Record<string, string> = { ...(previous?.config ?? {}) };
+    const secrets: Record<string, string> = { ...(previous?.secrets ?? {}) };
+    for (const field of fields) {
+      if (field.kind === 'secret') {
+        const provided = Object.hasOwn(rawSecrets, field.key) ? rawSecrets[field.key]! : undefined;
+        if (provided !== undefined) {
+          if (provided) secrets[field.key] = provided;
+          else if (field.required) throw new AppError('INVALID_CHANNEL_FIELD', `${field.key} is required`);
+          else delete secrets[field.key];
+        } else if (!previous && field.required && !secrets[field.key]) {
+          throw new AppError('INVALID_CHANNEL_FIELD', `${field.key} is required`);
+        }
+        continue;
+      }
+      const provided = Object.hasOwn(rawConfig, field.key) ? rawConfig[field.key]! : undefined;
+      if (previous && field.immutable && provided !== undefined && provided !== (previous.config[field.key] ?? '')) {
+        throw new AppError('INVALID_CHANNEL_FIELD', `${field.key} cannot be changed`);
+      }
+      const value = provided !== undefined ? provided : (previous ? config[field.key] : field.defaultValue);
+      if (!value) {
+        if (field.required) throw new AppError('INVALID_CHANNEL_FIELD', `${field.key} is required`);
+        delete config[field.key];
+        continue;
+      }
+      if (field.kind === 'select' && field.options?.length && !field.options.some(option => option.value === value)) {
+        throw new AppError('INVALID_CHANNEL_FIELD', `${field.key} is invalid`);
+      }
+      config[field.key] = value;
+    }
+    return { config, secrets };
+  }
+
+  private missingRequiredSecrets(provider: ChannelProvider, secrets: Record<string, string>): string[] {
+    const fields = provider.meta?.fields;
+    if (!fields?.length) return Object.values(secrets).some(Boolean) ? [] : ['secret'];
+    return fields.filter(field => field.kind === 'secret' && field.required && !secrets[field.key]).map(field => field.key);
+  }
+
+  private toChannelAccount(stored: StoredAccount, secrets: Record<string, string>): ChannelAccount {
+    return {
+      id: stored.id,
+      kind: stored.kind,
+      config: accountConfig(stored),
+      secrets,
+      enabled: stored.enabled,
+      source: stored.source ?? 'manual',
+    };
+  }
+
   info(account: StoredAccount): ChannelAccountInfo {
     const status = this.state.runtimes.get(account.id)?.status ?? { state: account.enabled ? 'connecting' as const : 'disabled' as const };
     const connection = this.state.runtimes.get(account.id)?.connection;
-    const { source: _source, card, ...rest } = account;
-    const links = this.state.provider(account.kind)?.links(account) ?? {};
-    return { ...rest, ...(connection?.botName ? { botName: connection.botName } : {}), ...(connection?.avatarUrl ? { avatarUrl: connection.avatarUrl } : {}), secretSet: existsSync(this.secretPath(account.id)), status, links, card: mergeCard(card) };
+    const provider = this.state.provider(account.kind);
+    const config = accountConfig(account);
+    const providerLinks = provider?.links?.({ id: account.id, config, source: account.source ?? 'manual' }) ?? {};
+    const links = {
+      ...(providerLinks.open ? { open: providerLinks.open } : {}),
+      ...(providerLinks.console ? { console: providerLinks.console } : {}),
+      ...(connection?.links?.open ? { open: connection.links.open } : {}),
+      ...(connection?.links?.console ? { console: connection.links.console } : {}),
+    };
+    const badge = provider?.badge?.({ config });
+    const identity = connection?.identity ?? provider?.identity?.({ config }, connection);
+    return {
+      id: account.id,
+      kind: account.kind,
+      config,
+      appId: config.appId ?? '',
+      domain: config.domain ?? '',
+      enabled: account.enabled,
+      ...(connection?.botName ? { botName: connection.botName } : {}),
+      ...(connection?.avatarUrl ? { avatarUrl: connection.avatarUrl } : {}),
+      ...(badge ? { badge } : {}),
+      ...(identity ? { identity } : {}),
+      secretSet: existsSync(this.secretPath(account.id)),
+      status,
+      links,
+      card: mergeCard(account.card),
+    };
   }
 
   async createAccount(input: ChannelAccountInput): Promise<ChannelAccountInfo> {
     const kind = typeof input?.kind === 'string' ? channelKind(input.kind) : undefined;
-    if (!kind || !this.state.provider(kind)) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
-    const account: StoredAccount = { id: this.newAccountId(kind), kind, appId: requireString(input.appId, 'appId', 200).trim(), domain: this.domain(input.domain), enabled: input.enabled !== false, source: 'manual' };
-    this.writeSecret(account.id, requireString(input.appSecret, 'appSecret', 500).trim());
+    const provider = kind ? this.state.provider(kind) : undefined;
+    if (!kind || !provider) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
+    const { config, secrets } = this.resolveFields(provider, incomingConfig(input), incomingSecrets(input));
+    const externalId = primaryExternalId(provider, config);
+    const account: StoredAccount = {
+      id: this.newAccountId(kind),
+      kind,
+      config,
+      ...(externalId ? { externalId } : {}),
+      enabled: input.enabled !== false,
+      source: 'manual',
+    };
+    this.writeSecrets(account.id, secrets);
     this.state.bindings.setAccount(account);
     if (account.enabled) void this.connect(account.id);
     this.state.changed();
@@ -88,19 +235,31 @@ export class ChannelAccounts {
 
   async updateAccount(id: string, patch: Partial<ChannelAccountInput>): Promise<ChannelAccountInfo> {
     const current = this.account(id);
-    const next: StoredAccount = {
-      ...current,
-      ...(patch.appId !== undefined ? { appId: requireString(patch.appId, 'appId', 200).trim() } : {}),
-      ...(patch.domain !== undefined ? { domain: this.domain(patch.domain) } : {}),
-      ...(patch.enabled !== undefined ? { enabled: Boolean(patch.enabled) } : {}),
-      ...(patch.card !== undefined ? { card: mergeCard(current.card, validCard(patch.card)) } : {}),
-    };
-    if (patch.card !== undefined && patch.appId === undefined && patch.domain === undefined && patch.appSecret === undefined && patch.enabled === undefined) {
+    const provider = this.state.provider(current.kind);
+    const hasConfigOrSecret = patch.config !== undefined || patch.secrets !== undefined
+      || patch.appId !== undefined || patch.domain !== undefined || patch.appSecret !== undefined;
+    if (patch.card !== undefined && !hasConfigOrSecret && patch.enabled === undefined) {
+      const next: StoredAccount = { ...current, card: mergeCard(current.card, validCard(patch.card)) };
       this.state.bindings.setAccount(next);
       this.state.changed();
       return this.info(next);
     }
-    if (patch.appSecret !== undefined) this.writeSecret(id, requireString(patch.appSecret, 'appSecret', 500).trim());
+    const previousConfig = accountConfig(current);
+    const previousSecrets = this.readSecrets(id);
+    const resolved = hasConfigOrSecret
+      ? this.resolveFields(provider, incomingConfig(patch), incomingSecrets(patch), { config: previousConfig, secrets: previousSecrets })
+      : { config: previousConfig, secrets: previousSecrets };
+    const externalId = current.externalId ?? primaryExternalId(provider, resolved.config);
+    const next: StoredAccount = {
+      ...current,
+      config: resolved.config,
+      ...(externalId ? { externalId } : {}),
+      ...(patch.enabled !== undefined ? { enabled: Boolean(patch.enabled) } : {}),
+      ...(patch.card !== undefined ? { card: mergeCard(current.card, validCard(patch.card)) } : {}),
+    };
+    delete next.appId;
+    delete next.domain;
+    if (hasConfigOrSecret) this.writeSecrets(id, resolved.secrets);
     this.state.bindings.setAccount(next);
     this.state.healthCache.delete(id);
     await this.disconnect(id);
@@ -120,38 +279,58 @@ export class ChannelAccounts {
 
   async health(id: string, refresh = false): Promise<ChannelHealth> {
     const stored = this.account(id);
+    // An explicit refresh retries accounts that failed during initial connect (e.g. network not ready yet).
+    if (refresh && stored.enabled) {
+      const runtime = this.state.runtimes.get(id);
+      if (!runtime?.connection && runtime?.status.state !== 'connecting') {
+        void this.connect(id);
+      }
+    }
     const cached = this.state.healthCache.get(id);
     if (!refresh && cached && Date.now() - cached.at < HEALTH_TTL_MS) return this.liveHealth(id, cached.value);
     const provider = this.state.provider(stored.kind);
     let remote: Awaited<ReturnType<NonNullable<ChannelProvider['health']>>> = {};
-    const secret = readPrivateSettingsFile(this.secretPath(id))?.trim();
-    if (provider?.health && secret) {
-      try { remote = await provider.health({ id, kind: stored.kind, appId: stored.appId, domain: stored.domain, enabled: stored.enabled, appSecret: secret }); } catch { remote = {}; }
+    const secrets = this.readSecrets(id);
+    if (provider?.health && this.missingRequiredSecrets(provider, secrets).length === 0) {
+      try { remote = await provider.health(this.toChannelAccount(stored, secrets)); } catch { remote = {}; }
     }
+    const config = accountConfig(stored);
+    const grantUrl = remote.missingScopes?.length ? provider?.links?.({ id, config, source: stored.source ?? 'manual' }, remote.missingScopes).grant : undefined;
     const value: ChannelHealth = {
       connected: false,
       ...(remote.activated !== undefined ? { activated: remote.activated } : {}),
       ...(remote.missingScopes ? { missingScopes: remote.missingScopes } : {}),
-      ...(remote.missingScopes?.length && provider?.links(stored, remote.missingScopes).grant ? { grantUrl: provider.links(stored, remote.missingScopes).grant } : {}),
+      ...(grantUrl ? { grantUrl } : {}),
     };
     this.state.healthCache.set(id, { at: Date.now(), value });
     return this.liveHealth(id, value);
   }
 
   private liveHealth(id: string, remote: ChannelHealth): ChannelHealth {
+    const stored = this.account(id);
     const runtime = this.state.runtimes.get(id);
+    const provider = this.state.provider(stored.kind);
     const connected = runtime?.status.state === 'connected';
     const lastEventAt = runtime?.status.lastEventAt;
-    const manual = (this.account(id).source ?? 'manual') === 'manual';
-    return { ...remote, connected, ...(lastEventAt ? { lastEventAt } : {}), ...(manual && connected && !lastEventAt ? { needsLongConnection: true } : {}) };
+    const manual = (stored.source ?? 'manual') === 'manual';
+    const needsManualStep = Boolean(provider?.meta?.hints?.manualSetupStep) && manual && connected && !lastEventAt;
+    return {
+      ...remote,
+      connected,
+      ...(lastEventAt ? { lastEventAt } : {}),
+      ...(needsManualStep ? { needsLongConnection: true } : {}),
+    };
   }
 
   async startRegistration(input: ChannelRegistrationInput): Promise<ChannelRegistration> {
     const kind = typeof input?.kind === 'string' ? channelKind(input.kind) : undefined;
     const provider = kind ? this.state.provider(kind) : undefined;
     if (!kind || !provider?.register) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
-    const appId = input.appId === undefined ? undefined : requireString(input.appId, 'appId', 200).trim();
-    if (appId && !this.state.bindings.accounts().some(item => item.appId === appId && item.kind === kind)) throw new AppError('CHANNEL_ACCOUNT_NOT_FOUND', 'No such channel account', 404);
+    const rawExternal = input.externalId ?? input.appId;
+    const externalId = rawExternal === undefined ? undefined : requireString(rawExternal, 'externalId', MAX_FIELD_LEN).trim();
+    if (externalId && !this.state.bindings.accounts().some(item => item.kind === kind && (item.externalId === externalId || accountConfig(item).appId === externalId))) {
+      throw new AppError('CHANNEL_ACCOUNT_NOT_FOUND', 'No such channel account', 404);
+    }
     const now = Date.now();
     for (const [id, item] of this.state.registrations) {
       if (item.kind === kind && item.state === 'waiting') this.endRegistration(item, 'cancelled');
@@ -164,7 +343,12 @@ export class ChannelAccounts {
     let onTimeout!: (error: Error) => void;
     const timedOut = new Promise<never>((_, reject) => { onTimeout = reject; });
     const owner = this.state.deps.owner.get().name;
-    const running = provider.register({ ...(appId ? { appId } : {}), ...(owner ? { ownerName: owner } : {}), signal: abort.signal, ready: (url, expiresIn) => onReady({ url, expiresIn }) });
+    const running = provider.register({
+      ...(externalId ? { externalId, appId: externalId } : {}),
+      ...(owner ? { ownerName: owner } : {}),
+      signal: abort.signal,
+      ready: (url, expiresIn) => onReady({ url, expiresIn }),
+    });
     const timer = setTimeout(() => { abort.abort(); onTimeout(new Error('Timed out waiting for the QR code')); }, REGISTRATION_READY_MS);
     running.catch(() => undefined);
     const first = await Promise.race([ready, timedOut, running.then(() => undefined, error => { throw error; })]).catch(error => { clearTimeout(timer); abort.abort(); throw new AppError('CHANNEL_REGISTRATION_FAILED', errorMessage(error).slice(0, 200), 502); });
@@ -206,11 +390,25 @@ export class ChannelAccounts {
 
   private async completeRegistration(item: Registration, result: ProviderRegistration): Promise<void> {
     if (item.state !== 'waiting' || this.state.isClosed()) return;
-    const existing = this.state.bindings.accounts().find(account => account.kind === item.kind && account.appId === result.appId);
+    const config: Record<string, string> = {
+      ...(result.appId ? { appId: result.appId } : {}),
+      ...(result.domain ? { domain: result.domain } : {}),
+      ...(result.config ?? {}),
+    };
+    const secrets: Record<string, string> = {
+      ...(result.appSecret ? { appSecret: result.appSecret } : {}),
+      ...(result.secrets ?? {}),
+    };
+    const externalId = result.externalId ?? result.appId ?? config.appId;
+    const existing = externalId
+      ? this.state.bindings.accounts().find(account => account.kind === item.kind && (account.externalId === externalId || accountConfig(account).appId === externalId))
+      : undefined;
     const account: StoredAccount = existing
-      ? { ...existing, domain: result.domain, enabled: true }
-      : { id: this.newAccountId(item.kind), kind: item.kind, appId: result.appId, domain: result.domain, enabled: true, source: 'scan' };
-    this.writeSecret(account.id, result.appSecret);
+      ? { ...existing, config: { ...accountConfig(existing), ...config }, ...(externalId ? { externalId } : {}), enabled: true }
+      : { id: this.newAccountId(item.kind), kind: item.kind, config, ...(externalId ? { externalId } : {}), enabled: true, source: 'scan' };
+    delete account.appId;
+    delete account.domain;
+    this.writeSecrets(account.id, secrets);
     this.state.bindings.setAccount(account);
     this.state.healthCache.delete(account.id);
     if (existing) await this.disconnect(account.id);
@@ -236,8 +434,9 @@ export class ChannelAccounts {
         const provider = this.state.provider(stored.kind);
         runtime.provider = provider;
         if (!provider) throw new Error('提供这个通道的插件没有启用');
-        const secret = readPrivateSettingsFile(this.secretPath(id))?.trim();
-        if (!secret) throw new Error('缺少 App Secret');
+        const secrets = this.readSecrets(id);
+        const missing = this.missingRequiredSecrets(provider, secrets);
+        if (missing.length) throw new Error('缺少机器人凭据');
         const context: ChannelContext = {
           inbound: inbound => { void this.handlers.onInbound(inbound).catch(error => console.warn('[channels] inbound failed', errorMessage(error))); },
           action: action => this.handlers.onAction(action),
@@ -245,7 +444,7 @@ export class ChannelAccounts {
           signal: runtime.abort.signal,
           log: { info: (text, data) => console.info(`[channels] ${text}`, data ?? ''), warn: (text, data) => console.warn(`[channels] ${text}`, data ?? '') },
         };
-        const connection = await provider.connect({ id, kind: stored.kind, appId: stored.appId, domain: stored.domain, enabled: true, appSecret: secret } satisfies ChannelAccount, context);
+        const connection = await provider.connect(this.toChannelAccount(stored, secrets), context);
         if (runtime.abort.signal.aborted) { await connection.close().catch(() => undefined); return; }
         runtime.connection = connection;
         if (runtime.status.state === 'connecting') setStatus({ state: 'connected' });

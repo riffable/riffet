@@ -22,11 +22,33 @@ function pickBooleans(value: object | undefined): Record<string, boolean> {
   return Object.fromEntries(Object.entries(value ?? {}).filter(([key, item]) => key !== 'footer' && typeof item === 'boolean')) as Record<string, boolean>;
 }
 
-export interface StoredAccount { id: string; kind: ChannelKind; appId: string; domain: 'feishu' | 'lark'; enabled: boolean;
+export interface StoredAccount {
+  id: string;
+  kind: ChannelKind;
+  /** Non-secret platform configuration values keyed by `ChannelFieldSpec.key`. */
+  config?: Record<string, string>;
+  /** Stable platform identifier for deduplicating scan-to-create (e.g. Feishu App ID). */
+  externalId?: string;
+  /** Legacy Feishu fields kept for reading pre-generalization records. */
+  appId?: string;
+  domain?: string;
+  enabled: boolean;
   /** How it was added; records from before this field are manual. */
   source?: 'scan' | 'manual';
   /** Only what was changed from the defaults; read through `mergeCard`. */
-  card?: CardPatch }
+  card?: CardPatch;
+}
+
+/** Normalizes a stored account from either the legacy Feishu shape or the generic `config` shape. */
+export function accountConfig(account: Pick<StoredAccount, 'config' | 'appId' | 'domain'>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (account.appId) out.appId = account.appId;
+  if (account.domain) out.domain = account.domain;
+  for (const [key, value] of Object.entries(account.config ?? {})) {
+    if (typeof value === 'string' && value.length > 0) out[key] = value;
+  }
+  return out;
+}
 export interface StoredIdentity { id: string; account: string; userId: string; name?: string; boundAt: string }
 /** `anchorMessageId`: a real message of the chat to reply under (a topic's thread id is not one). */
 export interface StoredConversation { sessionId: string; address: ChannelAddress; anchorMessageId?: string }
@@ -40,7 +62,10 @@ export interface StoredSurface {
 export interface ChatModelDefaults { backendId?: string; model?: string }
 
 /** Kinds stored or sent before platforms became plugin declarations (docs/design/channels.md「插件化」). */
-const LEGACY_KINDS: Record<string, ChannelKind> = { feishu: 'riffet.feishu/feishu' };
+const LEGACY_KINDS: Record<string, ChannelKind> = {
+  feishu: 'riffet.channel-feishu/feishu',
+  'riffet.feishu/feishu': 'riffet.channel-feishu/feishu',
+};
 export const channelKind = (kind: string): ChannelKind => Object.hasOwn(LEGACY_KINDS, kind) ? LEGACY_KINDS[kind]! : kind;
 
 export const chatKey = (account: string, chatId: string) => `${account}:${chatId}`;
@@ -65,7 +90,13 @@ export class ChannelBindings {
 
   // ---- accounts and identities -----------------------------------------------------------------
 
-  accounts(): StoredAccount[] { return Object.values(this.read<StoredAccount>('accounts')).map(account => ({ ...account, kind: channelKind(account.kind) })); }
+  accounts(): StoredAccount[] {
+    return Object.values(this.read<StoredAccount>('accounts')).map(account => {
+      const config = accountConfig(account);
+      const externalId = account.externalId ?? config.appId;
+      return { ...account, kind: channelKind(account.kind), config, ...(externalId ? { externalId } : {}) };
+    });
+  }
   setAccount(account: StoredAccount): void { const all = this.read<StoredAccount>('accounts'); all[account.id] = account; this.write('accounts', all); }
   removeAccount(id: string): void {
     const accounts = this.read<StoredAccount>('accounts'); delete accounts[id]; this.write('accounts', accounts);

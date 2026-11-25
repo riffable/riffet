@@ -4,7 +4,7 @@
  */
 import * as Lark from '@larksuiteoapi/node-sdk';
 import type { ChannelAccount, ImChannelProvider, ProviderHealth, ProviderRegistration } from '@riffet/plugin-api';
-import { createFeishuApi, FeishuApiError } from './openapi.js';
+import { createFeishuApi, FeishuApiError, feishuDomain } from './openapi.js';
 
 /** What the provider calls, by the names in the platform's scan-to-create default template. */
 export const REQUIRED_SCOPES = [
@@ -32,24 +32,26 @@ async function reachableAvatar(): Promise<string | undefined> {
   } catch { return undefined; }
 }
 
-const register: NonNullable<ImChannelProvider['register']> = async ({ appId, signal, ready }): Promise<ProviderRegistration> => {
+const register: NonNullable<ImChannelProvider['register']> = async ({ externalId, appId, signal, ready }): Promise<ProviderRegistration> => {
   const avatar = await reachableAvatar();
+  const targetAppId = externalId ?? appId;
   const result = await Lark.registerApp({
     signal,
-    ...(appId ? { appId } : {}),
+    ...(targetAppId ? { appId: targetAppId } : {}),
     appPreset: { name: APP_NAME, desc: APP_DESC, ...(avatar ? { avatar } : {}) },
     onQRCodeReady: ({ url, expireIn }) => ready(url, expireIn),
   });
+  const domain = result.user_info?.tenant_brand === 'lark' ? 'lark' : 'feishu';
   return {
-    appId: result.client_id,
-    appSecret: result.client_secret,
-    domain: result.user_info?.tenant_brand ?? 'feishu',
+    externalId: result.client_id,
+    config: { appId: result.client_id, domain },
+    secrets: { appSecret: result.client_secret },
     ...(result.user_info?.open_id ? { userId: result.user_info.open_id } : {}),
   };
 };
 
 const health: NonNullable<ImChannelProvider['health']> = async (account: ChannelAccount): Promise<ProviderHealth> => {
-  const api = createFeishuApi({ appId: account.appId, appSecret: account.appSecret, domain: account.domain });
+  const api = createFeishuApi({ appId: account.config.appId ?? '', appSecret: account.secrets.appSecret ?? '', domain: feishuDomain(account.config.domain) });
   const out: ProviderHealth = {};
   const [bot, scopes] = await Promise.allSettled([
     api.callRaw('GET', '/open-apis/bot/v3/info', { label: 'bot-info' }),
@@ -71,13 +73,15 @@ const health: NonNullable<ImChannelProvider['health']> = async (account: Channel
   return out;
 };
 
-const links: ImChannelProvider['links'] = (account, missingScopes) => {
-  const lark = account.domain === 'lark';
+const links: NonNullable<ImChannelProvider['links']> = (account, missingScopes) => {
+  const appId = account.config.appId ?? '';
+  if (!appId) return {};
+  const lark = account.config.domain === 'lark';
   const console = lark ? 'https://open.larksuite.com' : 'https://open.feishu.cn';
   return {
-    open: `https://applink.${lark ? 'larksuite' : 'feishu'}.${lark ? 'com' : 'cn'}/client/bot/open?appId=${account.appId}`,
-    console: `${console}/app/${account.appId}`,
-    ...(missingScopes?.length ? { grant: `${console}/app/${account.appId}/auth?q=${missingScopes.join(',')}&op_from=openapi&token_type=tenant` } : {}),
+    open: `https://applink.${lark ? 'larksuite' : 'feishu'}.${lark ? 'com' : 'cn'}/client/bot/open?appId=${appId}`,
+    console: `${console}/app/${appId}`,
+    ...(missingScopes?.length ? { grant: `${console}/app/${appId}/auth?q=${missingScopes.join(',')}&op_from=openapi&token_type=tenant` } : {}),
   };
 };
 

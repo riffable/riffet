@@ -1271,6 +1271,10 @@ msgstr "Run an action from a workbench control or pick a command"
 msgid "代理"
 msgstr "Proxy"
 
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "代理与自定义地址"
+msgstr "Proxy and custom API base"
+
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -1677,6 +1681,11 @@ msgstr "Change"
 #: src/app/design/overview/Opening.tsx
 msgid "修改 3 个文件"
 msgstr "Editing 3 files"
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "修改配置"
+msgstr "Edit configuration"
 
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "值"
@@ -2330,10 +2339,9 @@ msgctxt "settings-delete-action"
 msgid "删除"
 msgstr "Delete"
 
-#. placeholder {0}: botName(account)
 #: src/app/settings/channels/BotDetail.tsx
-msgid "删除 {0}？"
-msgstr "Delete {0}?"
+msgid "删除 {displayName}？"
+msgstr "Delete {displayName}?"
 
 #: src/app/design/android/TypeChapter.tsx
 msgid "删除？"
@@ -3293,6 +3301,23 @@ msgstr "There are {0} radius tiers; the pill takes half the height; when nested,
 msgid "圆角档位"
 msgstr "Radius tiers"
 
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在 {platform} 中打开"
+msgstr "Open in {platform}"
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在 {platform} 私聊机器人发一条消息"
+msgstr "Send the bot a direct message in {platform}"
+
+#: src/app/settings/channels/shared.tsx
+msgid "在 {platformName} 中打开"
+msgstr "Open in {platformName}"
+
+#: src/app/settings/channels/shared.tsx
+msgid "在 {platformName} 私聊机器人发送 <0>{command}</0>"
+msgstr "Send <0>{command}</0> to the bot in a {platformName} direct message"
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "在 DECISIONS.md 追加新决定"
 msgstr "Append a new decision to DECISIONS.md"
@@ -3338,8 +3363,8 @@ msgid "在手机上扫码配对后出现在这里。"
 msgstr "Appears here after you pair by scanning the QR code on your phone."
 
 #: src/app/settings/ChannelsSection.tsx
-msgid "在插件中启用飞书后可添加"
-msgstr "Turn on the Feishu plugin to add one"
+msgid "在插件中启用机器人通道后可添加"
+msgstr "Enable a bot channel plugin to add one"
 
 #: src/app/settings/LinksSection.tsx
 msgid "在无法被直连的机器上使用（如 Mac），主动连向生成链接串的一方"
@@ -3394,23 +3419,9 @@ msgstr "Online maintenance"
 msgid "在终端中运行"
 msgstr "Run in terminal"
 
-#: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
-msgid "在飞书中打开"
-msgstr "Open in Feishu"
-
-#: src/app/settings/channels/BotDetail.tsx
-msgid "在飞书私聊机器人发一条消息"
-msgstr "Send the bot a message in a Feishu private chat"
-
-#. placeholder {0}: code.code
-#: src/app/settings/channels/shared.tsx
-msgid "在飞书私聊机器人发送 <0>/bind {0}</0>"
-msgstr "Send <0>/bind {0}</0> to the bot in a Feishu private chat"
-
-#: src/app/settings/channels/BotDetail.tsx
-msgid "在飞书里列出这些命令"
-msgstr "List these commands in Feishu"
+msgid "在聊天里列出这些命令"
+msgstr "List these commands in chat"
 
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -3431,10 +3442,6 @@ msgstr "Avg {0} · p95 {1}"
 #: src/app/settings/PreferencesSections.tsx
 msgid "垂直边距"
 msgstr "Vertical padding"
-
-#: src/app/settings/channels/AddBotDialog.tsx
-msgid "域名"
-msgstr "Domain"
 
 #: src/app/design/catalog.tsx
 #: src/app/design/overview/SystemChapter.tsx
@@ -3493,8 +3500,16 @@ msgid "备注"
 msgstr "Note"
 
 #: src/app/settings/channels/BotDetail.tsx
-msgid "复制 App ID"
-msgstr "Copy App ID"
+msgid "复制"
+msgstr "Copy"
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "复制 {identityLabel}"
+msgstr "Copy {identityLabel}"
+
+#: src/app/settings/channels/shared.tsx
+msgid "复制命令"
+msgstr "Copy command"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "复制或粘贴"
@@ -4953,6 +4968,10 @@ msgstr "When opening a session"
 msgid "打开开发者后台"
 msgstr "Open developer console"
 
+#: src/app/settings/channels/shared.tsx
+msgid "打开机器人"
+msgstr "Open bot"
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "打开画布查看节点时按轮生成"
 msgstr "Runs per turn when opened on Canvas"
@@ -4997,11 +5016,6 @@ msgstr "Pin {0} to sidebar"
 #: src/app/settings/SidebarSection.tsx
 msgid "把{0}移到更多"
 msgstr "Move {0} to More"
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/channels/BotDetail.tsx
-msgid "把事件订阅改为长连接"
-msgstr "Switch event subscription to long connection"
 
 #: src/app/design/components/NavigationChapter.tsx
 msgid "把兼容 OpenAI 接口的网关作为模型源。"
@@ -6285,7 +6299,6 @@ msgstr "More"
 msgid "更多操作"
 msgstr "More actions"
 
-#: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
 msgid "更换凭据"
 msgstr "Replace credentials"
@@ -6452,6 +6465,10 @@ msgstr "Not detected"
 #: src/app/design/components/InputsChapter.tsx
 msgid "未登录"
 msgstr "Not signed in"
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "未绑定的账号发来的消息会被忽略"
+msgstr "Messages from unbound accounts are ignored"
 
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
@@ -7275,6 +7292,14 @@ msgstr "Mixed text, punctuation, truncation, wrapping"
 msgid "添加"
 msgstr "Add"
 
+#: src/app/settings/ChannelsSection.tsx
+msgid "添加 {onlyProvider} 机器人"
+msgstr "Add {onlyProvider} bot"
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "添加 {platform} 机器人"
+msgstr "Add {platform} bot"
+
 #: src/app/settings/LinksSection.tsx
 msgid "添加互联"
 msgstr "Add a link"
@@ -7282,6 +7307,11 @@ msgstr "Add a link"
 #: src/app/settings/PreferencesSections.tsx
 msgid "添加按键"
 msgstr "Add keys"
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/ChannelsSection.tsx
+msgid "添加机器人"
+msgstr "Add bot"
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "添加规则"
@@ -7306,11 +7336,6 @@ msgstr "Add a project folder"
 #: src/app/settings/ThemeCanvas.tsx
 msgid "添加颜色"
 msgstr "Add color"
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/ChannelsSection.tsx
-msgid "添加飞书机器人"
-msgstr "Add Feishu bot"
 
 #: src/app/settings/StorageSection.tsx
 msgid "清理过期时间线缓存、历史旧版本并去重 Checkpoints，不中断服务"
@@ -7487,6 +7512,10 @@ msgstr "Generate command"
 msgid "生成文件"
 msgstr "Generated files"
 
+#: src/app/settings/channels/BotDetail.tsx
+msgid "生成绑定码"
+msgstr "Generate code"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "生成配对码"
 msgstr "Generate pairing code"
@@ -7499,6 +7528,10 @@ msgstr "Create link string"
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "用"
 msgstr "Use"
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "用 {platform} 扫码"
+msgstr "Scan with {platform}"
 
 #: src/app/design/android/notes.ts
 msgid "用 Compose 画出的 iOS 外观；iPhone 原生端与它取同样的值。"
@@ -7548,10 +7581,6 @@ msgstr "Wording, tone, terminology and formatting"
 msgid "用这里生成的绑定码绑定账号，只在私聊"
 msgstr "Link an account with a code made here, in a private chat only"
 
-#: src/app/settings/channels/AddBotDialog.tsx
-msgid "用飞书扫码"
-msgstr "Scan with Feishu"
-
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "由 Codex 写入 ~/.codex/config.toml"
 msgstr "Written by Codex to ~/.codex/config.toml"
@@ -7598,6 +7627,10 @@ msgstr "Inter for the interface, JetBrains Mono for code, PingFang for Chinese. 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "界面自有的四种彩色，用于 agent 的头像与名称标记。"
 msgstr "The four colours the interface owns, used for agent avatars and name marks."
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "留空保持不变"
+msgstr "Leave blank to keep current"
 
 #. placeholder {0}: addingEntry.source.label
 #: src/app/settings/BackendProfilesSection.tsx
@@ -7827,6 +7860,10 @@ msgstr "Does the web version work offline?"
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "离线的地位"
 msgstr "The role of offline"
+
+#: src/app/settings/channels/shared.tsx
+msgid "私聊机器人发送 <0>{command}</0>"
+msgstr "Send <0>{command}</0> to the bot in a direct message"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "移动端快捷按键栏"
@@ -8227,8 +8264,9 @@ msgid "经 SSH 互联"
 msgstr "Link over SSH"
 
 #: src/app/settings/channels/AddBotDialog.tsx
-msgid "绑定你的飞书账号"
-msgstr "Link your Feishu account"
+#: src/app/settings/channels/BotDetail.tsx
+msgid "绑定你的 {platform} 账号"
+msgstr "Bind your {platform} account"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "结束进程"
@@ -9569,6 +9607,11 @@ msgctxt "settings-group"
 msgid "连接"
 msgstr "Connections"
 
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "连接 {platform}"
+msgstr "Connect to {platform}"
+
 #: src/app/settings/settingsSections.ts
 msgid "连接与访问"
 msgstr "Connection & Access"
@@ -9596,11 +9639,6 @@ msgstr "Disconnected"
 #: src/app/settings/LinksSection.tsx
 msgid "连接方向只取决于网络可达性；想在 A 机器里选 B 机器的目录，只需在 B 开启「允许 A 操作这台电脑」"
 msgstr "Connection direction only depends on network reachability; to pick folders on B from A, turn on \"Let A operate this computer\" on B"
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/channels/BotDetail.tsx
-msgid "连接飞书"
-msgstr "Connect to Feishu"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "连续合并"
@@ -10420,15 +10458,6 @@ msgstr "Each style has a section; sizes and motion are read from one definition.
 #: src/app/design/android/PlatformChapter.tsx
 msgid "风格是配方"
 msgstr "Styles are recipes"
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/channels/BotDetail.tsx
-msgid "飞书"
-msgstr "Feishu"
-
-#: src/app/settings/channels/BotDetail.tsx
-msgid "飞书里的应用不会被删除"
-msgstr "The app in Feishu is not deleted"
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "首条消息开始时生成"

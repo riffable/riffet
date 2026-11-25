@@ -1,11 +1,14 @@
 /*
  * IM channels (docs/design/channels.md): what `GET /api/channels` and its writes exchange with the
- * Web settings page. Secrets never appear here: `secretSet` only says one is stored.
+ * Web settings page. Secrets never appear here: `secretSet` only says they are stored.
  */
 
-/** The declaration id of the IM platform (`contributes.imChannels`), e.g. `riffet.feishu/feishu`. Inputs still accept the bare `feishu` of older clients. */
+import type { LocalizedText } from './plugins.js';
+
+/** The declaration id of the IM platform (`contributes.imChannels`), e.g. `riffet.channel-feishu/feishu`. Inputs still accept the bare `feishu` of older clients. */
 export type ChannelKind = string;
-export type ChannelDomain = 'feishu' | 'lark';
+/** @deprecated Legacy Feishu region string; new platforms store non-secret fields in `config`. */
+export type ChannelDomain = string;
 
 export interface ChannelConnectionStatus {
   state: 'disabled' | 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -13,6 +16,58 @@ export interface ChannelConnectionStatus {
   error?: string;
   /** ISO time of the last event received from the platform. */
   lastEventAt?: string;
+}
+
+/** One option of a `select` credential/config field declared by a channel provider. */
+export interface ChannelFieldOption {
+  value: string;
+  label: LocalizedText;
+}
+
+/** One manual setup / credential field declared by a channel provider. */
+export interface ChannelFieldSpec {
+  key: string;
+  label: LocalizedText;
+  kind: 'text' | 'secret' | 'select';
+  required?: boolean;
+  /** Collapsed under an optional section unless already filled or editing after a failure. */
+  advanced?: boolean;
+  /** Cannot be edited once the bot account has been created (e.g. Feishu App ID). */
+  immutable?: boolean;
+  /** Monospace font for IDs, tokens and URLs. */
+  mono?: boolean;
+  placeholder?: LocalizedText;
+  defaultValue?: string;
+  options?: ChannelFieldOption[];
+}
+
+/** Which turn-card customization toggles a channel platform honors. */
+export interface ChannelCardCapabilities {
+  process?: boolean;
+  header?: boolean;
+  stopButton?: boolean;
+  footer?: boolean;
+}
+
+/** Short platform-specific facts shown in onboarding and account management. */
+export interface ChannelProviderHints {
+  /** One-line setup method shown under the platform name in the picker. */
+  summary?: LocalizedText;
+  /** One-line source of manual credentials shown above the form (e.g. "向 @BotFather 发送 /newbot 获取 Token"). */
+  credentialSource?: LocalizedText;
+  /** Link to the external console / bot creator alongside `credentialSource`. */
+  credentialUrl?: string;
+  credentialLinkLabel?: LocalizedText;
+  /** Extra step in the platform console after connecting a manually configured bot (e.g. Feishu long connection). */
+  manualSetupStep?: LocalizedText;
+  /** Note shown when deleting a bot account (e.g. "飞书里的应用不会被删除"). */
+  deleteNote?: LocalizedText;
+}
+
+/** Copyable platform identifier shown under the bot's name (e.g. Feishu App ID or Telegram @username). */
+export interface ChannelAccountIdentity {
+  label: LocalizedText;
+  value: string;
 }
 
 /** How a bot's reply card looks, per bot. Everything is on by default. */
@@ -30,12 +85,19 @@ export interface ChannelCardOptions {
 export interface ChannelAccountInfo {
   id: string;
   kind: ChannelKind;
+  /** Non-secret platform configuration values keyed by `ChannelFieldSpec.key`. */
+  config: Record<string, string>;
+  /** Legacy Feishu fields kept for older clients (e.g. frozen macOS settings). */
   appId: string;
   domain: ChannelDomain;
   enabled: boolean;
   /** The bot's display name and avatar, once known. */
   botName?: string;
   avatarUrl?: string;
+  /** Optional short badge shown next to the bot name in the list (e.g. "Lark"). */
+  badge?: string;
+  /** Optional copyable identifier shown under the bot name on the detail page. */
+  identity?: ChannelAccountIdentity;
   secretSet: boolean;
   status: ChannelConnectionStatus;
   /** `open`: a chat with the bot in the platform's client; `console`: the app in the developer console. */
@@ -57,12 +119,12 @@ export interface ChannelHealth {
   grantUrl?: string;
   /** Set once any message reached the bot. */
   lastEventAt?: string;
-  /** Manual setup only: whether the console still needs the long-connection subscription saved. */
+  /** Manual setup only: whether the platform console still needs a post-connect step (described by `provider.hints.manualSetupStep`). */
   needsLongConnection?: boolean;
 }
 
-/** `POST /api/channels/registrations`: the platform's scan-to-create flow; `appId` re-authorizes an existing bot instead. */
-export interface ChannelRegistrationInput { kind: ChannelKind; appId?: string }
+/** `POST /api/channels/registrations`: the platform's scan-to-create flow; `externalId` (or legacy `appId`) re-authorizes an existing bot. */
+export interface ChannelRegistrationInput { kind: ChannelKind; externalId?: string; appId?: string }
 export interface ChannelRegistration {
   id: string;
   /** The verification URL the QR encodes; also opened directly in a browser. */
@@ -82,7 +144,7 @@ export interface ChannelRegistrationState {
 export interface ChannelIdentity {
   id: string;
   account: string;
-  /** Feishu: the user's open_id under this app. */
+  /** Platform-scoped user identifier (e.g. Feishu open_id, Telegram user id). */
   userId: string;
   name?: string;
   boundAt: string;
@@ -101,8 +163,16 @@ export interface ChannelChat {
   updatedAt: string;
 }
 
-/** An IM platform a plugin that is on provides; `register` when it offers scan-to-create. */
-export interface ChannelProviderInfo { id: ChannelKind; register: boolean }
+/** An IM platform a plugin that is on provides; drives generic onboarding and settings UI. */
+export interface ChannelProviderInfo {
+  id: ChannelKind;
+  title: LocalizedText;
+  register: boolean;
+  fields: ChannelFieldSpec[];
+  capabilities: { edit: boolean; actions: 'forms' | 'buttons' | 'none'; threads: boolean };
+  card?: ChannelCardCapabilities;
+  hints?: ChannelProviderHints;
+}
 
 export interface ChannelsState {
   /** What a new bot can be added for; an account of a platform not listed stays, but cannot connect. */
@@ -115,11 +185,16 @@ export interface ChannelsState {
 /** `POST /api/channels/accounts` (create) and `PATCH /api/channels/accounts/:id` (all optional). */
 export interface ChannelAccountInput {
   kind: ChannelKind;
-  appId: string;
+  /** Non-secret platform configuration values keyed by `ChannelFieldSpec.key`. */
+  config?: Record<string, string>;
+  /** Secret values keyed by `ChannelFieldSpec.key`; omitted keys on PATCH keep stored values. */
+  secrets?: Record<string, string>;
+  /** Legacy Feishu inputs accepted for backward compatibility with older clients. */
+  appId?: string;
   /** Omitted on PATCH keeps the stored secret. */
   appSecret?: string;
-  domain: ChannelDomain;
-  enabled: boolean;
+  domain?: ChannelDomain;
+  enabled?: boolean;
   /** PATCH only; a partial value is merged (and `footer` field by field). Changing it never reconnects. */
   card?: Partial<Omit<ChannelCardOptions, 'footer'>> & { footer?: Partial<ChannelCardOptions['footer']> };
 }

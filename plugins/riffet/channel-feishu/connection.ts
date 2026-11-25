@@ -176,10 +176,12 @@ export async function openSocket({ account, api, botOpenId, ctx }: SocketOptions
   const ready = new Promise<void>(resolve => { markReady = resolve; });
   const log = { warn: (...parts: unknown[]) => ctx.log.warn(`feishu sdk: ${flatten(parts)}`), info: (...parts: unknown[]) => ctx.log.info(`feishu sdk: ${flatten(parts)}`) };
 
+  const appId = account.config.appId ?? '';
+  const appSecret = account.secrets.appSecret ?? '';
   const client = new Lark.WSClient({
-    appId: account.appId,
-    appSecret: account.appSecret,
-    domain: account.domain === 'lark' ? Lark.Domain.Lark : Lark.Domain.Feishu,
+    appId,
+    appSecret,
+    domain: account.config.domain === 'lark' ? Lark.Domain.Lark : Lark.Domain.Feishu,
     loggerLevel: Lark.LoggerLevel.warn,
     logger: { error: log.warn, warn: log.warn, info: log.info, debug: () => undefined, trace: () => undefined },
     onReady: () => { setState('connected'); markReady(); },

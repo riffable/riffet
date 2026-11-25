@@ -49,7 +49,7 @@ export interface OwnedTaskProvider { owner: PluginManifest['id']; version?: stri
 /** A generated avatar style of an enabled plugin: its declaration and the provider that draws it. */
 /** `signal` is the activation's: it aborts when the plugin is turned off. */
 /** An IM platform of an enabled plugin: `id` is its declaration id, the `ChannelKind` of the accounts it connects. */
-export interface OwnedImChannel { owner: PluginManifest['id']; id: string; provider: ImChannelProvider; signal: AbortSignal }
+export interface OwnedImChannel { owner: PluginManifest['id']; id: string; title: NonNullable<PluginDeclarations['imChannels']>[number]['title']; provider: ImChannelProvider; signal: AbortSignal }
 export interface OwnedAgentTools { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['agentTools']>[number]; group: AgentToolGroup; signal: AbortSignal }
 export interface OwnedAvatarStyle { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['avatarStyles']>[number]; provider: AvatarStyleProvider }
 /** A command ready to run: the declaration, the handler, and the signal that aborts with the activation. */
@@ -587,7 +587,7 @@ export class PluginRegistry {
       const providers = entry.active?.contributions?.imChannels;
       return (entry.plugin.manifest.contributes?.imChannels ?? []).flatMap(declaration => {
         const provider = providers && Object.hasOwn(providers, declaration.id) ? providers[declaration.id] : undefined;
-        return provider && entry.active ? [{ owner: entry.plugin.manifest.id, id: declaration.id, provider, signal: entry.active.controller.signal }] : [];
+        return provider && entry.active ? [{ owner: entry.plugin.manifest.id, id: declaration.id, title: declaration.title, provider, signal: entry.active.controller.signal }] : [];
       });
     });
   }

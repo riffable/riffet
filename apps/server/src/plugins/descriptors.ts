@@ -75,7 +75,7 @@ export function checkedContributions(ctx: RegistryContext, contributions: Contri
     if (!manifest.contributes?.channels?.some(declared => declared.id === channelId) || typeof handler?.open !== 'function') throw new Error(`channel "${channelId}" is not declared in contributes.channels or has no open()`);
   }
   for (const [channelId, provider] of Object.entries(contributions.imChannels ?? {})) {
-    if (!manifest.contributes?.imChannels?.some(declared => declared.id === channelId) || typeof provider?.connect !== 'function' || typeof provider.links !== 'function') throw new Error(`IM channel "${channelId}" is not declared in contributes.imChannels or has no connect() and links()`);
+    if (!manifest.contributes?.imChannels?.some(declared => declared.id === channelId) || typeof provider?.connect !== 'function' || (provider.links !== undefined && typeof provider.links !== 'function')) throw new Error(`IM channel "${channelId}" is not declared in contributes.imChannels or has no connect()`);
   }
   for (const [name, service] of Object.entries(contributions.services ?? {})) {
     if (!SERVICE_NAME.test(name) || !service || typeof service !== 'object' || typeof service.version !== 'string' || !SERVICE_VERSION.test(service.version)) throw new Error(`service "${name}" needs a name like "scan" and a version like "1.0.0"`);

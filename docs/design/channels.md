@@ -4,14 +4,14 @@
 
 在飞书里和 Riffet 的会话对话：私聊或群里发消息，服务按聊天选定的项目新建或继续会话，把思考、工具和回答实时写回一张卡片，审批和提问也能在飞书里直接回答。飞书就是又一个客户端，和 Web、Mac、手机看到的是同一批会话、同一个交互。
 
-通道层放在服务端核心，与具体 IM 无关；具体 IM 是插件实现的 `imChannels` 扩展点，飞书是第一个实现（内置插件 `riffet.feishu`），后续 Slack、Telegram 等只新增插件。卡片、流式与过程消息的做法沿用已在生产环境验证过的飞书机器人实践；但不把飞书调用写进会话主流程，平台细节都留在适配器里。
+通道层放在服务端核心，与具体 IM 无关；具体 IM 是插件实现的 `imChannels` 扩展点，飞书和 Telegram 是首批内置实现（`riffet.channel-feishu`、`riffet.channel-telegram`），后续 Slack、Discord 等只新增插件。卡片、流式与过程消息的做法沿用已在生产环境验证过的飞书机器人实践；但不把平台调用写进会话主流程，平台细节都留在适配器里。
 
 ## 已定决策
 
 | 问题 | 决定 |
 | --- | --- |
 | 部署 | Riffet 可能在任意服务器上；只要求服务能主动连出飞书，不要求公网入口 |
-| 代码位置 | 通道层在服务端核心 `apps/server/src/channels/`；具体 IM 是插件扩展点 `imChannels`，飞书为内置插件 `riffet.feishu`（2026-11-18 修改，原为「不做插件扩展点」） |
+| 代码位置 | 通道层在服务端核心 `apps/server/src/channels/`；具体 IM 是插件扩展点 `imChannels`，飞书与 Telegram 为内置插件 `riffet.channel-feishu`、`riffet.channel-telegram`（2026-11-18 修改，原为「不做插件扩展点」） |
 | 聊天范围 | 私聊、群聊、话题群都支持 |
 | 谁能使用 | 只有绑定过的飞书账号；群里其他人的消息忽略。按群授权全部成员以后再做 |
 | 会话粒度 | 默认一个话题一个会话，群里新的 @ 消息开新会话；可把某个群设为整群共用一个会话 |
@@ -25,7 +25,7 @@
 ## 架构
 
 ```
-ImChannelProvider（插件 plugins/riffet/feishu，后续 slack、telegram 插件）
+ImChannelProvider（插件 plugins/riffet/channel-feishu、plugins/riffet/channel-telegram 等）
    │ 入站消息 · 卡片回调                 ▲ 渲染 TurnView · 交互卡 · 通知
    ▼                                     │
 ChannelService（channels/，与 IM 无关）
@@ -54,7 +54,8 @@ apps/server/src/channels/
   commands.ts     /new /stop /project /status /bind …
   routes.ts       /api/channels/*（设置页用）
 
-plugins/riffet/feishu/      内置插件（插件化之后；之前在 apps/server/src/channels/feishu/）
+plugins/riffet/channel-feishu/   飞书内置插件（插件化之后；之前在 apps/server/src/channels/feishu/）
+plugins/riffet/channel-telegram/ Telegram 内置插件
   index.ts        清单：contributes.imChannels
   activate.ts     返回 Contributions.imChannels
   provider.ts     ImChannelProvider 实现
@@ -69,7 +70,7 @@ plugins/riffet/feishu/      内置插件（插件化之后；之前在 apps/serv
 
 ## 插件化
 
-2026-11-18：具体 IM 是插件扩展点 `imChannels`，飞书是内置插件 `riffet.feishu`（默认启用）。通道层（入站管线、门禁、绑定、会话跟随、投影、命令、交互、收口、持久化、路由）留在核心，作为这个扩展点的宿主实现；插件只实现平台适配器，不碰会话、绑定与身份，因此不需要扩大 `host.sessions`。
+2026-11-18：具体 IM 是插件扩展点 `imChannels`，飞书是首个内置插件（现命名 `riffet.channel-feishu`，默认启用；同期新增 `riffet.channel-telegram`）。通道层（入站管线、门禁、绑定、会话跟随、投影、命令、交互、收口、持久化、路由）留在核心，作为这个扩展点的宿主实现；插件只实现平台适配器，不碰会话、绑定与身份，因此不需要扩大 `host.sessions`。
 
 ### 扩展点
 
@@ -83,18 +84,17 @@ plugins/riffet/feishu/      内置插件（插件化之后；之前在 apps/serv
 
 ### 契约与数据
 
-- `ChannelKind` 是声明 ID（`riffet.feishu/feishu`）。`ChannelsState.providers: [{ id, register }]` 列出当前可用的平台和是否支持扫码创建。
-- 存量数据不改写：账号读取时把 `kind: 'feishu'` 视为 `riffet.feishu/feishu`；创建账号与扫码的请求也接受 `feishu`，旧版 Mac 客户端照常可用。新账号 ID 用声明名的最后一段（`feishu-1a2b3c4d`），保持为一个 URL 段。
-- 账号字段仍是 `appId`、`appSecret`、`domain`（飞书的形状）。接第二个平台、字段不同时，再改为由声明给出表单字段，不提前抽象。
+- `ChannelKind` 是声明 ID（如 `riffet.channel-feishu/feishu`、`riffet.channel-telegram/telegram`）。`ChannelsState.providers` 列出当前可用平台的 `id`、`title`、`register`、`fields`、`capabilities`、`card` 与 `hints`。
+- 存量数据不改写：账号读取时把旧 `kind: 'feishu'` 与 `'riffet.feishu/feishu'` 视为 `riffet.channel-feishu/feishu`，把旧的顶层 `appId`/`domain` 归入 `config`，把旧的纯文本 `.secret` 文件视为 `{ appSecret }`；创建与更新接口同时接受新字段（`config`/`secrets`）和旧字段（`appId`/`appSecret`/`domain`），返回体保留兼容的 `appId`/`domain`，旧版 Mac 客户端照常可用。新账号 ID 用声明名的最后一段（如 `feishu-1a2b3c4d`、`telegram-1a2b3c4d`），保持为一个 URL 段。
+- 表单字段与平台提示由各插件的 `ImChannelProvider.meta` 声明，核心按字段定义做校验与存储，不再写死飞书的 `appId`/`appSecret`/`domain` 或长连接检查步骤。
 
 ### 设置页
 
-- Web 的「机器人」页按 `providers` 取新账号的平台、决定是否提供扫码与「重新扫码授权」；没有可用平台时空状态提示在插件中启用飞书，不显示添加。页面文案仍是飞书的：目前只有这一个平台。
+- Web 的「机器人」页按 `providers` 渲染平台选择、扫码或字段表单、卡片能力开关、检查清单和平台文案；没有可用平台时空状态提示在插件中启用机器人通道，不显示添加。
 
 ### 现状
 
-- Mac 的「机器人」设置（`ChannelsSettings.swift`、`ChannelsModel.swift`）仍发送 `kind: 'feishu'`，靠服务端的兼容读取工作，也不读 `providers`：插件关闭时仍显示添加入口，添加会失败。
-- 账号表单字段是飞书的形状（见上）。
+- Mac 的「机器人」设置（`ChannelsSettings.swift`、`ChannelsModel.swift`）已冻结（M 类），仍发送旧格式字段，靠服务端的兼容读取和兼容响应字段工作。
 
 ## 核心模型
 
@@ -259,7 +259,7 @@ header     会话标题 · 副标题为模型
 
 ### 卡片体系
 
-除流式回复卡外，所有卡片（命令、模型、项目选择、交互、通知、错误）都由 `feishu/kit.ts` 的基础组件拼出，不在各处手写 JSON。
+除流式回复卡外，所有卡片（命令、模型、项目选择、交互、通知、错误）都由 `channel-feishu/kit.ts` 的基础组件拼出，不在各处手写 JSON。
 
 **结构**：标题栏 → 主内容 → 次内容（可选）→ 操作（可选）→ 提示（可选）。主内容不省略，哪怕只有一行也包一个色块；只有一类信息时不硬拆次内容。
 

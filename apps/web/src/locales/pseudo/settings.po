@@ -1271,6 +1271,10 @@ msgstr ""
 msgid "代理"
 msgstr ""
 
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "代理与自定义地址"
+msgstr ""
+
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -1676,6 +1680,11 @@ msgstr ""
 
 #: src/app/design/overview/Opening.tsx
 msgid "修改 3 个文件"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "修改配置"
 msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx
@@ -2330,9 +2339,8 @@ msgctxt "settings-delete-action"
 msgid "删除"
 msgstr ""
 
-#. placeholder {0}: botName(account)
 #: src/app/settings/channels/BotDetail.tsx
-msgid "删除 {0}？"
+msgid "删除 {displayName}？"
 msgstr ""
 
 #: src/app/design/android/TypeChapter.tsx
@@ -3293,6 +3301,23 @@ msgstr ""
 msgid "圆角档位"
 msgstr ""
 
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在 {platform} 中打开"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在 {platform} 私聊机器人发一条消息"
+msgstr ""
+
+#: src/app/settings/channels/shared.tsx
+msgid "在 {platformName} 中打开"
+msgstr ""
+
+#: src/app/settings/channels/shared.tsx
+msgid "在 {platformName} 私聊机器人发送 <0>{command}</0>"
+msgstr ""
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "在 DECISIONS.md 追加新决定"
 msgstr ""
@@ -3338,7 +3363,7 @@ msgid "在手机上扫码配对后出现在这里。"
 msgstr ""
 
 #: src/app/settings/ChannelsSection.tsx
-msgid "在插件中启用飞书后可添加"
+msgid "在插件中启用机器人通道后可添加"
 msgstr ""
 
 #: src/app/settings/LinksSection.tsx
@@ -3394,22 +3419,8 @@ msgstr ""
 msgid "在终端中运行"
 msgstr ""
 
-#: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
-msgid "在飞书中打开"
-msgstr ""
-
-#: src/app/settings/channels/BotDetail.tsx
-msgid "在飞书私聊机器人发一条消息"
-msgstr ""
-
-#. placeholder {0}: code.code
-#: src/app/settings/channels/shared.tsx
-msgid "在飞书私聊机器人发送 <0>/bind {0}</0>"
-msgstr ""
-
-#: src/app/settings/channels/BotDetail.tsx
-msgid "在飞书里列出这些命令"
+msgid "在聊天里列出这些命令"
 msgstr ""
 
 #: src/app/settings/PairingDialogs.tsx
@@ -3430,10 +3441,6 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "垂直边距"
-msgstr ""
-
-#: src/app/settings/channels/AddBotDialog.tsx
-msgid "域名"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -3493,7 +3500,15 @@ msgid "备注"
 msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
-msgid "复制 App ID"
+msgid "复制"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "复制 {identityLabel}"
+msgstr ""
+
+#: src/app/settings/channels/shared.tsx
+msgid "复制命令"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -4953,6 +4968,10 @@ msgstr ""
 msgid "打开开发者后台"
 msgstr ""
 
+#: src/app/settings/channels/shared.tsx
+msgid "打开机器人"
+msgstr ""
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "打开画布查看节点时按轮生成"
 msgstr ""
@@ -4996,11 +5015,6 @@ msgstr ""
 #. placeholder {0}: name(id)
 #: src/app/settings/SidebarSection.tsx
 msgid "把{0}移到更多"
-msgstr ""
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/channels/BotDetail.tsx
-msgid "把事件订阅改为长连接"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -6285,7 +6299,6 @@ msgstr ""
 msgid "更多操作"
 msgstr ""
 
-#: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
 msgid "更换凭据"
 msgstr ""
@@ -6451,6 +6464,10 @@ msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "未登录"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "未绑定的账号发来的消息会被忽略"
 msgstr ""
 
 #: src/app/design/patterns/KeyboardChapter.tsx
@@ -7275,12 +7292,25 @@ msgstr ""
 msgid "添加"
 msgstr ""
 
+#: src/app/settings/ChannelsSection.tsx
+msgid "添加 {onlyProvider} 机器人"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "添加 {platform} 机器人"
+msgstr ""
+
 #: src/app/settings/LinksSection.tsx
 msgid "添加互联"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "添加按键"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/ChannelsSection.tsx
+msgid "添加机器人"
 msgstr ""
 
 #: src/app/settings/TitleRulesSection.tsx
@@ -7305,11 +7335,6 @@ msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
 msgid "添加颜色"
-msgstr ""
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/ChannelsSection.tsx
-msgid "添加飞书机器人"
 msgstr ""
 
 #: src/app/settings/StorageSection.tsx
@@ -7487,6 +7512,10 @@ msgstr ""
 msgid "生成文件"
 msgstr ""
 
+#: src/app/settings/channels/BotDetail.tsx
+msgid "生成绑定码"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "生成配对码"
 msgstr ""
@@ -7498,6 +7527,10 @@ msgstr ""
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "用"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "用 {platform} 扫码"
 msgstr ""
 
 #: src/app/design/android/notes.ts
@@ -7548,10 +7581,6 @@ msgstr ""
 msgid "用这里生成的绑定码绑定账号，只在私聊"
 msgstr ""
 
-#: src/app/settings/channels/AddBotDialog.tsx
-msgid "用飞书扫码"
-msgstr ""
-
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "由 Codex 写入 ~/.codex/config.toml"
 msgstr ""
@@ -7597,6 +7626,10 @@ msgstr ""
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "界面自有的四种彩色，用于 agent 的头像与名称标记。"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "留空保持不变"
 msgstr ""
 
 #. placeholder {0}: addingEntry.source.label
@@ -7826,6 +7859,10 @@ msgstr ""
 
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "离线的地位"
+msgstr ""
+
+#: src/app/settings/channels/shared.tsx
+msgid "私聊机器人发送 <0>{command}</0>"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -8227,7 +8264,8 @@ msgid "经 SSH 互联"
 msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
-msgid "绑定你的飞书账号"
+#: src/app/settings/channels/BotDetail.tsx
+msgid "绑定你的 {platform} 账号"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
@@ -9569,6 +9607,11 @@ msgctxt "settings-group"
 msgid "连接"
 msgstr ""
 
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "连接 {platform}"
+msgstr ""
+
 #: src/app/settings/settingsSections.ts
 msgid "连接与访问"
 msgstr ""
@@ -9595,11 +9638,6 @@ msgstr ""
 
 #: src/app/settings/LinksSection.tsx
 msgid "连接方向只取决于网络可达性；想在 A 机器里选 B 机器的目录，只需在 B 开启「允许 A 操作这台电脑」"
-msgstr ""
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/channels/BotDetail.tsx
-msgid "连接飞书"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -10419,15 +10457,6 @@ msgstr ""
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "风格是配方"
-msgstr ""
-
-#: src/app/settings/channels/AddBotDialog.tsx
-#: src/app/settings/channels/BotDetail.tsx
-msgid "飞书"
-msgstr ""
-
-#: src/app/settings/channels/BotDetail.tsx
-msgid "飞书里的应用不会被删除"
 msgstr ""
 
 #: src/app/settings/AuxiliaryModelsSection.tsx

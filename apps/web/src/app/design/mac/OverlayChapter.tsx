@@ -37,7 +37,7 @@ function SheetAnatomy() {
   return (
     <Frame className="flex flex-col items-center pb-14">
       <div className="h-9 w-full shrink-0 bg-fg/[0.04] shadow-[inset_0_-1px_0_var(--line)]" aria-hidden />
-      <div className="relative w-full max-w-md max-md:px-4">
+      <div className="relative w-full max-w-lg max-md:px-4">
         <div className="flex flex-col rounded-b-2xl bg-elevated shadow-pop">
           <div className="flex flex-col gap-1 px-5 pb-3 pt-5">
             <span className="text-base font-medium text-fg">{t`重命名会话`}</span>

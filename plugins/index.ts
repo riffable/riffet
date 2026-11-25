@@ -7,9 +7,10 @@ import { antigravity } from './riffet/antigravity/index.js';
 import { avatars } from './riffet/avatars/index.js';
 import { browser } from './riffet/browser/index.js';
 import { canvas } from './riffet/canvas/index.js';
+import { channelFeishu } from './riffet/channel-feishu/index.js';
+import { channelTelegram } from './riffet/channel-telegram/index.js';
 import { codeStudio } from './riffet/code-studio/index.js';
 import { cursor } from './riffet/cursor/index.js';
-import { feishu } from './riffet/feishu/index.js';
 import { speechLocal } from './riffet/speech-local/index.js';
 import { trace } from './riffet/trace/index.js';
 import { translate } from './riffet/translate/index.js';
@@ -24,5 +25,6 @@ export const builtinPlugins: Plugin[] = [
   avatars,
   translate,
   speechLocal,
-  feishu,
+  channelFeishu,
+  channelTelegram,
 ];

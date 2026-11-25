@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { ChannelAccountInfo, ChannelCardOptions } from '@contracts';
+import type { ChannelAccountInfo, ChannelCardCapabilities, ChannelCardOptions } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { IconArrowLeft, IconChevronDown, IconWrench } from '@/components/icons';
 import { Segmented, Spinner, Switch } from '@/components/ui/controls';
@@ -10,16 +10,19 @@ import { SettingsGroup, SettingsRow } from '../SettingsLayout';
 import { botName } from './shared';
 
 const ALL_ON: ChannelCardOptions = { header: true, process: true, stopButton: true, footer: { model: true, changes: true, context: true, elapsed: true } };
+const ALL_CAPS: Required<ChannelCardCapabilities> = { process: true, header: true, stopButton: true, footer: true };
 const cardOf = (account: ChannelAccountInfo): ChannelCardOptions => ({ ...ALL_ON, ...account.card, footer: { ...ALL_ON.footer, ...account.card?.footer } });
 
 /** One bot's reply card: a live preview of what the platform shows, and what goes on it. */
-export function CardSettings({ account, busy, run, onBack }: {
+export function CardSettings({ account, capabilities, busy, run, onBack }: {
   account: ChannelAccountInfo;
+  capabilities?: ChannelCardCapabilities;
   busy: boolean;
   run: (action: () => Promise<unknown>, fallback: string) => Promise<void>;
   onBack: () => void;
 }) {
   const { t } = useLingui();
+  const caps = { ...ALL_CAPS, ...(capabilities ? { process: Boolean(capabilities.process), header: Boolean(capabilities.header), stopButton: Boolean(capabilities.stopButton), footer: Boolean(capabilities.footer) } : {}) };
   const [card, setCard] = useState(() => cardOf(account));
   const [phase, setPhase] = useState<'running' | 'done'>('running');
   useEffect(() => setCard(cardOf(account)), [account]);
@@ -39,8 +42,8 @@ export function CardSettings({ account, busy, run, onBack }: {
     <Switch aria-label={label} checked={card.footer[key]} disabled={busy} onCheckedChange={(value) => void save({ footer: { [key]: value } })} />
   </SettingsRow>;
 
-  const left = card.footer.model;
-  const right = card.footer.changes || card.footer.context || card.footer.elapsed;
+  const left = caps.footer && card.footer.model;
+  const right = caps.footer && (card.footer.changes || card.footer.context || card.footer.elapsed);
   const rightParts = [
     card.footer.changes && <span key="c"><span className="text-(color:--card-add)">+12</span> <span className="text-(color:--card-del)">−3</span></span>,
     card.footer.context && <span key="x"><Trans>上下文</Trans> 42%</span>,
@@ -53,21 +56,21 @@ export function CardSettings({ account, busy, run, onBack }: {
     <div className="flex flex-col items-start gap-3">
       <Segmented ariaLabel={t`卡片`} value={phase} onChange={setPhase} options={[{ value: 'running', label: t`回复中` }, { value: 'done', label: t`已完成` }]} />
       <div className="card-preview flex w-full flex-col gap-3 rounded-xl bg-muted p-4 max-md:p-3">
-        {card.process && <div className="flex flex-col gap-1 rounded-lg bg-white px-3 py-2 text-(color:--card-fg)">
+        {caps.process && card.process && <div className="flex flex-col gap-1 rounded-lg bg-white px-3 py-2 text-(color:--card-fg)">
           {phase === 'running'
             ? <span className="inline-flex items-center gap-1.5 text-sm"><Spinner className="text-(color:--card-fg-2)" /><Trans>思考中</Trans></span>
             : <span className="inline-flex items-center gap-1 text-sm"><Trans>定位重定向问题</Trans><IconChevronDown className="size-3.5 text-(color:--card-fg-2)" /></span>}
           <span className="inline-flex items-center gap-1.5 text-xs text-(color:--card-fg-2)"><IconWrench className="size-3.5" /><Trans>已调用 2 次工具</Trans></span>
         </div>}
         <div className="flex flex-col overflow-hidden rounded-lg border border-(color:--card-line) bg-white text-(color:--card-fg)">
-          {card.header && <div className="border-b border-(color:--card-line) px-3 py-2 text-sm font-semibold"><Trans>示例会话</Trans></div>}
+          {caps.header && card.header && <div className="border-b border-(color:--card-line) px-3 py-2 text-sm font-semibold"><Trans>示例会话</Trans></div>}
           <p className="px-3 py-3 text-sm leading-relaxed">
             <Trans>已修复登录页的重定向问题，并补充了对应的回归用例。</Trans>
           </p>
           {phase === 'running'
             ? <div className="flex items-center justify-between gap-3 border-t border-(color:--card-line) px-3 py-2 text-xs text-(color:--card-fg-2)">
               <span className="inline-flex items-center gap-1.5"><Spinner className="text-(color:--card-fg-2)" /><Trans>处理中</Trans></span>
-              {card.stopButton && <span className="text-(color:--card-fg)"><Trans>中断</Trans></span>}
+              {caps.stopButton && card.stopButton && <span className="text-(color:--card-fg)"><Trans>中断</Trans></span>}
             </div>
             : (left || right) && <div className={cn('flex items-center justify-between gap-3 border-t border-(color:--card-line) px-3 py-2 text-xs text-(color:--card-fg-2)', !left && 'justify-end')}>
               {left && <span className="min-w-0 truncate">Opus 5.5 · fast · high</span>}
@@ -77,18 +80,18 @@ export function CardSettings({ account, busy, run, onBack }: {
       </div>
     </div>
 
-    <SettingsGroup>
+    {caps.process && <SettingsGroup>
       {top('process', t`思考过程`, t`单独一条消息，展示思考与工具调用`)}
-    </SettingsGroup>
-    <SettingsGroup title={t`卡片`}>
-      {top('header', t`标题栏`)}
-      {top('stopButton', t`中断按钮`)}
-    </SettingsGroup>
-    <SettingsGroup title={t`页脚`} note={<Trans>新设置从下一条回复开始生效</Trans>}>
+    </SettingsGroup>}
+    {(caps.header || caps.stopButton) && <SettingsGroup title={t`卡片`}>
+      {caps.header && top('header', t`标题栏`)}
+      {caps.stopButton && top('stopButton', t`中断按钮`)}
+    </SettingsGroup>}
+    {caps.footer && <SettingsGroup title={t`页脚`} note={<Trans>新设置从下一条回复开始生效</Trans>}>
       {foot('model', t`模型`)}
       {foot('changes', t`改动行数`)}
       {foot('context', t`上下文占用`)}
       {foot('elapsed', t`用时`)}
-    </SettingsGroup>
+    </SettingsGroup>}
   </div>;
 }

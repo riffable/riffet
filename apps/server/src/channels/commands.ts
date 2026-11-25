@@ -61,7 +61,7 @@ export const commandOfAction = (action: string): ChannelCommand | undefined => Q
 export const helpText = (): string => [
   ...COMMANDS.map(command => `- \`${command.usage}\` ${command.description}`),
   '',
-  `<font color='grey'>${PASS_THROUGH_NOTE}</font>`,
+  PASS_THROUGH_NOTE,
 ].join('\n');
 
 /** IM-facing replies; short and plain. */

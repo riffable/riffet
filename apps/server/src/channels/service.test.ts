@@ -29,8 +29,8 @@ function fakeProvider() {
     acknowledge: async () => undefined,
     close: async () => undefined,
   };
-  const provider: ChannelProvider = { kind: 'riffet.feishu/feishu', capabilities: { edit: true, actions: 'buttons', threads: true }, connect: async (_account, ctx) => { context = ctx; return connection; },
-    links: account => ({ open: `https://open.test/${account.appId}` }),
+  const provider: ChannelProvider = { kind: 'riffet.channel-feishu/feishu', title: { 'zh-Hans': '飞书', en: 'Feishu' }, capabilities: { edit: true, actions: 'buttons', threads: true }, connect: async (_account, ctx) => { context = ctx; return connection; },
+    links: account => ({ open: `https://open.test/${account.config.appId ?? ''}` }),
     register: async ({ ready }) => { ready('https://scan.test/code', 600); return registrations.shift()!; },
   };
   const message = (messageId: string, text: string, sender = 'ou_owner', chatType: 'p2p' | 'group' = 'p2p'): InboundMessage => ({
@@ -218,5 +218,59 @@ describe('channel core', () => {
     expect(info.card).toEqual({ header: true, process: false, stopButton: true, footer: { model: true, changes: true, context: false, elapsed: true } });
     expect(connect).not.toHaveBeenCalled();
     await expect(channels.updateAccount(id, { card: { header: 'no' as unknown as boolean } })).rejects.toThrow();
+  });
+
+  it('connects a token-only channel using declared fields without leaking secrets or requiring Feishu fields', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-channels-generic-'));
+    const seen: Array<{ config: Record<string, string>; secrets: Record<string, string> }> = [];
+    const tokenProvider: ChannelProvider = {
+      kind: 'riffet.channel-telegram/telegram',
+      title: { 'zh-Hans': 'Telegram', en: 'Telegram' },
+      capabilities: { edit: true, actions: 'buttons', threads: true },
+      meta: {
+        fields: [
+          { key: 'botToken', label: { en: 'Bot Token' }, kind: 'secret', required: true, mono: true },
+          { key: 'proxy', label: { en: 'Proxy' }, kind: 'text', mono: true },
+        ],
+        card: { header: true, stopButton: true, footer: true },
+      },
+      connect: async account => {
+        seen.push({ config: account.config, secrets: account.secrets });
+        return {
+          botName: 'RiffetBot',
+          identity: { label: { en: 'Username' }, value: '@riffet_bot' },
+          links: { open: 'https://t.me/riffet_bot' },
+          openTurn: async () => ({ update: () => undefined, finish: async () => undefined, state: () => ({ kind: 'riffet.channel-telegram/telegram', data: {} }) }),
+          resumeTurn: async () => undefined,
+          showInteraction: async () => ({ messageId: 'i' }),
+          updateInteraction: async () => undefined,
+          showProjectPicker: async () => ({ messageId: 'p' }),
+          showPanel: async () => ({ messageId: 'panel' }),
+          updatePanel: async () => undefined,
+          send: async () => ({ messageId: 's' }),
+          acknowledge: async () => undefined,
+          close: async () => undefined,
+        };
+      },
+    };
+    const { app, channels } = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent', channelProviders: [tokenProvider] });
+    cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); });
+
+    await expect(channels.createAccount({ kind: 'riffet.channel-telegram/telegram', config: {}, secrets: {} })).rejects.toThrow(/botToken/);
+    const created = await channels.createAccount({ kind: 'riffet.channel-telegram/telegram', config: { proxy: 'http://127.0.0.1:7890' }, secrets: { botToken: '123:secret-token' } });
+    await channels.connected(created.id);
+
+    expect(seen).toEqual([{ config: { proxy: 'http://127.0.0.1:7890' }, secrets: { botToken: '123:secret-token' } }]);
+    const state = channels.state();
+    expect(JSON.stringify(state)).not.toContain('123:secret-token');
+    expect(state.providers[0]).toMatchObject({ id: 'riffet.channel-telegram/telegram', register: false, card: { header: true, stopButton: true, footer: true } });
+    expect(state.accounts[0]).toMatchObject({ botName: 'RiffetBot', identity: { value: '@riffet_bot' }, links: { open: 'https://t.me/riffet_bot' }, secretSet: true });
+    // Platforms without `hints.manualSetupStep` never ask for Feishu's long-connection console step.
+    expect((await channels.health(created.id)).needsLongConnection).toBeUndefined();
+
+    // Updating only non-secret config keeps the stored botToken intact.
+    await channels.updateAccount(created.id, { config: { proxy: '' } });
+    await channels.connected(created.id);
+    expect(seen[1]).toEqual({ config: {}, secrets: { botToken: '123:secret-token' } });
   });
 });

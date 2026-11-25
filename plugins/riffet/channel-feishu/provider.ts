@@ -8,7 +8,7 @@ import type {
 import { interactionCard, noticeCard, panelCard, projectPickerCard } from './cards.js';
 import { openSocket } from './connection.js';
 import { onboarding } from './onboarding.js';
-import { createFeishuApi, FeishuApiError, type FeishuApi } from './openapi.js';
+import { createFeishuApi, FeishuApiError, feishuDomain, type FeishuApi } from './openapi.js';
 import { closeOrphanedSurface, deliverCard, openTurnSurface, replyTarget, resumeTurnSurface, type SurfaceDeps } from './surface.js';
 
 const REACTION_RECEIVED = 'Typing';
@@ -62,7 +62,7 @@ function createReactions(api: FeishuApi) {
 
 async function connect(account: ChannelAccount, ctx: ChannelContext): Promise<ChannelConnection> {
   ctx.status({ state: 'connecting' });
-  const api = createFeishuApi({ appId: account.appId, appSecret: account.appSecret, domain: account.domain });
+  const api = createFeishuApi({ appId: account.config.appId ?? '', appSecret: account.secrets.appSecret ?? '', domain: feishuDomain(account.config.domain) });
   const fail = (error: unknown): never => {
     ctx.status({ state: 'error', error: error instanceof Error ? error.message : String(error) });
     throw error;
@@ -116,6 +116,34 @@ async function connect(account: ChannelAccount, ctx: ChannelContext): Promise<Ch
 
 export const feishuProvider: ImChannelProvider = {
   capabilities: { edit: true, actions: 'forms', threads: true },
+  meta: {
+    fields: [
+      { key: 'appId', label: { 'zh-Hans': 'App ID', en: 'App ID' }, kind: 'text', required: true, immutable: true, mono: true },
+      { key: 'appSecret', label: { 'zh-Hans': 'App Secret', en: 'App Secret' }, kind: 'secret', required: true, mono: true },
+      {
+        key: 'domain',
+        label: { 'zh-Hans': '域名', en: 'Region' },
+        kind: 'select',
+        required: true,
+        defaultValue: 'feishu',
+        options: [
+          { value: 'feishu', label: { 'zh-Hans': '飞书', en: 'Feishu' } },
+          { value: 'lark', label: { 'zh-Hans': 'Lark', en: 'Lark' } },
+        ],
+      },
+    ],
+    card: { process: true, header: true, stopButton: true, footer: true },
+    hints: {
+      summary: { 'zh-Hans': '扫码创建或填应用凭据', en: 'Scan to create or enter app credentials' },
+      credentialSource: { 'zh-Hans': '从开放平台应用凭证页获取 App ID 与 App Secret', en: 'Copy App ID and App Secret from the Developer Console' },
+      credentialUrl: 'https://open.feishu.cn/app',
+      credentialLinkLabel: { 'zh-Hans': '打开开放平台', en: 'Developer Console' },
+      manualSetupStep: { 'zh-Hans': '把事件订阅改为长连接', en: 'Switch event subscription to long connection' },
+      deleteNote: { 'zh-Hans': '飞书里的应用不会被删除', en: 'The app in Feishu will not be deleted' },
+    },
+  },
+  badge: ({ config }) => config.domain === 'lark' ? 'Lark' : undefined,
+  identity: ({ config }) => config.appId ? { label: { 'zh-Hans': 'App ID', en: 'App ID' }, value: config.appId } : undefined,
   connect,
   ...onboarding,
 };

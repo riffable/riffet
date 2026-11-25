@@ -39,7 +39,7 @@ const SIZES = {
   /** confirmDialog, promptDialog and confirmations that wait on their own request. */
   confirm: 'max-w-[420px]',
   /** Create, rename, one form. */
-  form: 'max-w-md',
+  form: 'max-w-lg',
   /** Previews, diffs, choices from a list. */
   content: 'max-w-3xl',
   /** Its own navigation or a large canvas: settings, full previews. */

@@ -95,8 +95,24 @@ function paramTitle(param: ModelParam): string {
   return PARAM_TITLES[param.id] ?? param.name;
 }
 
+const EFFORT_LABELS: Record<string, string> = {
+  default: '默认',
+  none: 'Off',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'xhigh',
+  'extra-high': 'xhigh',
+  max: 'Max',
+};
+
 function optionTitle(param: ModelParam, option: { value: string; label: string }): string {
   const kind = paramKind(param);
+  if (kind === 'effort') {
+    const key = option.value.toLowerCase();
+    return EFFORT_LABELS[key] ?? (option.label.length > 16 && option.value ? option.value : option.label);
+  }
   if (kind === 'fast') return option.value === 'true' ? '快速' : option.value === 'false' ? '标准' : option.label;
   if (kind === 'toggle') return option.value === 'true' ? '开' : '关';
   return option.label;

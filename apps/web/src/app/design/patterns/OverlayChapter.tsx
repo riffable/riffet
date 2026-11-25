@@ -96,7 +96,7 @@ function Anatomy() {
   const mark = 'pointer-events-none absolute font-mono text-2xs text-fg-3';
   return (
     <Frame className="flex justify-center p-12 max-md:p-4">
-      <div className="relative w-full max-w-md">
+      <div className="relative w-full max-w-lg">
         <div className="flex flex-col rounded-2xl bg-elevated shadow-pop">
           <div className="relative flex flex-col gap-1 px-5 pb-3 pt-5 pr-12">
             <span className="text-lg font-semibold text-fg">{t`删除这个会话？`}</span>
@@ -119,7 +119,7 @@ function Anatomy() {
 /** The four dialog widths, nested on one sheet; the Mac's sheets take the same four. */
 export function Widths() {
   const { t } = useLingui();
-  const tiers: Array<[string, number]> = [[t`确认`, 420], [t`表单`, 448], [t`内容`, 768], [t`工作区`, 1080]];
+  const tiers: Array<[string, number]> = [[t`确认`, 420], [t`表单`, 512], [t`内容`, 768], [t`工作区`, 1080]];
   return (
     <Frame className="flex flex-col gap-3 p-8 max-md:p-4">
       {tiers.map(([name, width]) => (

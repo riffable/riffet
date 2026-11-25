@@ -50,5 +50,5 @@ export const MAC = {
   menu: { pad: 4, row: 32, subtitleRow: 44, header: 28, minWidth: 176, maxWidth: 360 },
   /** The page skeleton and the sheet widths, the same numbers as the web (macos.md §3.2, §4.2). */
   page: { document: 768, board: 1200, inline: 32, top: 40, bottom: 64 },
-  sheet: { inset: 20, widths: [420, 448, 768, 1080] as const },
+  sheet: { inset: 20, widths: [420, 512, 768, 1080] as const },
 } as const;

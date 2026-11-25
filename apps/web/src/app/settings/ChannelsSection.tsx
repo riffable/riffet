@@ -12,11 +12,11 @@ import { SettingsGroup } from './SettingsLayout';
 import { AddBotDialog, type AddBotMode } from './channels/AddBotDialog';
 import { BotDetail } from './channels/BotDetail';
 import { CardSettings } from './channels/CardSettings';
-import { BotAvatar, botName, pendingCount } from './channels/shared';
+import { BotAvatar, botName, pendingCount, providerName, providerOf } from './channels/shared';
 
 /** 机器人: the IM bots connected to this server; a row opens that bot's page in place. */
 export function ChannelsSection() {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const [state, setState] = useState<ChannelsState>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,12 +65,16 @@ export function ChannelsSection() {
     : <div className="flex justify-center p-5"><Spinner /></div>;
 
   const detail = detailId ? state.accounts.find((account) => account.id === detailId) : undefined;
+  const detailProvider = providerOf(state, detail?.kind);
   const canAdd = state.providers.length > 0;
+  const onlyProvider = state.providers.length === 1 ? providerName(state.providers[0], i18n.locale, state.providers[0]!.id) : undefined;
+  const multiPlatform = state.providers.length > 1 || new Set(state.accounts.map((account) => account.kind)).size > 1;
 
   const status = (account: ChannelAccountInfo) => {
     const { state: connection, lastEventAt } = account.status;
     const health = healths[account.id];
-    const pending = connection === 'connected' && health ? pendingCount(account, health) : 0;
+    const bound = state.identities.some((identity) => identity.account === account.id);
+    const pending = connection === 'connected' && health ? pendingCount(account, health, bound) : 0;
     if (connection === 'disabled') return { tone: 'idle' as const, label: t`已停用` };
     if (connection === 'connecting') return { tone: 'warning' as const, label: t`连接中`, pulse: true };
     if (connection !== 'connected') return { tone: 'danger' as const, label: t`连接失败` };
@@ -83,20 +87,23 @@ export function ChannelsSection() {
     <FeedbackNotice scope="channels" message={error} tone="danger" />
     {detail
       ? cardOpen
-        ? <CardSettings account={detail} busy={busy} run={run} onBack={() => setCardOpen(false)} />
+        ? <CardSettings account={detail} capabilities={detailProvider?.card} busy={busy} run={run} onBack={() => setCardOpen(false)} />
         : <BotDetail account={detail} state={state} busy={busy} run={run} onBack={() => setDetailId(undefined)} onOpenCard={() => setCardOpen(true)} onDialog={openDialog} />
       : state.accounts.length === 0
         ? canAdd
-          ? <EmptyState icon={<IconBot />} title={t`还没有机器人`}><Button variant="primary" onClick={() => openDialog({ kind: 'add' })}><IconPlus /><Trans>添加飞书机器人</Trans></Button></EmptyState>
-          : <EmptyState icon={<IconBot />} title={t`还没有机器人`} description={t`在插件中启用飞书后可添加`} />
+          ? <EmptyState icon={<IconBot />} title={t`还没有机器人`}><Button variant="primary" onClick={() => openDialog({ kind: 'add' })}><IconPlus />{onlyProvider ? <Trans>添加 {onlyProvider} 机器人</Trans> : <Trans>添加机器人</Trans>}</Button></EmptyState>
+          : <EmptyState icon={<IconBot />} title={t`还没有机器人`} description={t`在插件中启用机器人通道后可添加`} />
         : <SettingsGroup action={canAdd && <Button size="xs" variant="ghost" onClick={() => openDialog({ kind: 'add' })}><IconPlus /><Trans>添加</Trans></Button>}>
           {state.accounts.map((account) => {
             const { tone, label, pulse } = status(account);
+            const platform = providerName(providerOf(state, account.kind), i18n.locale, account.kind);
+            const displayName = botName(account, platform);
+            const tag = account.badge || (multiPlatform && displayName !== platform ? platform : undefined);
             return <button key={account.id} type="button" onClick={() => setDetailId(account.id)} className="-mx-4 flex min-h-14 items-center gap-3 px-4 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus max-md:-mx-3 max-md:px-3">
               <BotAvatar account={account} size="sm" />
               <span className="flex min-w-0 flex-1 items-center gap-2">
-                <span className="truncate text-sm font-medium text-fg">{botName(account)}</span>
-                {account.domain === 'lark' && <Badge>Lark</Badge>}
+                <span className="truncate text-sm font-medium text-fg">{displayName}</span>
+                {tag && <Badge>{tag}</Badge>}
               </span>
               <span className="flex shrink-0 items-center gap-1.5 text-sm text-fg-2"><StatusDot tone={tone} pulse={pulse} />{label}</span>
               <IconChevronRight className="size-4 shrink-0 text-fg-4" />

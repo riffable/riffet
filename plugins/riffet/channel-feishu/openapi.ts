@@ -3,12 +3,14 @@
  * concurrent requests coalesced), one error class that sorts failures by code, and the handful of
  * endpoints the channel uses. Only the long connection itself goes through the SDK.
  */
-import type { ChannelDomain } from '@contracts';
+export type FeishuDomain = 'feishu' | 'lark';
 
-export const DOMAIN_BASE: Record<ChannelDomain, string> = {
+export const DOMAIN_BASE: Record<FeishuDomain, string> = {
   feishu: 'https://open.feishu.cn',
   lark: 'https://open.larksuite.com',
 };
+
+export const feishuDomain = (value: string | undefined): FeishuDomain => value === 'lark' ? 'lark' : 'feishu';
 
 const TOKEN_REFRESH_MARGIN_MS = 60_000;
 /** Business codes meaning the tenant token is unusable; one fresh token and one retry. */
@@ -47,7 +49,7 @@ export class FeishuApiError extends Error {
   isTransient(): boolean { return this.isRateLimit() || this.httpStatus >= 500 || this.httpStatus === 0; }
 }
 
-export interface FeishuApiOptions { appId: string; appSecret: string; domain: ChannelDomain }
+export interface FeishuApiOptions { appId: string; appSecret: string; domain: FeishuDomain }
 
 interface TokenEntry { token: string; expiresAt: number }
 const tokens = new Map<string, TokenEntry>();
