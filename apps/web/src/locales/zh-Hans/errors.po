@@ -1104,6 +1104,31 @@ msgstr "此系统不支持项目任务"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_CONTROL_STALE"
+msgstr "终端控制权已变更，请重新获取"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_CONTROLLED"
+msgstr "另一台设备正在控制这个终端"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_DETACHED"
+msgstr "终端正在重连，请稍后再试"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_INTERACTION_BUSY"
+msgstr "终端正在执行另一项操作，请稍后再试"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_LEASE_REQUIRED"
+msgstr "获取控制权后才能输入"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
 msgid "error.TERMINAL_NOT_RUNNING"
 msgstr "CLI 未在运行"
 

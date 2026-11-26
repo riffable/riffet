@@ -3,7 +3,7 @@ import { LEGACY_DEFAULT_BACKEND_ID } from '../session-identity.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import type { FastifyInstance } from 'fastify';
 import { AppError, requireString } from '../errors.js';
-import { TERMINAL_BINARY_PROTOCOL, TERMINAL_BUDGET, type TerminalClientMessage } from '../../../../packages/contracts/src/index.js';
+import { TERMINAL_BINARY_PROTOCOL, TERMINAL_BUDGET, type TerminalClientMessage, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
 import { revisionedList } from './params.js';
 import type { RouteDeps } from './deps.js';
 import { localRequest } from '../auth.js';
@@ -76,6 +76,11 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
     const unwatch=auth.onRevoke(request,()=>{closed=true;stopHeartbeat();socket.terminate();});
     socket.once('close',unwatch);
     let chain=Promise.resolve();
+    // Names the message an error answers, so a client tells a user's own action from its background requests.
+    const reply=(error:unknown,requestType?:TerminalClientMessage['type'])=>{
+      const e=error as AppError;
+      if(socket.readyState===1)socket.send(JSON.stringify({type:'error',code:e.code??'TERMINAL_ERROR',message:e.message,...(requestType?{request:requestType}:{})} satisfies TerminalServerMessage));
+    };
     const protocol=Number(request.query.protocol)||1;
     const binaryProtocol=protocol>=TERMINAL_BINARY_PROTOCOL;
     let heartbeatTimer:NodeJS.Timeout|undefined;
@@ -124,7 +129,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
           if(frame.clientId!==clientId||frame.epoch!==epoch)throw new AppError('TERMINAL_LEASE_REQUIRED','Claim terminal control before sending input',409);
           if(frame.data.length>128*1024)throw new AppError('INPUT_TOO_LARGE','Paste at most 128 KiB at once');
           await terminal.input(id,frame.clientId,frame.epoch,frame.data);
-        }).catch(error=>{const e=error as AppError;if(socket.readyState===1)socket.send(JSON.stringify({type:'error',code:e.code??'TERMINAL_ERROR',message:e.message}));});
+        }).catch(error=>reply(error,'input'));
         return;
       }
       // Acks only settle a counter. Behind a long claim/paste/resize they would arrive late and make a
@@ -132,11 +137,13 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
       let parsed:TerminalClientMessage|undefined;
       try{parsed=JSON.parse(raw.toString()) as TerminalClientMessage;}catch{/* Reported from the chain, in order. */}
       if(parsed?.type==='ack'){if(!closed&&Number.isFinite(parsed.chars))unsubscribe.ack(parsed.chars);return;}
+      let requestType:TerminalClientMessage['type']|undefined;
       chain=chain.then(async()=>{
         if(closed)return;
         // Messages already queued before revocation must not acquire control or write input.
         auth.authenticate(request);
         const message=parsed??JSON.parse(raw.toString()) as TerminalClientMessage;
+        requestType=message.type;
         if(message.type==='claim'){
           const info=await terminal.claim(id,requireString(message.clientId,'clientId',200),Boolean(message.takeover));clientId=message.clientId;epoch=info.epoch;
           if(closed)await terminal.release(id,clientId,epoch).catch(()=>undefined);
@@ -157,7 +164,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
         }
         else if(message.type==='release'){await terminal.release(id,message.clientId,message.epoch);clientId=undefined;epoch=undefined;}
         else throw new AppError('INVALID_MESSAGE','Unknown terminal message');
-      }).catch(error=>{const e=error as AppError;if(socket.readyState===1)socket.send(JSON.stringify({type:'error',code:e.code??'TERMINAL_ERROR',message:e.message}));});
+      }).catch(error=>reply(error,requestType));
     });
     socket.on('close',()=>{closed=true;stopHeartbeat();unsubscribe();if(clientId&&epoch!==undefined)void terminal.release(id,clientId,epoch).catch(()=>undefined);});
   });

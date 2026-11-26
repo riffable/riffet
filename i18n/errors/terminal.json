@@ -1,5 +1,10 @@
 {
   "CLI_INPUT_REJECTED": { "zh": "CLI 拒绝了 {method} 写入", "en": "The CLI rejected the {method} write" },
+  "TERMINAL_CONTROLLED": { "zh": "另一台设备正在控制这个终端", "en": "Another device is controlling this terminal" },
+  "TERMINAL_CONTROL_STALE": { "zh": "终端控制权已变更，请重新获取", "en": "Terminal control changed; take control again" },
+  "TERMINAL_DETACHED": { "zh": "终端正在重连，请稍后再试", "en": "The terminal is reconnecting; try again shortly" },
+  "TERMINAL_INTERACTION_BUSY": { "zh": "终端正在执行另一项操作，请稍后再试", "en": "The terminal is busy with another operation; try again shortly" },
+  "TERMINAL_LEASE_REQUIRED": { "zh": "获取控制权后才能输入", "en": "Take control of the terminal before typing" },
   "TERMINAL_NOT_RUNNING": { "zh": "CLI 未在运行", "en": "The CLI is not running" },
   "TERMINAL_REBOUND": { "zh": "会话已切换到另一个终端，请重新提交消息", "en": "The conversation moved to another terminal; send the message again" }
 }

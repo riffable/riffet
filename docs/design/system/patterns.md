@@ -283,6 +283,7 @@
 - **提示条跟随主题**（DECISIONS 2026-11-13）：`toast` 与提示条用浮层底色、细描边与阴影；成功与失败只体现在图标颜色上，失败时整条不染红。`Notice` 是行内的浅色底，不是浮层。
 - 正常操作不增加成功通知；展示时序、最短时长与适用范围见 [feedback-presentation.md](../feedback-presentation.md)，不在此重复。
 - 等待不是提示：加载、保存、同步这类状态只由正在等待的控件表达，结束后不留下「已完成」。
+- **只报用户自己操作的失败**：界面自己发出的请求（连接时认领、resize、轮询、重连、跟随替换后的终端）失败时不弹 `toast`，只改相关控件的状态；能自动恢复的不报。请求层要能分出一次失败回应的是哪个请求，终端 WebSocket 的 `error` 带 `request` 字段即为此。
 
 ### 5.2 加载
 
@@ -299,6 +300,7 @@
 
 **现状**：
 
+- 其他把后台请求的失败接到 `toast` 的位置尚未普查：`onError` 回调只收字符串，分不出用户操作和后台请求。终端面板已按上一条处理（`TerminalView.tsx`、KMP `TerminalConnection.kt`）。
 - 没有共用的加载延迟阈值；`Spinner` 立即出现。`feedback-presentation.md` 称各入口沿用自身的延迟，代码中未找到共用实现。
 - `Field` 已有 `error` 槽；`plugins/PluginFlowDialog.tsx` 的 `<p role="alert">` 是流程级失败，不属字段错误，保持手写。
 

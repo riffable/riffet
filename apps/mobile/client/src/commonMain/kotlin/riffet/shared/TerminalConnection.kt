@@ -108,6 +108,8 @@ class TerminalConnection(
     private var sentSize: Pair<Int, Int>? = null
     private val pending = ArrayList<Command>()
     private var claiming = false
+    /** The claim on the wire was asked for by the user (typing, pasting, take over), not by connecting. */
+    private var userClaim = false
     @Volatile private var generation = 0
     @Volatile private var inputRevision = 0
     @Volatile private var pasteRevision = 0
@@ -211,7 +213,10 @@ class TerminalConnection(
         val info = _info.value
         val mine = info != null && info.ownerId == clientId
         return when (command) {
-            Command.TakeOver -> TerminalClientMessage.Claim(clientId = clientId, takeover = true)
+            Command.TakeOver -> {
+                userClaim = true
+                TerminalClientMessage.Claim(clientId = clientId, takeover = true)
+            }
             Command.Release -> if (mine) TerminalClientMessage.Release(clientId = clientId, epoch = info.epoch) else null
             Command.Size -> sizeIfOwner()
             Command.Appearance -> { info?.let(::followAppearance); null }
@@ -223,6 +228,7 @@ class TerminalConnection(
                     pending += command
                     if (claiming) null else {
                         claiming = true
+                        userClaim = true
                         TerminalClientMessage.Claim(clientId = clientId, takeover = true)
                     }
                 }
@@ -239,6 +245,7 @@ class TerminalConnection(
     /** What waited for the lease, in the order the user produced it. */
     private fun pendingFor(info: TerminalInfo): List<TerminalClientMessage> {
         claiming = false
+        userClaim = false
         val queued = pending.mapNotNull { userMessage(it, info.epoch) }
         pending.clear()
         return queued
@@ -276,6 +283,7 @@ class TerminalConnection(
                     while (commands.tryReceive().isSuccess) { }
                     sentSize = null
                     claiming = false
+                    userClaim = false
                     pending.clear()
                     emit(TerminalClientMessage.Claim(clientId = clientId))
                     generation += 1
@@ -363,15 +371,22 @@ class TerminalConnection(
                                                 emit(sizeIfOwner())
                                             }
                                             is TerminalServerMessage.Error -> {
-                                                AppLog.log(TAG, "error ${message.code}: ${message.message}")
-                                                // A refused claim drops what was waiting for it, as the web does.
-                                                if (claiming) {
-                                                    claiming = false
-                                                    pending.clear()
+                                                AppLog.log(TAG, "error ${message.code} request=${message.request ?: "-"}: ${message.message}")
+                                                // Only what the user did reports a failure (docs/design/system/patterns.md §5.1), as
+                                                // on the web. The claim made on connecting, a resize, or a viewer's claim refused
+                                                // while another device holds control is no failure of theirs.
+                                                val request = message.request
+                                                val ownAction = request == "input" || request == "paste" || request == "release" || (request == "claim" && userClaim)
+                                                // A server that does not name the request (an older one, or opening the stream) may be refusing a claim.
+                                                if (request == "claim" || request == null) {
+                                                    userClaim = false
+                                                    // A refused claim drops what was waiting for it, as the web does.
+                                                    if (claiming) {
+                                                        claiming = false
+                                                        pending.clear()
+                                                    }
                                                 }
-                                                // A viewer's claim is refused while the Mac holds control; that is
-                                                // the expected state, not something to show as a failure.
-                                                if (message.code != "TERMINAL_CONTROLLED") _notice.value = message.message
+                                                if (ownAction) _notice.value = L10n.errorText(message.code, message = message.message) ?: message.message
                                             }
                                             is TerminalServerMessage.Exit -> {
                                                 exited = true

@@ -26,6 +26,7 @@ verify:
 - Claude Code 的结束行成批写入而 hook 立即到达，所以状态指向下一回合时要再读一小段时间（`dispatch-feed.ts#TURN_END_WAIT_MS`）。
 - 插件被关闭后，它的 host 在激活释放前仍可被调用，之后一律拒绝；已关闭的驱动不会再注册，新激活建新驱动（`plugin-backend.ts#PluginBackendDriver`）。
 - 驱动不在时，等它的工作按插件激活的时限排队而不是立即失败（`registry.ts#NativeBackendRegistry` 的 `pending`）；撤回后新请求立刻失败。
+- 会话绑定的原生会话 id 只因能对应到本次启动的证据改变：Riffet 指定的 id、协议返回的 id、带本次启动归属的 hook 或进程信号。按工作区、目录或修改时间推断的候选不算，问不到就保持原绑定，也不把「无法确认」报给用户（[NATIVE-BINDING.md](../../../../docs/NATIVE-BINDING.md) §3；`plugins/riffet/cursor/native/service.ts#scan` 曾按修改时间猜，成员的 `/new` 会认回刚归档的 chat）。
 - 核心不带 Cursor 插件也必须能启动：它留下的会话、历史与存储的配置保留，需要 CLI 的操作被拒并写明后端（`no-cursor.test.ts`）。
 - 探测后端可用性之前先让模型源完成 `prepare`（`catalog.ts#prepareSource`）：自带进程的模型源在此之前只回答未就绪，结果会被缓存 30 秒，刚启动时提供方会显示为不可用（b6108c7）。
 

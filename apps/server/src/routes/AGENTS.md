@@ -34,6 +34,7 @@ HTTP 与 WebSocket 接口：把请求翻译成对内核服务的调用。只做�
 - 外部输入是 Web、Mac、iOS、Android 客户端的 HTTP、SSE 与 WebSocket 请求，以及带 `?features=` 的 EventSource（不能设头）。
 - 契约来源是 `packages/contracts/src/`。`pnpm gen:contracts` 生成 JSON Schema 快照到 `packages/contracts/schema/released/<版本>.json`，`pnpm gen:contracts:check` 在 CI 里要求相对最新快照只增不破；破坏性变更需要 `pnpm version:bump` 后重新生成。
 - 服务端忽略未知的输入字段，所以新增可选字段对旧客户端是安全的；删字段或改类型不是。
+- 终端 WebSocket 的 `error` 带 `request`，指明它回应的是哪条客户端消息（`terminals.ts`）；打开流时遇到的失败不带。客户端只对用户自己的输入、粘贴、释放和主动认领报错，连接时的认领和 resize 失败只改状态（docs/design/system/patterns.md §5.1）。
 - 没有 HTTP 层的录制；用 `apps/server/src/app.test.ts` 与本目录的 `*.test.ts` 经 `app.inject` 验证。
 
 ## 排障

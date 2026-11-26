@@ -1104,6 +1104,31 @@ msgstr ""
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_CONTROL_STALE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_CONTROLLED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_DETACHED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_INTERACTION_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_LEASE_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
 msgid "error.TERMINAL_NOT_RUNNING"
 msgstr ""
 

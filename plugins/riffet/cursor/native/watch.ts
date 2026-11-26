@@ -100,9 +100,8 @@ export class Watch {
    * that pane was logged. A redraw passes through such frames, so only a lasting one is attention.
    */
   unrecognized: { since: number; logged: boolean } | undefined;
-  /** Whether the followed chat store decoded, and a notice the workbench wants to surface. */
+  /** Whether the followed chat store decoded. */
   transcript: 'ok' | 'unavailable' | 'unparsed' | undefined;
-  notice: string | undefined;
   readonly subagents = new Map<string, SubagentWatch>();
   /** Background jobs keyed by the tool call that started them, i.e. by their timeline row. */
   readonly jobs = new Map<string, JobWatch>();
@@ -131,7 +130,6 @@ export class Watch {
   primed = false;
   /** Output-speed measurements for this conversation, fed by every batch of committed records. */
   readonly metrics: CursorTranscriptMeter;
-  readonly startedAt = Date.now();
 
   constructor(readonly sessionId: string, private readonly stats: StatsSink = noopStats) {
     this.metrics = new CursorTranscriptMeter(

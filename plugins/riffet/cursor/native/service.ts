@@ -991,7 +991,6 @@ export class NativeService {
         for (const item of watch.subagents.values()) item.transcript.close();
         watch.subagents.clear();
         watch.jobs.clear();
-        watch.notice = undefined;
         watch.booted = undefined;
         watch.unrecognized = undefined;
         watch.lastBusyAt = Date.now();
@@ -1313,7 +1312,7 @@ export class NativeService {
       ...status,
       ...(activeTurn ? { activeTurn } : {}),
       ...(watch.transcript ? { transcript: watch.transcript } : {}),
-      ...(startupNotice || watch.notice ? { notice: startupNotice ?? watch.notice, noticeLevel: startupNotice ? startupNoticeLevel : 'warning' } : {}),
+      ...(startupNotice ? { notice: startupNotice, noticeLevel: startupNoticeLevel } : {}),
     };
     if (JSON.stringify(next) !== JSON.stringify(watch.status)) {
       watch.status = next;
@@ -1864,27 +1863,13 @@ export class NativeService {
       watch.openStoresKnown = false;
       watch.openSubagentCalls = [];
     }
+    // Only the CLI's own answer moves the conversation (docs/NATIVE-BINDING.md §3). Chats are bucketed per
+    // workspace, so the newest one says nothing about which terminal wrote it: after `/new` that guess
+    // took back the chat just archived, or another conversation's. Without an answer the binding stays —
+    // including a chat id this launch assigned whose store the CLI only creates on its first prompt.
     const working = workingChat(open, topLevel);
-    const currentChatId = session.nativeSessionId;
-    if (working) {
-      watch.notice = undefined;
-      if (working.id === currentChatId) return session;
-      return this.recordCursorChat(watch, session, working.id);
-    }
-
-    // No process-level answer (a CLI that keeps nothing open, or a host without `/proc`/`lsof`):
-    // fall back to the newest chat, which is only safe while a single conversation is live here.
-    const current = topLevel.find((item) => item.id === currentChatId);
-    const latest = topLevel.reduce<{ id: string; mtime: number } | undefined>((best, item) => (!best || item.mtime > best.mtime ? item : best), undefined);
-    if (!latest) return session;
-    if (latest.id === currentChatId) return session;
-    if (latest.mtime <= watch.startedAt || latest.mtime <= (current?.mtime ?? 0)) return session;
-    if (this.sharedWorkspace(session)) {
-      watch.notice = '无法确认这条新对话属于哪个终端，已暂停自动跟随';
-      return session;
-    }
-    watch.notice = undefined;
-    return this.recordCursorChat(watch, session, latest.id);
+    if (!working || working.id === session.nativeSessionId) return session;
+    return this.recordCursorChat(watch, session, working.id);
   }
 
   /**
@@ -1960,15 +1945,5 @@ export class NativeService {
       }
     }
     return [...chats];
-  }
-
-  /** Whether another live native conversation shares this session's workspace chat bucket. */
-  private sharedWorkspace(session: AgentSessionView): boolean {
-    return this.port.listSessions().some((other) => {
-      if (other.id === session.id || other.archivedAt || other.projectId !== session.projectId) return false;
-      if (!other.terminalId) return false;
-      const item = this.port.findTerminal(other.terminalId);
-      return !!item && item.kind === 'cursor' && item.state !== 'exited';
-    });
   }
 }

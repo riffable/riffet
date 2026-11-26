@@ -24,6 +24,7 @@ import { useTheme } from '@/lib/theme';
 import { defaultDisplaySettings, MAX_TERMINAL_FONT_SIZE, MIN_TERMINAL_FONT_SIZE, setDisplaySettings, useDisplaySettings, type TerminalMobileKeyId } from '@/lib/display-settings';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { cn, downloadJson, errorMessage, reconnectDelay } from '@/lib/utils';
+import { textOf } from '@/lib/errors';
 import { useStores } from '../state/stores';
 import { clipboardFiles, readUploadData, uploadName } from '../session/image-upload';
 import { attachmentMimeType, planIntake } from '../session/composerAttachmentIntake';
@@ -235,6 +236,8 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
   /** Typed input and pastes waiting for control, in the order they were made. */
   const pendingInputRef = useRef<Array<{ paste: boolean; data: string }>>([]);
   const claimingRef = useRef(false);
+  /** The claim on the wire was asked for by the user (typing, pasting, 获取控制权), not by connecting. */
+  const userClaimRef = useRef(false);
   const inputRevisionRef = useRef(0);
   const leaseWaiterRef = useRef<{ resolve: (epoch: number) => void; reject: (error: Error) => void; timer: number } | undefined>(undefined);
   const repeatTimers = useRef<{ delay?: number; interval?: number }>({});
@@ -301,6 +304,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
     else pending.push({ paste, data });
     if (claimingRef.current) return;
     claimingRef.current = true;
+    userClaimRef.current = true;
     send({ type: 'claim', clientId, takeover: true });
   }, [clientId, send]);
   const sendInput = useCallback((data: string) => deliver(data, false), [deliver]);
@@ -333,6 +337,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
             reject(new Error(t`终端正在重连，请稍后再试。`));
           }, 10_000);
           leaseWaiterRef.current = { resolve, reject, timer };
+          userClaimRef.current = true;
           send({ type: 'claim', clientId, takeover: true });
         });
         if (!current()) throw new Error(t`终端控制权或输入位置已变更，请重新粘贴。`);
@@ -790,6 +795,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
         retryCount.current = 0;
         setConnection('connected');
         // Opening a terminal takes it over from a device left open elsewhere; a reconnect does not steal it back.
+        userClaimRef.current = false;
         socket?.send(JSON.stringify({ type: 'claim', clientId, ...(connectedOnce ? {} : { takeover: true }) } satisfies ClientMessage));
         connectedOnce = true;
         requestAnimationFrame(() => fitCallbackRef.current());
@@ -831,6 +837,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
             const waiter = leaseWaiterRef.current;
             if (waiter) { window.clearTimeout(waiter.timer); leaseWaiterRef.current = undefined; waiter.resolve(next.epoch); }
             claimingRef.current = false;
+            userClaimRef.current = false;
             const pending = pendingInputRef.current;
             pendingInputRef.current = [];
             for (const item of pending) send({ type: item.paste ? 'paste' : 'input', clientId, epoch: next.epoch, data: item.data });
@@ -839,12 +846,25 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
           setLeaseMessage(ownsControl ? 'control' : next.ownerId ? 'other-device' : 'readonly');
           requestAnimationFrame(() => fitCallbackRef.current());
         } else if (message.type === 'error') {
-          const waiter = leaseWaiterRef.current;
-          if (waiter) { window.clearTimeout(waiter.timer); leaseWaiterRef.current = undefined; waiter.reject(new Error(message.message)); }
-          claimingRef.current = false;
-          pendingInputRef.current = [];
-          setLeaseMessage({ text: message.message });
-          if (message.code !== 'LEASE_REQUIRED') onErrorRef.current(message.message);
+          // Only what the user did reports a failure (patterns §5.1). Resizes and the claim made on connecting
+          // also fail while a terminal is being replaced; the next state, or the replacement, says what holds.
+          const ownAction = message.request === 'input' || message.request === 'paste' || message.request === 'release'
+            || (message.request === 'claim' && userClaimRef.current);
+          const text = textOf({ code: message.code }, message.message) ?? message.message;
+          // A server that does not name the request (an older linked one, or opening the stream) may be refusing a claim.
+          const answersClaim = message.request === 'claim' || message.request === undefined;
+          // A paste waiting for this claim reports the failure itself.
+          const waiter = answersClaim ? leaseWaiterRef.current : undefined;
+          if (answersClaim) {
+            userClaimRef.current = false;
+            claimingRef.current = false;
+            pendingInputRef.current = [];
+            if (waiter) { window.clearTimeout(waiter.timer); leaseWaiterRef.current = undefined; waiter.reject(new Error(text)); }
+          }
+          if (ownAction) {
+            setLeaseMessage({ text });
+            if (!waiter) onErrorRef.current(text);
+          }
         } else if (message.type === 'exit') {
           exited = true;
           clearWatchdog();
@@ -934,6 +954,7 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
 
   const claim = (takeover: boolean) => {
     if (socketRef.current?.readyState !== WebSocket.OPEN) { onError(t`终端正在重连，请稍后再试。`); return; }
+    userClaimRef.current = true;
     send({ type: 'claim', clientId, ...(takeover ? { takeover: true } : {}) });
     setLeaseMessage(takeover ? 'takeover' : 'requesting');
   };

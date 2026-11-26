@@ -615,6 +615,15 @@ describe('NativeService Cursor chat identity', () => {
     expect(service.sessionForChat(oldChat)).toBeUndefined();
   });
 
+  it('keeps the chat this launch was given while its CLI holds no chat open', async () => {
+    // After `/new` the CLI resumes an assigned id whose store only appears with its first prompt; a newer
+    // chat in the shared workspace bucket (the one just archived, or another conversation's) is no answer.
+    const { host, session, service } = identityHarness();
+    const selected = await chats(service, []).scan(new Watch(session.id), session, scanProject.cwd);
+    expect(selected).toMatchObject({ nativeSessionId: oldChat });
+    expect(host.sessions.get(session.id)).toMatchObject({ nativeSessionId: oldChat });
+  });
+
   it('leaves the record untouched when the working chat belongs to another conversation', async () => {
     const { host, session, service } = identityHarness();
     host.sessions.set('session-2', fakeSession({ id: 'session-2', nativeSessionId: nextChat, terminalId: undefined }));

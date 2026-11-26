@@ -1104,6 +1104,31 @@ msgstr "Project tasks are not supported on this system"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_CONTROL_STALE"
+msgstr "Terminal control changed; take control again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_CONTROLLED"
+msgstr "Another device is controlling this terminal"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_DETACHED"
+msgstr "The terminal is reconnecting; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_INTERACTION_BUSY"
+msgstr "The terminal is busy with another operation; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_LEASE_REQUIRED"
+msgstr "Take control of the terminal before typing"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
 msgid "error.TERMINAL_NOT_RUNNING"
 msgstr "The CLI is not running"
 

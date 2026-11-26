@@ -171,9 +171,10 @@ sealed interface TerminalServerMessage {
     @SerialName("state")
     data class State(val terminal: TerminalInfo) : TerminalServerMessage
 
+    /** [request] is the client message this answers; null when the server met the failure on its own (opening the stream). */
     @Serializable
     @SerialName("error")
-    data class Error(val code: String, val message: String) : TerminalServerMessage
+    data class Error(val code: String, val message: String, val request: String? = null) : TerminalServerMessage
 
     @Serializable
     @SerialName("exit")

@@ -65,7 +65,11 @@ export type TerminalServerMessage =
   /** Replaces everything the client shows: reset, resize to `cols`×`rows`, then write `data`. */
   | { type: 'snapshot'; data: string; sequence: number; cols: number; rows: number; streamId: string }
   | { type: 'state'; terminal: TerminalInfo }
-  | { type: 'error'; code: string; message: string }
+  /**
+   * `request` names the client message this answers; absent for a failure the server met on its own
+   * (opening the stream). Clients show only the failures of what the user did (docs/design/system/patterns.md §5.1).
+   */
+  | { type: 'error'; code: string; message: string; request?: TerminalClientMessage['type'] }
   | { type: 'exit'; exitCode?: number };
 /** A user paste into an existing terminal; preparation never submits a new conversation turn. */
 export interface TerminalAttachmentPaste {
