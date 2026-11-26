@@ -483,7 +483,7 @@ export class WorkspaceService {
    * with it. None or several such files leave it missing.
    */
   private async readablePath(root: string, filePath: string, allowOutside: boolean, harnessImageHomes?: readonly string[]): Promise<string> {
-    const target = await resolveReadablePath(root, filePath, allowOutside, [this.stateDir], harnessImageHomes);
+    const target = await resolveReadablePath(root, filePath, allowOutside, [this.stateDir], harnessImageHomes, this.stateDir);
     if (await stat(target).then(() => true, () => false)) return target;
     const mention = filePath.replace(/^\.\//, '');
     if (!mention || path.isAbsolute(mention) || mention.startsWith('~') || mention.split('/').includes('..')) return target;
@@ -496,7 +496,7 @@ export class WorkspaceService {
       if (named !== undefined) return target;
       named = file;
     }
-    return named === undefined ? target : resolveReadablePath(root, named, false, [this.stateDir], harnessImageHomes);
+    return named === undefined ? target : resolveReadablePath(root, named, false, [this.stateDir], harnessImageHomes, this.stateDir);
   }
 
   /**
@@ -549,8 +549,9 @@ export class WorkspaceService {
     const binary = Boolean(imageMimeType) || text === undefined;
     const kind = previewKind(path, sample);
     const inside = isWithin(root, target);
-    // What `write.ts#FileWrites.save` accepts: the whole file, UTF-8, inside the project, outside `.git`.
-    const editable = inside && !binary && data.byteLength <= MAX_PREVIEW_BYTES && !path.split('/').includes('.git') && editableText(data) !== undefined;
+    // What `write.ts#FileWrites.save` accepts: the whole file, UTF-8, inside the project, outside `.git` and writable under state/secret policy.
+    const editable = inside && !binary && data.byteLength <= MAX_PREVIEW_BYTES && !path.split('/').includes('.git') && editableText(data) !== undefined
+      && !(await isSecretPath(await realpath(target).catch(() => target), [this.stateDir], false));
     return {
       // Outside files keep their absolute path: there is no project-relative form for them,
       // and the UI echoes this value back when referencing a line or opening the editor.
@@ -627,7 +628,7 @@ export class WorkspaceService {
     const file = await this.rawFile(project, target, options);
     const real = await realpath(file.path);
     if (!isWithin(await realpath(root), real)) throw missing();
-    if (await isSecretPath(real, [this.stateDir])) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
+    if (await isSecretPath(real, [this.stateDir], true, [], this.stateDir)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
     return { ...file, ...siteFileType(file.name, file) };
   }
 
