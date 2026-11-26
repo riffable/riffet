@@ -453,17 +453,22 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     return session ? this.signatureOf(session) : undefined;
   }
 
+  private toolListKey(memberId?: string): string {
+    return !memberId || memberId === DEFAULT_AGENT_MEMBER_ID ? 'assistant:last-tool-list' : `member:last-tool-list:${memberId}`;
+  }
+
   private rememberMainTools(session: Session, signature: string): void {
     if (this.assistantRole(session) !== 'main') return;
     const member = this.memberOf(session);
-    if (member && member.id !== DEFAULT_AGENT_MEMBER_ID) return;
+    const key = this.toolListKey(member?.id);
     const value = `${session.id}:${signature}`;
-    if (this.deps.store.getSetting('assistant:last-tool-list', '') !== value) this.deps.store.setSetting('assistant:last-tool-list', value);
+    if (this.deps.store.getSetting(key, '') !== value) this.deps.store.setSetting(key, value);
   }
 
   /** A running CLI may survive a service upgrade with an older list; low-frequency reads do not affect this signature. */
-  mainNeedsToolRefresh(sessionId: string): boolean {
-    return this.deps.store.getSetting('assistant:last-tool-list', '') !== `${sessionId}:${this.signature(sessionId)}`;
+  mainNeedsToolRefresh(sessionId: string, memberId?: string): boolean {
+    const resolvedMember = memberId ?? (() => { try { return this.memberOf(this.deps.store.getSession(sessionId))?.id; } catch { return undefined; } })();
+    return this.deps.store.getSetting(this.toolListKey(resolvedMember), '') !== `${sessionId}:${this.signature(sessionId)}`;
   }
 
   private signatureOf(session: Session, draft = false): string {
@@ -542,10 +547,10 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   private memberAllowsTool(member: AgentMember | undefined, toolName: string): boolean {
     if (!member) return true;
     const caps = member.capabilities;
-    if (toolName === 'run_report') return true;
+    if (toolName === 'run_report' || toolName === 'history_search') return true;
     if (toolName.startsWith('delegation_')) return caps.delegations;
     if (toolName === 'server_status') return caps.workbenchAdmin;
-    if (toolName.startsWith('task_') || toolName === 'list_projects' || toolName === 'session_list' || toolName === 'session_read' || toolName === 'history_search') {
+    if (toolName.startsWith('task_') || toolName === 'list_projects' || toolName === 'session_list' || toolName === 'session_read') {
       return caps.taskBoard;
     }
     return true;
@@ -739,7 +744,24 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       const restricted = boardTool.audience === 'task-read' && (role === 'supervise' || role === 'task-watch');
       const taskScope = restricted ? this.deps.boundWorkItem?.(session.id) : undefined;
       if (restricted && !taskScope) return errorResult('TOOL_NOT_AVAILABLE', 'This run has no bound task.');
-      try { return textResult(await boardTool.call(args, { sessionId: session.id, taskScope })); }
+      const ownSessionId = session.origin?.kind === 'assistant' ? member?.mainSessionId : session.id;
+      const historyScope = !member ? { kind: 'global' as const }
+        : !member.capabilities.taskBoard ? { kind: 'member' as const, memberId: member.id, ...(ownSessionId ? { ownSessionId } : {}) }
+        : member.scope.kind === 'project' ? { kind: 'projects' as const, projectIds: member.scope.projectIds ?? [], memberId: member.id, ...(ownSessionId ? { ownSessionId } : {}) }
+        : member.scope.kind === 'personal' ? { kind: 'work-and-self' as const, memberId: member.id, ...(ownSessionId ? { ownSessionId } : {}) }
+        : { kind: 'global' as const };
+      try {
+        return textResult(await boardTool.call(args, {
+          sessionId: session.id,
+          taskScope,
+          ...(member ? {
+            memberId: member.id,
+            historyScope,
+            taskBoardAllowed: member.capabilities.taskBoard,
+            ...(member.scope.kind === 'project' ? { allowedProjectIds: member.scope.projectIds ?? [] } : {}),
+          } : {}),
+        }));
+      }
       catch (error) {
         if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
         throw error;

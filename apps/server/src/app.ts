@@ -78,7 +78,7 @@ import { registerTeamRoutes } from './routes/team.js';
 import { registerPluginApprovalRoutes } from './routes/plugin-approvals.js';
 import { PluginApprovals } from './plugins/approvals.js';
 import { AssistantBoard, Supervision, Verification, WorkItemService, assistantInstructionsFile, assistantProject, isSystemCommand, type AssistantWork } from './work-items/index.js';
-import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
+import { ensureAssistantHome, globalUserProfilePath, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
 import { AgentTeamService } from './assistant/team.js';
 import { AssistantRuns } from './assistant/runs.js';
@@ -136,7 +136,7 @@ import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerTraceRoutes } from './routes/trace.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, CODE_INDEX_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, ASSISTANT_BUDGET, CODE_INDEX_BUDGET, DEFAULT_AGENT_MEMBER_ID, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, assistantChoice, memberChoice, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -345,8 +345,18 @@ export async function createApp(options: AppOptions = {}) {
     defaultProject:()=>assistantProject(store,stateDir),
     defaultInstructions:text=>assistantInstructionsFile(store,stateDir,text),
     assistantSettings:()=>settings.getSettings().assistant,
-    syncDefaultSettings:target=>{
-      settings.setSettings({assistant:{backendId:target?.backendId??null,profileId:target?.profileId??null,model:target?.model??null}});
+    syncDefaultSettings:(target,extra)=>{
+      settings.setSettings({assistant:{
+        backendId:target?.backendId??null,
+        profileId:target?.profileId??null,
+        model:target?.model??null,
+        ...(extra?.consolidation!==undefined?{consolidation:extra.consolidation}:{}),
+        ...(extra?.dailyRuns!==undefined?{dailyRuns:extra.dailyRuns}:{}),
+      }});
+    },
+    onMemberDeleted:id=>{
+      assistantDelegationsRef?.endForMember(id,'owner');
+      assistantRuns?.clearPending(id);
     },
     renderAvatar:(request,name)=>owner.renderGeneratedAvatar(request,name),
   });
@@ -354,7 +364,7 @@ export async function createApp(options: AppOptions = {}) {
   const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),team:()=>team,timeZone:()=>settings.getSettings().assistant?.timeZone,
     workbenchProof:runId=>workbenchAppearance.proofFor(runId),
     nativeSettingProof:runId=>workbenchAppearance.nativeProofFor(runId),
-    pending:{offer:()=>assistantRuns?.offerPending()??[],settle:delivered=>assistantRuns?.settlePending(delivered)},
+    pending:{offer:memberId=>assistantRuns?.offerPending(memberId)??[],settle:(delivered,memberId)=>assistantRuns?.settlePending(delivered,memberId)},
     compacting:sessionId=>consolidation?.compacting(sessionId)});
   const nativeBackends:NativeBackendService=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,
@@ -792,14 +802,49 @@ export async function createApp(options: AppOptions = {}) {
   try{quickChatProject(store,stateDir);}catch(error){console.warn('[riffet] quick chat project unavailable',error);}
   try{assistantHome=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd);team.ensureDefaultMember();}catch(error){console.warn('[riffet] assistant project unavailable',error);}
   const stopAssistantWatch=assistantStanding.watch();
-  // ---- The 助理's background runs (docs/ASSISTANT.md §7) ----
+  // ---- Team members' background runs (docs/ASSISTANT.md §7, docs/TEAM.md) ----
   const ownerZone=()=>settings.getSettings().assistant?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const assistantMain=()=>{try{const id=assistantProject(store,stateDir).mainSessionId;if(!id)return undefined;return store.getSession(id).archivedAt?undefined:id;}catch{return undefined;}};
+  const memberMain=(memberId:string):string|undefined=>{
+    try{
+      const member=team.find(memberId);
+      if(!member||member.archivedAt||member.sessionMode!=='continuous')return undefined;
+      const id=member.mainSessionId??(member.scope.kind!=='project'?store.getProject(member.projectId).mainSessionId:undefined);
+      if(!id)return undefined;
+      return store.getSession(id).archivedAt?undefined:id;
+    }catch{return undefined;}
+  };
+  const assistantMain=()=>memberMain(DEFAULT_AGENT_MEMBER_ID);
+  const memberConsolidationEnabled=(memberId:string):boolean=>{
+    const member=team.find(memberId);
+    if(!member||member.archivedAt)return false;
+    if(member.id===DEFAULT_AGENT_MEMBER_ID){
+      return member.memory.consolidation&&(settings.getSettings().assistant?.consolidation??SETTING_DEFAULTS.assistant.consolidation);
+    }
+    return member.memory.consolidation;
+  };
+  const memberDailyLimit=(memberId:string):number=>{
+    const member=team.find(memberId);
+    if(member&&member.id!==DEFAULT_AGENT_MEMBER_ID)return member.budget.dailyRuns;
+    return settings.getSettings().assistant?.dailyRuns??member?.budget.dailyRuns??ASSISTANT_BUDGET.dailyRuns;
+  };
   // Set while a background run adds its notice: its push is the run's own.
   let addingForRun=false;
   // Made below: a queued run asks it whether it is still wanted.
   let supervision:Supervision|undefined;
   const runs=new AssistantRuns({store,settings:()=>settings.getSettings(),backends:()=>nativeBackends.catalog.listBackends(),project:()=>assistantProject(store,stateDir),
+    resolveMember:(memberId,backends)=>{
+      const member=team.find(memberId);
+      if(!member||member.archivedAt)return undefined;
+      let project;
+      try{project=store.getProject(member.projectId);}catch{return undefined;}
+      if(project.archivedAt)return undefined;
+      const choice=member.id===DEFAULT_AGENT_MEMBER_ID
+        ?(member.target?memberChoice(member.target,backends):assistantChoice(settings.getSettings().assistant,backends))
+        :memberChoice(member.target,backends);
+      return {memberId:member.id,project,choice,mainSessionId:memberMain(member.id),dailyRuns:memberDailyLimit(member.id)};
+    },
+    mainSessionOf:memberMain,
+    dailyLimit:memberDailyLimit,
     start:(body,text,origin,ids)=>orchestration.start(body,text,origin,ids),
     archive:async sessionId=>{await patchSession(deps,sessionId,{archived:true});},
     remove:async sessionId=>{await deletion.delete(sessionId,[sessionId]);},
@@ -807,15 +852,20 @@ export async function createApp(options: AppOptions = {}) {
     notice:(sessionId,body)=>{addingForRun=true;try{notices.add({sessionId,body,source:'agent'});}finally{addingForRun=false;}},
     push:(sessionId,body,key)=>push.notice(sessionId,body,key),
     wanted:run=>{
-      const assistant=settings.getSettings().assistant;
+      const owner=run.memberId??DEFAULT_AGENT_MEMBER_ID;
+      const member=team.find(owner);
+      if(!member||member.archivedAt)return false;
       if(run.job==='supervise')return Boolean(run.subject&&supervision?.wanted(run.subject,run.key));
-      if(run.job==='consolidate')return assistant?.consolidation??SETTING_DEFAULTS.assistant.consolidation;
+      if(run.job==='consolidate')return memberConsolidationEnabled(owner);
+      if(!member.capabilities.delegations)return false;
       try{return Boolean(run.subject&&assistantDelegationsRef?.wantsRun(run.subject,run.key));}catch{return false;}
     }});
   runs.mainSession=assistantMain;
   assistantMainRef=assistantMain;
-  const existingMain=assistantMain();
-  if(existingMain && riffetMcp.mainNeedsToolRefresh(existingMain)) reclaimer.restartWhenRested(existingMain);
+  for(const member of team.list()){
+    const mainId=memberMain(member.id);
+    if(mainId&&riffetMcp.mainNeedsToolRefresh(mainId,member.id))reclaimer.restartWhenRested(mainId);
+  }
   // What an agent tells the owner with notify_user, or a wake-up's notice, reaches their phone too; a background run
   // pushes its own, and records whether it went out (docs/ASSISTANT.md §7.1).
   const stopNoticePush=notices.subscribe(notice=>{
@@ -823,20 +873,32 @@ export async function createApp(options: AppOptions = {}) {
     void push.notice(notice.sessionId,[notice.title,notice.body].filter(Boolean).join(' · '),`notice-${notice.id}`).catch(()=>undefined);
   });
   assistantRuns=runs;
-  const queue=(job:'supervise'|'consolidate'|'delegation',key:string,brief:Record<string,string|number>,subject?:string)=>{const before=runs.has(key);return runs.enqueue(job,key,brief,subject).state==='queued'&&!before;};
+  const queue=(job:'supervise'|'consolidate'|'delegation',key:string,brief:Record<string,string|number>,subject?:string,memberId:string=DEFAULT_AGENT_MEMBER_ID)=>{const before=runs.has(key);return runs.enqueue(job,key,brief,subject,memberId).state==='queued'&&!before;};
+  const memberDelegationState=(memberId:string):'active'|'paused'|'deleted'=>{
+    const member=team.find(memberId);
+    if(!member)return 'deleted';
+    if(member.archivedAt||!member.capabilities.delegations)return 'paused';
+    return 'active';
+  };
   const delegations=new AssistantDelegations({store,timeZone:ownerZone,nextCron:(cron,after,zone)=>nextCronTime(parseCron(cron),after,zone),
     taskStatuses:{
       baseline:reference=>workItems.taskStatusBaseline(reference),
       events:(id,cursor,limit)=>workItems.taskStatusEvents(id,cursor,limit),
       subscribe:listener=>workItems.onStatusChange(listener)},
-    fire:({delegation,reason,payload,key})=>{queue('delegation',key,{goal:delegation.goal,attention:delegation.attention,trigger:JSON.stringify(delegation.trigger),until:delegation.until,cursor:delegation.cursor??'（还没有）',reason,payload:payload||'（没有附带内容）'},delegation.id);},
+    fire:({delegation,reason,payload,key})=>{queue('delegation',key,{goal:delegation.goal,attention:delegation.attention,trigger:JSON.stringify(delegation.trigger),until:delegation.until,cursor:delegation.cursor??'（还没有）',reason,payload:payload||'（没有附带内容）'},delegation.id,delegation.memberId);},
     pluginEvents:{declared:topic=>plugins.assistantEventDeclared(topic),backlog:id=>runs.pendingCount('delegation',id)},
-    expired:delegation=>runs.addPending(undefined,`委托「${delegation.goal.slice(0,80)}」已到期结束。`),
+    memberState:memberDelegationState,
+    expired:delegation=>{if(memberDelegationState(delegation.memberId??DEFAULT_AGENT_MEMBER_ID)!=='deleted')runs.addPending(undefined,`委托「${delegation.goal.slice(0,80)}」已到期结束。`,delegation.memberId);},
     changed:()=>store.workItemsChanged()});
   assistantDelegationsRef=delegations;
-  consolidation=new Consolidation({store,cwd:()=>assistantProject(store,stateDir).cwd,mainSessionId:assistantMain,timeZone:ownerZone,
-    enabled:()=>settings.getSettings().assistant?.consolidation??SETTING_DEFAULTS.assistant.consolidation,
-    enqueue:(key,brief)=>queue('consolidate',key,brief),has:key=>runs.has(key),
+  consolidation=new Consolidation({store,
+    targets:()=>team.list().flatMap(member=>{
+      const mainSessionId=memberMain(member.id);
+      if(!mainSessionId)return [];
+      return [{memberId:member.id,cwd:team.memberDir(member.id),userFile:globalUserProfilePath(stateDir),mainSessionId,enabled:memberConsolidationEnabled(member.id)}];
+    }),
+    timeZone:ownerZone,
+    enqueue:(key,brief,memberId)=>queue('consolidate',key,brief,undefined,memberId),has:key=>runs.has(key),
     keepAlive:async sessionId=>{
       const session=store.getSession(sessionId);
       if(session.backendId!=='claude'||!session.backendProfileId)return;
@@ -859,7 +921,7 @@ export async function createApp(options: AppOptions = {}) {
     enqueue:(key,brief,workItemId)=>{queue('supervise',key,brief,workItemId);},pending:workItemId=>runs.pending('supervise',workItemId),
     agentLabel:backendId=>(backendId&&isNativeBackendId(backendId)?backendRegistry.get(backendId)?.label:undefined)??backendId??'Agent'});
   assistantWork={
-    report:(sessionId,outcome,text)=>runs.report(sessionId,outcome,text,assistantMain()) as {outcome:string},
+    report:(sessionId,outcome,text)=>runs.report(sessionId,outcome,text) as {outcome:string},
     boundWorkItem:sessionId=>{
       const run=runs.bySession(sessionId);
       if(run?.job==='supervise') return run.subject;
@@ -868,7 +930,7 @@ export async function createApp(options: AppOptions = {}) {
       catch { return undefined; }
     },
     supervised:sessionId=>{const run=runs.bySession(sessionId);return run?.job==='supervise'&&run.subject?{workItemId:run.subject,runId:run.id}:undefined;},
-    delegations:{list:()=>delegations.list(),create:input=>delegations.create(input),update:(id,input)=>delegations.update(id,input),end:(id,by)=>delegations.end(id,by)},
+    delegations:{list:memberId=>delegations.list(memberId),create:(input,memberId)=>delegations.create(input,memberId),update:(id,input,memberId)=>delegations.update(id,input,memberId),end:(id,by,memberId)=>delegations.end(id,by,memberId)},
   };
   const stopAssistantWork:Array<()=>void>=lite?[]:[runs.watch(),delegations.start(),consolidation.start(),supervision.start(),verification.start()];
   // Tasks whose last prerequisite was done while the server was stopping (docs/TASK-BOARD.md §4.4).

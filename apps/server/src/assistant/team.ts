@@ -72,8 +72,10 @@ export interface AgentTeamDeps {
   defaultInstructions: (text?: string | null) => AssistantInstructions;
   /** Reads saved legacy `AppSettings.assistant` defaults for initial migration. */
   assistantSettings?: () => AssistantSettings | undefined;
-  /** Syncs default member backend/model changes back to `AppSettings.assistant` for older clients. */
-  syncDefaultSettings?: (target: AgentMemberTarget | undefined) => void;
+  /** Syncs default member backend/model/consolidation/budget changes back to `AppSettings.assistant` for older clients. */
+  syncDefaultSettings?: (target: AgentMemberTarget | undefined, extra?: { consolidation?: boolean; dailyRuns?: number }) => void;
+  /** Called right after a team member is deleted so runtime state (delegations, pending notes) can be cleaned up. */
+  onMemberDeleted?: (memberId: string) => void;
   /** Renders a plugin-provided generated avatar PNG (same engine as Settings -> Profile). */
   renderAvatar?: (request: OwnerAvatarGenerateRequest, name?: string) => Promise<{ png: Buffer }>;
 }
@@ -84,24 +86,10 @@ function readText(path: string): string | undefined {
   try { return readFileSync(path, 'utf8'); } catch { return undefined; }
 }
 
-function defaultMemberInstructions(name: string, description: string | undefined, scope: AgentMemberScope, sessionMode: AgentMemberSessionMode): string {
-  const lines = [`# ${name}`, ''];
-  if (description?.trim()) {
-    lines.push(description.trim(), '');
-  }
-  lines.push('## Mandate');
-  if (scope.kind === 'project') {
-    lines.push('- Focus strictly on your assigned project responsibilities and quality bar.');
-    lines.push('- Follow the repository\'s `AGENTS.md` for coding conventions and commands; enforce your own role boundaries and acceptance criteria.');
-  } else if (scope.kind === 'personal') {
-    lines.push('- Focus exclusively on this domain; keep your analysis structured, grounded, and independent of unrelated coding tasks.');
-  } else {
-    lines.push('- Coordinate across projects, maintain clean delegation, and surface only decisions that genuinely require owner input.');
-  }
-  if (sessionMode === 'fresh') {
-    lines.push('- Each run starts fresh: consult your memory files first, and record newly learned environment facts, pitfalls, or updated baselines back into `memory/` before finishing.');
-  }
-  return `${lines.join('\n')}\n`;
+/** The `AGENTS.md` a new member starts with; how every member works is in its system prompt, not here. */
+function defaultMemberInstructions(name: string, description: string | undefined): string {
+  const duty = description?.trim() || '<!-- 这个成员负责什么。 -->';
+  return `# ${name}\n\n## 职责\n\n${duty}\n\n<!-- 可以补充：交付标准（做到什么程度算完成）；红线（哪些事不做，或要先问用户）；对默认权限的调整（例如允许直接发起工单、允许推送临时分支）。 -->\n`;
 }
 
 function normalizeScope(store: Store, raw: AgentMemberScope): AgentMemberScope {
@@ -257,14 +245,16 @@ export class AgentTeamService {
   memberHome(member: AgentMember): AssistantHome {
     const dir = this.memberDir(member.id);
     const globalUserFile = ensureGlobalUserProfile(this.deps.stateDir, this.deps.defaultProject().cwd);
-    const cacheKey = `${member.id}:${member.scope.kind}:${member.sessionMode}`;
+    const cacheKey = `${member.id}:${member.scope.kind}:${member.sessionMode}:${member.capabilities.workbenchAdmin}`;
     const cached = this.homes.get(cacheKey);
     if (cached && existsSync(cached.memoryDir) && existsSync(cached.systemPromptFile)) return cached;
     const home = ensureMemberHome(this.deps.stateDir, dir, {
       globalUserFile,
       projectScoped: member.scope.kind === 'project',
       freshMode: member.sessionMode === 'fresh',
-      memberName: member.name,
+      memberId: member.id,
+      isDefault: member.id === DEFAULT_AGENT_MEMBER_ID,
+      workbenchAdmin: member.capabilities.workbenchAdmin,
     });
     this.homes.set(cacheKey, home);
     return home;
@@ -336,7 +326,7 @@ export class AgentTeamService {
 
       const instructions = typeof input.instructions === 'string' && input.instructions.trim()
         ? `${input.instructions.trimEnd().slice(0, INSTRUCTIONS_LIMIT)}\n`
-        : defaultMemberInstructions(name, description, scope, sessionMode);
+        : defaultMemberInstructions(name, description);
       writeFileSync(join(dir, INSTRUCTIONS_FILE), instructions, { mode: 0o600 });
       writeFileSync(join(dir, CLAUDE_FILE), CLAUDE_IMPORT, { mode: 0o600 });
 
@@ -345,7 +335,8 @@ export class AgentTeamService {
         globalUserFile,
         projectScoped: scope.kind === 'project',
         freshMode: sessionMode === 'fresh',
-        memberName: name,
+        memberId: id,
+        workbenchAdmin: capabilities.workbenchAdmin,
       });
 
       if (typeof input.initialMemory === 'string' && input.initialMemory.trim()) {
@@ -501,8 +492,11 @@ export class AgentTeamService {
     if (renamed && next.scope.kind !== 'project') {
       try { this.deps.store.updateProject(next.projectId, { name: renamed }); } catch { /* missing */ }
     }
-    if (patch.target !== undefined && id === DEFAULT_AGENT_MEMBER_ID) {
-      this.deps.syncDefaultSettings?.(next.target);
+    if (id === DEFAULT_AGENT_MEMBER_ID && (patch.target !== undefined || patch.memory !== undefined || patch.budget !== undefined)) {
+      this.deps.syncDefaultSettings?.(next.target, {
+        ...(patch.memory !== undefined ? { consolidation: next.memory.consolidation } : {}),
+        ...(patch.budget !== undefined ? { dailyRuns: next.budget.dailyRuns } : {}),
+      });
     }
 
     next.updatedAt = nowIso();
@@ -530,6 +524,7 @@ export class AgentTeamService {
     this.clearAvatarFiles(id);
     this.homes.clear();
     this.writeRaw(members.filter(item => item.id !== id));
+    this.deps.onMemberDeleted?.(id);
   }
 
   /** Records `sessionId` as a `continuous` member's active standing conversation. */
@@ -595,7 +590,7 @@ export class AgentTeamService {
         throw new AppError('INVALID_ARGUMENT', `Instructions are text of at most ${INSTRUCTIONS_LIMIT} characters`);
       }
       const next = text === null || !text.trim()
-        ? defaultMemberInstructions(member.name, member.description, member.scope, member.sessionMode)
+        ? defaultMemberInstructions(member.name, member.description)
         : `${text.trimEnd()}\n`;
       writeFileSync(path, next, { mode: 0o600 });
       void commitAssistantHome(dir);

@@ -2,7 +2,7 @@ import { boardTools } from './assistant-tools.js';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { ASSISTANT_QUERY_BUDGET, type AssistantChoice, type AssistantDelegation, type Automation, type AssistantInstructions, type NativeBackendCatalogEntry, type NativeBackendId, type NativeInteraction, type NativeStatus, type Project, type Session, type WorkItem, type WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_QUERY_BUDGET, DEFAULT_AGENT_MEMBER_ID, type AssistantChoice, type AssistantDelegation, type Automation, type AssistantInstructions, type NativeBackendCatalogEntry, type NativeBackendId, type NativeInteraction, type NativeStatus, type Project, type Session, type WorkItem, type WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { isRunningSession, needsYou } from '../../../../packages/contracts/src/session-attention.js';
 import { AppError } from '../errors.js';
 import { servingKey } from '../journal/ingest.js';
@@ -132,10 +132,23 @@ export interface AssistantSearch {
   snippet(text: string, query: string): string;
   mergeMessageHits<T extends { sessionId: string; text: string; at: string }>(sources: readonly (readonly T[])[], limit: number): T[];
 }
-/** The conversation calling a tool. */
-export interface ToolContext { sessionId: string; taskScope?: string }
+export type HistoryScope =
+  | { kind: 'global' }
+  | { kind: 'projects'; projectIds: string[]; memberId: string; ownSessionId?: string }
+  | { kind: 'work-and-self'; memberId: string; ownSessionId?: string }
+  | { kind: 'member'; memberId: string; ownSessionId?: string };
 
-/** The 助理's background runs and delegations (docs/ASSISTANT.md §7), given by `app.ts`. */
+/** The conversation calling a tool. */
+export interface ToolContext {
+  sessionId: string;
+  taskScope?: string;
+  memberId?: string;
+  historyScope?: HistoryScope;
+  taskBoardAllowed?: boolean;
+  allowedProjectIds?: string[];
+}
+
+/** Background runs and delegations (docs/ASSISTANT.md §7, docs/TEAM.md), given by `app.ts`. */
 export interface AssistantWork {
   /** `run_report`: how the run calling it ended. */
   report(sessionId: string, outcome: 'silent' | 'tell' | 'ask', text: string | undefined): { outcome: string };
@@ -143,10 +156,10 @@ export interface AssistantWork {
   boundWorkItem?(sessionId: string): string | undefined;
   supervised(sessionId: string): { workItemId: string; runId: string } | undefined;
   delegations: {
-    list(): AssistantDelegation[];
-    create(input: Args): AssistantDelegation;
-    update(id: string, input: Args): AssistantDelegation;
-    end(id: string, by: 'assistant'): AssistantDelegation;
+    list(memberId?: string): AssistantDelegation[];
+    create(input: Args, memberId?: string): AssistantDelegation;
+    update(id: string, input: Args, memberId?: string): AssistantDelegation;
+    end(id: string, by: 'assistant', memberId?: string): AssistantDelegation;
   };
 }
 
@@ -366,22 +379,84 @@ export class AssistantBoard {
     return { ...this.conversation(session), messages, note: DATA_NOTE };
   }
 
+  private sessionBelongsToMember(session: Pick<Session, 'projectId' | 'agentMemberId' | 'origin'>, project: Pick<Project, 'system' | 'agentMemberId'> | undefined, memberId: string): boolean {
+    if (session.origin?.kind === 'assistant') return false;
+    if (session.agentMemberId) return session.agentMemberId === memberId;
+    if (project?.agentMemberId) return project.agentMemberId === memberId;
+    return memberId === DEFAULT_AGENT_MEMBER_ID && project?.system === 'assistant';
+  }
+
+  private historySessionAllowed(session: Pick<Session, 'id' | 'projectId' | 'agentMemberId' | 'origin'>, project: Pick<Project, 'id' | 'system' | 'agentMemberId'> | undefined, scope: HistoryScope): boolean {
+    if (scope.kind === 'global') return true;
+    if (this.sessionBelongsToMember(session, project, scope.memberId)) return true;
+    if (scope.kind === 'member') return false;
+    if (!project || project.system) return false;
+    if (scope.kind === 'work-and-self') return true;
+    return scope.projectIds.includes(project.id);
+  }
+
+  private assertDelegationTriggerAllowed(triggerRaw: unknown, context?: ToolContext): void {
+    if (!triggerRaw || typeof triggerRaw !== 'object' || Array.isArray(triggerRaw)) return;
+    const trigger = triggerRaw as Record<string, unknown>;
+    if (trigger.kind !== 'task-status') return;
+    if (context?.taskBoardAllowed === false) {
+      throw new AppError('TOOL_NOT_AVAILABLE', 'task-status delegations require taskBoard capability', 403);
+    }
+    if (context?.allowedProjectIds) {
+      const item = this.task(trigger.task);
+      if (!item.projectId || !context.allowedProjectIds.includes(item.projectId)) {
+        throw new AppError('WORK_ITEM_NOT_FOUND', `There is no task ${String(trigger.task ?? '')}`, 404);
+      }
+    }
+  }
+
   private historySearch(args: Args, context?: ToolContext): Record<string, unknown> {
     const search = this.deps.search;
     const query = search.normalizeQuery(args.query);
     if (!query) throw invalid('query is required: 1 to 200 characters');
     const limit = this.limit(args, 20, 50);
     const requested = optionalText(args, 'session');
-    const sessionId = requested === 'self' ? context?.sessionId : requested;
-    if (requested === 'self' && !sessionId) throw invalid('session "self" needs the calling conversation');
+    const scope = context?.historyScope;
     const { store } = this.deps;
+    const projectsById = new Map(store.listProjects().map(project => [project.id, project]));
+
+    let sessionId: string | undefined;
+    if (requested === 'self') {
+      const targetSelf = scope && scope.kind !== 'global' ? (scope.ownSessionId ?? context?.sessionId) : context?.sessionId;
+      if (!targetSelf) throw invalid('session "self" needs the calling conversation');
+      // For a member's background run without a standing main session, fall back to searching across that member's own sessions.
+      const selfSession = (() => { try { return store.getSession(targetSelf); } catch { return undefined; } })();
+      sessionId = selfSession?.origin?.kind === 'assistant' ? undefined : targetSelf;
+    } else if (requested) {
+      if (scope && scope.kind !== 'global') {
+        let targetSession: Session | undefined;
+        try { targetSession = store.getSession(requested); } catch { targetSession = undefined; }
+        if (!targetSession || !this.historySessionAllowed(targetSession, projectsById.get(targetSession.projectId), scope)) {
+          throw invalid('This member cannot search that conversation');
+        }
+      }
+      sessionId = requested;
+    }
+
     const pattern = search.likePattern(query);
     // Main and archived conversations are searchable; database predicates exclude quick chats and
     // background runs before either source applies its limit.
-    const hits = search.mergeMessageHits([
-      store.searchPrompts(pattern, limit, sessionId, ['chat'], false, false, true),
-      store.searchIndexedMessages(pattern, limit, sessionId, ['chat'], false, false, true),
-    ], limit);
+    const fetchLimit = scope && scope.kind !== 'global' && !sessionId ? Math.min(limit * 5, 250) : limit;
+    let hits = search.mergeMessageHits([
+      store.searchPrompts(pattern, fetchLimit, sessionId, ['chat'], false, false, true),
+      store.searchIndexedMessages(pattern, fetchLimit, sessionId, ['chat'], false, false, true),
+    ], fetchLimit);
+    if (scope && scope.kind !== 'global') {
+      const sessionsById = new Map<string, Session | null>();
+      hits = hits.filter(hit => {
+        let session = sessionsById.get(hit.sessionId);
+        if (session === undefined) {
+          try { session = store.getSession(hit.sessionId); } catch { session = null; }
+          sessionsById.set(hit.sessionId, session);
+        }
+        return Boolean(session && this.historySessionAllowed(session, projectsById.get(session.projectId), scope));
+      }).slice(0, limit);
+    }
     return { hits: hits.map(hit => ({ session: hit.sessionId, title: hit.sessionTitle, project: this.projectName(hit.projectId) ?? hit.projectId, role: hit.kind, at: hit.at, ...(hit.archived ? { archived: true } : {}), snippet: search.snippet(hit.text, query) })), note: DATA_NOTE };
   }
 
@@ -529,18 +604,22 @@ export class AssistantBoard {
         const item = this.deps.workItems.superviseRework(workItemId, args.text, commandId);
         return { reworked: item.number };
       }
-      case 'delegation_list': return { delegations: this.work().delegations.list().map(delegationView) };
-      case 'delegation_create': return { created: delegationView(this.work().delegations.create(args)) };
+      case 'delegation_list': return { delegations: this.work().delegations.list(context?.memberId ?? DEFAULT_AGENT_MEMBER_ID).map(delegationView) };
+      case 'delegation_create': {
+        this.assertDelegationTriggerAllowed(args.trigger, context);
+        return { created: delegationView(this.work().delegations.create(args, context?.memberId ?? DEFAULT_AGENT_MEMBER_ID)) };
+      }
       case 'delegation_update': {
         const id = optionalText(args, 'delegation');
         if (!id) throw invalid('delegation is required; call delegation_list');
         const { delegation: _id, ...changes } = args;
-        return { updated: delegationView(this.work().delegations.update(id, changes)) };
+        if (changes.trigger !== undefined) this.assertDelegationTriggerAllowed(changes.trigger, context);
+        return { updated: delegationView(this.work().delegations.update(id, changes, context?.memberId ?? DEFAULT_AGENT_MEMBER_ID)) };
       }
       case 'delegation_end': {
         const id = optionalText(args, 'delegation');
         if (!id) throw invalid('delegation is required; call delegation_list');
-        return { ended: delegationView(this.work().delegations.end(id, 'assistant')) };
+        return { ended: delegationView(this.work().delegations.end(id, 'assistant', context?.memberId ?? DEFAULT_AGENT_MEMBER_ID)) };
       }
       default:
         throw new AppError('TOOL_NOT_FOUND', `Unknown tool ${name}`, 404);

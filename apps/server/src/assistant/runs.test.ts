@@ -237,4 +237,121 @@ describe('assistant background runs', () => {
     expect((await supervisionMcp('tools/list')).tools).toContainEqual(expect.objectContaining({ name: 'task_continue' }));
     expect(await supervisionMcp('tools/call', { name: 'task_continue', arguments: { text: 'Continue the deployment review.' } })).toMatchObject({ structuredContent: { sent: task.number } });
   }, 60_000);
+
+  it('isolates delegations, plugin-event runs, pending notes, and self-only history_search per team member', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-member-runs-'));
+    const server = await boot(stateDir);
+    cleanups.push(async () => { await server.app.close(); await rm(stateDir, { recursive: true, force: true }); });
+    vi.spyOn(server.plugins, 'assistantEventDeclared').mockImplementation(topic => topic === 'personal.finance/alert');
+
+    const advisor = await server.team.create({
+      name: '投资理财顾问',
+      scope: { kind: 'personal' },
+      sessionMode: 'continuous',
+      capabilities: { delegations: true, taskBoard: false, externalTools: true, workspace: false, memberCalls: false, workbenchAdmin: false },
+    });
+    const advisorMain = server.store.createSession({
+      id: 'advisor-main', projectId: advisor.projectId, agentMemberId: advisor.id, kind: 'native', backendId: 'claude',
+    });
+    server.team.claimMainSession(advisor.id, advisorMain.id);
+
+    const defaultDelegation = server.assistantDelegations.create({
+      goal: 'Default member watch', attention: 'Default only', trigger: { kind: 'schedule', cron: '0 9 * * 1' },
+    });
+
+    const advisorMcp = await mcpOf(server, advisorMain.id);
+    const advisorTools = (await advisorMcp('tools/list')).tools.map((tool: { name: string }) => tool.name);
+    expect(advisorTools).toEqual(expect.arrayContaining(['delegation_create', 'delegation_list', 'delegation_end', 'history_search']));
+    expect(advisorTools).not.toContain('task_list');
+    expect(advisorTools).not.toContain('session_list');
+
+    // Member without taskBoard may search its own conversation, never another session.
+    const otherProj = server.store.createProject(stateDir, 'PrivateCode');
+    const otherSession = server.store.createSession({ projectId: otherProj.id, kind: 'native', backendId: 'claude' });
+    server.store.indexMessages([
+      { sessionId: advisorMain.id, messageId: 'm1', kind: 'user', text: 'advisor-secret-token-42', at: new Date().toISOString() },
+      { sessionId: otherSession.id, messageId: 'm2', kind: 'user', text: 'private-code-secret-99', at: new Date().toISOString() },
+    ]);
+    expect(await advisorMcp('tools/call', { name: 'history_search', arguments: { query: 'advisor-secret-token-42', session: 'self' } })).toMatchObject({
+      structuredContent: { hits: [expect.objectContaining({ session: advisorMain.id })] },
+    });
+    expect(await advisorMcp('tools/call', { name: 'history_search', arguments: { query: 'private-code-secret-99' } })).toMatchObject({
+      structuredContent: { hits: [] },
+    });
+    expect(await advisorMcp('tools/call', { name: 'history_search', arguments: { query: 'private-code-secret-99', session: otherSession.id } })).toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringMatching(/^INVALID_ARGUMENT:/) }],
+    });
+
+    // Project-scoped member with taskBoard cannot search outside its bound project or read personal members' history.
+    const boundProj = server.store.createProject(join(stateDir, 'bound'), 'BoundCode');
+    const qa = await server.team.create({ name: 'QA', scope: { kind: 'project', projectIds: [boundProj.id] }, sessionMode: 'fresh' });
+    const qaSession = server.store.createSession({ projectId: boundProj.id, agentMemberId: qa.id, kind: 'native', backendId: 'claude' });
+    const qaMcp = await mcpOf(server, qaSession.id);
+    expect(await qaMcp('tools/call', { name: 'history_search', arguments: { query: 'advisor-secret-token-42' } })).toMatchObject({ structuredContent: { hits: [] } });
+    expect(await qaMcp('tools/call', { name: 'history_search', arguments: { query: 'private-code-secret-99' } })).toMatchObject({ structuredContent: { hits: [] } });
+
+    // Member without taskBoard cannot create task-status delegations.
+    const task = server.workItems.create({ title: 'Secret task', assignee: { kind: 'agent', backendId: 'claude' }, projectId: otherProj.id });
+    expect(await advisorMcp('tools/call', {
+      name: 'delegation_create',
+      arguments: { goal: 'Probe task', attention: 'Any', trigger: { kind: 'task-status', task: task.number, status: 'review' } },
+    })).toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringMatching(/^TOOL_NOT_AVAILABLE:/) }],
+    });
+
+    // Cross-member delegation mutation is denied.
+    expect(await advisorMcp('tools/call', { name: 'delegation_end', arguments: { delegation: defaultDelegation.id } })).toMatchObject({
+      isError: true,
+      content: [{ text: expect.stringMatching(/^DELEGATION_NOT_FOUND:/) }],
+    });
+
+    // Advisor creates a plugin-event delegation owned by itself.
+    const created = await advisorMcp('tools/call', {
+      name: 'delegation_create',
+      arguments: { goal: '盯盘异常分诊', attention: '止损或逻辑失效时通知', trigger: { kind: 'plugin-event', topic: 'personal.finance/alert' } },
+    });
+    const delegationId = (created.structuredContent as { created: { id: string } }).created.id;
+    expect(server.assistantDelegations.get(delegationId).memberId).toBe(advisor.id);
+
+    // HTTP member delegations route returns only this member's delegations.
+    const authStatus = await server.app.inject({ method: 'GET', url: '/api/auth/status', headers: { host: '127.0.0.1:4317' } });
+    const cookie = String(authStatus.headers['set-cookie']).split(';')[0]!;
+    const routeRes = await server.app.inject({ method: 'GET', url: `/api/team/members/${advisor.id}/delegations`, headers: { host: '127.0.0.1:4317', cookie } });
+    expect(routeRes.statusCode).toBe(200);
+    expect((routeRes.json() as { delegations: Array<{ id: string }> }).delegations.map(d => d.id)).toEqual([delegationId]);
+
+    // Plugin event fans out to the subscribed advisor member, not default.
+    expect(server.assistantDelegations.pluginEvent('personal.finance/alert', { symbol: '00700.HK', price: 347.8 }, 'evt-1')).toEqual({ delegations: 1 });
+    await settled(() => {
+      const current = server.assistantRuns!.recent(10, advisor.id)[0];
+      if (!current?.sessionId) return false;
+      try { server.store.getSession(current.sessionId); return true; } catch { return false; }
+    });
+    const [advisorRun] = server.assistantRuns!.recent(10, advisor.id);
+    expect(advisorRun?.memberId).toBe(advisor.id);
+    const runSession = server.store.getSession(advisorRun!.sessionId!);
+    expect(runSession.projectId).toBe(advisor.projectId);
+    expect(runSession.agentMemberId).toBe(advisor.id);
+
+    // Background run can search its owning member's main conversation via session: "self", never others.
+    const runMcp = await mcpOf(server, runSession.id);
+    expect(await runMcp('tools/call', { name: 'history_search', arguments: { query: 'advisor-secret-token-42', session: 'self' } })).toMatchObject({
+      structuredContent: { hits: [expect.objectContaining({ session: advisorMain.id })] },
+    });
+    expect(await runMcp('tools/call', { name: 'history_search', arguments: { query: 'private-code-secret-99' } })).toMatchObject({
+      structuredContent: { hits: [] },
+    });
+    expect(await runMcp('tools/call', { name: 'run_report', arguments: { outcome: 'ask', text: '00700.HK 跌破逻辑失效位' } })).toMatchObject({ structuredContent: { reported: 'ask' } });
+    expect(server.notices.list(advisorMain.id).map(n => n.body)).toEqual(['00700.HK 跌破逻辑失效位']);
+    expect(server.assistantRuns!.offerPending(advisor.id).map(n => n.text)).toEqual(['00700.HK 跌破逻辑失效位']);
+    expect(server.assistantRuns!.offerPending()).toEqual([]);
+
+    // Deleting the member ends its active delegations, clears pending notes, and stops future plugin-event fanout.
+    server.team.delete(advisor.id);
+    expect(server.assistantDelegations.get(delegationId).state).toBe('ended');
+    expect(server.assistantRuns!.offerPending(advisor.id)).toEqual([]);
+    expect(server.assistantDelegations.pluginEvent('personal.finance/alert', { symbol: '00700.HK' }, 'evt-2')).toEqual({ delegations: 0 });
+  }, 60_000);
 });

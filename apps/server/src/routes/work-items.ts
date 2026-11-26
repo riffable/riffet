@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { ASSISTANT_BUDGET } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, DEFAULT_AGENT_MEMBER_ID } from '../../../../packages/contracts/src/index.js';
 import type { AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { projectVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
@@ -83,7 +83,7 @@ export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): v
   });
   // What the 助理 follows over time (docs/ASSISTANT.md §7.3): the owner reads and ends them; the 助理 makes them.
   const delegations=()=>deps.assistantDelegations?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})();
-  app.get('/api/assistant/runs/usage',async():Promise<AssistantRunUsage>=>(deps.assistantRuns?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})()).usage());
+  app.get('/api/assistant/runs/usage',async():Promise<AssistantRunUsage>=>(deps.assistantRuns?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})()).usage(DEFAULT_AGENT_MEMBER_ID));
   app.get('/api/assistant/delegations',async():Promise<{delegations:AssistantDelegation[]}>=>({delegations:delegations().list()}));
   app.post<{Params:{id:string}}>('/api/assistant/delegations/:id/end',async(request):Promise<AssistantDelegation>=>{
     const ended=delegations().end(request.params.id,'owner');

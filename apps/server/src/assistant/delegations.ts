@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { ASSISTANT_BUDGET, WORK_ITEM_STATUSES, type AssistantDelegation, type AssistantDelegationTrigger, type WorkItemEvent } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, DEFAULT_AGENT_MEMBER_ID, WORK_ITEM_STATUSES, type AssistantDelegation, type AssistantDelegationTrigger, type WorkItemEvent } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import type { Store } from '../store.js';
 
@@ -37,6 +37,8 @@ export interface AssistantDelegationsDeps {
   };
   /** Plugin events (`host.assistant.emit`): which topics an enabled plugin declares, and how many runs of a delegation are still queued or going. */
   pluginEvents?: { declared(topic: string): boolean; backlog(delegationId: string): number };
+  /** Current lifecycle state of a delegation's owning member: paused skips polling/events; deleted ends open delegations. */
+  memberState?(memberId: string): 'active' | 'paused' | 'deleted';
   /** A delegation that ended on its date, for the main conversation to mention. */
   expired(delegation: AssistantDelegation): void;
   fetch?: typeof fetch;
@@ -67,7 +69,12 @@ export class AssistantDelegations {
   private row(raw: unknown): Row | undefined {
     if (!raw) return undefined;
     const { json, next_check_at } = raw as { json: string; next_check_at: number };
-    return { delegation: JSON.parse(json) as AssistantDelegation, nextCheckAt: next_check_at };
+    const parsed = JSON.parse(json) as AssistantDelegation;
+    return { delegation: { memberId: DEFAULT_AGENT_MEMBER_ID, ...parsed }, nextCheckAt: next_check_at };
+  }
+
+  private ownerOf(delegation: Pick<AssistantDelegation, 'memberId'>): string {
+    return delegation.memberId || DEFAULT_AGENT_MEMBER_ID;
   }
 
   get(id: string): AssistantDelegation {
@@ -76,22 +83,26 @@ export class AssistantDelegations {
     return found.delegation;
   }
 
-  /** Open ones first, then those ended in the last 30 days, newest first. */
-  list(): AssistantDelegation[] {
+  /** Open ones first, then those ended in the last 30 days, newest first. Optionally scoped to one member. */
+  list(memberId?: string): AssistantDelegation[] {
     const since = Date.now() - 30 * 86_400_000;
     return this.db.prepare('SELECT json, next_check_at FROM assistant_delegations ORDER BY created_at DESC').all()
       .map(raw => this.row(raw)!.delegation)
-      .filter(item => item.state === 'active' || Date.parse(item.updatedAt) >= since)
+      .filter(item => (!memberId || this.ownerOf(item) === memberId) && (item.state === 'active' || Date.parse(item.updatedAt) >= since))
       .sort((a, b) => Number(b.state === 'active') - Number(a.state === 'active'));
   }
 
-  create(input: Record<string, unknown>): AssistantDelegation {
-    const open = this.db.prepare("SELECT COUNT(*) AS count FROM assistant_delegations WHERE state='active'").get() as { count: number };
-    if (open.count >= ASSISTANT_BUDGET.delegations) throw new AppError('TOO_MANY_DELEGATIONS', `At most ${ASSISTANT_BUDGET.delegations} delegations can be open; end one first`, 409);
+  create(input: Record<string, unknown>, memberId = DEFAULT_AGENT_MEMBER_ID): AssistantDelegation {
+    const owner = memberId || DEFAULT_AGENT_MEMBER_ID;
+    const openCount = this.db.prepare("SELECT json, next_check_at FROM assistant_delegations WHERE state='active'").all()
+      .map(raw => this.row(raw)!.delegation)
+      .filter(item => this.ownerOf(item) === owner).length;
+    if (openCount >= ASSISTANT_BUDGET.delegations) throw new AppError('TOO_MANY_DELEGATIONS', `At most ${ASSISTANT_BUDGET.delegations} delegations can be open; end one first`, 409);
     const now = new Date();
     const trigger = this.trigger(input.trigger);
     const delegation: AssistantDelegation = {
       id: randomUUID(),
+      memberId: owner,
       goal: text(input.goal, 'goal', 4000, true)!,
       attention: text(input.attention, 'attention', 4000, true)!,
       ...trigger,
@@ -103,8 +114,9 @@ export class AssistantDelegations {
     return delegation;
   }
 
-  update(id: string, input: Record<string, unknown>): AssistantDelegation {
+  update(id: string, input: Record<string, unknown>, memberId?: string): AssistantDelegation {
     const current = this.get(id);
+    if (memberId && this.ownerOf(current) !== memberId) throw new AppError('DELEGATION_NOT_FOUND', 'No delegation has this id', 404);
     if (current.state !== 'active') throw new AppError('DELEGATION_ENDED', 'This delegation has ended; create a new one', 409);
     const now = new Date();
     const next: AssistantDelegation = {
@@ -122,12 +134,34 @@ export class AssistantDelegations {
     return next;
   }
 
-  end(id: string, by: NonNullable<AssistantDelegation['endedReason']>): AssistantDelegation {
+  end(id: string, by: NonNullable<AssistantDelegation['endedReason']>, memberId?: string): AssistantDelegation {
     const current = this.get(id);
+    if (memberId && this.ownerOf(current) !== memberId) throw new AppError('DELEGATION_NOT_FOUND', 'No delegation has this id', 404);
     if (current.state !== 'active') return current;
     const ended: AssistantDelegation = { ...current, state: 'ended', endedReason: by, updatedAt: new Date().toISOString() };
     this.write(ended, 0);
     return ended;
+  }
+
+  /** Ends every open delegation owned by [memberId] (e.g. when that member is deleted). */
+  endForMember(memberId: string, by: NonNullable<AssistantDelegation['endedReason']> = 'owner'): number {
+    let count = 0;
+    for (const item of this.list(memberId)) {
+      if (item.state === 'active') {
+        this.end(item.id, by);
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  private memberAllows(delegation: AssistantDelegation): boolean {
+    const state = this.deps.memberState?.(this.ownerOf(delegation)) ?? 'active';
+    if (state === 'deleted') {
+      this.end(delegation.id, 'owner');
+      return false;
+    }
+    return state === 'active';
   }
 
   /** A task transition recorded before the deadline still counts if recovery reaches it afterward. */
@@ -225,7 +259,7 @@ export class AssistantDelegations {
       AND json_extract(json,'$.trigger.kind')='task-status' AND json_extract(json,'$.trigger.workItemId')=?`).all(workItemId);
     for (const row of watches) {
       const { delegation } = this.row(row)!;
-      if (delegation.trigger.kind !== 'task-status') continue;
+      if (delegation.trigger.kind !== 'task-status' || !this.memberAllows(delegation)) continue;
       try { this.checkTaskStatus(delegation, delegation.trigger, now); } catch (error) { this.checkFailed(delegation.id, error, now); }
     }
   }
@@ -247,6 +281,7 @@ export class AssistantDelegations {
       AND json_extract(json,'$.trigger.kind')='plugin-event' AND json_extract(json,'$.trigger.topic')=?`).all(topic);
     for (const row of subscribed) {
       const { delegation } = this.row(row)!;
+      if (!this.memberAllows(delegation)) continue;
       if (Date.parse(delegation.until) <= now.getTime() || delegation.cursor === eventKey) continue;
       if (this.deps.pluginEvents && this.deps.pluginEvents.backlog(delegation.id) >= ASSISTANT_BUDGET.pluginEventBacklog) {
         console.warn('[riffet] delegation has too many runs waiting; plugin event dropped', delegation.id, topic);
@@ -301,6 +336,7 @@ export class AssistantDelegations {
   }
 
   private async check(delegation: AssistantDelegation, now: Date): Promise<void> {
+    if (!this.memberAllows(delegation)) return;
     const trigger = delegation.trigger;
     if (trigger.kind === 'task-status') {
       this.checkTaskStatus(delegation, trigger, now);

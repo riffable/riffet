@@ -180,6 +180,8 @@ export type AssistantDelegationTrigger =
  */
 export interface AssistantDelegation {
   id: string;
+  /** Owning team member id (`default` when omitted on legacy records). */
+  memberId?: string;
   goal: string;
   /** What is worth acting on, and what is worth telling the owner about. */
   attention: string;

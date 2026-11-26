@@ -4,7 +4,6 @@ import { stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import {
   ASSISTANT_BUDGET,
-  DEFAULT_AGENT_MEMBER_ID,
   OWNER_AVATAR_MAX_BYTES,
   type AgentMember,
   type AgentMemberCreate,
@@ -123,9 +122,9 @@ export function registerTeamRoutes(app: FastifyInstance, deps: RouteDeps): void 
 
   app.get<{ Params: { id: string } }>('/api/team/members/:id/delegations', async (request) => {
     const member = team().get(request.params.id);
-    if (member.id !== DEFAULT_AGENT_MEMBER_ID || !member.capabilities.delegations) return { delegations: [] };
+    if (!member.capabilities.delegations) return { delegations: [] };
     const delegations = deps.assistantDelegations?.();
     if (!delegations) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
-    return { delegations: delegations.list() };
+    return { delegations: delegations.list(member.id) };
   });
 }

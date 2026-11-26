@@ -1,6 +1,7 @@
 import { DEFAULT_AGENT_MEMBER_ID, type AgentMember, type Project, type Session } from '../../../../packages/contracts/src/index.js';
 import type { NativeStandingHost, StandingLaunch, StandingMoment } from '../backends/types.js';
 import { AppError } from '../errors.js';
+import { assistantContextPart } from '../prompts/index.js';
 import type { Store } from '../store.js';
 import { commitAssistantHome, type AssistantHome } from './home.js';
 import type { AgentTeamService } from './team.js';
@@ -34,8 +35,8 @@ export interface AssistantStandingDeps {
   team?: () => AgentTeamService | undefined;
   /** The owner's time zone as their client reported it; the server's when unset. */
   timeZone(): string | undefined;
-  /** What background runs left for the main conversation (§7.1): offered at a message, settled when its turn ends. */
-  pending?: { offer(): Array<{ text: string; at: number }>; settle(delivered: boolean): void };
+  /** What background runs left for a member's main conversation (§7.1): offered at a message, settled when its turn ends. */
+  pending?: { offer(memberId: string): Array<{ text: string; at: number }>; settle(delivered: boolean, memberId: string): void };
   nativeSettingProof?(runId: string): string | undefined;
   workbenchProof?(runId: string): string | undefined;
   /** The main conversation is about to be summarized (§7.4). */
@@ -113,29 +114,30 @@ export class AssistantStanding implements NativeStandingHost {
     if (!resolved) return undefined;
     const { project, member } = resolved;
     const now = new Date();
-    const lines = [`Now: ${clock(now, this.deps.timeZone())}.`];
+    const lines = [assistantContextPart('now', { time: clock(now, this.deps.timeZone()) })];
     // A background run is one short piece of work: the time is all it needs to be told.
     if (this.isRun(sessionId)) return `<riffet-context>\n${lines.join('\n')}\n</riffet-context>`;
     const isMain = this.isMain(sessionId, project, member);
     const isAdminMain = isMain && (!member || member.capabilities.workbenchAdmin);
     if (moment === 'prompt') {
       const proof = runId && isAdminMain ? this.deps.workbenchProof?.(runId) : undefined;
-      if (proof) lines.push(`This message originated in a verified Riffet Web workbench. For this turn only, workbench and authorized paired-client setting tools take sourceTurn="${proof}". The source identifies the workbench; check what the owner actually meant before changing it. Do not quote or save this value.`);
+      if (proof) lines.push(assistantContextPart('workbench', { proof }));
       const nativeProof = runId && isAdminMain ? this.deps.nativeSettingProof?.(runId) : undefined;
-      if (nativeProof) lines.push(`This message came from an authenticated paired client. For an explicitly requested instance or paired-device setting in this turn use sourceTurn="${nativeProof}". This is not a Web workbench target. Do not quote or save this value.`);
+      if (nativeProof) lines.push(assistantContextPart('paired', { proof: nativeProof }));
       const gap = this.sinceLastMessage(sessionId, now);
-      if (gap !== undefined && gap >= GAP_WORTH_SAYING_MS) lines.push(`The previous message in this conversation was ${span(gap)} ago. State you looked up before then may have changed.`);
-      const notes = isMain && (!member || member.id === DEFAULT_AGENT_MEMBER_ID) ? this.deps.pending?.offer() ?? [] : [];
+      if (gap !== undefined && gap >= GAP_WORTH_SAYING_MS) lines.push(assistantContextPart('gap', { span: span(gap) }));
+      const memberId = member?.id ?? DEFAULT_AGENT_MEMBER_ID;
+      const notes = isMain ? this.deps.pending?.offer(memberId) ?? [] : [];
       if (notes.length) {
         const zone = this.deps.timeZone();
         // Each note was written by a background run; a note that quotes the wrapper must not close it.
-        lines.push('', 'While the owner was away, your background runs left these for them, oldest first. Bring them up briefly before answering, unless the owner\'s message already covers them:', '', ...notes.map(note => `- [${stamp(new Date(note.at), zone)}] ${note.text.replace(/<\/?riffet-context>/g, '')}`));
+        lines.push('', assistantContextPart('pending'), '', ...notes.map(note => `- [${stamp(new Date(note.at), zone)}] ${note.text.replace(/<\/?riffet-context>/g, '')}`));
       }
     } else if (moment === 'compact') {
-      lines.push('The conversation above was just summarized. A detail the summary lost can be found with history_search (session "self").');
+      lines.push(assistantContextPart('compact'));
     } else {
       const carried = this.carried(sessionId);
-      if (carried) lines.push('', 'This CLI session is new, but the conversation is not: its earlier turns are no longer in your context. The most recent of them, oldest first:', '', carried, '', 'Your memory files hold what you saved; anything older is found with history_search (session "self").');
+      if (carried) lines.push('', assistantContextPart('carried', { turns: carried }));
     }
     return `<riffet-context>\n${lines.join('\n')}\n</riffet-context>`;
   }
@@ -159,7 +161,7 @@ export class AssistantStanding implements NativeStandingHost {
     if (!messages.length) return undefined;
     const zone = this.deps.timeZone();
     // A turn that quotes the wrapper must not close it.
-    const rendered = messages.map(message => `[${stamp(new Date(message.at), zone)}] ${message.kind === 'user' ? 'Owner' : 'You'}: ${clip(message.text.trim().replace(/<\/?riffet-context>/g, ''), CARRIED_MESSAGE_CHARS)}`);
+    const rendered = messages.map(message => `[${stamp(new Date(message.at), zone)}] ${message.kind === 'user' ? '用户' : '你'}：${clip(message.text.trim().replace(/<\/?riffet-context>/g, ''), CARRIED_MESSAGE_CHARS)}`);
     // The newest turns matter most: drop from the oldest end until it fits.
     while (rendered.length > 1 && rendered.join('\n\n').length > CARRIED_CHARS) rendered.shift();
     return rendered.join('\n\n');
@@ -174,8 +176,8 @@ export class AssistantStanding implements NativeStandingHost {
       if (!resolved) return;
       const { project, member } = resolved;
       // The turn that carried the background runs' notes ended: they reached the owner only if it ended well.
-      if (this.isMain(session.id, project, member) && (!member || member.id === DEFAULT_AGENT_MEMBER_ID)) {
-        this.deps.pending?.settle(from === 'running' && session.state === 'idle');
+      if (this.isMain(session.id, project, member)) {
+        this.deps.pending?.settle(from === 'running' && session.state === 'idle', member?.id ?? DEFAULT_AGENT_MEMBER_ID);
       }
       const dir = member && this.deps.team?.() ? this.deps.team()!.memberDir(member.id) : project.cwd;
       const prev = this.commitTimers.get(dir);
@@ -231,31 +233,31 @@ export function zoneOf(timeZone: string | undefined): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-/** `Monday 2026-11-16 14:05 (Asia/Shanghai, UTC+08:00)`. */
+/** `2026-11-16 星期一 14:05（Asia/Shanghai，UTC+08:00）`. */
 export function clock(at: Date, timeZone?: string): string {
   const zone = zoneOf(timeZone);
-  const part = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-US', { timeZone: zone, ...options });
-  const offset = part({ timeZoneName: 'longOffset' }).formatToParts(at).find(item => item.type === 'timeZoneName')?.value.replace('GMT', 'UTC') ?? 'UTC';
-  return `${part({ weekday: 'long' }).format(at)} ${stamp(at, zone)} (${zone}, ${offset === 'UTC' ? 'UTC+00:00' : offset})`;
+  const offset = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' }).formatToParts(at).find(item => item.type === 'timeZoneName')?.value.replace('GMT', 'UTC') ?? 'UTC';
+  const [day, time] = stamp(at, zone).split(' ');
+  const weekday = new Intl.DateTimeFormat('zh-CN', { timeZone: zone, weekday: 'long' }).format(at);
+  return `${day} ${weekday} ${time}（${zone}，${offset === 'UTC' ? 'UTC+00:00' : offset}）`;
 }
 
 /** `2026-11-16 14:05` in `timeZone`. */
 function stamp(at: Date, timeZone?: string): string {
-  if (!Number.isFinite(at.getTime())) return 'unknown time';
+  if (!Number.isFinite(at.getTime())) return '时间未知';
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: zoneOf(timeZone), year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(at);
   const value = (type: string) => parts.find(item => item.type === type)?.value ?? '';
   return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}`;
 }
 
-/** `45 minutes`, `3 hours 12 minutes`, `2 days 4 hours`. */
+/** `45 分钟`, `3 小时 12 分钟`, `2 天 4 小时`. */
 export function span(ms: number): string {
   const minutes = Math.max(1, Math.round(ms / 60_000));
-  const unit = (count: number, name: string) => `${count} ${name}${count === 1 ? '' : 's'}`;
-  if (minutes < 60) return unit(minutes, 'minute');
+  if (minutes < 60) return `${minutes} 分钟`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return minutes % 60 ? `${unit(hours, 'hour')} ${unit(minutes % 60, 'minute')}` : unit(hours, 'hour');
+  if (hours < 24) return minutes % 60 ? `${hours} 小时 ${minutes % 60} 分钟` : `${hours} 小时`;
   const days = Math.floor(hours / 24);
-  return hours % 24 ? `${unit(days, 'day')} ${unit(hours % 24, 'hour')}` : unit(days, 'day');
+  return hours % 24 ? `${days} 天 ${hours % 24} 小时` : `${days} 天`;
 }
 
 function clip(text: string, limit: number): string { return text.length > limit ? `${text.slice(0, limit)} […]` : text; }
