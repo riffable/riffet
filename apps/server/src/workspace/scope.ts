@@ -33,12 +33,12 @@ export function toProjectRelative(root: string, target: string): string {
  * Only the image route supplies configured harness homes. Their normalized image objects can
  * be read, but explicit denied roots and unrelated credential stores still take precedence.
  */
-export async function resolveExternalFile(input: string, deniedRoots: readonly string[] = [], harnessImageHomes: readonly string[] = [], artifactStateDir?: string): Promise<string> {
+export async function resolveExternalFile(input: string, deniedRoots: readonly string[] = [], harnessImageHomes: readonly string[] = [], artifactStateDir?: string, generatedImageHomes: readonly string[] = []): Promise<string> {
   if (typeof input !== 'string' || !input || input.includes('\0')) throw new AppError('INVALID_PATH', 'Path is invalid');
   if (!path.isAbsolute(input)) throw new AppError('INVALID_PATH', 'An absolute path is required');
   let real: string;
   try { real = await realpath(path.resolve(input)); } catch { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); }
-  if (await isSecretPath(real, deniedRoots, true, harnessImageHomes, artifactStateDir)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
+  if (await isSecretPath(real, deniedRoots, true, harnessImageHomes, artifactStateDir, generatedImageHomes)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
   let info;
   try { info = await stat(real); } catch { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); }
   if (!info.isFile()) throw new AppError('NOT_A_FILE', 'Path is not a regular file');
@@ -54,6 +54,24 @@ const SECRET_HOME_DIRECTORIES = ['.ssh', '.gnupg', '.aws', '.azure', '.kube', '.
 const SECRET_HOME_FILES = ['.netrc', '.git-credentials', '.npmrc', '.pypirc', '.claude.json', '.codex/auth.json', '.claude/.credentials.json', '.config/cursor/auth.json', '.factory/auth.json', '.claude/settings.json', '.cursor/cli-config.json', '.traecli.toml'];
 const SECRET_NAME = /^(?:\.env(?:\..+)?|id_(?:rsa|dsa|ecdsa|ed25519)(?:_sk)?|.+\.(?:pem|key|p12|pfx|keystore|jks))$/i;
 const SESSION_ARTIFACT_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
+const GENERATED_IMAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,191}\.(?:png|jpe?g|gif|webp|bmp|avif)$/i;
+
+/**
+ * Whether `real` is a regular generated-image artifact written by Codex under
+ * `<codexHome>/generated_images/<threadId>/<imageFile>`.
+ */
+async function isGeneratedImagePath(real: string, generatedImageHomes: readonly string[]): Promise<boolean> {
+  if (!generatedImageHomes.length || SECRET_NAME.test(path.basename(real))) return false;
+  for (const candidate of generatedImageHomes) {
+    const resolved = await realpath(candidate).catch(() => undefined);
+    if (!resolved) continue;
+    const rel = path.relative(resolved, real);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) continue;
+    const parts = rel.split(path.sep);
+    if (parts.length === 3 && parts[0] === 'generated_images' && SESSION_ARTIFACT_SEGMENT.test(parts[1]!) && GENERATED_IMAGE_NAME.test(parts[2]!)) return true;
+  }
+  return false;
+}
 
 /**
  * Session-scoped agent output files written inside a protected Riffet/harness directory:
@@ -102,7 +120,7 @@ async function readableArtifactRoot(artifactStateDir: string | undefined, real: 
 }
 
 /** [byName] also refuses any `.env` or key file by its name; a project's own copies are left readable. */
-export async function isSecretPath(real: string, deniedRoots: readonly string[] = [], byName = true, harnessImageHomes: readonly string[] = [], artifactStateDir?: string): Promise<boolean> {
+export async function isSecretPath(real: string, deniedRoots: readonly string[] = [], byName = true, harnessImageHomes: readonly string[] = [], artifactStateDir?: string, generatedImageHomes: readonly string[] = []): Promise<boolean> {
   if (byName && SECRET_NAME.test(path.basename(real))) return true;
   const home = homedir();
   // Only real objects in configured stores qualify. Native path components avoid treating a
@@ -117,15 +135,16 @@ export async function isSecretPath(real: string, deniedRoots: readonly string[] 
     if (parts.length === 5 && parts[0] === 'attachments' && parts[1] === 'v1' && parts[2] === 'objects'
       && /^[0-9a-f]{64}$/.test(parts[4]!) && parts[3] === parts[4]!.slice(0, 2)) harnessImage = true;
   }
+  const generatedImage = await isGeneratedImagePath(real, generatedImageHomes);
   const artifact = await readableArtifactRoot(artifactStateDir, real, home);
-  // A DSH store may live in the Riffet config container. This exception never overrides the
+  // A DSH store or Codex home may live in the Riffet config container. This exception never overrides the
   // active state directory, SSH stores or any other credential root, even when configured there.
   const configContainers = new Set(['.riffet'].map(item => path.join(home, item)));
   const stateContainers = new Set(['.riffet', '.local/share/riffet'].map(item => path.join(home, item)));
   for (const candidate of [...deniedRoots, ...SECRET_HOME_DIRECTORIES.map(item => path.join(home, item))]) {
     const resolved = await realpath(candidate).catch(() => candidate);
     if (!isWithin(resolved, real)) continue;
-    if (harnessImage && !deniedRoots.includes(candidate) && configContainers.has(candidate)) continue;
+    if ((harnessImage || generatedImage) && !deniedRoots.includes(candidate) && configContainers.has(candidate)) continue;
     if (artifact?.kind === 'state' && (resolved === artifact.root || (stateContainers.has(candidate) && isWithin(resolved, artifact.root)))) continue;
     if (artifact?.kind === 'trae' && !deniedRoots.includes(candidate) && resolved === artifact.root) continue;
     return true;
@@ -150,15 +169,25 @@ export function expandHomePath(input: string): string {
 /**
  * Resolve a path for reading. Project paths keep the strict scoping; an explicit absolute
  * (or `~/`) path outside the project falls back to the relaxed single-file read when allowed.
+ * Read-only image callers may also pass `generatedImageHomes` to allow agent-generated images
+ * under `<home>/generated_images/<thread>/<image>` even when general outside reads are disabled.
  */
-export async function resolveReadablePath(root: string, input: string, allowOutside = false, deniedRoots: readonly string[] = [], harnessImageHomes: readonly string[] = [], artifactStateDir?: string): Promise<string> {
+export async function resolveReadablePath(root: string, input: string, allowOutside = false, deniedRoots: readonly string[] = [], harnessImageHomes: readonly string[] = [], artifactStateDir?: string, generatedImageHomes: readonly string[] = []): Promise<string> {
   const expanded = typeof input === 'string' ? expandHomePath(input) : input;
-  if (allowOutside && path.isAbsolute(expanded) && !isWithin(root, path.resolve(expanded))) return resolveExternalFile(expanded, deniedRoots, harnessImageHomes, artifactStateDir);
+  if (path.isAbsolute(expanded) && !isWithin(root, path.resolve(expanded))) {
+    if (allowOutside) return resolveExternalFile(expanded, deniedRoots, harnessImageHomes, artifactStateDir, generatedImageHomes);
+    if (generatedImageHomes.length) {
+      const real = await realpath(path.resolve(expanded)).catch(() => undefined);
+      if (real && await isGeneratedImagePath(real, generatedImageHomes)) {
+        return resolveExternalFile(expanded, deniedRoots, harnessImageHomes, artifactStateDir, generatedImageHomes);
+      }
+    }
+  }
   const target = await resolveScopedPath(root, expanded);
   // A project rooted at the home directory (or above the state directory) holds the same stores.
   const real = await realpath(target).catch(() => target);
-  if (await isSecretPath(real, deniedRoots, false, harnessImageHomes, artifactStateDir)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
+  if (await isSecretPath(real, deniedRoots, false, harnessImageHomes, artifactStateDir, generatedImageHomes)) throw new AppError('PATH_DENIED', 'This file holds credentials and cannot be read through the workbench', 403);
   // Trusted-store reads must use the canonical path whose credential policy was checked.
-  if (harnessImageHomes.length || (artifactStateDir && await readableArtifactRoot(artifactStateDir, real, homedir()))) return real;
+  if (harnessImageHomes.length || generatedImageHomes.length || (artifactStateDir && await readableArtifactRoot(artifactStateDir, real, homedir()))) return real;
   return target;
 }

@@ -1,5 +1,6 @@
 package riffet.ui.timeline
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import riffet.contracts.WorkbenchEvent
@@ -186,5 +187,58 @@ class TimelineRowsTest {
         val trailingAfterNotice = resumedAfterNotice.last() as TimelineRow.Process
         assertEquals(TurnFooter.HELD, trailingAfterNotice.footer)
         assertEquals(trailingAfterNotice.key, heldFooterRow(resumedAfterNotice))
+    }
+
+    @Test
+    fun `surfaces completed image_generation with an image outside Process without unfolding earlier commentary`() {
+        fun imageTool(sequence: Long, status: String, withImage: Boolean): TimelineItem.Tool {
+            val fields = buildMap {
+                put("toolCallId", JsonPrimitive("call-$sequence"))
+                put("kind", JsonPrimitive("image_generation"))
+                put("toolName", JsonPrimitive("Generate image"))
+                put("status", JsonPrimitive(status))
+                if (withImage) {
+                    put(
+                        "content",
+                        JsonArray(
+                            listOf(
+                                JsonObject(
+                                    mapOf(
+                                        "type" to JsonPrimitive("content"),
+                                        "content" to JsonObject(
+                                            mapOf(
+                                                "type" to JsonPrimitive("image"),
+                                                "path" to JsonPrimitive("/tmp/generated.png"),
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                            ),
+                        ),
+                    )
+                }
+            }
+            val base = WorkbenchEvent(sequence = sequence, sessionId = "session-1", runId = "turn-1", type = "tool_call", data = JsonObject(fields), createdAt = at)
+            return TimelineItem.Tool(key = "tool:$sequence", event = ProjectedEvent(base = base, projectionKey = "event:$sequence", sourceEvents = listOf(base), turn = turn))
+        }
+
+        val running = buildTimelineGrouping(listOf(user(1, "Draw"), assistant(2, "Planning..."), imageTool(3, "in_progress", false)), sessionRunning = true)
+        assertEquals(listOf("user:1:NONE", "process(asst:2,tool:3)"), describe(running.rows))
+
+        // Incremental update transitioning from running to completed with an image must regroup out of Process.
+        val surfaced = updateTimelineGrouping(
+            running,
+            listOf(user(1, "Draw"), assistant(2, "Planning..."), imageTool(3, "completed", true)),
+            sessionRunning = false,
+        )
+        assertEquals(listOf("user:1:NONE", "process(asst:2)", "tool:3:SHOWN"), describe(surfaced.rows))
+        assertEquals(true, (surfaced.rows[1] as TimelineRow.Process).canAutoFold)
+
+        val withAnswer = buildTimelineRows(
+            listOf(user(1, "Draw"), assistant(2, "Planning..."), imageTool(3, "completed", true), assistant(4, "Here is your meme.")),
+            sessionRunning = false,
+        )
+        assertEquals(listOf("user:1:NONE", "process(asst:2)", "tool:3:NONE", "asst:4:SHOWN"), describe(withAnswer))
+        assertEquals(true, (withAnswer[1] as TimelineRow.Process).canAutoFold)
     }
 }

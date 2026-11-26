@@ -216,4 +216,36 @@ describe('transcriptTurns interaction tool boundaries', () => {
     const [turn] = transcriptTurns(timeline, false, undefined);
     expect(turn!.rows[1]!.type === 'item' && turn!.rows[1]!.footer === 'shown').toBe(true);
   });
+
+  it('surfaces completed image_generation with an image outside TurnProcess without unfolding earlier commentary', () => {
+    const imageTool = (sequence: number, status: string, withImage: boolean): TimelineItem => ({
+      kind: 'tool',
+      turn: TURN,
+      key: `tool:${sequence}`,
+      event: projected(sequence, 'tool_call', {
+        toolCallId: `call-${sequence}`,
+        kind: 'image_generation',
+        toolName: 'Generate image',
+        status,
+        ...(withImage ? { content: [{ type: 'content', content: { type: 'image', path: '/tmp/generated.png' } }] } : {}),
+      }),
+    });
+
+    // While generating (even with an early preview image) or on failure, the tool stays inside TurnProcess.
+    const [runningTurn] = transcriptTurns([user(1, 'Draw'), assistant(2, 'Planning...', 'commentary'), imageTool(3, 'in_progress', true)], true, undefined);
+    expect(runningTurn!.rows.map(describeRow)).toEqual(['user:user:1:none', 'process(asst:2,tool:3)']);
+
+    const [failedTurn] = transcriptTurns([user(1, 'Draw'), assistant(2, 'Planning...', 'commentary'), imageTool(3, 'failed', false), assistant(4, 'Failed.', 'final_answer')], false, undefined);
+    expect(failedTurn!.rows.map(describeRow)).toEqual(['user:user:1:none', 'process(asst:2,tool:3)', 'assistant:asst:4:shown']);
+
+    // Once completed with an image, it stands outside TurnProcess, while earlier commentary (phased or unphased) remains folded.
+    const [completedTurn] = transcriptTurns([user(1, 'Draw'), assistant(2, 'Planning...'), imageTool(3, 'completed', true), assistant(4, 'Here is your meme.', 'final_answer')], false, undefined);
+    expect(completedTurn!.rows.map(describeRow)).toEqual(['user:user:1:none', 'process(asst:2)', 'tool:tool:3:none', 'assistant:asst:4:shown']);
+    expect(completedTurn!.rows[1]!.type === 'process' && completedTurn!.rows[1]!.canAutoFold).toBe(true);
+
+    // When the turn ends directly on the generated image without trailing prose, the image carries the footer and preceding process folds.
+    const [imageOnlyTurn] = transcriptTurns([user(1, 'Draw'), assistant(2, 'Planning...', 'commentary'), imageTool(3, 'completed', true)], false, undefined);
+    expect(imageOnlyTurn!.rows.map(describeRow)).toEqual(['user:user:1:none', 'process(asst:2)', 'tool:tool:3:shown']);
+    expect(imageOnlyTurn!.rows[1]!.type === 'process' && imageOnlyTurn!.rows[1]!.canAutoFold).toBe(true);
+  });
 });

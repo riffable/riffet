@@ -1,6 +1,6 @@
 import type { NativeContext, NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
 import { describeCommandActions } from '../../../../../packages/timeline/src/toolTitle.js';
-import { toolImageContent } from '../shared/tool-images.js';
+import { INLINE_IMAGE_LIMIT, toolImageContent } from '../shared/tool-images.js';
 import type { RpcTurn, RpcItem } from './types.js';
 import { firstLine, str, finiteToken, asRecord, asArray } from './util.js';
 import { splitUnifiedDiff, type DiffHunk } from '../shared/unified-diff.js';
@@ -16,8 +16,41 @@ export function spanTime(span: ItemSpan | undefined, type: string, fallback: str
 /** Bytes one subagent's opening snapshot may spend; older events stay behind its history cursor. */
 const SUBAGENT_SNAPSHOT_BYTES = 96 * 1024;
 export function isCodexToolItem(item: RpcItem): boolean {
-  return ['commandExecution', 'fileChange', 'mcpToolCall', 'dynamicToolCall', 'collabAgentToolCall', 'functionCallOutput', 'webSearch', 'imageView'].includes(item.type)
+  return ['commandExecution', 'fileChange', 'mcpToolCall', 'dynamicToolCall', 'collabAgentToolCall', 'functionCallOutput', 'webSearch', 'imageView', 'imageGeneration'].includes(item.type)
     || isSubagentStart(item);
+}
+
+/**
+ * Removes multi-megabyte inline image payloads from `raw` snapshots once projected, so neither the
+ * journal nor live WebSocket frames carry redundant base64 copies alongside `savedPath`.
+ */
+export function sanitizedCodexRaw(item: RpcItem): RpcItem {
+  if (item.type !== 'imageGeneration') return item;
+  const result = str(item.result);
+  if (!result || (!str(item.savedPath) && result.length <= INLINE_IMAGE_LIMIT)) return item;
+  const { result: _omitted, ...rest } = item;
+  return rest;
+}
+
+function base64ImageMimeType(data: string): string {
+  if (data.startsWith('/9j/')) return 'image/jpeg';
+  if (data.startsWith('R0lGOD')) return 'image/gif';
+  if (data.startsWith('UklGR')) return 'image/webp';
+  return 'image/png';
+}
+
+function imageGenerationFailureText(value: unknown): string | undefined {
+  if (typeof value === 'string') return str(value);
+  const failure = asRecord(value);
+  if (!failure) return undefined;
+  const message = str(failure.message) ?? str(failure.error);
+  if (message) return message;
+  if (str(failure.type) === 'usageLimitExceeded') {
+    const resetsAt = finiteToken(failure.resetsAt);
+    const reset = resetsAt !== undefined ? new Date(resetsAt * (resetsAt < 1e12 ? 1000 : 1)).toISOString() : undefined;
+    return reset ? `Image generation usage limit exceeded (resets at ${reset})` : 'Image generation usage limit exceeded';
+  }
+  return str(failure.type);
 }
 
 /**
@@ -183,21 +216,39 @@ export function projectToolItem(item: RpcItem, event: (id: string, type: string,
   // not create one. Reading them as `agent` rows made each coordination step look like another
   // child in the transcript, and a pile of rows named "Subagent".
   const collaborationLabel = collabCallLabel(item.type === 'collabAgentToolCall' ? str(item.tool) : undefined);
+  const generatedPrompt = item.type === 'imageGeneration' ? str(item.revisedPrompt)?.trim() || undefined : undefined;
+  const generatedPath = item.type === 'imageGeneration' ? str(item.savedPath)?.trim() || undefined : undefined;
+  const generatedInputs = item.type === 'imageGeneration'
+    ? asArray<unknown>(item.inputImages).map(entry => str(asRecord(entry)?.path)).filter((p): p is string => Boolean(p))
+    : [];
   const toolName = parsedCommand?.name ?? (item.type === 'fileChange' ? 'File changes'
     : item.type === 'mcpToolCall' ? `${str(item.server) ?? 'MCP'} · ${str(item.tool) ?? 'tool'}`
       : item.type === 'dynamicToolCall' ? [str(item.namespace), str(item.tool)].filter(Boolean).join(' · ')
         : item.type === 'collabAgentToolCall' ? (spawnsAgent ? 'Subagent' : collaborationLabel) : item.type === 'webSearch' ? 'Web search'
-          : item.type === 'imageView' ? 'View image' : str(item.name) ?? 'Tool');
+          : item.type === 'imageView' ? 'View image'
+            : item.type === 'imageGeneration' ? 'Generate image' : str(item.name) ?? 'Tool');
   const kind = parsedCommand?.kind ?? (item.type === 'fileChange' ? 'edit'
-    : item.type === 'webSearch' ? 'fetch' : item.type === 'collabAgentToolCall' ? (spawnsAgent ? 'agent' : 'other') : item.type === 'imageView' ? 'read' : 'other');
+    : item.type === 'webSearch' ? 'fetch'
+      : item.type === 'collabAgentToolCall' ? (spawnsAgent ? 'agent' : 'other')
+        : item.type === 'imageView' ? 'read'
+          : item.type === 'imageGeneration' ? 'image_generation' : 'other');
   const imagePath = item.type === 'imageView' ? str(item.path) : undefined;
   const webQuery = item.type === 'webSearch' ? webSearchQuery(item) : undefined;
-  const title = parsedCommand?.title ?? command ?? imagePath ?? (subagentDescription || undefined) ?? webQuery ?? toolName;
+  const title = parsedCommand?.title ?? command ?? imagePath ?? (generatedPrompt ? firstLine(generatedPrompt) : undefined) ?? (subagentDescription || undefined) ?? webQuery ?? toolName;
   const call = event(`${base}:call`, 'tool_call', {
     toolCallId, toolName, kind, title, status: 'in_progress',
     ...(parsedCommand ? { rawInput: parsedCommand.input, ...(parsedCommand.locations.length ? { locations: parsedCommand.locations } : {}) }
       : command ? { rawInput: { command, ...(str(item.cwd) ? { cwd: item.cwd } : {}) } }
       : imagePath ? { rawInput: { path: imagePath }, locations: [{ path: imagePath }] }
+        : item.type === 'imageGeneration' ? {
+          rawInput: {
+            ...(generatedPrompt ? { prompt: generatedPrompt } : {}),
+            ...(generatedPath ? { path: generatedPath } : {}),
+            ...(generatedInputs.length ? { inputImages: generatedInputs } : {}),
+            ...(item.transparentBackground === true ? { transparentBackground: true } : {}),
+          },
+          ...(generatedPath ? { locations: [{ path: generatedPath }] } : {}),
+        }
         : subagentPrompt !== undefined ? { rawInput: { ...(subagentDescription ? { description: subagentDescription } : {}), prompt: subagentPrompt } }
           // A coordination call's arguments are an opaque payload, not something to show as detail.
           : item.type === 'collabAgentToolCall' ? { rawInput: {} }
@@ -213,11 +264,21 @@ export function projectToolItem(item: RpcItem, event: (id: string, type: string,
   });
   if (status === 'in_progress') return [call];
   const mcpContent = item.type === 'mcpToolCall' ? mcpResultContent(item.result) : [];
+  const generatedFailure = item.type === 'imageGeneration' ? imageGenerationFailureText(item.failure) : undefined;
+  const generatedResult = item.type === 'imageGeneration' && !generatedFailure ? str(item.result) : undefined;
+  const generatedContent: Array<Record<string, unknown>> = item.type === 'imageGeneration' ? [
+    ...(!generatedFailure && (generatedPath || generatedResult) ? [toolImageContent(
+      generatedPath ? { path: generatedPath } : { data: generatedResult!, mimeType: base64ImageMimeType(generatedResult!) },
+    )] : []),
+    ...(generatedPrompt ? [{ type: 'content', content: { type: 'text', text: generatedPrompt } }] : []),
+    ...(generatedFailure ? [{ type: 'content', content: { type: 'text', text: generatedFailure } }] : []),
+  ] : [];
   // POSIX grep/rg exit code 1 means "no lines matched", not a failed tool invocation.
-  const finalStatus = status === 'failed' && kind === 'search' && item.exitCode === 1 ? 'completed' : status;
+  const finalStatus = generatedFailure ? 'failed' : status === 'failed' && kind === 'search' && item.exitCode === 1 ? 'completed' : status;
   const resultData: Record<string, unknown> = {
     toolCallId, status: finalStatus,
     ...(imagePath ? { content: [toolImageContent({ path: imagePath })] } : {}),
+    ...(generatedContent.length ? { content: generatedContent } : {}),
     ...(mcpContent.length ? { content: mcpContent } : {}),
     ...(item.type === 'commandExecution' && str(item.aggregatedOutput) ? { content: [{ type: 'content', content: { type: 'text', text: item.aggregatedOutput } }] } : {}),
     ...(item.type === 'commandExecution' && typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {}),
@@ -233,19 +294,21 @@ export function projectToolItem(item: RpcItem, event: (id: string, type: string,
 export function projectStartedTool(item: RpcItem, sessionId: string, threadId: string, turnId: string, runId?: string, createdAt?: string, span?: ItemSpan): NativeWorkbenchEvent[] {
   if (!isCodexToolItem(item)) return [];
   const base = `${threadId}:${turnId}:${subagentToolCallId(item) ?? item.type}`;
-  return projectToolItem({ ...item, status: 'inProgress' }, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, item), base).slice(0, 1);
+  const raw = sanitizedCodexRaw(item);
+  return projectToolItem({ ...item, status: 'inProgress' }, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, raw), base).slice(0, 1);
 }
 
 export function projectCompletedTool(item: RpcItem, sessionId: string, threadId: string, turnId: string, runId?: string, createdAt?: string, span?: ItemSpan, observedChanges?: ObservedChanges): NativeWorkbenchEvent[] {
   if (!isCodexToolItem(item)) return [];
   const base = `${threadId}:${turnId}:${subagentToolCallId(item) ?? item.type}`;
-  const all = projectToolItem(item, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, item), base, observedChanges);
+  const raw = sanitizedCodexRaw(item);
+  const all = projectToolItem(item, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, raw), base, observedChanges);
   // A child's start may be announced only once it has happened, so its row comes with it.
   if (isSubagentStart(item)) return all;
   const updates = all.filter(event => event.type === 'tool_call_update');
-  if (item.type !== 'commandExecution') return updates;
-  // Providers can finish parsing the actions only after item/started. Correct that first shell
-  // header via the usual update, so the live row and a later history projection agree.
+  if (item.type !== 'commandExecution' && item.type !== 'imageGeneration') return updates;
+  // Providers can finish parsing actions or image metadata (`revisedPrompt`, `savedPath`) only
+  // after item/started. Correct that first header via the usual update, so live and history agree.
   const call = all.find(event => event.type === 'tool_call');
   if (!call) return updates;
   const { toolName, kind, title, rawInput, locations } = call.data;

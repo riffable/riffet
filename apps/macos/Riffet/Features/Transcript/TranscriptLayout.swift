@@ -1813,6 +1813,7 @@ enum ToolSymbols {
         case "think": "brain"
         case "fetch": "globe"
         case "switch_mode": "repeat"
+        case "image": "photo"
         case "agent": "person.crop.circle"
         case "message": "paperplane"
         case "question": "questionmark.bubble"

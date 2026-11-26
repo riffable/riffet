@@ -1052,3 +1052,10 @@
 - **否决**：只有一个成员时标签直接进对话、两个以上才显示列表（加第二个成员时首页换一种页面，`+` 没有固定位置；切走再回来，标签本来就停在上次打开的对话里）；标题处的成员切换菜单（其他成员藏在菜单里，看不到谁在运行、谁在等你）；按最近活动排序（成员的位置会跳）；手机上不能新建成员、只靠对话里的 `agent_member` 工具（建成员是低频但明确的动作，五个字段在手机上放得下）。
 - **范围**：iPhone、Android。原型 `docs/design/team-mobile-demo.html`。
 - **规则**：[移动端页面](system/mobile.md) §9.12。
+
+## 2026-11-26 · 图片生成产物工具完成后独立外露于过程折叠
+
+- **决定**：`kind: 'image_generation'`（如 Codex `imageGeneration`）在进行中与失败时留在 `TurnProcess`（「已处理」），完成后带有可渲染图片时作为独立单行外露在主线中，不随过程块收起；它不清除前置无 `phase` 正文的过程归属（与 `question` / `plan` 的分段语义区分），若后面没有正文回答则承接回合页脚。
+- **原因**：用户让 Agent 画图时，生成的图片本身是核心交付物；若收进自动折叠的「已处理」，回合结束后只能看到文字说明、看不到成品图。仅在完成且有图时外露，避免生成中拆碎过程块或把失败调用孤立在主线。
+- **否决**：把 `imageGeneration` 留在 `TurnProcess` 里（用户看不到图）；一启动就放到过程块外（生成中与失败态会拆出多余分段）；复用 `question` / `plan` 清除前置无 phase 正文的规则（画图前的思路说明属于过程旁白，不应被带到外层）。
+- **规则**：[界面](system/surfaces.md) §1.4；`packages/timeline/src/toolTitle.ts#isArtifactToolData`、`apps/web/src/app/session/transcriptRows.ts`、`apps/mobile/client/src/commonMain/kotlin/riffet/ui/timeline/TimelineRows.kt`。

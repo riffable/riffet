@@ -482,8 +482,8 @@ export class WorkspaceService {
    * path for; a project path that does not exist then means the project's only listed file ending
    * with it. None or several such files leave it missing.
    */
-  private async readablePath(root: string, filePath: string, allowOutside: boolean, harnessImageHomes?: readonly string[]): Promise<string> {
-    const target = await resolveReadablePath(root, filePath, allowOutside, [this.stateDir], harnessImageHomes, this.stateDir);
+  private async readablePath(root: string, filePath: string, allowOutside: boolean, harnessImageHomes?: readonly string[], generatedImageHomes?: readonly string[]): Promise<string> {
+    const target = await resolveReadablePath(root, filePath, allowOutside, [this.stateDir], harnessImageHomes, this.stateDir, generatedImageHomes);
     if (await stat(target).then(() => true, () => false)) return target;
     const mention = filePath.replace(/^\.\//, '');
     if (!mention || path.isAbsolute(mention) || mention.startsWith('~') || mention.split('/').includes('..')) return target;
@@ -496,7 +496,7 @@ export class WorkspaceService {
       if (named !== undefined) return target;
       named = file;
     }
-    return named === undefined ? target : resolveReadablePath(root, named, false, [this.stateDir], harnessImageHomes, this.stateDir);
+    return named === undefined ? target : resolveReadablePath(root, named, false, [this.stateDir], harnessImageHomes, this.stateDir, generatedImageHomes);
   }
 
   /**
@@ -573,7 +573,7 @@ export class WorkspaceService {
    * attachment object may be read from a configured harness home. Riffet's own registered
    * attachments use the attachment reader; all other state and credential files remain denied.
    */
-  async readPreviewImage(project: ProjectRef, filePath: string, options: { allowOutside?: boolean; harnessImageHomes?: readonly string[] } = {}): Promise<{ mimeType: string; data: Buffer }> {
+  async readPreviewImage(project: ProjectRef, filePath: string, options: { allowOutside?: boolean; harnessImageHomes?: readonly string[]; generatedImageHomes?: readonly string[] } = {}): Promise<{ mimeType: string; data: Buffer }> {
     const root = await projectRoot(project);
     const requested = path.resolve(root, expandHomePath(filePath));
     const attachmentId = path.basename(requested, '.bin');
@@ -583,7 +583,7 @@ export class WorkspaceService {
       // registered objects through the same metadata, size and symlink checks as /attachments/:id.
       ({ data } = await this.readAttachment(attachmentId));
     } else {
-      const target = await this.readablePath(root, filePath, options.allowOutside === true, options.harnessImageHomes);
+      const target = await this.readablePath(root, filePath, options.allowOutside === true, options.harnessImageHomes, options.generatedImageHomes);
       let info;
       try { info = await stat(target); } catch { throw new AppError('FILE_NOT_FOUND', 'File does not exist', 404); }
       if (!info.isFile()) throw new AppError('NOT_A_FILE', 'Path is not a regular file');

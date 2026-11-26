@@ -29,7 +29,7 @@ import { ZoomableImage } from './ImageViewer';
 
 export const toolIcons: Record<string, typeof IconWrench> = {
   read: IconFileText, edit: IconFilePenLine, delete: IconTrash2, move: IconArrowRightLeft, search: IconSearch,
-  execute: IconSquareTerminal, git: IconGitBranch, mcp: IconWrench, think: IconBrain, fetch: IconGlobe, switch_mode: IconRepeat, agent: IconBot, message: IconSend, question: IconMessageCircleQuestion,
+  execute: IconSquareTerminal, git: IconGitBranch, mcp: IconWrench, think: IconBrain, fetch: IconGlobe, switch_mode: IconRepeat, image: IconImage, agent: IconBot, message: IconSend, question: IconMessageCircleQuestion,
   plan: IconListChecks,
 };
 
@@ -68,13 +68,14 @@ function ToolImage({ content, root, maxHeight }: { content: Record<string, unkno
   const { t } = useLingui();
   const imageSource = useImageSource();
   const path = str(content.path);
+  const uri = str(content.uri);
   const name = str(content.name);
   const mimeType = str(content.mimeType);
   const data = str(content.data);
   const bytes = typeof content.bytes === 'number' ? content.bytes : undefined;
   const width = pixelEdge(content.width);
   const height = pixelEdge(content.height);
-  const src = path ? imageSource(path) : data && mimeType?.startsWith('image/') ? `data:${mimeType};base64,${data}` : undefined;
+  const src = path ? imageSource(path) : uri ? uri : data && mimeType?.startsWith('image/') ? `data:${mimeType};base64,${data}` : undefined;
   const label = name ?? (path ? stripRoot(path, root) : undefined);
   if (src) return <ZoomableImage src={src} name={name ?? (path ? path.split('/').pop() || path : t`工具返回的图片`)} {...(label ? { label } : {})} {...(path ? { path } : {})} {...(width && height ? { size: { width, height } } : {})} {...(maxHeight ? { maxHeight } : {})} placeholder="large" />;
   if (!path && content.omitted !== true) return null;
@@ -111,7 +112,7 @@ function toolContents(view: ToolView, listSeparator: string, root?: string, onOp
     if (item.type === 'markdown' && typeof item.text === 'string' && item.text.trim()) return <Markdown key={index} text={item.text} />;
     const content = isRecord(item.content) ? item.content : undefined;
     if (content?.type === 'text' && typeof content.text === 'string' && content.text.trim()) return <CodeBlock key={index} copy={content.text} remember={`output:${index}`}>{content.text}</CodeBlock>;
-    if (content?.type === 'image' && (str(content.path) || content.omitted === true || str(content.data) && str(content.mimeType)?.startsWith('image/'))) return <ToolImage key={index} content={content} root={root} />;
+    if (content?.type === 'image' && (str(content.path) || str(content.uri) || content.omitted === true || str(content.data) && str(content.mimeType)?.startsWith('image/'))) return <ToolImage key={index} content={content} root={root} />;
     return null;
   }).filter(Boolean);
   const diffPaths = new Set(view.contents.flatMap(item => item.type === 'diff' && str(item.path) ? [stripRoot(str(item.path)!, root)] : []));
@@ -405,11 +406,12 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
     ? <div className="flex min-w-0 items-start gap-1"><div className="min-w-0 flex-1">{row}</div><StopButton activity={activity} /></div>
     : row;
   if (backgroundTask || !images.length || open) return controlled;
+  const generated = view.kind === 'image_generation';
   return (
     <div className="flex min-w-0 flex-col">
       {controlled}
-      <div className="mb-1.5 ml-6 flex min-w-0 flex-wrap gap-2">
-        {images.map((content, index) => <ToolImage key={index} content={content} root={root} maxHeight={192} />)}
+      <div className={cn('mb-1.5 flex min-w-0 flex-wrap gap-2', generated ? 'mt-2' : 'ml-6')}>
+        {images.map((content, index) => <ToolImage key={index} content={content} root={root} maxHeight={generated ? 448 : 192} />)}
       </div>
     </div>
   );

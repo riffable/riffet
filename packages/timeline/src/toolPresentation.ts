@@ -26,6 +26,7 @@ export type ToolVerb =
   | 'Ask'
   | 'Send'
   | 'Mode'
+  | 'Image'
   | 'Agent'
   | 'Tool';
 
@@ -44,6 +45,7 @@ export type ToolIconKind =
   | 'question'
   | 'plan'
   | 'switch_mode'
+  | 'image'
   | 'think'
   | 'other';
 
@@ -1098,11 +1100,12 @@ export function describeToolRow(
     return { icon: 'search', verb: 'Search', primary: compactSearchQuery(stripped || rawTitle), primaryKind: 'code', ...(scope ? { secondary: scope } : {}) };
   }
 
-  // 9. Workflow / conversation tools (plan, question, message, switch_mode).
+  // 9. Workflow / conversation tools (plan, question, message, switch_mode, image_generation).
   if (kind === 'plan') return { icon: 'plan', verb: 'Plan', primary: rawTitle || fallbackTitle, primaryKind: 'prose' };
   if (kind === 'question') return { icon: 'question', verb: 'Ask', primary: rawTitle || fallbackTitle, primaryKind: 'prose' };
   if (kind === 'message') return { icon: 'message', verb: 'Send', primary: rawTitle || fallbackTitle, primaryKind: 'prose' };
   if (kind === 'switch_mode') return { icon: 'switch_mode', verb: 'Mode', primary: rawTitle || fallbackTitle, primaryKind: 'prose' };
+  if (kind === 'image_generation') return { icon: 'image', verb: 'Image', primary: rawTitle || fallbackTitle, primaryKind: 'prose' };
 
   // 10. Generic tool fallback.
   return {

@@ -3,7 +3,7 @@ import { ACTIVITY_EVENT_TYPE } from '../../journal/activity.js';
 import { messagePhase, reasoningChannel } from './drafts.js';
 import { asyncQuestionReplyDisplay } from './interactions.js';
 import type { CodexQuestionHistory } from './question-history.js';
-import { isCodexToolItem, isFinalTurnStatus, projectToolItem, spanTime, subagentToolCallId, taskNotice, userItemText, type ItemSpan, type ObservedChanges } from './transcript.js';
+import { isCodexToolItem, isFinalTurnStatus, projectToolItem, sanitizedCodexRaw, spanTime, subagentToolCallId, taskNotice, userItemText, type ItemSpan, type ObservedChanges } from './transcript.js';
 import type { RpcItem, RpcTurn } from './types.js';
 import { asArray, asRecord, str } from './util.js';
 
@@ -54,13 +54,14 @@ export function projectCodexItem(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'star
   const { threadId, runId, commandId } = context;
   const span = item.type === 'userMessage' ? undefined : context.span;
   const base = `${threadId}:${turn.id}:${subagentToolCallId(item) ?? item.type}`;
+  const raw = sanitizedCodexRaw(item);
   const event = (nativeId: string, type: string, data: Record<string, unknown>): NativeWorkbenchEvent => ({
     sequence: 0,
     sessionId: context.sessionId,
     ...(runId ? { runId } : {}),
     type,
     data: { sessionUpdate: type, ...data },
-    raw: item,
+    raw,
     createdAt: spanTime(span, type, context.createdAt),
     nativeId,
     nativeTurnId: turn.id,

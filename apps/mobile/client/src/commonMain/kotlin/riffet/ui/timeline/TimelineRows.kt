@@ -1,5 +1,6 @@
 package riffet.ui.timeline
 
+import kotlinx.serialization.json.JsonObject
 import riffet.contracts.NativeActivityKind
 import riffet.contracts.RunState
 import riffet.core.AssistantPhase
@@ -11,6 +12,7 @@ import riffet.core.analyzeTimelineTurns
 import riffet.core.kind
 import riffet.core.timelineItemTime
 import riffet.core.toolKind
+import riffet.core.toolView
 import riffet.ui.composer.visibleTimeline
 
 /*
@@ -234,13 +236,13 @@ fun buildTimelineGrouping(
             if (!activityBeforeProcess[index]) nextProcessTurn = null
         } else {
             nextProcessTurn = turnKeys[index].takeIf {
-                (!item.isInteractionTool() && item.kind in PROCESS_KINDS) || item.isCommentary() ||
+                (!item.isStandaloneTool() && item.kind in PROCESS_KINDS) || item.isCommentary() ||
                     (item is TimelineItem.Assistant && item.phase == null && assistantBeforeProcess[index])
             }
         }
     }
     fun isProcessItem(item: TimelineItem, index: Int, continuingProcess: Boolean): Boolean {
-        if (item.isInteractionTool()) return false
+        if (item.isStandaloneTool()) return false
         if (item.kind in PROCESS_KINDS) return true
         if (item.isProcessActivity()) {
             // Compaction and task updates stay with the surrounding work without splitting its
@@ -252,8 +254,8 @@ fun buildTimelineGrouping(
         return item.phase?.let { it == AssistantPhase.COMMENTARY } ?: assistantBeforeProcess[index]
     }
 
-    // The web's `followedByAnswer`: prose outside a process, or a question or plan review that has
-    // settled, comes later in the turn.
+    // The web's `followedByAnswer`: prose outside a process, or a settled standalone tool
+    // (question, plan review, or generated-image artifact), comes later in the turn.
     fun followedByAnswer(last: Int, turnKey: String): Boolean {
         val turnEnd = analysis.lastIndexByTurn[turnKey] ?: return false
         val stale = turnKey !in activeTurns
@@ -261,7 +263,7 @@ fun buildTimelineGrouping(
             if (turnKeys[index] != turnKey) return@any false
             when (val later = items[index]) {
                 is TimelineItem.Assistant -> later.phase?.let { it != AssistantPhase.COMMENTARY } ?: !assistantBeforeProcess[index]
-                is TimelineItem.Tool -> later.isInteractionTool() && toolItemLiveness(later, stale).let { !it.active && !it.incomplete }
+                is TimelineItem.Tool -> later.isStandaloneTool() && toolItemLiveness(later, stale).let { !it.active && !it.incomplete }
                 else -> false
             }
         }
@@ -355,7 +357,7 @@ fun buildTimelineGrouping(
         val carries = when (item) {
             is TimelineItem.Assistant -> if (finalAnswer == null) analysis.lastIndexByTurn[turnKey] == index else finalAnswer == index
             is TimelineItem.Status -> finalAnswer == null && analysis.lastIndexByTurn[turnKey] == index
-            is TimelineItem.Tool -> finalAnswer == null && item.isInteractionTool() && analysis.lastIndexByTurn[turnKey] == index
+            is TimelineItem.Tool -> finalAnswer == null && item.isStandaloneTool() && analysis.lastIndexByTurn[turnKey] == index
             else -> false
         }
         // For a user row, `settled` records that same-turn output already follows it.
@@ -369,7 +371,7 @@ fun buildTimelineGrouping(
                 footer = footerOf(carries, settled),
                 answerText = if (settled && (item is TimelineItem.Status || item is TimelineItem.Tool)) latestAnswerText(items, turnKeys, index) else null,
                 stopped = turnKey in interruptedTurns && analysis.lastIndexByTurn[turnKey] == index &&
-                    (item is TimelineItem.Assistant || item is TimelineItem.User || item.isInteractionTool()),
+                    (item is TimelineItem.Assistant || item is TimelineItem.User || item.isStandaloneTool()),
             ),
             index,
             index,
@@ -397,6 +399,19 @@ private fun TimelineItem.isCommentary(): Boolean = this is TimelineItem.Assistan
 /** User-facing decision tools (AskQuestion / AskUserQuestion / proposed plan reviews) stand outside the process block and bound earlier prose. */
 private fun TimelineItem.isInteractionTool(): Boolean =
     this is TimelineItem.Tool && toolKind(event.base).let { it == "question" || it == "plan" }
+
+/** Completed image-generation artifact tools stand outside the process block once they have an image to show, without un-folding earlier commentary. */
+private fun TimelineItem.isArtifactTool(): Boolean {
+    if (this !is TimelineItem.Tool || toolKind(event.base) != "image_generation") return false
+    val view = toolView(event.base, root = null)
+    if (view.status != "completed") return false
+    return view.contents.any { entry ->
+        val content = entry["content"] as? JsonObject ?: entry
+        toolImage(content, root = null)?.let { !it.omitted && (it.path != null || it.dataUrl != null) } == true
+    }
+}
+
+private fun TimelineItem.isStandaloneTool(): Boolean = isInteractionTool() || isArtifactTool()
 
 private fun TimelineItem.isProcessActivity(): Boolean = this is TimelineItem.Activity &&
     (activity.kind == NativeActivityKind.BACKGROUND_TASK || activity.kind == NativeActivityKind.COMPACTION)
@@ -566,8 +581,9 @@ private fun patchable(before: TimelineItem, after: TimelineItem): Boolean {
     return when (after) {
         is TimelineItem.Assistant -> before is TimelineItem.Assistant && before.phase == after.phase
         is TimelineItem.Thought -> before is TimelineItem.Thought && before.channel == after.channel
-        // A question or plan review settling decides whether the work before it is followed by an answer.
-        is TimelineItem.Tool -> before is TimelineItem.Tool && !before.isInteractionTool() && !after.isInteractionTool()
+        // A standalone tool (question, plan review, or generated-image artifact) crossing in/out of
+        // a process block or settling changes row boundaries and whether earlier work can fold.
+        is TimelineItem.Tool -> before is TimelineItem.Tool && !before.isStandaloneTool() && !after.isStandaloneTool()
         is TimelineItem.Plan -> before is TimelineItem.Plan
         is TimelineItem.Image -> before is TimelineItem.Image
         is TimelineItem.Status -> before is TimelineItem.Status && before.tone == after.tone

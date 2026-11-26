@@ -1,9 +1,22 @@
 import { closeSync, lstatSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /** DSH's isolated profile home, beside the other state Riffet keeps in the user's home. */
 export const DEFAULT_DSH_CONFIG_DIR = join(homedir(), '.riffet', 'dsh');
+
+/** Codex's default home (`$CODEX_HOME` when set, else `~/.codex`), used for read-only generated images. */
+export const defaultCodexHome = () => process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');
+
+/** Unique Codex homes (configured profile dirs plus default home) whose `generated_images/` artifacts are readable. */
+export function codexGeneratedImageHomes(profiles: readonly { configDir?: string }[] = []): string[] {
+  const homes = new Set<string>([resolve(defaultCodexHome())]);
+  for (const profile of profiles) {
+    const dir = profile.configDir?.trim();
+    if (dir) homes.add(resolve(dir));
+  }
+  return [...homes];
+}
 
 /** `server.lock` is held: by a live process (`pid`), or by none that can be trusted (an interrupted write, no `pid`). */
 export class StateDirectoryBusy extends Error {

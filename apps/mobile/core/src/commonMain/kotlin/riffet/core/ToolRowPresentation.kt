@@ -1237,6 +1237,7 @@ fun describeToolRow(
         "question" -> return ToolRowPresentation(icon = "question", verb = "Ask", primary = rawTitle.ifEmpty { fallbackTitle }, primaryKind = "prose")
         "message" -> return ToolRowPresentation(icon = "message", verb = "Send", primary = rawTitle.ifEmpty { fallbackTitle }, primaryKind = "prose")
         "switch_mode" -> return ToolRowPresentation(icon = "switch_mode", verb = "Mode", primary = rawTitle.ifEmpty { fallbackTitle }, primaryKind = "prose")
+        "image_generation" -> return ToolRowPresentation(icon = "image", verb = "Image", primary = rawTitle.ifEmpty { fallbackTitle }, primaryKind = "prose")
     }
 
     // 10. Generic fallback

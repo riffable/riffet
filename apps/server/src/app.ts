@@ -35,7 +35,7 @@ import { agentDefaultsRead, agentDefaultsCommand } from './settings/assistant-ag
 import { sharedThemeRead, sharedThemeCommand, webThemeRead } from './themes/assistant.js';
 import { SettingsService } from './settings/index.js';
 import { ThemeService } from './themes/index.js';
-import { migratePluginStorage } from './compat.js';
+import { codexGeneratedImageHomes, migratePluginStorage } from './compat.js';
 import { SessionLock } from './agent-host/session-lock.js';
 import { NativeDispatcher } from './native/dispatch.js';
 import { buildSessionControlSnapshot } from './native/control.js';
@@ -571,7 +571,7 @@ export async function createApp(options: AppOptions = {}) {
   // Canvas summaries are written on request, one turn at a time (docs/PLUGIN_ARCHITECTURE.md, canvas).
   const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>resolveAuxiliaryModel(settings.getSettings(),'summary'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);},record:recordAuxiliaryCall});
   const sessionMedia=new SessionMedia(sessionId=>timeline.namedPaths(sessionId),sessionId=>timeline.revision(sessionId),sessionId=>timeline.ready(sessionId,'main'),
-    (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside}));
+    (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside,generatedImageHomes:codexGeneratedImageHomes(nativeBackends.catalog.profileSettings('codex')?.profiles??[])}));
   // Read on the sync tick, which cannot await. A known backend defaults to interrupt and targeted stop until `capabilitiesFor` fills this cache; when it resolves, active sync streams refresh `control`.
   const controlCapabilityCache=new Map<string,{supportsInterrupt:boolean;supportsTargetedStop:boolean;supportsSteer?:boolean}>();
   const controlCapabilityPending=new Set<string>();

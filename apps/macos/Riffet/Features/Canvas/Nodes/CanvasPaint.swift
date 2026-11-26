@@ -280,6 +280,7 @@ enum CanvasIcons {
         case "think": .brain
         case "fetch": .globe
         case "switch_mode": .repeat
+        case "image": .image
         case "agent": .bot
         case "message": .send
         case "question": .messageCircleQuestion

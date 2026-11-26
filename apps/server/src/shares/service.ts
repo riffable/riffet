@@ -12,6 +12,7 @@ import { BUILTIN_THEME_PALETTES } from '../../../../packages/contracts/src/index
 import { AppError } from '../errors.js';
 import { captureShareSnapshot, shareTurnCatalog } from './capture.js';
 import { buildSharePackage } from './package.js';
+import { codexGeneratedImageHomes } from '../compat.js';
 import { AppearanceService } from '../appearance/index.js';
 
 const now = () => new Date().toISOString();
@@ -261,7 +262,8 @@ export class ShareService {
       const sourceBuild = fileURLToPath(new URL('../../../../dist/share/', import.meta.url));
       const webAssetsDir = this.options.webAssetsDir ?? (existsSync(join(packaged, 'index.html')) ? packaged : sourceBuild);
       await mkdir(dirname(outputDir), { recursive: true, mode: 0o700 });
-      const built = await (this.options.build ?? buildSharePackage)({ ...this.deps, snapshot, sessionId, outputDir, webAssetsDir, appearanceFiles, allowOutsideRead, onProgress: progress, signal: options.signal });
+      const generatedImageHomes = codexGeneratedImageHomes(this.deps.nativeBackends.catalog?.profileSettings?.('codex')?.profiles ?? []);
+      const built = await (this.options.build ?? buildSharePackage)({ ...this.deps, snapshot, sessionId, outputDir, webAssetsDir, appearanceFiles, allowOutsideRead, generatedImageHomes, onProgress: progress, signal: options.signal });
       options.signal?.throwIfAborted();
       await writeFile(join(outputDir, 'share-manifest.json'), JSON.stringify({ format: 'riffet-share-v1', hash: built.hash, capturedAt: snapshot.capturedAt }), { mode: 0o600 });
       const draft: DraftRecord = { id: draftId, sessionId, title: snapshot.title, capturedAt: snapshot.capturedAt,

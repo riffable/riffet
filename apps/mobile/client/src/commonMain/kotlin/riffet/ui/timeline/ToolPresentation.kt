@@ -147,9 +147,10 @@ private fun int(element: JsonElement?): Int? = (element as? JsonPrimitive)?.intO
 /** One `content` image entry as a host draws it; hosts that read JSON themselves call this too. */
 fun toolImage(content: JsonObject, root: String?): ToolImage? {
     val path = text(content["path"])
+    val uri = text(content["uri"])
     val mimeType = text(content["mimeType"])
     val data = text(content["data"])
-    val dataUrl = if (data != null && mimeType?.startsWith("image/") == true) "data:$mimeType;base64,$data" else null
+    val dataUrl = uri ?: if (data != null && mimeType?.startsWith("image/") == true) "data:$mimeType;base64,$data" else null
     val omitted = (content["omitted"] as? JsonPrimitive)?.booleanOrNull == true
     if (path == null && dataUrl == null && !omitted) return null
     return ToolImage(

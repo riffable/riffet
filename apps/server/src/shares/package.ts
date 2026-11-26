@@ -109,6 +109,7 @@ export interface SharePackageOptions {
   /** Plugin font and background files the snapshot's appearance refers to, and the sharer's avatar, by package-relative name. */
   appearanceFiles?: Array<{ name: string; data: Buffer }>;
   allowOutsideRead?: boolean;
+  generatedImageHomes?: readonly string[];
   onProgress?: (progress: ShareDraftProgress) => void;
   signal?: AbortSignal;
 }
@@ -319,7 +320,7 @@ export async function buildSharePackage(options: SharePackageOptions): Promise<{
               // macOS's /var -> /private/var alias must not turn a project-local image into
               // an outside read. The workspace reader still checks the canonical target.
               if (path.isAbsolute(local) && isWithin(path.resolve(project.cwd), path.resolve(local))) local = path.relative(project.cwd, local);
-              const { data, mimeType } = await workspace.readPreviewImage(project, local, { allowOutside: options.allowOutsideRead === true });
+              const { data, mimeType } = await workspace.readPreviewImage(project, local, { allowOutside: options.allowOutsideRead === true, ...(options.generatedImageHomes ? { generatedImageHomes: options.generatedImageHomes } : {}) });
               resource = await freeze(data, { name: path.basename(local), mimeType });
             }
           }

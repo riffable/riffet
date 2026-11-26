@@ -524,4 +524,33 @@ describe('complete Codex share reads', () => {
     expect(recent.events.filter(event => event.type === 'tool_call')).toHaveLength(2);
     expect(recent.selectedTurnIds).toEqual(['assistant-only', 'tool-only']);
   });
+
+  it('maps rollout Extension image_gen.generation and web.search items while stripping oversized base64', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'riffet-share-rollout-')); dirs.push(root);
+    const day = join(root, 'sessions', '2026', '11', '26'); await mkdir(day, { recursive: true });
+    const id = '01a202a6-7a0c-7792-9d61-5c2757d98ea4';
+    const savedPath = join(root, 'generated_images', id, 'exec-img.png');
+    await writeFile(join(day, `rollout-${at}-${id}.jsonl`), [
+      line('session_meta', { id }),
+      line('event_msg', { type: 'task_started', turn_id: 'gen-turn' }),
+      line('event_msg', { type: 'item_completed', item: { type: 'UserMessage', id: 'u', content: [{ type: 'text', text: 'Draw a meme' }] } }),
+      line('event_msg', { type: 'item_completed', item: { type: 'Extension', kind: 'web.search', id: 'exec-ws', query: 'penguin meme' } }),
+      line('event_msg', { type: 'item_completed', item: { type: 'Extension', kind: 'image_gen.generation', id: 'exec-img', status: 'completed', revisedPrompt: 'Cartoon penguin at sea', savedPath, result: `iVBORw0KGgo=${'A'.repeat(60_000)}`, failure: null, generationId: 'g1' } }),
+      line('event_msg', { type: 'item_completed', item: { type: 'AgentMessage', id: 'a', text: 'Done.', phase: 'final_answer' } }),
+      '',
+    ].join('\n'));
+    const result = await readCodexShare({} as never, { id: 'session', nativeSessionId: id } as Session, root);
+    const search = result.events.find(event => event.type === 'tool_call' && event.data.toolCallId === 'exec-ws');
+    const genCall = result.events.find(event => event.type === 'tool_call' && event.data.toolCallId === 'exec-img');
+    const genResult = result.events.find(event => event.type === 'tool_call_update' && event.data.toolCallId === 'exec-img');
+    expect(search?.data).toMatchObject({ toolName: 'Web search', kind: 'fetch', title: 'penguin meme' });
+    expect(genCall?.data).toMatchObject({ toolName: 'Generate image', kind: 'image_generation', title: 'Cartoon penguin at sea', locations: [{ path: savedPath }] });
+    expect(genResult?.data).toMatchObject({
+      status: 'completed',
+      content: [
+        { type: 'content', content: { type: 'image', path: savedPath } },
+        { type: 'content', content: { type: 'text', text: 'Cartoon penguin at sea' } },
+      ],
+    });
+  });
 });

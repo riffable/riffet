@@ -41,6 +41,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 - reasoning 是旁白还是思考看内容，不看字段（`drafts.ts#reasoningChannel`）：OpenAI 的 summary 每段以粗体标题开头，算旁白平铺；兼容 Responses 的网关会把别家模型（DeepSeek）的原始思维链放进 `summary_text`，没有标题，按思考折叠。
 - App Server JSON-RPC：入口是 `runtime.ts#onNotification` 和 `runtime.ts#onServerRequest`。录制数据按 CLI 版本存放在 `fixtures/app-server/` 下，场景见 `recording.ts#CODEX_SCENARIOS`；TRAE CLI（`traex`）录制 answer 与 command，放在 `fixtures/traex/`，不含 hook，用 `pnpm record traex <场景>`。
 - rollout JSONL（`$CODEX_HOME/sessions/`）：用量、计划与分享读取，解析入口 `rollout-records.ts#rolloutRows`。录制数据在 `fixtures/rollout/`，只保留解析器读取的记录类型。
+- `imageGeneration`（rollout 中为 `Extension` + `kind: 'image_gen.generation'`，app-server 提升为顶层 `ThreadItem`）：按 `kind: 'image_generation'` 工具项投影，优先引用 `savedPath`，在 `raw` 与分享 rollout 中剥离超大内联 `result` base64；计入 `metering.ts` 的工具等待，完成通知补写 `title`/`rawInput`/`locations` 与实时项对齐。
 - 打断后，未完成的回答不在 CLI 的定稿副本里（`thread/turns/list` 只返回用户消息），会话日志里也就没有这段回答。
 - hook（PreToolUse / PostToolUse，只处理 Bash）：`observation.ts#CodexObservation`，记录命令改动的文件。hook 载荷与 App Server 消息录在同一份录制里；回放不投递它们（算改动需要真实的工作区），由 `recording.ts#hookProblems` 检查观察依赖的约定：每条命令有一对 hook，`tool_use_id` 是 item id，`session_id` 是线程，PreToolUse 先于 item 完成。
 - 录制会按 Riffet 的方式确认 hook 信任，这会写用户 `config.toml` 里与正在运行的 Riffet 同名的信任项；`scripts/record.ts` 运行前记下、结束后写回。

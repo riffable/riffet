@@ -208,6 +208,22 @@ export function isInteractionToolData(data: Record<string, unknown>): boolean {
 }
 
 /**
+ * Completed user-facing artifact tools (such as Codex `imageGeneration`) that produced a
+ * renderable image. They stand outside the folded process block once complete so the generated
+ * deliverable stays visible, without pulling earlier unphased commentary out of the process block.
+ */
+export function isArtifactToolData(data: Record<string, unknown>): boolean {
+  if (toolDataKind(data) !== 'image_generation') return false;
+  const status = str(data.status) ?? str(data.state);
+  if (status && status !== 'completed') return false;
+  return records(data.content).some(entry => {
+    const content = isRecord(entry.content) ? entry.content : entry;
+    return content.type === 'image'
+      && Boolean(str(content.path) || str(content.uri) || (str(content.data) && str(content.mimeType)?.startsWith('image/')));
+  });
+}
+
+/**
  * A tool call's title and the command it ran. `fallback` names a call that carries no title; the
  * title of a multi-line command is cut to its first logical line so the folded header never dumps
  * an inline script body onto one line.

@@ -208,4 +208,42 @@ describe('Codex tool item projection', () => {
     const [call] = project({ type: 'webSearch', id: 'search', status: 'inProgress', query: '', action: { type: 'search', queries: ['codex app server'] } });
     expect(call?.data).toMatchObject({ toolName: 'Web search', kind: 'fetch', title: 'codex app server', rawInput: { query: 'codex app server' } });
   });
+
+  it('projects imageGeneration started/completed/history items and strips oversized raw base64', () => {
+    const savedPath = '/home/user/.codex/generated_images/thread-1/exec-img.png';
+    const bigBase64 = `iVBORw0KGgo=${'A'.repeat(60_000)}`;
+    const initial = { type: 'imageGeneration', id: 'exec-img', status: 'inProgress', revisedPrompt: null, failure: null, generationId: null, result: '' };
+    const finished = {
+      type: 'imageGeneration', id: 'exec-img', status: 'completed',
+      revisedPrompt: 'First line prompt\nSecond line details',
+      savedPath,
+      inputImages: [{ path: '/tmp/ref.png', sha256: 'abc' }],
+      failure: null, generationId: 'gen-1', result: bigBase64,
+    };
+    const [started] = projectStartedTool(initial, 'session', 'thread', 'turn', undefined, createdAt);
+    const [completed] = projectCompletedTool(finished, 'session', 'thread', 'turn', undefined, createdAt);
+    const history = project(finished);
+    expect(started?.data).toMatchObject({ toolName: 'Generate image', kind: 'image_generation', title: 'Generate image', status: 'in_progress' });
+    expect(completed?.type).toBe('tool_call_update');
+    expect(completed?.data).toMatchObject({
+      toolCallId: 'exec-img', kind: 'image_generation', title: 'First line prompt', status: 'completed',
+      locations: [{ path: savedPath }],
+      content: [
+        { type: 'content', content: { type: 'image', path: savedPath } },
+        { type: 'content', content: { type: 'text', text: 'First line prompt\nSecond line details' } },
+      ],
+    });
+    expect((completed?.raw as Record<string, unknown> | undefined)?.result).toBeUndefined();
+    expect(history).toHaveLength(2);
+    expect(history[1]?.data).toMatchObject({ status: 'completed', content: completed?.data.content });
+
+    const [, failedResult] = project({
+      type: 'imageGeneration', id: 'exec-fail', status: 'completed', revisedPrompt: null,
+      failure: { type: 'usageLimitExceeded', limitId: 'img', resetsAt: null }, generationId: null, result: '',
+    });
+    expect(failedResult?.data).toMatchObject({
+      status: 'failed',
+      content: [{ type: 'content', content: { type: 'text', text: 'Image generation usage limit exceeded' } }],
+    });
+  });
 });

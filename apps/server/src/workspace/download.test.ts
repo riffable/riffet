@@ -280,4 +280,33 @@ describe('file downloads', () => {
     expect(archive.name).toBe('my-app.zip');
     expect(await text(archive.stream())).toContain('my-app/a.txt');
   });
+
+  it('serves Codex generated_images artifacts on the image route even with allowOutside disabled, while blocking other files', async () => {
+    const project = path.join(dir, 'project');
+    await mkdir(project);
+    const codexHome = path.join(dir, '.codex');
+    const png = Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+      0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    ]);
+    const generated = path.join(codexHome, 'generated_images', '01a202a6-7a0c-7792-9d61-5c2757d98ea4', 'exec-img.png');
+    await mkdir(path.dirname(generated), { recursive: true });
+    await writeFile(generated, png);
+    const authFile = path.join(codexHome, 'auth.json');
+    await writeFile(authFile, '{"token":"secret"}');
+    const nonArtifact = path.join(codexHome, 'other', 'leak.png');
+    await mkdir(path.dirname(nonArtifact), { recursive: true });
+    await writeFile(nonArtifact, png);
+    const escaped = path.join(codexHome, 'generated_images', '01a202a6-7a0c-7792-9d61-5c2757d98ea4', 'escape.png');
+    await symlink(nonArtifact, escaped);
+
+    const options = { allowOutside: false, generatedImageHomes: [codexHome] };
+    await expect(workspace.readPreviewImage(project, generated, options)).resolves.toMatchObject({ mimeType: 'image/png' });
+    await expect(workspace.readPreviewImage(project, generated, { allowOutside: false })).rejects.toMatchObject({ code: 'INVALID_PATH' });
+    await expect(workspace.readPreviewImage(project, nonArtifact, options)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+    await expect(workspace.readPreviewImage(project, escaped, options)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+    await expect(workspace.readPreviewImage(project, authFile, options)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+    await expect(workspace.preview(project, generated, { allowOutside: false })).rejects.toMatchObject({ code: 'INVALID_PATH' });
+  });
 });

@@ -24,6 +24,16 @@ interface ProjectedRollout { events: NativeWorkbenchEvent[]; modelInfo?: Record<
 function nativeItem(source: Record<string, unknown>): RpcItem {
   const item: RpcItem = { ...source, type: String(source.type).replace(/^[A-Z]/, value => value.toLowerCase()) };
   for (const [key, value] of Object.entries(source)) if (key !== 'type') item[key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())] = value;
+  // Rollout Extension items carry their provider kind (`web.search`, `image_gen.generation`),
+  // whereas app-server ThreadItems promote them to top-level item types.
+  if (item.type === 'extension') {
+    const extensionKind = str(item.kind);
+    if (extensionKind === 'web.search') item.type = 'webSearch';
+    else if (extensionKind === 'image_gen.generation') {
+      item.type = 'imageGeneration';
+      if (str(item.savedPath)) delete item.result;
+    }
+  }
   if (item.type === 'agentMessage') item.text = str(item.text) ?? contentText(item.content);
   if (item.type === 'enteredReviewMode') item.review = str(item.review) ?? str(item.userFacingHint);
   if (item.type === 'exitedReviewMode') item.review = str(item.review) ?? reviewOutputText(item.reviewOutput);
@@ -418,6 +428,12 @@ async function readSelectedRollout(stateHome: string, threadId: string, options:
       // These are the only event rows the shared projector consumes. Context is recreated below.
       if (row.type === 'event_msg') {
         if (!['task_started', 'item_completed', 'task_complete', 'turn_aborted', 'entered_review_mode', 'exited_review_mode'].includes(String(payload.type))) return;
+        // Strip multi-megabyte inline PNG base64 from image_gen rollout items once savedPath is known.
+        const completed = payload.type === 'item_completed' ? asRecord(payload.item) : undefined;
+        if (completed && completed.type === 'Extension' && completed.kind === 'image_gen.generation' && str(completed.savedPath ?? completed.saved_path) && typeof completed.result === 'string') {
+          const { result: _omitted, ...compactItem } = completed;
+          retained = { ...row, payload: { ...payload, item: compactItem } };
+        }
       } else if (row.type === 'response_item') {
         const entry = catalog.get(turnId);
         if (payload.type === 'message' && payload.role === 'assistant' && entry?.canonicalAgent) return;

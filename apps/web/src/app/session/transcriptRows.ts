@@ -2,7 +2,7 @@ import type { NativeJob, Run, RunMetrics, TurnOutlineV3 } from '@contracts';
 import { str } from '@/lib/utils';
 import { nativeEventIds, type TimelineItem } from './model';
 import { isUnreceivedSteer, withoutLinkedActivities } from '../../../../../packages/timeline/src/model';
-import { isInteractionToolData } from '../../../../../packages/timeline/src/toolTitle';
+import { isArtifactToolData, isInteractionToolData } from '../../../../../packages/timeline/src/toolTitle';
 import { analyzeTimelineTurns, runIdFromTurnKey } from './timelineTurns';
 import { laneTurnOf } from '@/sync/rows';
 import { activeToolStates, currentToolActivity } from './toolView';
@@ -35,6 +35,14 @@ const processKinds = new Set<TimelineItem['kind']>(['thought', 'tool', 'plan', '
 
 function isInteractionTool(item: TimelineItem | undefined): item is ToolItem {
   return item?.kind === 'tool' && isInteractionToolData(item.event.data);
+}
+
+function isArtifactTool(item: TimelineItem | undefined): item is ToolItem {
+  return item?.kind === 'tool' && isArtifactToolData(item.event.data);
+}
+
+function isStandaloneTool(item: TimelineItem | undefined): item is ToolItem {
+  return isInteractionTool(item) || isArtifactTool(item);
 }
 
 function backgroundTask(item: TimelineItem): boolean {
@@ -233,7 +241,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     else if (item.kind === 'assistant') assistantBeforeProcess[index] = laterProcessTurns.has(turnKeys[index]!);
   }
   const isProcessItem = (item: TimelineItem, index: number): boolean => {
-    if (isInteractionTool(item)) return false;
+    if (isStandaloneTool(item)) return false;
     if (processKinds.has(item.kind)) return true;
     if (item.kind !== 'assistant') return false;
     if (item.phase) return item.phase === 'commentary';
@@ -368,9 +376,9 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       for (let index = groupLastIndex + 1; index <= turnEnd; index += 1) {
         if (turnKeys[index] !== turnKey) continue;
         const later = timeline[index]!;
-        if (isInteractionTool(later) || (later.kind === 'user' && !isUnreceivedSteer(later)) || processItems[index]) hasLaterSegment = true;
+        if (isStandaloneTool(later) || (later.kind === 'user' && !isUnreceivedSteer(later)) || processItems[index]) hasLaterSegment = true;
         if ((later.kind === 'assistant' && !processItems[index])
-          || (isInteractionTool(later) && (() => {
+          || (isStandaloneTool(later) && (() => {
             const live = toolItemLiveness(later, { stale: !turnDisplayedRunning });
             return !live.active && !live.incomplete;
           })())) {
@@ -452,7 +460,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const finalAnswer = finalAnswerIndexByTurn.get(turnKey);
     // The turn's answer, or what would be it if the turn ended now.
     const carries = finalAnswer === undefined
-      ? (item.kind === 'assistant' || item.kind === 'status' || isInteractionTool(item)) && lastTurnEnd(index)
+      ? (item.kind === 'assistant' || item.kind === 'status' || isStandaloneTool(item)) && lastTurnEnd(index)
       : item.kind === 'assistant' && finalAnswer === index;
     // For a user row, `settled` records that same-turn output already follows it.
     const settled = item.kind === 'user'
@@ -462,7 +470,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     // A status row (run_cancelled) already says it stopped; an answer, prompt or decision tool left last says it here.
     const outlineStatus = turnStatusOf(turnKey);
     const outcomeUnknown = outlineStatus === 'outcome_unknown' || outcomeUnknownTurns.has(turnKey);
-    const stopped = !outcomeUnknown && (interruptedTurns.has(turnKey) || outlineStatus === 'interrupted' || outlineStatus === 'cancelled') && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user' || isInteractionTool(item));
+    const stopped = !outcomeUnknown && (interruptedTurns.has(turnKey) || outlineStatus === 'interrupted' || outlineStatus === 'cancelled') && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user' || isStandaloneTool(item));
     add({ type: 'item', key: item.key, item, gap: rowGap(previousItem, item, previousRowFooter), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: carries && settled ? metricsForTurn(turnKey) : undefined, runId: carries && settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
   }
   flushGroup();

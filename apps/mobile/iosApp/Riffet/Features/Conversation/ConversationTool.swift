@@ -348,6 +348,7 @@ struct ConversationToolHeader: View {
         case "think": return "brain"
         case "fetch": return "globe"
         case "switch_mode": return "arrow.2.squarepath"
+        case "image": return "photo"
         case "agent": return "person.crop.circle"
         case "message": return "paperplane"
         case "question": return "questionmark.bubble"

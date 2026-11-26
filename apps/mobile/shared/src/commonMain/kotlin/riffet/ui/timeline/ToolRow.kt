@@ -548,6 +548,7 @@ internal fun toolIcon(kind: String): ImageVector = when (kind) {
     "think" -> RiffetIcons.Brain
     "fetch" -> RiffetIcons.Globe
     "switch_mode" -> RiffetIcons.Repeat
+    "image" -> RiffetIcons.Image
     "agent" -> RiffetIcons.Bot
     "message" -> RiffetIcons.Send
     "question" -> RiffetIcons.MessageQuestion
