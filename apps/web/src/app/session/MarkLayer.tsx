@@ -77,11 +77,17 @@ function useBesideRange(scrollRef: RefObject<HTMLElement | null>, host: HTMLElem
     place();
     const observer = new MutationObserver(schedule);
     observer.observe(scroller, { childList: true, subtree: true, characterData: true });
+    // Sidebar toggles and side panels resize the reading column without firing window.resize.
+    const resize = new ResizeObserver(schedule);
+    resize.observe(scroller);
+    if (host !== scroller) resize.observe(host);
+    resize.observe(element);
     scroller.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
+      resize.disconnect();
       scroller.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };

@@ -787,9 +787,9 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
     return () => cancelAnimationFrame(frame);
   }, [open, providerColumn, listId, side, loading, previewIsActive, footerCount]);
 
-  // A mobile settings dialog isolates scrolling; the portalled model list needs its own scope.
+  // On mobile the sheet needs its own scroll lock; on desktop let Popover inherit modal state when inside a Dialog.
   const picker = (
-    <Popover modal={isMobile} open={open} onOpenChange={(next) => { if (next) startOpen(); setOpen(next); }}>
+    <Popover modal={isMobile || undefined} open={open} onOpenChange={(next) => { if (next) startOpen(); setOpen(next); }}>
       <PopoverTrigger
         data-model-picker
         aria-label={retryOnly ? t`重新加载模型列表` : t({ message: '选择模型', context: 'session-model-picker-label' })}
@@ -826,8 +826,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           event.preventDefault();
           contentRef.current?.focus({ preventScroll: true });
         }}
-        style={lockedHeight ? (side === 'bottom' ? { minHeight: `min(${lockedHeight}px, 64dvh)` } : { height: lockedHeight }) : undefined}
-        className={cn('flex max-h-[min(64dvh,420px)] flex-col', agentColumn ? providerTier ? 'w-[min(660px,calc(100vw-24px))]' : 'w-[min(500px,calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
+        style={lockedHeight ? (side === 'bottom' ? { minHeight: `min(${lockedHeight}px, 64dvh, var(--radix-popover-content-available-height, 64dvh))` } : { height: `min(${lockedHeight}px, var(--radix-popover-content-available-height, ${lockedHeight}px))` }) : undefined}
+        className={cn('flex max-h-[min(64dvh,420px,var(--radix-popover-content-available-height,420px))] flex-col', agentColumn ? providerTier ? 'w-[min(660px,calc(100vw-24px))]' : 'w-[min(500px,calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
       >
         {sourceLabel && (
           <div className="flex shrink-0 items-center gap-1.5 edge-b bg-subtle/40 px-3 py-1.5 text-2xs text-fg-3">

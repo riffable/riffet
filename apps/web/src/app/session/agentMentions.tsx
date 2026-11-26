@@ -219,12 +219,20 @@ export function AgentMentionPicker({ reference, source, open, onOpenChange, onCh
 
 interface Box { top: number; left: number; width: number; height: number; style: Record<string, string> }
 
+const MIRROR_STYLE_PROPS = ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize', 'textIndent'] as const;
+
 /** The textarea's box and the type that lays out its text, which the layer beneath it copies. */
 function measure(textarea: HTMLTextAreaElement): Box {
   const computed = getComputedStyle(textarea);
   const style: Record<string, string> = {};
-  for (const name of ['paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'tabSize', 'textIndent'] as const) style[name] = computed[name];
+  for (const name of MIRROR_STYLE_PROPS) style[name] = computed[name];
   return { top: textarea.offsetTop, left: textarea.offsetLeft, width: textarea.clientWidth, height: textarea.clientHeight, style };
+}
+
+function sameBox(a: Box | undefined, b: Box): boolean {
+  if (!a || a.top !== b.top || a.left !== b.left || a.width !== b.width || a.height !== b.height) return false;
+  for (const name of MIRROR_STYLE_PROPS) if (a.style[name] !== b.style[name]) return false;
+  return true;
 }
 
 /**
@@ -271,6 +279,7 @@ export function ComposerMentionLayer({ textareaRef, text, references, slashRange
     return merged;
   }, [text, inlineRefs, slashRanges]);
   const [box, setBox] = useState<Box>();
+  const [fontVersion, setFontVersion] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number; height: number }>();
@@ -278,13 +287,34 @@ export function ComposerMentionLayer({ textareaRef, text, references, slashRange
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea || !hasMarks) { setBox(undefined); return; }
-    const update = () => setBox(measure(textarea));
+    const update = () => {
+      const next = measure(textarea);
+      setBox(prev => (sameBox(prev, next) ? prev : next));
+    };
     const scrolled = () => setScrollTop(textarea.scrollTop);
     update(); scrolled();
     const observer = new ResizeObserver(update);
     observer.observe(textarea);
+    // Display text-scale and appearance font overrides (`--text-scale`, `--font-sans` on root) can
+    // alter text metrics without changing a min-height-clamped single-line textarea's box height.
+    const root = textarea.ownerDocument.documentElement;
+    const styleObserver = new MutationObserver(update);
+    styleObserver.observe(root, { attributes: true, attributeFilter: ['style', 'class'] });
+    const fonts = textarea.ownerDocument.fonts;
+    let disposed = false;
+    const onFonts = () => { if (!disposed) { update(); setFontVersion(version => version + 1); } };
+    void fonts?.ready.then(onFonts);
+    fonts?.addEventListener('loadingdone', onFonts);
+    fonts?.addEventListener('loadingerror', onFonts);
     textarea.addEventListener('scroll', scrolled, { passive: true });
-    return () => { observer.disconnect(); textarea.removeEventListener('scroll', scrolled); };
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      styleObserver.disconnect();
+      fonts?.removeEventListener('loadingdone', onFonts);
+      fonts?.removeEventListener('loadingerror', onFonts);
+      textarea.removeEventListener('scroll', scrolled);
+    };
   }, [textareaRef, hasMarks]);
   // Scrolled with the textarea, so a mark stays under its words.
   useLayoutEffect(() => { if (layer) layer.scrollTop = scrollTop; }, [layer, scrollTop, text, box]);
@@ -306,7 +336,7 @@ export function ComposerMentionLayer({ textareaRef, text, references, slashRange
     }
     const next = { top: box.top + mark.offsetTop - scrollTop, left: box.left + mark.offsetLeft, width: mark.offsetWidth, height: mark.offsetHeight };
     setAnchor(prev => (prev && prev.top === next.top && prev.left === next.left && prev.width === next.width && prev.height === next.height ? prev : next));
-  }, [openAgentIndex, layer, box, scrollTop, text]);
+  }, [openAgentIndex, layer, box, scrollTop, text, fontVersion]);
   if (!box || !hasMarks) return null;
   const parts: ReactNode[] = [];
   let cursor = 0;

@@ -663,6 +663,37 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   </> : undefined;
   // Its last contents stay while it folds away.
   const heldStrip = useHeld(stripContent);
+  const triggerMenu = menuOpen && trigger ? (
+    <ComposerTriggerMenu
+      trigger={trigger}
+      fullscreen={fullscreen}
+      isMobile={isMobile}
+      hero={hero}
+      browsing={browsing}
+      browsingName={browsingName}
+      sessionMentions={sessionMentions}
+      showSearching={showSearching}
+      searching={searching}
+      menuListRef={menuListRef}
+      menuId={menuId}
+      optionId={optionId}
+      slashGroups={slashGroups}
+      slashItems={slashItems}
+      slashQuery={slashQuery}
+      unknownSlashCommand={unknownSlashCommand}
+      unknownCommandHint={props.unknownCommandHint}
+      highlight={highlight}
+      setHighlight={setHighlight}
+      choose={choose}
+      browseInto={browseInto}
+      files={files}
+      agentRows={agentRows}
+      sessionFiles={sessionFiles}
+      projectRows={projectRows}
+      references={references}
+      referenceSessions={props.referenceSessions}
+    />
+  ) : null;
 
   return (
     <div className={cn('relative', fullscreen && 'flex min-h-0 flex-1 flex-col')} onPointerDown={holdComposerFocus} onMouseDown={holdComposerFocus}>
@@ -679,37 +710,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           or the attachment rail past the panel's edge.
         */}
         <div className={cn('relative', fullscreen && 'flex min-h-0 flex-1 flex-col')}>
-          {menuOpen && trigger && (
-            <ComposerTriggerMenu
-              trigger={trigger}
-              fullscreen={fullscreen}
-              isMobile={isMobile}
-              hero={hero}
-              browsing={browsing}
-              browsingName={browsingName}
-              sessionMentions={sessionMentions}
-              showSearching={showSearching}
-              searching={searching}
-              menuListRef={menuListRef}
-              menuId={menuId}
-              optionId={optionId}
-              slashGroups={slashGroups}
-              slashItems={slashItems}
-              slashQuery={slashQuery}
-              unknownSlashCommand={unknownSlashCommand}
-              unknownCommandHint={props.unknownCommandHint}
-              highlight={highlight}
-              setHighlight={setHighlight}
-              choose={choose}
-              browseInto={browseInto}
-              files={files}
-              agentRows={agentRows}
-              sessionFiles={sessionFiles}
-              projectRows={projectRows}
-              references={references}
-              referenceSessions={props.referenceSessions}
-            />
-          )}
+          {!fullscreen && triggerMenu}
         {/* Notices above the card come and go with the session's state; they grow in rather than
             pushing the card and the transcript's bottom edge in a single frame. */}
         <Collapse open={Boolean(props.feedback)} className={cn(fullscreen && 'max-h-[35%] min-h-0 shrink-0')}>
@@ -749,72 +750,77 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           {/* Slides like the textarea and the dock above, so a draft handed back grows the stack in one motion. */}
           <Collapse open={Boolean(stripContent)} className={cn(compact && 'hidden')}><div inert={!stripContent}>{heldStrip}</div></Collapse>
 
-          <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} slashRanges={invokedSlashRanges} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />
-          <textarea
-            ref={textareaRef}
-            rows={1}
-            value={text}
-            disabled={disabled}
-            readOnly={dictating}
-            data-composer-input
-            aria-label={t`输入消息`}
-            aria-describedby={draftAtRisk ? draftWarningId : undefined}
-            role="combobox"
-            aria-autocomplete="list"
-            aria-haspopup="listbox"
-            aria-expanded={menuOpen}
-            aria-controls={menuOpen ? menuId : undefined}
-            aria-activedescendant={menuOpen && highlight < menuLength ? optionId(highlight) : undefined}
-            placeholder={composerPlaceholder}
-            className={cn('relative w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] min-w-0 flex-1 py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1', voice && draftEmpty && 'hidden')}
-            onCompositionStart={atomicMentions.onCompositionStart}
-            onCompositionEnd={atomicMentions.onCompositionEnd}
-            onPointerDown={atomicMentions.onPointerDown}
-            onChange={(event) => { updateText(event.target.value); dropUnwrittenMentions(event.target.value); syncTrigger(event.target.value, event.target.selectionStart); }}
-            onClick={atomicMentions.onClick}
-            onSelect={atomicMentions.onSelect}
-            onFocus={() => { clearBlurTimer(); if (voice && !dictating) setVoiceMode(false, false); }}
-            onBlur={() => { atomicMentions.onBlurReset(); scheduleBlurClose(); }}
-            onPaste={(event) => {
-              const pasted = clipboardFiles(event.clipboardData);
-              if (!pasted.length || disabled || props.attachmentsAllowed === false) return;
-              // Native text insertion preserves the selection and undo history for mixed pastes.
-              if (!event.clipboardData.getData('text/plain')) event.preventDefault();
-              void ingestFiles(pasted);
-            }}
-            onKeyDown={(event) => {
-              atomicMentions.onKeyDownStart();
-              handleComposerKeyDown(event, {
-              dictating,
-              dictationPhase: dictation.view.phase,
-              cancelDictation: dictation.cancel,
-              finishDictation: dictation.finish,
-              browsing,
-              trigger,
-              browseInto,
-              projectRowsCount: projectRows.length,
-              highlight,
-              setHighlight,
-              filesCount: files.length,
-              agentRowsCount: agentRows.length,
-              sessionFilesCount: sessionFiles.length,
-              menuLength,
-              choose,
-              agentMentions: props.agentMentions,
-              referencesRef,
-              setSelectionBias: atomicMentions.setSelectionBias,
-              updateText,
-              dropUnwrittenMentions,
-              setMentionMenu,
-              menuOpen,
-              dismissTrigger,
-              textRef,
-              isMobile,
-              keyBehavior,
-              submit: () => { void submit(); },
-            });
-            }}
-          />
+          {/* Share a positioning parent with the textarea so opening/closing the attachment rail above
+              moves the inline mention highlight layer in lockstep instead of stranding it at top: 0. */}
+          <div className={cn('relative flex flex-col', compact && 'min-w-0 flex-1', fullscreen && 'min-h-0 flex-1', voice && draftEmpty && 'hidden')}>
+            {fullscreen && triggerMenu}
+            <ComposerMentionLayer textareaRef={textareaRef} text={text} references={visibleReferences} slashRanges={invokedSlashRanges} source={props.agentMentions} openIndex={mentionMenu} onOpenIndex={setMentionMenu} onChangeReference={changeReference} />
+            <textarea
+              ref={textareaRef}
+              rows={1}
+              value={text}
+              disabled={disabled}
+              readOnly={dictating}
+              data-composer-input
+              aria-label={t`输入消息`}
+              aria-describedby={draftAtRisk ? draftWarningId : undefined}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-haspopup="listbox"
+              aria-expanded={menuOpen}
+              aria-controls={menuOpen ? menuId : undefined}
+              aria-activedescendant={menuOpen && highlight < menuLength ? optionId(highlight) : undefined}
+              placeholder={composerPlaceholder}
+              className={cn('relative w-full resize-none bg-transparent px-4 text-base leading-6 text-fg outline-none placeholder:text-fg-4', hero ? 'min-h-[76px] pt-4 pb-1' : compact ? 'min-h-[44px] py-2.5' : 'min-h-[52px] pt-3.5 pb-1', fullscreen && 'min-h-0 flex-1 overflow-y-auto pt-3 pb-1')}
+              onCompositionStart={atomicMentions.onCompositionStart}
+              onCompositionEnd={atomicMentions.onCompositionEnd}
+              onPointerDown={atomicMentions.onPointerDown}
+              onChange={(event) => { updateText(event.target.value); dropUnwrittenMentions(event.target.value); syncTrigger(event.target.value, event.target.selectionStart); }}
+              onClick={atomicMentions.onClick}
+              onSelect={atomicMentions.onSelect}
+              onFocus={() => { clearBlurTimer(); if (voice && !dictating) setVoiceMode(false, false); }}
+              onBlur={() => { atomicMentions.onBlurReset(); scheduleBlurClose(); }}
+              onPaste={(event) => {
+                const pasted = clipboardFiles(event.clipboardData);
+                if (!pasted.length || disabled || props.attachmentsAllowed === false) return;
+                // Native text insertion preserves the selection and undo history for mixed pastes.
+                if (!event.clipboardData.getData('text/plain')) event.preventDefault();
+                void ingestFiles(pasted);
+              }}
+              onKeyDown={(event) => {
+                atomicMentions.onKeyDownStart();
+                handleComposerKeyDown(event, {
+                dictating,
+                dictationPhase: dictation.view.phase,
+                cancelDictation: dictation.cancel,
+                finishDictation: dictation.finish,
+                browsing,
+                trigger,
+                browseInto,
+                projectRowsCount: projectRows.length,
+                highlight,
+                setHighlight,
+                filesCount: files.length,
+                agentRowsCount: agentRows.length,
+                sessionFilesCount: sessionFiles.length,
+                menuLength,
+                choose,
+                agentMentions: props.agentMentions,
+                referencesRef,
+                setSelectionBias: atomicMentions.setSelectionBias,
+                updateText,
+                dropUnwrittenMentions,
+                setMentionMenu,
+                menuOpen,
+                dismissTrigger,
+                textRef,
+                isMobile,
+                keyBehavior,
+                submit: () => { void submit(); },
+              });
+              }}
+            />
+          </div>
 
           {/* An empty draft in voice mode: the bar stands where the text would be. */}
           {voice && draftEmpty && <div className="pt-2 max-md:pl-4 max-md:pr-3 md:px-2">{holdBar(true, hero ? 'min-h-[68px]' : undefined)}</div>}

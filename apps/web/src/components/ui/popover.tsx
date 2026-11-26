@@ -3,12 +3,16 @@ import { Popover as Primitive } from 'radix-ui';
 import { cn } from '@/lib/utils';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { OverlayOpenContext, OverlayScopeContext, useClosingSnapshot, useOverlayState } from '@/lib/overlay-navigation';
+import { ModalDialogContext } from './dialog';
 import { menuSurface } from './dropdown-menu';
 import { keepTypingFocus, useTypingFocusReturn } from './focus-return';
 
-export function Popover({ open, defaultOpen, onOpenChange, ...props }: React.ComponentProps<typeof Primitive.Root>) {
+export function Popover({ open, defaultOpen, onOpenChange, modal, ...props }: React.ComponentProps<typeof Primitive.Root>) {
   const { scope, ...state } = useOverlayState({ open, defaultOpen, onOpenChange });
-  return <OverlayScopeContext.Provider value={scope}><OverlayOpenContext.Provider value={state.open}><Primitive.Root {...props} {...state} /></OverlayOpenContext.Provider></OverlayScopeContext.Provider>;
+  // Inside a modal Dialog, RemoveScroll eats wheel/touch events on portalled non-modal popovers;
+  // promoting to modal gives the popover its own RemoveScroll layer above the dialog's.
+  const insideModalDialog = React.useContext(ModalDialogContext);
+  return <OverlayScopeContext.Provider value={scope}><OverlayOpenContext.Provider value={state.open}><Primitive.Root modal={modal ?? insideModalDialog} {...props} {...state} /></OverlayOpenContext.Provider></OverlayScopeContext.Provider>;
 }
 export function PopoverTrigger({ onMouseDown, ...props }: React.ComponentProps<typeof Primitive.Trigger>) {
   return <Primitive.Trigger onMouseDown={(event) => { onMouseDown?.(event); keepTypingFocus(event); }} {...props} />;
@@ -29,7 +33,7 @@ export function PopoverContent({ className, children, sideOffset = 6, align = 's
     <Primitive.Portal>
       <Primitive.Content
         ref={contentRef} sideOffset={sideOffset} align={align} collisionPadding={8} hideWhenDetached={hideWhenDetached}
-        className={cn(menuSurface, 'ui-popover-content p-0', className, 'max-w-[calc(100vw-16px)]', mobileSheet && 'ui-floating-sheet')}
+        className={cn(menuSurface, 'ui-popover-content max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-contain p-0', className, 'max-w-[calc(100vw-16px)]', mobileSheet && 'ui-floating-sheet')}
         onOpenAutoFocus={(event) => {
           onOpenAutoFocus?.(event);
           if (!event.defaultPrevented && window.matchMedia(MOBILE_LAYOUT_QUERY).matches) {

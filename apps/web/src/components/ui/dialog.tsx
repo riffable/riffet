@@ -24,9 +24,21 @@ function isTextField(element: HTMLElement): boolean {
   return element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement || element instanceof HTMLSelectElement || element.getAttribute('contenteditable') === 'true';
 }
 
-export function Dialog({ open, defaultOpen, onOpenChange, onBack, ...props }: React.ComponentProps<typeof Primitive.Root> & { onBack?: () => void }) {
+/** Whether a descendant sits inside a mounted modal `DialogContent`, whose `RemoveScroll` blocks scrolling in portalled non-modal popovers. */
+export const ModalDialogContext = React.createContext(false);
+const DialogModalPropContext = React.createContext(true);
+
+export function Dialog({ open, defaultOpen, onOpenChange, onBack, modal = true, ...props }: React.ComponentProps<typeof Primitive.Root> & { onBack?: () => void }) {
   const { scope, ...state } = useOverlayState({ open, defaultOpen, onOpenChange, onBack });
-  return <OverlayScopeContext.Provider value={scope}><OverlayOpenContext.Provider value={state.open}><Primitive.Root {...props} {...state} /></OverlayOpenContext.Provider></OverlayScopeContext.Provider>;
+  return (
+    <OverlayScopeContext.Provider value={scope}>
+      <OverlayOpenContext.Provider value={state.open}>
+        <DialogModalPropContext.Provider value={modal}>
+          <Primitive.Root modal={modal} {...props} {...state} />
+        </DialogModalPropContext.Provider>
+      </OverlayOpenContext.Provider>
+    </OverlayScopeContext.Provider>
+  );
 }
 /** Leaves the caret where it is on a pointer press, so `previousFocus` below is the field being typed in. */
 export function DialogTrigger({ onMouseDown, ...props }: React.ComponentProps<typeof Primitive.Trigger>) {
@@ -50,6 +62,8 @@ export type DialogSize = keyof typeof SIZES;
 export function DialogContent({ className, overlayClassName, children, size = 'form', hideClose, mobileFullscreen, mobileSheet, onOpenAutoFocus, onCloseAutoFocus, ref, ...props }: React.ComponentProps<typeof Primitive.Content> & { overlayClassName?: string; size?: DialogSize; hideClose?: boolean; mobileFullscreen?: boolean; mobileSheet?: boolean }) {
   const { t } = useLingui();
   const shown = useClosingSnapshot(children);
+  const parentModal = React.useContext(ModalDialogContext);
+  const dialogModal = React.useContext(DialogModalPropContext);
   const contentRef = React.useRef<HTMLDivElement>(null);
   const previousFocus = React.useRef<HTMLElement | null>(null);
   // The portal mounts after this wrapper's layout effects. Forward the actual DOM attachment,
@@ -121,7 +135,9 @@ export function DialogContent({ className, overlayClassName, children, size = 'f
         }}
         {...props}
       >
-        {shown}
+        <ModalDialogContext.Provider value={parentModal || dialogModal}>
+          {shown}
+        </ModalDialogContext.Provider>
         {!hideClose && (
           <Primitive.Close className="ui-dialog-close absolute right-2 top-2 grid size-11 place-items-center rounded-lg text-fg-3 transition-colors hover:bg-hover hover:text-fg md:right-3 md:top-3 md:size-7" aria-label={t`关闭`}>
             <IconX className="size-4" />

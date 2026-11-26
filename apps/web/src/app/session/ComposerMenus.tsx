@@ -73,7 +73,7 @@ export function ComposerTriggerMenu({
   const memberRows = agentRows.filter(item => Boolean(item.member));
   const backendRows = agentRows.filter(item => !item.member);
   return (
-    <div className={cn('inset-x-0 z-(--z-dock) overflow-hidden rounded-xl bg-popover shadow-pop animate-in fade-in-0 duration-[var(--duration-fast)] ease-[var(--ease-decelerate)]', fullscreen ? 'absolute bottom-14 mx-3 mb-2' : isMobile ? 'relative mb-2' : hero ? 'absolute top-full mt-2 slide-in-from-top-1' : 'absolute bottom-full mb-2 slide-in-from-bottom-1')}>
+    <div className={cn('inset-x-0 z-(--z-dock) overflow-hidden rounded-xl bg-popover shadow-pop animate-in fade-in-0 duration-[var(--duration-fast)] ease-[var(--ease-decelerate)]', fullscreen ? 'absolute bottom-2 mx-3' : isMobile ? 'relative mb-2' : hero ? 'absolute top-full mt-2 slide-in-from-top-1' : 'absolute bottom-full mb-2 slide-in-from-bottom-1')}>
       <div className="flex h-8 items-center gap-1.5 edge-b px-3 text-xs text-fg-3">
         {trigger.type === 'slash'
           ? <><IconSlash className="size-3" />{slashGroups.length > 1 ? t`命令与 Skills` : slashGroups[0]?.kind === 'skill' ? t`Skills` : t({ message: '命令', context: 'session-commands-label' })}</>
