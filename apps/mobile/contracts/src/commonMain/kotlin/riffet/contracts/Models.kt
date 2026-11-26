@@ -373,6 +373,8 @@ data class AgentMention(
     val backendId: String,
     val backendProfileId: String? = null,
     val model: String? = null,
+    val memberId: String? = null,
+    val label: String? = null,
 )
 
 @Serializable

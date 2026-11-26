@@ -94,7 +94,7 @@ const sessionMax = {
   creationFingerprint: 'fp-create', lastActivityAt: at(8), seenActivityAt: at(7), activeSince: at(7), pinnedAt: at(6), pinRank: 1,
   origin: { kind: 'fork', sessionId: 'session-0', runId: 'run-0', groupId: 'group-1', templateId: 'template-1', scheduleId: 'schedule-1' },
   handedOffTo: 'session-2', toolGroups: ['riffet.core', 'device:phone-1'], extensionsOff: ['mcp:docs', 'skill:review'], terminalHold: { since: at(8), pid: 4242 },
-  goal: { objective: '让解析器测试全部通过', status: 'budget_limited', reason: '还有两个用例失败', tokensUsed: 120000, tokenBudget: 100000, seconds: 900, updatedAt: at(8) }, workItemId: 'work-item-1', createdAt: at(0), updatedAt: at(9),
+  goal: { objective: '让解析器测试全部通过', status: 'budget_limited', reason: '还有两个用例失败', tokensUsed: 120000, tokenBudget: 100000, seconds: 900, updatedAt: at(8) }, workItemId: 'work-item-1', agentMemberId: 'default', createdAt: at(0), updatedAt: at(9),
   terminalAppearance: { foreground: '#202020', background: '#fafafa' },
 } satisfies Required<Session>;
 const sessionMin = { id: 'session-1', projectId: 'project-1', kind: 'native', title: '', tags: [], state: 'idle', mode: 'default', createdAt: at(0), updatedAt: at(0) } satisfies Min<Session>;
