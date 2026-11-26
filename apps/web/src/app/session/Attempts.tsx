@@ -18,7 +18,8 @@ import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
 import { MergeDialog } from '../panels/PublishSection';
 import { Composer } from './Composer';
-import { catalogKey, LaunchTargetBar, launchTargetOf, useBackendCatalogs } from './LaunchTargetBar';
+import { LaunchTargetBar, launchTargetOf } from './LaunchTargetBar';
+import { useAgentModels } from './agentModels';
 import { ASSEMBLY_MS, useHeld, useLingering } from './sessionLayout';
 import type { SlashCommand } from './model';
 import { boundedCache } from '@/lib/bounded-cache';
@@ -99,8 +100,20 @@ export function AttemptsDialog({ open, onOpenChange, projectId, directory, backe
     }
   }
   const duplicate = rows.length !== new Set(rows.map(rowKey)).size;
-  const { catalogs, pending, refresh } = useBackendCatalogs(projectId, rows);
-  const modelsOf = (row: { backendId?: NativeBackendId; profileId?: string }) => (row.backendId ? catalogs.get(catalogKey(projectId, row.backendId, row.profileId))?.models ?? [] : []);
+  const agentModels = useAgentModels(projectId);
+  const defaultProfileOf = (id: NativeBackendId) => {
+    const profiles = available.find((entry) => entry.backendId === id)?.profiles ?? [];
+    return profiles.find((profile) => profile.isDefault)?.id ?? profiles[0]?.id;
+  };
+  const { load: loadAgentModels } = agentModels;
+  const rowCatalogTargets = rows.map((row) => `${row.backendId}:${row.profileId ?? defaultProfileOf(row.backendId) ?? ''}`).join('|');
+  useEffect(() => {
+    if (!open) return;
+    loadAgentModels(backendId, defaultProfileOf(backendId));
+    for (const row of rows) loadAgentModels(row.backendId, row.profileId ?? defaultProfileOf(row.backendId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, backendId, rowCatalogTargets, loadAgentModels]);
+  const modelsOf = (row: { backendId?: NativeBackendId; profileId?: string }) => (row.backendId ? agentModels.read(row.backendId, row.profileId ?? defaultProfileOf(row.backendId)) ?? [] : []);
 
   const presetMulti = () => setRows(available.slice(0, 3).map((entry) => ({ backendId: entry.backendId })));
   const presetModels = () => {
@@ -170,7 +183,7 @@ export function AttemptsDialog({ open, onOpenChange, projectId, directory, backe
               const set = (patch: Partial<TargetRow>) => setRows(rows.map((item, i) => (i === index ? { ...item, ...patch } : item)));
               return (
                 <div key={index} className="flex flex-wrap items-center gap-x-1 gap-y-1 rounded-xl bg-muted px-1.5 py-1.5">
-                  <LaunchTargetBar value={row} onChange={set} backends={available} catalogs={catalogs} pending={pending} projectId={projectId} disabled={busy} refreshCatalog={(backendId, profileId) => refresh({ backendId, profileId })} />
+                  <LaunchTargetBar value={row} onChange={set} backends={available} projectId={projectId} disabled={busy} />
                   <span className="flex-1" />
                   {rows.length > 2 && (
                     <Button size="xs" variant="quiet" aria-label={t`移除`} onClick={() => setRows(rows.filter((_, i) => i !== index))}><IconX /></Button>
@@ -358,7 +371,6 @@ export function AttemptGroupPage({ groupId, findSession, onOpenSession, onAdopte
   }, [groupId]);
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => { void api.backends().then(setBackends).catch(() => undefined); }, []);
-  const { catalogs: addCatalogs, pending: addPending, refresh: refreshAddCatalog } = useBackendCatalogs(data?.group.projectId ?? '', addTarget.backendId ? [{ backendId: addTarget.backendId, profileId: addTarget.backendProfileId }] : []);
 
   const group = data?.group;
   const attempts = useMemo(() => (group && data ? aliveAttempts(group, data.attempts) : []), [group, data]);
@@ -422,7 +434,7 @@ export function AttemptGroupPage({ groupId, findSession, onOpenSession, onAdopte
                 mode: 'mode' in patch ? patch.mode : addTarget.mode,
                 approval: 'approval' in patch ? patch.approval : addTarget.approval,
               })}
-              backends={backends.filter((entry) => entry.available)} catalogs={addCatalogs} pending={addPending} projectId={group.projectId} disabled={busy} refreshCatalog={(backendId, profileId) => refreshAddCatalog({ backendId, profileId })}
+              backends={backends.filter((entry) => entry.available)} projectId={group.projectId} disabled={busy}
             />
             <span className="flex-1" />
             <Button size="sm" variant="primary" disabled={busy || !addTarget.backendId} onClick={() => void act(async () => { await api.addAttempt(group.id, addTarget); setAdding(false); }, t`无法追加`)}><Trans>开始</Trans></Button>

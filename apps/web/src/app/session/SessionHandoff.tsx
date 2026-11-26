@@ -12,7 +12,7 @@ import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
 import { useLists } from '../state/stores';
 import { AutomationEditor, type AutomationEditorState } from '../automations/AutomationEditor';
-import { LaunchTargetBar, launchTargetOf, useBackendCatalogs, type LaunchTargetShape } from './LaunchTargetBar';
+import { LaunchTargetBar, launchTargetOf, type LaunchTargetShape } from './LaunchTargetBar';
 
 /**
  * Backends as cards rather than a dropdown: these launches are about *which* agent, so every choice
@@ -63,7 +63,6 @@ export function HandoffDialog({ open, onOpenChange, session, backends, working, 
   const label = useBackendLabel();
   const source = sessionBackend(session);
   const [target, setTarget] = useState<LaunchTargetShape>({});
-  const { catalogs, pending, refresh } = useBackendCatalogs(session.projectId, [target]);
   const [goal, setGoal] = useState('');
   /** Kept when the target or goal changes: the text does not depend on the target, and 重新生成 applies a new goal. */
   const [draft, setDraft] = useState<HandoffDraft>();
@@ -155,7 +154,7 @@ export function HandoffDialog({ open, onOpenChange, session, backends, working, 
           <BackendCards backends={backends} selected={target.backendId ? [target.backendId] : []} onToggle={(backendId) => setTarget({ backendId })} />
           {target.backendId && (
             <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-              <LaunchTargetBar showBackend={false} showMode={false} value={target} onChange={(patch) => setTarget((current) => ({ ...current, ...patch }))} backends={backends} catalogs={catalogs} pending={pending} projectId={session.projectId} disabled={busy || generating} refreshCatalog={(backendId, profileId) => refresh({ backendId, profileId })} />
+              <LaunchTargetBar showBackend={false} showMode={false} value={target} onChange={(patch) => setTarget((current) => ({ ...current, ...patch }))} backends={backends} projectId={session.projectId} disabled={busy || generating} />
             </div>
           )}
           <Field label={t`后续任务`}>

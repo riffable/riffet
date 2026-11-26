@@ -2225,11 +2225,6 @@ msgstr "Options: {0}"
 msgid "部分估算的 token 数"
 msgstr "Partially estimated token count"
 
-#: src/app/session/ProfilePicker.tsx
-msgctxt "session-profile-select"
-msgid "配置"
-msgstr "Profile"
-
 #: src/app/session/Attempts.tsx
 msgid "采用"
 msgstr "Adopt"
@@ -2396,9 +2391,6 @@ msgstr "Default"
 #: src/app/session/agentModelChoice.tsx
 #: src/app/session/Composer.tsx
 #: src/app/session/LaunchTargetBar.tsx
+#: src/app/session/ModelPicker.tsx
 msgid "默认模型"
 msgstr "Default model"
-
-#: src/app/session/ProfilePicker.tsx
-msgid "默认配置"
-msgstr "Default profile"

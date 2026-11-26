@@ -11,6 +11,8 @@ import { useCatalog } from '../state/stores';
 const catalogKey = (serverId: string, projectId: string, backendId: NativeBackendId, profileId?: string) => `${serverId ? `${serverId}@${projectId}` : projectId}:${backendId}:${profileId ?? 'default'}`;
 
 export interface AgentModels {
+  /** The last known catalog entry (models + capabilities) of one agent's provider, from this visit or cache. */
+  entry(backendId: NativeBackendId, profileId?: string): NativeBackendCatalogEntry | undefined;
   /** The last known models of one agent's provider: empty when it answered with none, undefined while nothing is known. */
   read(backendId: NativeBackendId, profileId?: string): ModelInfo[] | undefined;
   /** The provider's own response during this visit, including availability when there are no models. */
@@ -40,10 +42,11 @@ export function useAgentModels(projectId: string, serverId = ''): AgentModels {
     issues.current.clear();
     visited.current.clear();
   }, [revision, projectId, serverId]);
-  const read = useCallback((backendId: NativeBackendId, profileId?: string) => {
+  const entry = useCallback((backendId: NativeBackendId, profileId?: string) => {
     const key = catalogKey(serverId, projectId, backendId, profileId);
-    return fresh.current.get(key)?.models ?? cachedCatalog(key)?.models;
+    return fresh.current.get(key) ?? cachedCatalog(key);
   }, [serverId, projectId]);
+  const read = useCallback((backendId: NativeBackendId, profileId?: string) => entry(backendId, profileId)?.models, [entry]);
   const probed = useCallback((backendId: NativeBackendId, profileId?: string) => fresh.current.get(catalogKey(serverId, projectId, backendId, profileId)), [serverId, projectId]);
   const load = useCallback((backendId: NativeBackendId, profileId?: string, force = false) => {
     const key = catalogKey(serverId, projectId, backendId, profileId);
@@ -67,6 +70,7 @@ export function useAgentModels(projectId: string, serverId = ''): AgentModels {
     });
   }, [serverId, projectId]);
   return {
+    entry,
     read,
     probed,
     issue: (backendId, profileId) => issues.current.get(catalogKey(serverId, projectId, backendId, profileId)) || undefined,

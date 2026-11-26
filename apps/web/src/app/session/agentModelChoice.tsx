@@ -40,12 +40,14 @@ function splitAgent(id: string): { backendId: NativeBackendId; profileId?: strin
  * model. With `agents` the menu also picks the agent (a new conversation's menu, Agent → provider →
  * model); without, it lists the providers of the choice's own agent. `quickChat` lists quick chat among the agents.
  */
-export function useAgentModelChoice({ projectId, backends, choice, agents = false, quickChat = false }: {
+export function useAgentModelChoice({ projectId, backends, choice, agents = false, quickChat = false, allowDefault = false }: {
   projectId: string;
   backends: readonly NativeBackendCatalogEntry[];
   choice: AgentModelValue | undefined;
   agents?: boolean;
   quickChat?: boolean;
+  /** Prepend a "默认模型" option to every provider list so callers can clear an explicit model back to the backend's default. */
+  allowDefault?: boolean;
 }) {
   const { t } = useLingui();
   const label = useBackendLabel();
@@ -59,20 +61,28 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
 
   const sourceId = (id: NativeBackendId, profileId?: string) => agents ? sourceOf(id, profileId) : profileId ?? '';
   const choiceId = (id: NativeBackendId, profileId: string | undefined, model: string) => agents ? choiceOf(id, profileId, model) : compose(profileId, model);
-  const listed = (id: NativeBackendId, profileId?: string): Choice[] => (agentModels.read(id, profileId) ?? []).map((item) => ({ id: choiceId(id, profileId, item.value), label: cleanLabel(item.name), aliases: modelUsageAliases(item) }));
+  const defaultOption = (id: NativeBackendId, profileId?: string): Choice => ({ id: choiceId(id, profileId, ''), label: t`默认模型` });
+  const rawListed = (id: NativeBackendId, profileId?: string): Choice[] => (agentModels.read(id, profileId) ?? []).map((item) => ({ id: choiceId(id, profileId, item.value), label: cleanLabel(item.name), aliases: modelUsageAliases(item) }));
+  const listed = (id: NativeBackendId, profileId?: string): Choice[] => {
+    const items = rawListed(id, profileId);
+    return allowDefault && items.length ? [defaultOption(id, profileId), ...items] : items;
+  };
   const providersOf = (entry: NativeBackendCatalogEntry): ModelProviderChoices[] => {
     const agent = { id: entry.backendId, label: label(entry.backendId), icon: agentIcon(entry.backendId) };
     const saved = entry.profiles.find((profile) => profile.isDefault)?.id;
     return (entry.profiles.length ? entry.profiles : [undefined]).map((profile): ModelProviderChoices => {
-      const list = listed(entry.backendId, profile?.id);
-      const loading = !list.length && agentModels.loading(entry.backendId, profile?.id);
-      const issue = list.length ? undefined : agentModels.issue(entry.backendId, profile?.id);
+      const items = rawListed(entry.backendId, profile?.id);
+      const loading = !items.length && agentModels.loading(entry.backendId, profile?.id);
+      const issue = items.length ? undefined : agentModels.issue(entry.backendId, profile?.id);
       // An agent that lists nothing still starts on its own default model.
-      const fallback = agents && !loading && !list.length && (agentModels.read(entry.backendId, profile?.id) !== undefined || Boolean(issue));
+      const fallback = (agents || allowDefault) && !loading && !items.length && (agentModels.read(entry.backendId, profile?.id) !== undefined || Boolean(issue));
+      const models = items.length
+        ? (allowDefault ? [defaultOption(entry.backendId, profile?.id), ...items] : items)
+        : fallback ? [defaultOption(entry.backendId, profile?.id)] : [];
       return {
         id: sourceId(entry.backendId, profile?.id),
         label: profile?.name ?? agent.label,
-        models: fallback ? [{ id: choiceId(entry.backendId, profile?.id, ''), label: t`默认模型` }] : list,
+        models,
         loading,
         ...(issue ? { issue } : {}),
         ...(agents ? { agent, preferred: profile?.id === saved } : {}),
@@ -81,18 +91,20 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
   };
   const workers = backends.filter((entry) => (quickChat || entry.backendId !== 'chat') && entry.available !== false);
   const providers: ModelProviderChoices[] | undefined = agents ? workers.flatMap(providersOf) : backend && profiles.length ? providersOf(backend) : undefined;
-  const catalog = backendId ? agentModels.read(backendId, activeProfileId) ?? [] : [];
+  const catalogEntryValue = backendId ? agentModels.entry(backendId, activeProfileId) : undefined;
+  const catalog = catalogEntryValue?.models ?? [];
   // Normalize native variant ids back to family model + params so effort/fast/context controls stay in sync.
   const saved = parseSelection(backendId && choice?.model ? backendSelection(backendId, catalog, choice.model) : choice?.model);
   const savedModel = backendId && saved.model ? catalogEntry(catalog, saved.model)?.value ?? saved.model : saved.model;
   const withProfile = profiles.length ? activeProfileId : undefined;
-  const value = backendId && savedModel ? choiceId(backendId, withProfile, savedModel) : undefined;
+  const hasModels = catalog.length > 0;
+  const value = backendId && (savedModel || (allowDefault && hasModels)) ? choiceId(backendId, withProfile, savedModel) : undefined;
   /** A model found beside others is filed under its agent, and its provider where the agent has several. */
   const groupOf = (provider: ModelProviderChoices, all: ModelProviderChoices[]) => !provider.agent ? provider.label
     : all.filter((other) => other.agent?.id === provider.agent!.id).length > 1 ? `${provider.agent.label} · ${provider.label}` : provider.agent.label;
   const everything: Choice[] = providers ? providers.flatMap((provider) => provider.models.map((model) => ({ ...model, group: groupOf(provider, providers) }))) : backendId ? listed(backendId) : [];
   // Until its provider's list arrives, the trigger still names the model rather than the raw choice id.
-  const models = value && !everything.some((item) => item.id === value) ? [...everything, { id: value, label: cleanLabel(savedModel) }] : everything;
+  const models = value && savedModel && !everything.some((item) => item.id === value) ? [...everything, { id: value, label: cleanLabel(savedModel) }] : everything;
 
   const pick = (id: string): AgentModelValue | undefined => {
     const picked = agents ? splitAgent(id) : backendId ? { backendId, ...split(id) } : undefined;
@@ -112,6 +124,8 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
     pick,
     params,
     withParam,
+    /** The active backend's latest catalog entry (with capabilities), falling back to the bootstrap entry. */
+    capabilities: catalogEntryValue?.capabilities ?? backend?.capabilities,
     /** Spread onto `ModelPicker`. */
     picker: {
       models,
