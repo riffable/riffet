@@ -198,7 +198,7 @@ Riffet 选择沿用现有模型参数表达，例如 `gemini-3.8-flash[effort=me
 2. 在会话锁内重新检查项目 cwd、归档状态、外部 holder 和现有 terminal。先复用可信的 live pane；两个视图并发打开也只能有一个 writer。
 3. 准备会话私有 bridge bundle、不可变启动配置和 launch descriptor。为每次进程启动分配 `launchId`，记录 executable identity、PID 起始时间、cwd 和 profile 指纹。
 4. `host.terminals.launch` 使用 `reuseLive: true`，监听注册先于任何输入。新会话不携带初始 prompt 参数，`supportsInitialPromptArgs=false`。
-5. 确认原生 composer 完成恢复且可完整粘贴，或有可信的有效 busy 状态。启用 MCP 的会话还须确认本次工具 inventory 就绪；服务 initialize 完成不等于首轮模型已取得工具。登录、信任、失败界面是独立状态，不误判为 ready。新项目信任与 Claude Code 驱动一致：在 Riffet 中为会话选定项目即作为信任决定，写入本次启动私有 settings 的 `trustedWorkspaces`，不改用户自己的 agy 配置，并以 info 提示说明（2026-11-13 修订：原做法让首次发送停在信任对话框，对话视图无法处理）。
+5. 确认原生 composer 完成恢复且可完整粘贴，或有可信的有效 busy 状态。启用 MCP 的会话还须确认本次工具 inventory 就绪；服务 initialize 完成不等于首轮模型已取得工具。登录、信任、失败界面是独立状态，不误判为 ready。新项目信任与 Claude Code 驱动一致：在 Riffet 中为会话选定项目即作为信任决定，写入本次启动 `--settings` 的 `trustedWorkspaces`（并入用户已信任的目录），不改用户自己的 agy 配置，并以 info 提示说明（2026-11-13 修订：原做法让首次发送停在信任对话框，对话视图无法处理；2026-11-26 实测 1.5.10 只靠 `--settings` 就不再弹出信任对话框）。
 
 新会话没有 native ID 时允许 terminal 先绑定 Riffet Session。首条 fence 保存 launch 与 pane 身份；可信 hook 确认 conversation ID、cwd 和 launch 后，才调用 `setNativeSessionId`。第一次绑定失败或候选冲突时停止结构化发送并保留诊断。首次 outcome 不明前不发送第二条受管消息。
 
@@ -218,14 +218,17 @@ Riffet 选择沿用现有模型参数表达，例如 `gemini-3.8-flash[effort=me
 
 ## 7 桥接目录和配置隔离
 
-受管会话以 `--gemini_dir` 选择私有原生数据根，以 `--add-dir` 加载桥接工作区。私有原生根放在 workspace 外，保存 settings、SQLite 与原生扩展快照；不把整个根变成 Agent 工作区。额外工作区仅包含非秘密桥接插件和执行脚本，按会话隔离。会话自己的 endpoint Key、控制 token、投递基线和其他会话数据都不能放进这个可由 Agent 访问的目录。
+2026-11-26 修订：新会话的原生数据根就是提供商的 `sourceDir`（默认 `~/.gemini`），对话写进 agy 自己的 `antigravity-cli/conversations/`，用户自己的 agy 和用量工具都能看到。原先为每个会话复制一份私有根，是因为 `/model`、`/mcp` 等原生命令会写持久配置、Riffet 的 MCP 也只能写进配置文件；现在 Riffet 的选择（模型、模式、审批、信任、自定义模型）都只经本次启动的 `--settings` 和参数传入，`--settings` 只带这些键，其余设置仍由 agy 读用户自己的文件；原生命令产生的持久设置沿 CLI 原生作用域，与用户直接运行 agy 一致（启动参数 `--model` 优先于 `/model` 保存的模型，已实测）。Riffet MCP 放进本会话的桥接插件，只有本进程加载。会话第一次准备时在 `initialized.json` 记下布局：`version: 2` 记录数据根；`version: 1` 是此前的私有根，这些会话继续在 `native/` 上恢复，不迁移。对话位于共享目录后，用户可能在自己的终端里同时 `agy --conversation` 打开同一对话；目前不检查这种外部持有者（Claude Code、Codex 的检查见 [TERMINAL-SESSIONS.md](TERMINAL-SESSIONS.md)）。
+
+受管会话以 `--gemini_dir` 指明原生数据根，以 `--add-dir` 加载桥接工作区。不把数据根变成 Agent 工作区。额外工作区仅包含非秘密桥接插件和执行脚本，按会话隔离。会话自己的 endpoint Key、控制 token、投递基线和其他会话数据都不能放进这个可由 Agent 访问的目录。
 
 ```text
 <plugin-state>/sessions/<sessionId>/
-  native/                     --gemini_dir；settings、原生 SQLite、扩展快照
+  initialized.json            布局与数据根（version 2：sourceDir；version 1：native/）
+  native/                     仅旧会话（version 1）：私有 settings、原生 SQLite、扩展快照
   descriptor.json             0600，当前服务地址及已核验进程绑定
   workspace/                  稳定路径，精确恢复时继续使用
-    .agents/plugins/riffet-<sessionNamespace>/
+    .agents/plugins/riffet-antigravity/
       plugin.json
       hooks.json
       mcp_config.json
@@ -259,7 +262,7 @@ PreToolUse 仅做短时观察，并明确返回 `{"decision":"allow"}` 结束本
 
 ### 7.2 Riffet MCP
 
-`host.riffetMcp(sessionId)` 的 stdio spec 放入当前会话 bridge plugin 的 `mcp_config.json`。保留现有凭据 shim、按会话 toolGroups、基础工具和设备授权；不把 `/api/riffet-mcp` 当通用 HTTP MCP 端点，不改全局或项目 MCP 文件。
+`host.riffetMcp(sessionId)` 的 stdio spec 放入当前会话 bridge plugin 的 `mcp_config.json`。agy 把插件里的服务命名为 `<插件名>_<服务名>`（`riffet-antigravity_riffet_<hash>`）。1.5.10 起插件 MCP 不在启动时加载，要等 `/mcp` 视图打开或第一条消息到达，而第一条消息本身拿不到工具；`RefreshMcpServers` 不触发加载，`--settings` 不接受 `mcpServers`，附加目录下的 `.agents/mcp_config.json` 也不读。因此投递前 inventory 里没有这个服务时，Riffet 先输入 `/mcp`、按 Esc 关掉，等服务就绪再粘贴（`mcp-scope.ts#mcpReady`）。旧会话（version 1）的 MCP 仍写在私有根自己的 MCP 配置里。保留现有凭据 shim、按会话 toolGroups、基础工具和设备授权；不把 `/api/riffet-mcp` 当通用 HTTP MCP 端点，不改全局或项目 MCP 文件。
 
 桥接需在原生 /mcp 名称空间下核对真实加载结果。受管工具请求附带 launch/native binding；RiffetMcpService 在实际副作用前原子核验绑定、撤销状态和调用身份，不能只由包装器先读缓存再转发。身份未确认、观察缺口或切到其他会话时拒绝调用。服务重启后使用原 shim 的凭据重读机制，不重复发送结果未知的 tools/call。
 

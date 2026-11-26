@@ -5,7 +5,7 @@ import {
   AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentDiscussionRequest, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
   type AgentOpenResult, type AgentProfile, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
 } from '@riffet/plugin-api/experimental/agent';
-import { agyMode, agySelection, agyToolPermission, parseAgyProfile } from './config.js';
+import { agyMode, agySelection, agySessionGeminiDir, agyToolPermission, parseAgyProfile } from './config.js';
 import { streamAgyDiscussion } from './discussion.js';
 import { queueConfiguration } from './config-queue.js';
 import { interrupt, runtimeAction } from './control.js';
@@ -185,7 +185,7 @@ export class AntigravityBackend implements AgentBackend {
     return new AntigravityTranscriptSource({
       sessionId: id,
       nativeId: () => host.view.session(id)?.nativeSessionId,
-      geminiDir: () => join(sessionRoot(hub, id), 'native'),
+      geminiDir: () => this.geminiDir(id),
       live: () => hub.runtimes.get(id)?.snapshot,
       watch: wake => {
         const set = hub.watchers.get(id) ?? new Set();
@@ -202,8 +202,19 @@ export class AntigravityBackend implements AgentBackend {
 
   async readHistory(_host: AgentHost, context: AgentContext) {
     return context.session.nativeSessionId
-      ? readAgyHistory(join(sessionRoot(this.hub, context.session.id), 'native'), context.session.nativeSessionId, context.session.id)
+      ? readAgyHistory(this.geminiDir(context.session.id), context.session.nativeSessionId, context.session.id)
       : { events: [], subagents: [] };
+  }
+
+  /** A session's data root never changes once recorded; the transcript reads it on every wake, so it is kept. */
+  private readonly roots = new Map<string, string>();
+  private geminiDir(id: string): string {
+    const known = this.roots.get(id);
+    if (known) return known;
+    const recorded = agySessionGeminiDir(this.hub.stateDir, id);
+    if (!recorded) return join(sessionRoot(this.hub, id), 'native');
+    this.roots.set(id, recorded);
+    return recorded;
   }
 
   async canReleaseInput(_host: AgentHost, _context: AgentContext, _run: AgentRunRef) {
@@ -217,12 +228,14 @@ export class AntigravityBackend implements AgentBackend {
   async stop(host: AgentHost, id: string): Promise<void> {
     const terminalId = host.view.session(id)?.terminalId;
     detach(this.hub, id);
+    this.roots.delete(id);
     if (terminalId) await host.terminals.stop(terminalId);
   }
 
   close(host?: AgentHost): void {
     this.discussions.abort();
     this.hub.closed = true;
+    this.roots.clear();
     for (const [id, runtime] of this.hub.runtimes) this.detach(host ?? runtime.host, id);
   }
 }

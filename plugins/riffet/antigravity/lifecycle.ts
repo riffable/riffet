@@ -1,7 +1,8 @@
 import { realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { AgentContext, AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { readJson } from './bridge.js';
+import { agySessionGeminiDir } from './config.js';
 import { validateMcp } from './mcp-scope.js';
 import { endOpenTurns, refresh, schedule } from './poll.js';
 import { nativeStatus, assertCurrent, detach, epochOf, sessionRoot, type Hub, type Launch, type Runtime } from './runtime.js';
@@ -32,7 +33,8 @@ async function readSavedLaunch(hub: Hub, context: AgentContext): Promise<Launch 
   const root = await realpath(sessionRoot(hub, context.session.id));
   if (
     saved.root !== root ||
-    saved.geminiDir !== join(root, 'native') ||
+    // The data root recorded when the session was first prepared, resolved like `root` (layout 1 sits under it).
+    saved.geminiDir !== agySessionGeminiDir(dirname(dirname(root)), context.session.id) ||
     saved.bridgeDir !== join(root, 'workspace') ||
     typeof saved.command !== 'string' ||
     typeof saved.nonce !== 'string' ||

@@ -80,6 +80,9 @@ async function writeBytes(path: string, bytes: string): Promise<void> {
 export async function writeJson(path: string, value: unknown): Promise<void> {
   await writeBytes(path, JSON.stringify(value) + '\n');
 }
+/** The per-session agy plugin loaded through `--add-dir`; agy names its MCP servers `<plugin>_<server>`. */
+export const BRIDGE_PLUGIN = 'riffet-antigravity';
+export const bridgePluginDir = (paths: Pick<PreparedAgySession, 'bridgeDir'>) => join(paths.bridgeDir, '.agents', 'plugins', BRIDGE_PLUGIN);
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 /** The bridge records only identity/status, never prompts, tool arguments or model credentials. It grants no permissions. */
 export async function prepareBridge(paths: PreparedAgySession, nonce: string): Promise<void> {
@@ -142,12 +145,12 @@ process.stdin.on('error',finish);
       original.enabled === false || typeof original.command !== 'string' || !original.command || original.stack_with_default === true,
   };
   await writeJson(paths.settingsPath, settings);
-  const plugin = join(paths.bridgeDir, '.agents', 'plugins', 'riffet-antigravity');
+  const plugin = bridgePluginDir(paths);
   await safeDirectory(plugin, true);
   await chmod(plugin, 0o700);
-  await writeJson(join(plugin, 'plugin.json'), { name: 'riffet-antigravity', version: '0.1.0' });
+  await writeJson(join(plugin, 'plugin.json'), { name: BRIDGE_PLUGIN, version: '0.1.0' });
   await writeJson(join(plugin, 'hooks.json'), {
-    'riffet-antigravity': Object.fromEntries(
+    [BRIDGE_PLUGIN]: Object.fromEntries(
       ['SessionStart', 'PreInvocation', 'PostInvocation', 'Stop'].map(event => [event, [{ type: 'command', command: command('hook') }]]),
     ),
   });

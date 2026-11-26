@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, realpath } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import type { AgentContext, AgentHost, AgentOpenResult } from '@riffet/plugin-api/experimental/agent';
 import { prepareBridge, readJson, writeJson } from './bridge.js';
 import { sha } from './composer.js';
-import { agyLaunchConfig, agyProfileEnvironment, agySelection, parseAgyProfile, prepareAgySession } from './config.js';
+import { agyLaunchConfig, agyProfileEnvironment, agySelection, parseAgyProfile, prepareAgySession, type PreparedAgySession } from './config.js';
 import { attach } from './lifecycle.js';
-import { mcpServerName } from './mcp-scope.js';
+import { mcpConfigPath, mcpServerName } from './mcp-scope.js';
 import { agyLaunchModel, nativeModels } from './models.js';
 import { agyConversationId, agyRecord } from './protocol.js';
 import { refresh, schedule } from './poll.js';
@@ -23,11 +23,11 @@ export function open(hub: Hub, host: AgentHost, context: AgentContext): Promise<
   return task;
 }
 
-/** Writes this session's Riffet MCP server into agy's own config, or removes it when the host offers none. */
-async function writeMcpConfig(host: AgentHost, sessionId: string, geminiDir: string): Promise<void> {
+/** Writes this session's Riffet MCP server where this launch's agy reads it (see `mcpConfigPath`), or removes it when the host offers none. */
+async function writeMcpConfig(host: AgentHost, sessionId: string, paths: PreparedAgySession): Promise<void> {
   const mcp = await host.riffetMcp(sessionId);
-  const mcpPath = join(geminiDir, 'config', 'mcp_config.json');
-  await mkdir(join(geminiDir, 'config'), { recursive: true, mode: 0o700 });
+  const mcpPath = mcpConfigPath(paths);
+  await mkdir(dirname(mcpPath), { recursive: true, mode: 0o700 });
   const mcpConfig = (await readJson(mcpPath)) ?? {};
   const servers = agyRecord(mcpConfig.mcpServers) ? mcpConfig.mcpServers : {};
   const mcpName = mcpServerName(sessionId);
@@ -74,7 +74,7 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
   });
   const nonce = randomBytes(24).toString('hex');
   await prepareBridge(paths, nonce);
-  await writeMcpConfig(host, context.session.id, paths.geminiDir);
+  await writeMcpConfig(host, context.session.id, paths);
   const token = randomBytes(32).toString('base64url');
   const args = [
     `--gemini_dir=${paths.geminiDir}`,

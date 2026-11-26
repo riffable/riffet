@@ -1,7 +1,10 @@
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import { readJson } from './bridge.js';
-import { sha } from './composer.js';
+import { setTimeout as delay } from 'node:timers/promises';
+import type { AgentHost } from '@riffet/plugin-api/experimental/agent';
+import { BRIDGE_PLUGIN, bridgePluginDir, readJson } from './bridge.js';
+import { composerText, emptyComposer, sha } from './composer.js';
+import type { PreparedAgySession } from './config.js';
 import { AGY_ID, type AgyRecord } from './protocol.js';
 import { nativeStatus, owned, type Hub, type Runtime } from './runtime.js';
 import { readAgySnapshot } from './storage.js';
@@ -9,13 +12,63 @@ import { mapAgySnapshot } from './transcript.js';
 
 export const mcpServerName = (sessionId: string) => `riffet_${sha(sessionId).slice(0, 16)}`;
 
+/** Sessions from before native history keep their own data root under the session, with MCP in its config. */
+const privateRoot = (paths: Pick<PreparedAgySession, 'root' | 'geminiDir'>) => paths.geminiDir === join(paths.root, 'native');
+
+/**
+ * Where this launch's Riffet MCP server is declared: the session's own bridge plugin, so only this agy process
+ * loads it; a private data root (layout 1) keeps it in that root's config as before.
+ */
+export const mcpConfigPath = (paths: Pick<PreparedAgySession, 'root' | 'geminiDir' | 'bridgeDir'>) =>
+  privateRoot(paths) ? join(paths.geminiDir, 'config', 'mcp_config.json') : join(bridgePluginDir(paths), 'mcp_config.json');
+
+type Control = Parameters<Parameters<AgentHost['terminals']['interact']>[1]>[0];
+
+const MCP_VIEW_WAIT_MS = 2_000;
+const MCP_LOAD_WAIT_MS = 3_000;
+
+async function until(check: () => Promise<boolean>, timeout: number): Promise<boolean> {
+  for (const deadline = Date.now() + timeout; ; ) {
+    if (await check()) return true;
+    if (Date.now() >= deadline) return false;
+    await delay(150);
+  }
+}
+
+/**
+ * agy (1.5.10) starts the MCP servers of an `--add-dir` plugin only when its MCP view opens or a message
+ * arrives, and that message runs without them. Opening the view and closing it again starts them first.
+ */
+async function startPluginServers(runtime: Runtime, control: Control): Promise<void> {
+  await control.paste('/mcp', false);
+  if (!(await until(async () => composerText(await control.screen()).trim() === '/mcp', MCP_VIEW_WAIT_MS)))
+    throw runtime.host.error('AGY_INPUT_UNCONFIRMED', 'Antigravity has not confirmed the pasted input', 409);
+  await control.keys(['Enter']);
+  await until(async () => /MCP Servers/.test((await control.screen()) ?? ''), MCP_VIEW_WAIT_MS);
+  await control.keys(['Escape']);
+  if (!(await until(async () => emptyComposer(await control.screen()), MCP_VIEW_WAIT_MS)))
+    throw runtime.host.error('CLI_INTERACTION_REQUIRED', 'The Antigravity terminal has a draft or an open dialog', 409);
+}
+
 /** Riffet's MCP tools must be loaded in agy before input is pasted, or the turn starts without them. */
-export async function mcpReady(runtime: Runtime): Promise<void> {
+export async function mcpReady(runtime: Runtime, control: Control): Promise<void> {
   const name = mcpServerName(runtime.context.session.id);
-  const config = await readJson(join(runtime.launch.geminiDir, 'config', 'mcp_config.json'));
+  const config = await readJson(mcpConfigPath(runtime.launch));
   if (!config?.mcpServers?.[name] || config.mcpServers[name].disabled === true) return;
-  const inventory = await runtime.rpc!.call('GetMcpServerStates', {});
-  const server = Array.isArray(inventory.states) ? inventory.states.find((state: AgyRecord) => state.spec?.serverName === name) : undefined;
+  const served = privateRoot(runtime.launch) ? name : `${BRIDGE_PLUGIN}_${name}`;
+  const states = async () => {
+    const inventory = await runtime.rpc!.call('GetMcpServerStates', {});
+    const server = Array.isArray(inventory.states) ? inventory.states.find((state: AgyRecord) => state.spec?.serverName === served) : undefined;
+    return { inventory, server };
+  };
+  let { inventory, server } = await states();
+  if (!server && inventory.isLoading !== true && !privateRoot(runtime.launch)) {
+    await startPluginServers(runtime, control);
+    await until(async () => {
+      ({ inventory, server } = await states());
+      return server?.status === 'MCP_SERVER_STATUS_READY' || server?.status === 'MCP_SERVER_STATUS_ERROR';
+    }, MCP_LOAD_WAIT_MS);
+  }
   // Waiting does not fix a server agy failed to start (its shim moved, say): say so instead of holding the message.
   if (server?.status === 'MCP_SERVER_STATUS_ERROR') {
     const reason = typeof server.error === 'string' && server.error ? `: ${server.error.slice(0, 200)}` : '';

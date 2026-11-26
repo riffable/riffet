@@ -160,7 +160,7 @@ async function dispatch(
   if (!idle(runtime, status) || status?.conversation_id !== (id ?? '')) {
     throw host.error('CLI_BUSY', 'Antigravity is waiting for the current operation', 409);
   }
-  await mcpReady(runtime);
+  await mcpReady(runtime, control);
   const terminal = await host.terminals.get(runtime.launch.terminalId);
   await host.commitDispatchFence(request.runId, {
     nativeSessionId: id,

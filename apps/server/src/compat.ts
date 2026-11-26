@@ -1,9 +1,26 @@
-import { closeSync, lstatSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, lstatSync, openSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-/** DSH's isolated profile home, beside the other state Riffet keeps in the user's home. */
-export const DEFAULT_DSH_CONFIG_DIR = join(homedir(), '.riffet', 'dsh');
+/** The isolated DSH home Riffet used before conversations went to DSH's own. */
+const LEGACY_DSH_CONFIG_DIR = join(homedir(), '.riffet', 'dsh');
+let dshConfigDir: string | undefined;
+
+/**
+ * DSH's home when the provider names none: DSH's own `~/.dsh`, so its history and usage tools see Riffet's
+ * conversations. One DSH process serves all of a provider's conversations from one home, so an install whose
+ * conversations are still in the old isolated home (a real, non-empty `sessions/`) keeps it to resume them.
+ * Read once per process.
+ */
+export function defaultDshConfigDir(): string {
+  if (dshConfigDir) return dshConfigDir;
+  let legacy = false;
+  try {
+    const sessions = join(LEGACY_DSH_CONFIG_DIR, 'sessions');
+    legacy = lstatSync(sessions).isDirectory() && readdirSync(sessions).length > 0;
+  } catch { /* no old home */ }
+  return dshConfigDir = legacy ? LEGACY_DSH_CONFIG_DIR : join(homedir(), '.dsh');
+}
 
 /** Codex's default home (`$CODEX_HOME` when set, else `~/.codex`), used for read-only generated images. */
 export const defaultCodexHome = () => process.env.CODEX_HOME?.trim() || join(homedir(), '.codex');

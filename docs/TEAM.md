@@ -99,6 +99,8 @@
     .mcp.json                    # 成员专属 MCP 声明
 ```
 
+成员会话的 CLI 历史与用户自己的会话一样，写在 CLI 原生目录（或提供商显式选择的配置目录）：Claude Code 在 `~/.claude/projects/<成员目录>/`，Codex 在 `~/.codex/sessions/`。只有 CLI 无法在单次启动里注入会话所需的配置时，才为成员换一套配置根，历史随之移动；目前只有 Cursor，否则 `~/.cursor` 的全局编码规则会进入成员的提示，它的成员会话在 `<stateDir>/cursor-standing/`。换配置根的代价是成员要单独登录、拿不到用户装的 skill 和 MCP，用量工具也统计不到，所以不作为默认。
+
 系统提示与 Riffet 自带 skill 仍放在 `<stateDir>/team-runtime/`（成员目录之外），每次服务端启动重写，不进成员的 git 历史，成员的文件工具无法改写。
 
 ### 3.2 各文件的职责、读写权限与更新机制

@@ -3,7 +3,7 @@ import { createReadStream } from 'node:fs';
 import { AppError, requireString } from '../errors.js';
 import { isLoopbackHost } from '../connection-addresses.js';
 import { FILE_SITE_ROUTE, proxiedRequest } from '../auth.js';
-import { codexGeneratedImageHomes, DEFAULT_DSH_CONFIG_DIR } from '../compat.js';
+import { codexGeneratedImageHomes, defaultDshConfigDir } from '../compat.js';
 import path from 'node:path';
 import { CODE_INDEX_BUDGET } from '../../../../packages/contracts/src/budgets.js';
 import { previewImageData, readFileBounded } from '../workspace/index.js';
@@ -90,7 +90,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
   });
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/projects/:id/file',async(request)=>workspace.preview(store.getProject(request.params.id),requireString(request.query.path,'path',8192),{allowOutside:allowOutsideRead(request.headers)}));
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/projects/:id/file/image',async(request,reply)=>{
-    const harnessImageHomes=nativeBackends.catalog.profileSettings('dsh').profiles.map(profile=>profile.configDir?.trim()?path.resolve(profile.configDir.trim()):DEFAULT_DSH_CONFIG_DIR);
+    const harnessImageHomes=nativeBackends.catalog.profileSettings('dsh').profiles.map(profile=>profile.configDir?.trim()?path.resolve(profile.configDir.trim()):defaultDshConfigDir());
     const generatedImageHomes=codexGeneratedImageHomes(nativeBackends.catalog.profileSettings('codex')?.profiles??[]);
     const {mimeType,data}=await workspace.readPreviewImage(store.getProject(request.params.id),requireString(request.query.path,'path',8192),{allowOutside:allowOutsideRead(request.headers),harnessImageHomes,generatedImageHomes});
     reply.header('Content-Type',mimeType).header('Content-Disposition','inline').header('X-Content-Type-Options','nosniff');

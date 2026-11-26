@@ -213,7 +213,7 @@ export function AgentSettingsSection({ settings, onRefresh, onDirtyChange, onBus
           <Input aria-label={t`CLI 入口`} className="h-8 w-64 font-mono max-md:w-full" value={draft.executable ?? ''} disabled={busy} placeholder={backendId} onChange={(event) => setDraft((current) => ({ ...current, executable: event.target.value }))} />
         </SettingsRow>
         {backendId !== 'droid' && backendId !== 'antigravity' && <SettingsRow title={t`配置目录`} description={t`更换后会切换账号与原生历史范围`}>
-          <Input aria-label={t`配置目录`} className="h-8 w-64 font-mono max-md:w-full" value={draft.configDir ?? ''} disabled={busy} placeholder={backendId === 'dsh' ? '~/.riffet/dsh' : t`使用 CLI 默认目录`} onChange={(event) => setDraft((current) => ({ ...current, configDir: event.target.value }))} />
+          <Input aria-label={t`配置目录`} className="h-8 w-64 font-mono max-md:w-full" value={draft.configDir ?? ''} disabled={busy} placeholder={t`使用 CLI 默认目录`} onChange={(event) => setDraft((current) => ({ ...current, configDir: event.target.value }))} />
         </SettingsRow>}
         {backendId === 'dsh' && <SettingsRow title={t`DSH 源码目录`}>
           <Input aria-label={t`DSH 源码目录`} className="h-8 w-64 font-mono max-md:w-full" value={draft.sourceDir ?? ''} disabled={busy} onChange={(event) => setDraft((current) => ({ ...current, sourceDir: event.target.value }))} />

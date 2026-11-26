@@ -5788,16 +5788,6 @@
         }
       }
     },
-    "~/.riffet/dsh（默认）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "~/.riffet/dsh (default)"
-          }
-        }
-      }
-    },
     "·": {
       "localizations": {
         "en": {

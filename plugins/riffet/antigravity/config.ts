@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
-import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:fs/promises';
+import { constants, readFileSync } from 'node:fs';
+import { chmod, lstat, mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseSelection } from '@contracts';
@@ -18,25 +18,6 @@ export interface AgyProfile {
 }
 const secrets = new WeakMap<AgyProfile, string>();
 const MAX_FILE = 4 * 1024 * 1024;
-const MAX_TOTAL = 64 * 1024 * 1024;
-const MAX_FILES = 5000;
-// Authentication/account state is deliberately absent. Preserve only conventional customization roots.
-const CUSTOMIZATIONS = [
-  'AGENTS.md',
-  'GEMINI.md',
-  'config/rules',
-  'config/skills',
-  'antigravity-cli/skills',
-  'skills',
-  'config/agents',
-  'config/plugins',
-  'config/hooks.json',
-  'config/mcp_config.json',
-  'config/skills.json',
-  'config/rules.json',
-  'config/agents.json',
-  'config/plugins.json',
-];
 const SETTINGS_KEYS = new Set([
   'agentMode',
   'colorScheme',
@@ -69,7 +50,6 @@ const SETTINGS_KEYS = new Set([
   'statusLine',
   'title',
 ]);
-const SECRET_FILE = /(^|[._-])(oauth|credentials?|tokens?|secrets?|keyring|auth)([._-]|$)|^\.env(?:\.|$)|\.(pem|key|p12|pfx)$/i;
 const preparing = new Map<string, Promise<PreparedAgySession>>();
 function invalid(message: string): never {
   throw new AppError('INVALID_SETTINGS', message);
@@ -265,114 +245,12 @@ function nativeSettings(value: Record<string, unknown> | undefined): Record<stri
   check(settings);
   return settings;
 }
-async function copyCustomizations(sourceDir: string, target: string, finalTarget: string): Promise<void> {
-  const sourceStat = await stat(sourceDir);
-  if (!sourceStat) return;
-  if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink())
-    throw new Error('Antigravity customization source must be a real directory');
-  const source = await realpath(sourceDir);
-  let nodes = 0;
-  let total = 0;
-  const validateJson = (from: string, bytes: Buffer): Buffer => {
-    const rel = relative(sourceDir, from);
-    const normalized = rel.split(sep).join('/');
-    const manifest = /^config\/(?:skills|rules|agents|plugins)\.json$/.test(normalized);
-    const pluginManifest = /(^|\/)plugin\.json$/.test(normalized);
-    if (!manifest && !pluginManifest) return bytes;
-    let value: unknown;
-    try {
-      value = JSON.parse(bytes.toString('utf8'));
-    } catch {
-      throw new Error('Antigravity customization JSON is invalid');
-    }
-    if (!agyRecord(value)) throw new Error('Antigravity customization JSON must be an object');
-    if (manifest) {
-      for (const field of ['entries', 'inherits']) {
-        const entries = value[field];
-        if (entries === undefined) continue;
-        if (!Array.isArray(entries)) throw new Error('Antigravity discovery manifest is invalid');
-        for (const entry of entries) {
-          if (!agyRecord(entry) || typeof entry.path !== 'string') throw new Error('Antigravity discovery manifest path is invalid');
-          const referenced = isAbsolute(entry.path) ? resolve(entry.path) : resolve(sourceDir, 'config', entry.path);
-          const selected = CUSTOMIZATIONS.some(name => contained(join(sourceDir, name), referenced));
-          const inheritedManifest = /^config\/(?:skills|rules|agents|plugins)\.json$/.test(
-            relative(sourceDir, referenced).split(sep).join('/'),
-          );
-          if (!selected || entry.path.startsWith('~') || (field === 'inherits' && !inheritedManifest))
-            throw new Error('Antigravity discovery manifest references an unsupported customization source');
-          if (isAbsolute(entry.path)) entry.path = join(finalTarget, relative(sourceDir, referenced));
-        }
-      }
-      return Buffer.from(JSON.stringify(value, null, 2) + '\n');
-    }
-    if (pluginManifest && value.skills !== undefined) {
-      const pluginRoot = ['.antigravity-plugin', '.gemini-plugin'].includes(relative(dirname(dirname(from)), dirname(from)))
-        ? dirname(dirname(from))
-        : dirname(from);
-      for (const path of Array.isArray(value.skills) ? value.skills : [value.skills]) {
-        if (typeof path !== 'string' || isAbsolute(path) || !contained(pluginRoot, resolve(pluginRoot, path)))
-          throw new Error('Antigravity plugin references an external skill directory');
-      }
-    }
-    return bytes;
-  };
-  const copy = async (from: string, to: string, depth: number): Promise<void> => {
-    const info = await stat(from);
-    if (!info) return;
-    if (++nodes > MAX_FILES) throw new Error('Antigravity customization exceeds its snapshot limit');
-    if (info.isSymbolicLink() || !contained(source, await realpath(from)))
-      throw new Error('Antigravity customization contains a symbolic link or external path');
-    if (depth > 32) throw new Error('Antigravity customization exceeds its depth limit');
-    if (info.isDirectory()) {
-      await privateDirectory(to);
-      const names = await readdir(from);
-      if (names.length > MAX_FILES) throw new Error('Antigravity customization exceeds its snapshot limit');
-      for (const name of names) {
-        if (SECRET_FILE.test(name)) continue;
-        await copy(join(from, name), join(to, name), depth + 1);
-      }
-    } else if (info.isFile()) {
-      const bytes = validateJson(from, await fileBytes(from));
-      total += bytes.length;
-      if (total > MAX_TOTAL) throw new Error('Antigravity customization exceeds its snapshot limit');
-      await privateDirectory(dirname(to));
-      // Relative native commands may execute bundled helpers directly. Keep owner execution only.
-      const handle = await open(
-        to,
-        constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
-        from.endsWith('.json') || !(info.mode & 0o111) ? 0o600 : 0o700,
-      );
-      try {
-        await handle.writeFile(bytes);
-      } finally {
-        await handle.close();
-      }
-    } else throw new Error('Antigravity customization contains a non-regular file');
-  };
-  for (const name of CUSTOMIZATIONS) {
-    // A linked parent (e.g. config/) must not silently redirect a selected subtree.
-    let ancestor = dirname(join(sourceDir, name));
-    while (contained(sourceDir, ancestor) && ancestor !== sourceDir) {
-      if ((await stat(ancestor))?.isSymbolicLink()) throw new Error('Antigravity customization contains a symbolic link');
-      ancestor = dirname(ancestor);
-    }
-    await copy(join(sourceDir, name), join(target, name), 0);
-  }
-  // Refuse linked account/config parents even when the selected settings file itself is regular.
-  for (const path of [join(sourceDir, 'antigravity-cli'), join(sourceDir, 'antigravity-cli', 'cache')])
-    if ((await stat(path))?.isSymbolicLink()) throw new Error('Antigravity customization contains a symbolic link');
-  const settings = nativeSettings(await json(join(sourceDir, 'antigravity-cli', 'settings.json')));
-  await write(join(target, 'antigravity-cli', 'settings.json'), settings);
-  const onboarding = await json(join(sourceDir, 'antigravity-cli', 'cache', 'onboarding.json'));
-  const completed = Object.fromEntries(
-    ['consumerOnboardingComplete', 'enterpriseOnboardingComplete', 'onboardingComplete'].flatMap(key =>
-      onboarding?.[key] === true ? [[key, true]] : [],
-    ),
-  );
-  if (Object.keys(completed).length) await write(join(target, 'antigravity-cli', 'cache', 'onboarding.json'), completed);
-}
 export interface PreparedAgySession {
   root: string;
+  /**
+   * agy's data root (`--gemini_dir`): the provider's own `sourceDir` for sessions started since native history
+   * (layout 2), the session's private copy under `root/native` for older ones, which resume where they were.
+   */
   geminiDir: string;
   bridgeDir: string;
   settingsPath: string;
@@ -391,10 +269,10 @@ export interface PrepareAgySessionInput {
   mode?: string;
   approval?: string;
 }
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 /** Restore launch-specific paths from the saved launch record; current is only the conventional inspection path. */
 export function agySessionPaths(stateDir: string, sessionId: string, launchId = 'current'): PreparedAgySession {
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(sessionId) || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(launchId))
-    throw new Error('Invalid Antigravity session or launch identity');
+  if (!SESSION_ID.test(sessionId) || !SESSION_ID.test(launchId)) throw new Error('Invalid Antigravity session or launch identity');
   const root = join(absolute(stateDir, 'stateDir'), 'sessions', sessionId);
   const launch = join(root, 'launches', launchId);
   return {
@@ -405,9 +283,36 @@ export function agySessionPaths(stateDir: string, sessionId: string, launchId = 
     logPath: join(launch, 'agy.log'),
   };
 }
+/**
+ * Where a session's native conversation lives, read from its `initialized.json`: the provider's data root for
+ * layout 2, the private `native/` copy for layout 1. A session that never launched has neither.
+ */
+export function agySessionGeminiDir(stateDir: string, sessionId: string): string | undefined {
+  if (!SESSION_ID.test(sessionId)) throw new Error('Invalid Antigravity session identity');
+  const root = join(absolute(stateDir, 'stateDir'), 'sessions', sessionId);
+  let marker: unknown;
+  try {
+    marker = JSON.parse(readFileSync(join(root, 'initialized.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+  if (!agyRecord(marker)) return undefined;
+  if (marker.version === 1) return join(root, 'native');
+  return marker.version === 2 && typeof marker.geminiDir === 'string' && isAbsolute(marker.geminiDir) ? marker.geminiDir : undefined;
+}
+/** The user's own agy settings, which may be a managed dotfile link; unreadable ones are agy's to report, not ours. */
+async function userSettings(path: string): Promise<Record<string, unknown> | undefined> {
+  try {
+    const value: unknown = JSON.parse(await readFile(path, 'utf8'));
+    return agyRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+const trustedList = (value: unknown) => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []);
 async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySession> {
   const state = absolute(input.stateDir, 'stateDir');
-  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(input.sessionId)) throw new Error('Invalid Antigravity session identity');
+  if (!SESSION_ID.test(input.sessionId)) throw new Error('Invalid Antigravity session identity');
   const project = await realpath(absolute(input.projectCwd, 'projectCwd'));
   if (!(await lstat(project)).isDirectory()) throw new Error('Antigravity project is not a directory');
   const mode = agyMode(input.mode);
@@ -415,47 +320,49 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
   agySelection(input.model);
   // Resolve the trusted host-provided state root; session-owned descendants must never be links.
   await privateDirectory(state);
-  const paths = agySessionPaths(await realpath(state), input.sessionId, randomUUID());
-  const { root, geminiDir, bridgeDir, settingsPath, logPath } = paths;
+  const base = agySessionPaths(await realpath(state), input.sessionId, randomUUID());
+  const { root } = base;
   if (contained(project, root)) throw new Error('Antigravity private state must be outside the project workspace');
   await privateDirectory(dirname(root));
   await privateDirectory(root);
   const marker = join(root, 'initialized.json');
   const initialized = await json(marker);
-  if (initialized) {
-    if (initialized.version !== 1 || initialized.projectCwd !== project || initialized.sourceDir !== input.profile.sourceDir)
-      throw new Error('Antigravity private state belongs to another launch profile or workspace');
+  const sourceDir = input.profile.sourceDir;
+  if (initialized && (initialized.projectCwd !== project || initialized.sourceDir !== sourceDir))
+    throw new Error('Antigravity session state belongs to another launch profile or workspace');
+  const legacy = initialized?.version === 1;
+  if (initialized && !legacy && (initialized.version !== 2 || initialized.geminiDir !== sourceDir))
+    throw new Error('Antigravity session state is unsupported');
+  const paths = legacy ? base : { ...base, geminiDir: sourceDir };
+  const { geminiDir, bridgeDir, settingsPath, logPath } = paths;
+  if (legacy) {
     if (!(await stat(geminiDir))?.isDirectory() || (await stat(geminiDir))?.isSymbolicLink())
       throw new Error('Antigravity private native root is unavailable');
-  } else {
-    if (await stat(geminiDir)) throw new Error('Antigravity private state initialization is incomplete');
-    const temporary = join(root, `native-${randomUUID()}.tmp`);
-    try {
-      await privateDirectory(temporary);
-      await copyCustomizations(input.profile.sourceDir, temporary, geminiDir);
-      await rename(temporary, geminiDir);
-      await write(marker, { version: 1, projectCwd: project, sourceDir: input.profile.sourceDir });
-    } finally {
-      await rm(temporary, { recursive: true, force: true });
-    }
+  } else if (!initialized) {
+    if (await stat(join(root, 'native'))) throw new Error('Antigravity private state initialization is incomplete');
+    // History goes where the CLI keeps it, so the user's own agy and usage tools see these conversations.
+    await write(marker, { version: 2, projectCwd: project, sourceDir, geminiDir: sourceDir });
   }
   await privateDirectory(bridgeDir);
   await privateDirectory(join(root, 'launches'));
   await privateDirectory(dirname(settingsPath));
-  await privateDirectory(join(geminiDir, 'antigravity-cli'));
   const nativeSettingsPath = join(geminiDir, 'antigravity-cli', 'settings.json');
-  const settings = nativeSettings(await json(nativeSettingsPath));
+  // Layout 1 starts from the whole private copy; layout 2 overlays only what Riffet decides on the user's own
+  // settings, which agy keeps reading: the keys below are read so the overlay extends them instead of hiding them.
+  // Custom models are read only when this launch adds one, so a user's own model credentials never stop a launch.
+  const saved = legacy ? await json(nativeSettingsPath) : await userSettings(nativeSettingsPath);
+  const extended = ['trustedWorkspaces', 'statusLine', ...(input.customModel ? ['customModelsConfig'] : [])];
+  const settings = nativeSettings(
+    legacy ? saved : Object.fromEntries(extended.flatMap(key => (saved?.[key] === undefined ? [] : [[key, saved[key]]]))),
+  );
   // Picking the project for this conversation is the trust decision agy's first-run dialog asks for (as for
-  // Claude Code). It is recorded in the session's private native settings, never in the user's own; only that
-  // key is touched there, so what agy itself saved in the file stays as it was.
-  const trusted = Array.isArray(settings.trustedWorkspaces)
-    ? settings.trustedWorkspaces.filter((entry): entry is string => typeof entry === 'string')
-    : [];
+  // Claude Code). It goes into this launch's settings only; a legacy private root also keeps it in its own file.
+  const trusted = trustedList(settings.trustedWorkspaces);
   const trustedWorkspaces = [...new Set([...trusted, resolve(input.projectCwd), project])];
   const trustAdded = !trusted.includes(project);
-  if (trustAdded) await write(nativeSettingsPath, { ...(await json(nativeSettingsPath)), trustedWorkspaces });
+  if (legacy && trustAdded) await write(nativeSettingsPath, { ...saved, trustedWorkspaces });
   // Model selection is a native --model argument; labels saved by /model remain untouched. A custom model goes into
-  // this launch's own settings, never the session's native file, so it lasts exactly as long as the selection.
+  // this launch's own settings, never a native file, so it lasts exactly as long as the selection.
   Object.assign(
     settings,
     { queuedMessages: 'queue', altScreenMode: 'always', trustedWorkspaces },

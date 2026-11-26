@@ -316,7 +316,7 @@ struct AgentProviderEditor: View {
             }
             if profileAllowsConfigDir(backend) {
                 SettingsFieldRow("配置目录") {
-                    TextField(backend == .dsh ? "~/.riffet/dsh（默认）" : "使用 CLI 默认目录", text: $draft.configDir)
+                    TextField("使用 CLI 默认目录", text: $draft.configDir)
                         .font(.riffet(size: S(13), design: .monospaced))
                         .formField()
                 }

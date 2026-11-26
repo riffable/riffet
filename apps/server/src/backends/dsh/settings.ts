@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { ModelInputModalities, Session } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
-import { DEFAULT_DSH_CONFIG_DIR } from '../../compat.js';
+import { defaultDshConfigDir } from '../../compat.js';
 import { describeSearch, isCliMissing, resolveCliExecutable } from '../shared/cli-resolve.js';
 import { parseVersion, versionAtLeast, type CliVersion, type CliVersionRange } from '../shared/cli-version.js';
 import type { NativeBackendAvailability, NativeBackendProfileConfig } from '../types.js';
@@ -51,7 +51,7 @@ export function runtimeSettings(profile: NativeBackendProfileConfig): DshRuntime
   const configuredExecutable = nonEmpty(config.executable);
   const executable = configuredExecutable ?? 'dsh';
   const sourceDir = settingPath(config.sourceDir);
-  const configDir = settingPath(config.configDir) ?? DEFAULT_DSH_CONFIG_DIR;
+  const configDir = settingPath(config.configDir) ?? defaultDshConfigDir();
   const apiEndpoint = nonEmpty(config.apiEndpoint) ?? nonEmpty(process.env.DEEPSEEK_BASE_URL);
   const apiKey = nonEmpty(config.apiKey) ?? nonEmpty(process.env.DEEPSEEK_API_KEY);
   const defaultModel = nonEmpty(config.defaultModel) ?? process.env.DEEPSEEK_MODEL?.trim() ?? DEFAULT_MODEL;

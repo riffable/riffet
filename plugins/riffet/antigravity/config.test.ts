@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { agyProfileEnvironment, agySelection, parseAgyProfile, prepareAgySession } from './config.js';
+import { agyProfileEnvironment, agySelection, agySessionGeminiDir, parseAgyProfile, prepareAgySession } from './config.js';
 import { agyLaunchModel, parseAgyModels } from './models.js';
 const roots: string[] = [];
 afterEach(async () => {
@@ -33,7 +33,7 @@ async function fixture() {
     }),
   };
 }
-describe('Antigravity private launch configuration', () => {
+describe('Antigravity launch configuration', () => {
   it('keeps profile credentials out of serialization and rejects ambiguous provider settings', () => {
     const profile = parseAgyProfile({
       apiEndpoint: 'http://127.0.0.1:18080/prefix/',
@@ -79,79 +79,51 @@ describe('Antigravity private launch configuration', () => {
     expect(agyLaunchModel(agySelection('gemini-4-hydrogen-sonar[effort=xhigh]'), native, key).effort).toBeUndefined();
     expect(agyLaunchModel(agySelection('gemini-4-hydrogen-sonar'), native, { hasApiKey: false }).custom).toBeUndefined();
   });
-  it('snapshots customization privately and preserves native edits on resume', async () => {
+  it('runs new sessions on the provider data root without writing the user settings', async () => {
     const f = await fixture();
-    await f.put('AGENTS.md', 'global rule');
-    await f.put('config/skills/example/SKILL.md', 'skill');
-    await f.put('config/plugins/example/plugin.json', { name: 'example', skills: ['skills'] });
-    await f.put('config/plugins/example/skills/local/SKILL.md', 'plugin skill');
-    await f.put('config/skills.json', { entries: [{ path: join(f.source, 'config', 'skills') }] });
-    await f.put('config/mcp_config.json', { mcpServers: { fixture: { command: 'node', env: { KEY: 'user-mcp-secret' } } } });
     await f.put('antigravity-cli/settings.json', {
       colorScheme: 'dark',
-      toolPermission: 'strict',
-      trustedWorkspaces: [],
-      apiKey: 'native-secret',
+      model: 'Saved model',
+      trustedWorkspaces: ['/elsewhere'],
+      customModelsConfig: { customModels: { mine: { modelName: 'mine' } } },
     });
-    await f.put('antigravity-cli/cache/onboarding.json', {
-      consumerOnboardingComplete: true,
-      enterpriseOnboardingComplete: false,
-      onboardingComplete: true,
-      token: 'oauth-secret',
-    });
-    await f.put('oauth_creds.json', 'oauth-secret');
-    await f.put('config/skills/example/.env', 'secret file');
     const original = await readFile(join(f.source, 'antigravity-cli/settings.json'), 'utf8');
-    const first = await prepareAgySession({ ...f.input(), mode: 'plan', approval: 'allowlist' });
-    expect(await readFile(join(first.geminiDir, 'AGENTS.md'), 'utf8')).toBe('global rule');
-    expect(await readdir(first.geminiDir)).not.toContain('oauth_creds.json');
-    expect(await readdir(join(first.geminiDir, 'config', 'skills', 'example'))).not.toContain('.env');
-    expect(JSON.parse(await readFile(join(first.geminiDir, 'config', 'skills.json'), 'utf8')).entries[0].path).toBe(
-      join(first.geminiDir, 'config', 'skills'),
-    );
+    const first = await prepareAgySession({ ...f.input(), mode: 'plan', approval: 'allowlist', customModel: 'gateway-model' });
+    expect(first.geminiDir).toBe(f.source);
+    expect(first.trustAdded).toBe(true);
     const overlay = JSON.parse(await readFile(first.settingsPath, 'utf8'));
-    expect(overlay).toMatchObject({
-      colorScheme: 'dark',
-      toolPermission: 'request-review',
-      agentMode: 'plan',
+    // Only Riffet's own choices: everything else, including a model saved by /model, stays agy's to read.
+    expect(overlay).toEqual({
+      trustedWorkspaces: ['/elsewhere', f.project, await realpath(f.project)],
+      customModelsConfig: { customModels: { mine: { modelName: 'mine' }, 'gateway-model': { modelName: 'gateway-model' } } },
       queuedMessages: 'queue',
       altScreenMode: 'always',
+      agentMode: 'plan',
+      toolPermission: 'request-review',
     });
-    expect(overlay.trustedWorkspaces).toEqual(expect.arrayContaining([await realpath(f.project)]));
-    expect(overlay).not.toHaveProperty('apiKey');
-    expect(overlay).not.toHaveProperty('modelProvider');
-    expect(JSON.parse(await readFile(join(first.geminiDir, 'antigravity-cli', 'cache', 'onboarding.json'), 'utf8'))).toEqual({
-      consumerOnboardingComplete: true,
-      onboardingComplete: true,
-    });
-    expect((await stat(first.geminiDir)).mode & 0o777).toBe(0o700);
     expect((await stat(first.settingsPath)).mode & 0o777).toBe(0o600);
-    await writeFile(
-      join(first.geminiDir, 'antigravity-cli', 'settings.json'),
-      JSON.stringify({
-        colorScheme: 'light',
-        model: 'Native edited model',
-        toolPermission: 'strict',
-        customModelsConfig: { customModels: { mine: { modelName: 'mine' } } },
-      }),
-    );
-    await f.put('AGENTS.md', 'changed donor');
-    const second = await prepareAgySession({ ...f.input(), customModel: 'gateway-model' });
-    expect(second.geminiDir).toBe(first.geminiDir);
+    expect(await readFile(join(f.source, 'antigravity-cli', 'settings.json'), 'utf8')).toBe(original);
+    await expect(stat(join(first.root, 'native'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const second = await prepareAgySession(f.input());
+    expect(second.geminiDir).toBe(f.source);
     expect(second.bridgeDir).toBe(first.bridgeDir);
     expect(second.settingsPath).not.toBe(first.settingsPath);
-    expect(JSON.parse(await readFile(second.settingsPath, 'utf8'))).toMatchObject({
-      colorScheme: 'light',
-      model: 'Native edited model',
-      toolPermission: 'strict',
-      customModelsConfig: { customModels: { mine: { modelName: 'mine' }, 'gateway-model': { modelName: 'gateway-model' } } },
-    });
-    expect(JSON.parse(await readFile(join(second.geminiDir, 'antigravity-cli', 'settings.json'), 'utf8')).customModelsConfig.customModels).not.toHaveProperty(
-      'gateway-model',
+    expect(agySessionGeminiDir(f.input().stateDir, 'session-1')).toBe(f.source);
+  });
+  it('resumes a session started before native history on its private root', async () => {
+    const f = await fixture();
+    const state = join(f.root, 'state');
+    const root = join(state, 'sessions', 'session-1');
+    await mkdir(join(root, 'native', 'antigravity-cli'), { recursive: true });
+    await writeFile(join(root, 'initialized.json'), JSON.stringify({ version: 1, projectCwd: await realpath(f.project), sourceDir: f.source }));
+    await writeFile(join(root, 'native', 'antigravity-cli', 'settings.json'), JSON.stringify({ colorScheme: 'light', model: 'Private model' }));
+    const prepared = await prepareAgySession(f.input());
+    expect(prepared.geminiDir).toBe(join(await realpath(state), 'sessions', 'session-1', 'native'));
+    expect(JSON.parse(await readFile(prepared.settingsPath, 'utf8'))).toMatchObject({ colorScheme: 'light', model: 'Private model' });
+    expect(JSON.parse(await readFile(join(prepared.geminiDir, 'antigravity-cli', 'settings.json'), 'utf8')).trustedWorkspaces).toContain(
+      await realpath(f.project),
     );
-    expect(await readFile(join(second.geminiDir, 'AGENTS.md'), 'utf8')).toBe('global rule');
-    expect(await readFile(join(f.source, 'antigravity-cli', 'settings.json'), 'utf8')).toBe(original);
-    expect(process.env.HOME).toBeTruthy();
+    expect(agySessionGeminiDir(state, 'session-1')).toBe(join(state, 'sessions', 'session-1', 'native'));
   });
   it('enables the terminal sandbox for a Sandbox launch and restores the native setting on later launches', async () => {
     const f = await fixture();
@@ -162,29 +134,21 @@ describe('Antigravity private launch configuration', () => {
       expect(settings).toMatchObject({
         agentMode: '',
         toolPermission: approval === 'request-review' ? 'request-review' : 'proceed-in-sandbox',
-        enableTerminalSandbox: approval !== 'request-review',
-        permissions: { ask: ['command(git push)'] },
       });
+      expect(settings.enableTerminalSandbox).toBe(approval === 'request-review' ? undefined : true);
     }
   });
-  it('refuses linked state, linked customizations and external discovery references', async () => {
+  it('refuses linked session state', async () => {
     const f = await fixture();
-    await f.put('config/rules/rule.md', 'rule');
-    await symlink(join(f.source, 'config', 'rules', 'rule.md'), join(f.source, 'config', 'rules', 'linked.md'));
-    await expect(prepareAgySession(f.input())).rejects.toThrow('symbolic link');
-    await rm(join(f.source, 'config', 'rules', 'linked.md'));
-    await f.put('config/skills.json', { entries: [{ path: '/external/team/skills' }] });
-    await expect(prepareAgySession(f.input())).rejects.toThrow('unsupported customization');
-    await rm(join(f.source, 'config', 'skills.json'));
     const sessionParent = join(f.root, 'state', 'sessions');
+    await mkdir(sessionParent, { recursive: true });
     await rm(sessionParent, { recursive: true });
     await symlink(f.project, sessionParent);
     await expect(prepareAgySession(f.input())).rejects.toThrow('unsafe');
   });
-  it('does not fabricate onboarding and binds private roots to the original workspace', async () => {
+  it('binds session state to the original workspace', async () => {
     const f = await fixture();
-    const prepared = await prepareAgySession(f.input());
-    await expect(stat(join(prepared.geminiDir, 'antigravity-cli', 'cache', 'onboarding.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await prepareAgySession(f.input());
     const other = join(f.root, 'other');
     await mkdir(other);
     await expect(prepareAgySession({ ...f.input(), projectCwd: other })).rejects.toThrow('another');
