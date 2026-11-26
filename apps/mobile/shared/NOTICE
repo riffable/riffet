@@ -54,10 +54,6 @@ Apache License 2.0; full terms in icon-licenses/remix.txt.
 This historical version is pinned to its Apache-2.0 license; do not update to the
 2026 custom-license releases without reviewing standalone icon-pack distribution.
 
-Miuix (https://github.com/compose-miuix-ui/miuix), 0.9.4
-Copyright compose-miuix-ui contributors. Apache License 2.0.
-The application maps its own semantic palette to the Miuix theme.
-
 Haze (https://github.com/chrisbanes/haze), core / blur / glass 2.0.1
 Copyright 2023-2026 Christopher Banes and the Haze project contributors.
 Apache License 2.0; full terms in composeResources/files/licenses/haze.txt.

@@ -181,7 +181,7 @@ export function UnderlineTabs<T extends string>({ value, options, onChange, clas
             'relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 text-sm font-medium text-fg-3 outline-none transition-colors hover:text-fg focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus disabled:opacity-50 max-md:px-3 max-md:text-base [&_svg]:size-3.5',
             scrollable && 'shrink-0',
             'after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent after:transition-colors max-md:after:inset-x-3',
-            value === option.value && 'text-fg after:bg-fg',
+            value === option.value && 'text-fg after:bg-primary',
           )}
         >
           {option.icon}
@@ -234,7 +234,7 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
       <span
         ref={thumb}
         aria-hidden
-        className="pointer-events-none absolute left-0 top-0 rounded-md bg-elevated shadow-[0_0_0_0.5px_var(--line-strong),var(--shadow-soft)] transition-[transform,width] duration-[var(--duration-base)] ease-[var(--ease-standard)] dark:bg-active"
+        className="pointer-events-none absolute left-0 top-0 rounded-md bg-accent-soft transition-[transform,width] duration-[var(--duration-base)] ease-[var(--ease-standard)]"
       />
       {options.map((option) => (
         <button

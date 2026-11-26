@@ -141,7 +141,7 @@ export function FilterBar({ state, options, onChange, onExport }: {
             type="button"
             aria-pressed={state.includeEstimated}
             onClick={() => onChange({ ...state, includeEstimated: !state.includeEstimated })}
-            className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors', state.includeEstimated ? 'border-line-strong bg-active text-fg' : 'border-line text-fg-3 hover:bg-hover hover:text-fg')}
+            className={cn('inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors', state.includeEstimated ? 'border-transparent bg-accent-soft text-fg' : 'border-line text-fg-3 hover:bg-hover hover:text-fg')}
           >
             <span className="size-1.5 rounded-full bg-warning" aria-hidden />
             <Trans>含估算</Trans>

@@ -13,7 +13,10 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-private val ThemeInterfaceStyles = setOf("material3", "ios", "expressive", "miuix", "fluent")
+private val ThemeInterfaceStyles = setOf("riffet", "material3")
+
+/** Styles the apps no longer have; a saved design may still carry their overrides, which are dropped on read. */
+private val RetiredThemeInterfaceStyles = setOf("ios", "expressive", "miuix", "fluent")
 
 /** Optional per-style design overrides, mirrored by packages/contracts/src/theme-design.ts. */
 @Serializable(with = ThemeDesignSerializer::class)
@@ -97,7 +100,7 @@ object ThemeDesignSerializer : KSerializer<ThemeDesign> {
         val value = strict.decodeFromJsonElement(wire, element)
         value.tokens?.validate()
         value.styles.values.forEach { it.validate() }
-        return ThemeDesign(value.version, value.tokens, value.styles)
+        return ThemeDesign(value.version, value.tokens, value.styles.filterKeys { it !in RetiredThemeInterfaceStyles })
     }
     override fun serialize(encoder: Encoder, value: ThemeDesign) {
         require(value.version == 1 && value.styles.keys.all { it in ThemeInterfaceStyles })

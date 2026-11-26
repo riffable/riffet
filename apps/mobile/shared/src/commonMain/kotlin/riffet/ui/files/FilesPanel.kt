@@ -473,7 +473,7 @@ private fun FileTypeIcon(directory: Boolean) {
     Icon(
         if (directory) RiffetIcons.Folder else RiffetIcons.FileText,
         contentDescription = null,
-        tint = if (directory) colors.accent else colors.fg3,
+        tint = colors.fg3,
         modifier = Modifier.size(22.dp),
     )
 }
@@ -741,7 +741,7 @@ private fun TextPreviewFooter(preview: FilePreview) {
 private fun LineRow(number: Int, text: AnnotatedString, highlighted: Boolean) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    Row(Modifier.background(if (highlighted) surfaces.selected else Color.Transparent)) {
+    Row(Modifier.background(if (highlighted) surfaces.rowSelected else Color.Transparent)) {
         Text(
             text = number.toString(),
             style = typography.monoSmall,

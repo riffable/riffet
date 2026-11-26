@@ -111,6 +111,21 @@ enum ThemeSeedMath {
         return (max(a, b) + 0.05) / (min(a, b) + 0.05)
     }
 
+    /// The theme's colour one step deeper (light) or brighter (dark) than [accent], same hue and chroma, until it
+    /// carries its foreground at 4.6:1 (riffet-style.md §4). Mirrors `derivePrimary` in `apps/web/src/lib/theme-seed.ts`.
+    private static func derivePrimary(_ accent: Rgba, bgHex: String, dark: Bool) -> (primary: String, hover: String, fg: String) {
+        guard let lch = oklch(hex(accent)) else { return (hex(accent), hex(accent), dark ? bgHex : "#ffffff") }
+        let fgHex = dark ? bgHex : "#ffffff"
+        let fg = parse(fgHex) ?? Rgba(r: 255, g: 255, b: 255, a: 1)
+        var l = dark ? lch.l + 0.05 : lch.l - 0.07
+        var step = 0
+        while step < 200, contrast(fit(l, lch.c, lch.h), fg) < 4.6, !dark || l < 0.97 {
+            l += dark ? 0.005 : -0.005
+            step += 1
+        }
+        return (hex(l, lch.c, lch.h), hex(dark ? l - 0.05 : l - 0.06, lch.c, lch.h), fgHex)
+    }
+
     /// Steps lightness away from [background] until the ink reaches [minimum]:1.
     private static func readable(_ l: Double, _ c: Double, _ h: Double, on background: Rgba, minimum: Double, darker: Bool) -> String {
         var lightness = l
@@ -208,6 +223,7 @@ enum ThemeSeedMath {
             let accent = fit(accentL, ca, ha)
             let ink = min(cs * 1.4, 0.05)
             let fg = readable(0.29, cs * 0.5, h, on: bg, minimum: 12, darker: true)
+            let primary = derivePrimary(accent, bgHex: hex(bg), dark: false)
             return [
                 "bg": hex(bg),
                 "bg-sidebar": canvasStop(surface, dark: false, soft: soft),
@@ -225,9 +241,9 @@ enum ThemeSeedMath {
                 "line": hex(0.2, ink, h, 0.08),
                 "line-soft": hex(0.2, ink, h, 0.055),
                 "line-strong": hex(0.2, ink, h, 0.13),
-                "primary": hex(0.2, cs * 0.5, h),
-                "primary-hover": hex(0.33, cs * 0.5, h),
-                "primary-fg": hex(elevatedL, cs * 0.4, h),
+                "primary": primary.primary,
+                "primary-hover": primary.hover,
+                "primary-fg": primary.fg,
                 "accent": hex(accent),
                 "accent-hover": hex(accentL - 0.04, ca, ha),
                 "accent-soft": hex(Rgba(r: accent.r, g: accent.g, b: accent.b, a: 0.1)),
@@ -243,6 +259,7 @@ enum ThemeSeedMath {
         let accentL = 0.7 + 0.08 * yellowness(ha)
         let accent = fit(accentL, ca, ha)
         let ink = min(cs, 0.03)
+        let primary = derivePrimary(accent, bgHex: bgHex, dark: true)
         return [
             "bg": bgHex,
             "bg-sidebar": canvasStop(surface, dark: true, soft: soft),
@@ -260,9 +277,9 @@ enum ThemeSeedMath {
             "line": hex(0.98, ink, h, 0.075),
             "line-soft": hex(0.98, ink, h, 0.05),
             "line-strong": hex(0.98, ink, h, 0.12),
-            "primary": hex(0.95, cs * 0.4, h),
-            "primary-hover": hex(0.87, cs * 0.4, h),
-            "primary-fg": bgHex,
+            "primary": primary.primary,
+            "primary-hover": primary.hover,
+            "primary-fg": primary.fg,
             "accent": hex(accent),
             "accent-hover": hex(accentL - 0.04, ca, ha),
             "accent-soft": hex(Rgba(r: accent.r, g: accent.g, b: accent.b, a: 0.15)),

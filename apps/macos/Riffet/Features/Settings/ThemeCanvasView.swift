@@ -183,7 +183,7 @@ struct ThemeCanvasView: View {
             Slider(value: value, in: 0...1)
                 .labelsHidden()
                 .controlSize(.small)
-                .tint(palette.accent)
+                .tint(palette.primary)
                 .disabled(disabled)
                 .accessibilityLabel(Text(label))
         }

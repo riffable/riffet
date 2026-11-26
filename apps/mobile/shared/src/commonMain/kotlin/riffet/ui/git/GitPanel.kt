@@ -39,6 +39,7 @@ import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.app.pageColor
 import riffet.ui.app.cardColor
 import riffet.ui.app.pageBackground
+import riffet.ui.app.coverSystemBars
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.PaddingValues
@@ -276,6 +277,7 @@ fun GitPanel(
     riffet.ui.app.PageLeaveGuard { !busy }
     riffet.ui.app.PageHost(pages, modifier) { page, back ->
         riffet.ui.app.PageLeaveGuard { !busy }
+        val gitBars = riffet.ui.app.systemBarsPadding(includeDisplayCutout = false)
         when (page) {
             is GitPage.Checkpoint -> GitCheckpointPage(page.id, state, controller, back)
 
@@ -283,7 +285,9 @@ fun GitPanel(
 
             is GitPage.NewWorktree -> GitNewWorktreePage(state, controller, back)
 
-            else -> Column(Modifier.fillMaxSize().pageBackground(pageColor())) {
+            // The page's colour reaches under the system bars, as RiffetPageScaffold's does; otherwise the pane it
+            // was opened from shows through above and below it. The content keeps to the safe area.
+            else -> Column(Modifier.fillMaxSize().coverSystemBars(gitBars).pageBackground(pageColor()).padding(gitBars)) {
             val title = when (page) {
                 is GitPage.Commit -> page.hash.take(8)
                 is GitPage.Diff -> page.target.title ?: stringResource(Res.string.git_diff_title)
@@ -712,6 +716,7 @@ private fun ChangesTab(
                     onClick = onCommit,
                     enabled = canCommit,
                     primary = true,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -1065,9 +1070,9 @@ private fun GitWorktreePage(
         GitErrorBanner(state.error)
         if (worktree != null) {
             SettingsGroup(title = "") {
-                SettingsValueRow(stringResource(Res.string.gitp_branch), worktree.branch ?: detached)
-                SettingsValueRow(stringResource(Res.string.git_head), worktree.head.take(8))
-                SettingsValueRow(stringResource(Res.string.gitp_path), tildePath(worktree.path))
+                SettingsValueRow(stringResource(Res.string.gitp_branch), worktree.branch ?: detached, mono = true)
+                SettingsValueRow(stringResource(Res.string.git_head), worktree.head.take(8), mono = true)
+                SettingsValueRow(stringResource(Res.string.gitp_path), tildePath(worktree.path), mono = true)
             }
             if (onOpenWorktree != null && worktree.bare != true) SettingsGroup(title = "") {
                 SettingsActionRow(title = stringResource(Res.string.git_start_here), enabled = !state.busy, onClick = { onOpenWorktree(worktree.path) })

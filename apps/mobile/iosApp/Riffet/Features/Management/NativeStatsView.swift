@@ -167,7 +167,7 @@ struct NativeStatsView: View {
             ForEach(ordered.prefix(8), id: \.key) { row in
                 VStack(alignment: .leading, spacing: 5) {
                     LabeledContent(row.label, value: rank.formatted(row))
-                    if let amount = rank.amount(row), maximum > 0 { ProgressView(value: amount, total: maximum).tint(palette.accent) }
+                    if let amount = rank.amount(row), maximum > 0 { ProgressView(value: amount, total: maximum).tint(palette.primary) }
                 }.padding(.vertical, 3)
             }
             if ordered.count > 8 { DisclosureGroup("全部 \(ordered.count) 个模型") { ForEach(ordered, id: \.key) { row in LabeledContent(row.label, value: rank.formatted(row)).riffetFont(.caption) } } }
@@ -342,6 +342,7 @@ private enum NativeStatsFilterKind: String, Identifiable {
 /// The detailed filters (project, agent, model, call kind, archived, estimated, a custom range). Done
 /// applies them together; Cancel keeps what was set.
 private struct NativeStatsFiltersSheet: View {
+    @Environment(\.palette) private var palette
     @Binding var selection: NativeStatsSelection
     let projects: [StatsKeyInfo]
     let backends: [StatsKeyInfo]
@@ -368,8 +369,8 @@ private struct NativeStatsFiltersSheet: View {
                     filterRow(.backends, options: backends, values: $draft.backends)
                     filterRow(.models, options: models, values: $draft.models)
                     Picker("调用类型", selection: $draft.agentKind) { Text("全部").tag("all"); Text("主 Agent").tag("main"); Text("子 Agent").tag("subagent") }
-                    Toggle("包含已归档会话", isOn: $draft.includeArchived)
-                    Toggle("包含估算 Token", isOn: $draft.includeEstimated)
+                    Toggle("包含已归档会话", isOn: $draft.includeArchived).tint(palette.primary)
+                    Toggle("包含估算 Token", isOn: $draft.includeEstimated).tint(palette.primary)
                 }
                 if draft.activeCount > 0 {
                     Section {

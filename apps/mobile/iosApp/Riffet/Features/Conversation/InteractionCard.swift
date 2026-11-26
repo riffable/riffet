@@ -304,7 +304,7 @@ struct InteractionCardView: View {
             Button { submit(action.id) } label: {
                 InteractionButtonLabel(text: action.shortLabel ?? action.label, running: inFlightAction == action.id)
             }
-            .buttonStyle(.borderedProminent).tint(palette.accent).disabled(!connected || busy)
+            .buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).disabled(!connected || busy)
             .accessibilityIdentifier("interactionAction.\(action.id)")
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -447,11 +447,12 @@ struct InteractionCardView: View {
             Button { submit(chosen.id) } label: {
                 InteractionButtonLabel(text: chosen.shortLabel ?? chosen.label, running: inFlightAction == chosen.id, fallback: String(localized: "提交", bundle: .riffet))
             }
-            .buttonStyle(.borderedProminent).tint(chosen.tone == "danger" ? palette.danger : palette.accent)
+            .buttonStyle(.borderedProminent).tint(chosen.tone == "danger" ? palette.danger : palette.primary)
+            .foregroundStyle(chosen.tone == "danger" ? palette.dangerFg : palette.primaryFg)
             .disabled(!connected || busy)
             .accessibilityIdentifier("interactionAction.\(chosen.id)")
         } else {
-            Button("提交") {}.buttonStyle(.borderedProminent).disabled(true)
+            Button("提交") {}.buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).disabled(true)
         }
     }
 
@@ -548,7 +549,7 @@ struct InteractionCardView: View {
                     : submits ? (last || action.label.contains("提交") ? String(localized: "提交", bundle: .riffet) : String(localized: "下一题", bundle: .riffet))
                     : action.id == "skip" ? String(localized: "跳过", bundle: .riffet) : action.shortLabel ?? action.label
                 Button { submit(action.id) } label: { InteractionButtonLabel(text: label, running: inFlightAction == action.id, fallback: String(localized: "提交", bundle: .riffet)) }
-                    .buttonStyle(.bordered).tint(action.tone == "danger" ? palette.danger : palette.accent)
+                    .buttonStyle(.bordered).tint(action.tone == "danger" ? palette.danger : palette.primary)
                     .disabled(!connected || busy || (submits && !answerPresent))
                     .help(action.id == "skip" ? String(localized: "跳过这组问题", bundle: .riffet) : "")
                     .accessibilityIdentifier("interactionAction.\(action.id)")

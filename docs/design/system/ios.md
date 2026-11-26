@@ -1,12 +1,12 @@
 # iOS
 
-本文把[基础](foundations.md)、[模式](patterns.md)、[移动端页面](mobile.md)和组件落到 iPhone 与 iPad：每条语义在 iOS 上用哪个系统控件或 `Design/` 里的组件、取什么值、哪里跟平台而与 Android 不同。数值与 Android 的 ios 风格同源（`packages/contracts/src/mobile-styles.ts`，iOS 自己的差异在 `IOS_NATIVE_OVERRIDES`）；页面怎么组织见 [移动端页面](mobile.md)，本文不重复。架构、协议与验收记录见 [iPhone 原生方案](../../IOS.md)。
+本文把[基础](foundations.md)、[模式](patterns.md)、[移动端页面](mobile.md)和组件落到 iPhone 与 iPad：每条语义在 iOS 上用哪个系统控件或 `Design/` 里的组件、取什么值、哪里跟平台而与 Android 不同。数值在 `packages/contracts/src/mobile-styles.ts` 的 `MOBILE_IPHONE_DIMENSIONS`（iOS 自己的差异在 `IOS_NATIVE_OVERRIDES`）；页面怎么组织见 [移动端页面](mobile.md)，本文不重复。架构、协议与验收记录见 [iPhone 原生方案](../../IOS.md)。
 
 每节末尾的「现状」是 2026-11-15 盘点时与规则不符的实现，迁移后删掉对应条目；页面、浮层与场景的现状记在 [移动端页面](mobile.md) §7.4。路径相对 `apps/mobile/iosApp/Riffet/`。
 
 ## 1. 分工
 
-行为跟 [HIG](https://developer.apple.com/design/human-interface-guidelines/) 与系统控件，外观跟 Riffet 的颜色角色和 ios 风格的取值。
+行为跟 [HIG](https://developer.apple.com/design/human-interface-guidelines/) 与系统控件，外观跟 Riffet 的颜色角色和 `MOBILE_IPHONE_DIMENSIONS` 的取值。
 
 | 跟平台 | 跟共用的规范 |
 |---|---|
@@ -19,7 +19,7 @@
 | 硬件键盘、拖放、分享、文件与照片选择、相机与通知权限 | |
 
 - **系统控件优先。** 系统有的（开关、菜单、分段、搜索、下拉刷新、弹窗、空状态、分享）直接用，颜色和字体由 `Design/` 统一设置；系统没有的（胶囊、提示条、短暂反馈、页签、头像、发送按钮）在 `Design/` 里画一份，业务代码不再画第二份。
-- **只有一种外观。** iOS 不读 Android 的五种界面风格；Android 的 `IosPreset` 与本文同源，同一页面两端一起改。
+- **只有一种外观。** iOS 不读 Android 的界面风格，尺寸取自 `packages/contracts/src/mobile-styles.ts` 的 `MOBILE_IPHONE_DIMENSIONS`。
 - **材质只给浮在内容上的东西**（§2.3）。系统导航栏、Tab 栏不设自定义背景，否则盖掉 Liquid Glass 和软滚动边缘。
 
 ## 2. 基础的 iOS 写法
@@ -59,7 +59,7 @@ SwiftUI 在主线程上解析页面的视图类型、计算 body。iOS 的主线
 
 ### 2.1 文字角色
 
-角色在 `Design/RiffetDesign.swift` 的 `RiffetText`，字号与字重由 `pnpm gen:tokens` 从 ios 风格生成，经 `@ScaledMetric` 随 Dynamic Type 缩放。
+角色在 `Design/RiffetDesign.swift` 的 `RiffetText`，字号与字重由 `pnpm gen:tokens` 从 `MOBILE_IOS_TEXT` 生成，经 `@ScaledMetric` 随 Dynamic Type 缩放。
 
 | [基础](foundations.md) §2 的角色 | `RiffetText` | 取值 | 跟随的系统文字样式 |
 |---|---|---|---|

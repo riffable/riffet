@@ -286,7 +286,7 @@ private fun DownloadRow(
     val statusColor = if (item.state == DownloadState.FAILED) scheme.error else scheme.onSurfaceVariant
     val card = cardColor()
     val containerColor by animateColorAsState(
-        targetValue = if (!grouped && item.state == DownloadState.RUNNING) surfaces.selected else card,
+        targetValue = if (!grouped && item.state == DownloadState.RUNNING) surfaces.rowSelected else card,
         animationSpec = motion.effects(),
         label = "download-container",
     )

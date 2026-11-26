@@ -62,7 +62,7 @@ export * from './icon-pack.js';
 
 // The design system's values (docs/design/system/foundations.md), for its specimen page.
 export { DESKTOP_TEXT, MAC_MOTION, MOTION_DURATION, MOTION_EASING, SPACE } from './design-tokens.js';
-export { MOBILE_BASE_DIMENSIONS, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE_IOS_TEXT, MOBILE_MOTION, MOBILE_RIFFET_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS } from './mobile-styles.js';
+export { MOBILE_BASE_DIMENSIONS, MOBILE_EASING, MOBILE_IOS_TEXT, MOBILE_IPHONE_DIMENSIONS, MOBILE_MOTION, MOBILE_RIFFET_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS } from './mobile-styles.js';
 export { DESKTOP_STYLE } from './interface-styles.js';
 export type { DesktopStyle, DesktopStyleLength } from './interface-styles.js';
 

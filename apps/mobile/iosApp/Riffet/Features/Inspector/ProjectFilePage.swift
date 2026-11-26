@@ -208,7 +208,7 @@ struct ProjectFilePage: View {
                         Text(focus).riffetFont(.monoSmall).foregroundStyle(palette.fg).textSelection(.enabled)
                     }
                     .padding(RiffetMetrics.pageInset).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(palette.selected, in: RoundedRectangle(cornerRadius: RiffetMetrics.rowRadius, style: .continuous))
+                    .background(palette.bgActive, in: RoundedRectangle(cornerRadius: RiffetMetrics.rowRadius, style: .continuous))
                 }
                 ConversationCode(text: chunk.text, language: language, workbench: workbench, projectID: project.id, capped: false)
             }

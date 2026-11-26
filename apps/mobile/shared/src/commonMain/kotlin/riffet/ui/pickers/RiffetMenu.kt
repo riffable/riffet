@@ -321,7 +321,7 @@ internal fun RiffetMenuItem(
             Spacer(Modifier.width(metrics.controlInset))
             // The box stays when unchecked so every row's trailing column lines up.
             Box(Modifier.size(metrics.smallIconSize), contentAlignment = Alignment.Center) {
-                if (selected) Icon(RiffetIcons.Check, contentDescription = null, tint = colors.accent, modifier = Modifier.size(metrics.smallIconSize))
+                if (selected) Icon(RiffetIcons.Check, contentDescription = null, tint = LocalRiffetSurfaces.current.primaryAction, modifier = Modifier.size(metrics.smallIconSize))
             }
         }
     }

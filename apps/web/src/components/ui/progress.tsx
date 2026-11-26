@@ -2,7 +2,7 @@ import { cn } from '@/lib/utils';
 
 /** `neutral` for a figure that is only read, not a state: the context a conversation has used. */
 export type ProgressTone = 'accent' | 'neutral' | 'success' | 'warning' | 'danger';
-const FILL: Record<ProgressTone, string> = { accent: 'bg-accent', neutral: 'bg-fg-3', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
+const FILL: Record<ProgressTone, string> = { accent: 'bg-primary', neutral: 'bg-fg-3', success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
 
 /**
  * A determinate bar (docs/design/system/components/feedback.md「Progress」): how much of something is done, or how much of a bound is left. `value`

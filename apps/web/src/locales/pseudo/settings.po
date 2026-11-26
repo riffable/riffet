@@ -504,12 +504,8 @@ msgstr ""
 msgid "Mac 用 ⌘，其他平台用 Ctrl；标签页用 ⌥（Alt）。Escape 关闭最上面的一层。"
 msgstr ""
 
-#: src/app/design/android/notes.ts
-msgid "Material 控件，更大的圆角与选中面，浮动底栏，空间动效用更有弹性的弹簧。"
-msgstr ""
-
 #: src/app/design/android/OverlayChapter.tsx
-msgid "material3 与 expressive 用 Material 的弹窗；其余风格用共享实现，宽度和操作排列读配方。"
+msgid "material3 用 Material 的弹窗，宽度和操作排列读配方。"
 msgstr ""
 
 #: src/app/design/android/PagesChapter.tsx
@@ -776,10 +772,6 @@ msgstr ""
 msgid "上报"
 msgstr ""
 
-#: src/app/design/android/StylesChapter.tsx
-msgid "上方的线"
-msgstr ""
-
 #. placeholder {0}: timeAgo(last.at)
 #. placeholder {1}: formatBytes(last.beforeBytes)
 #. placeholder {2}: formatBytes(last.afterBytes)
@@ -825,10 +817,6 @@ msgid "下划线"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
-msgid "下划线输入框"
-msgstr ""
-
-#: src/app/design/android/StylesChapter.tsx
 msgid "下划线页签"
 msgstr ""
 
@@ -838,10 +826,6 @@ msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "下层页面的位移"
-msgstr ""
-
-#: src/app/design/android/StylesChapter.tsx
-msgid "下方的点"
 msgstr ""
 
 #: src/app/settings/StorageSection.tsx
@@ -1028,10 +1012,6 @@ msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "中"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "中性浮层、小圆角、描边的次要按钮、细轨道开关和下划线输入框。"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -2216,14 +2196,6 @@ msgstr ""
 msgid "分段控件"
 msgstr ""
 
-#: src/app/design/android/notes.ts
-msgid "分段控件是一组独立的胶囊"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "分段控件是下划线页签"
-msgstr ""
-
 #: src/app/design/android/StylesChapter.tsx
 msgid "分段控件的滑块"
 msgstr ""
@@ -2330,10 +2302,6 @@ msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "列表行的选中面"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "列表行高 56，分组之间 24"
 msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
@@ -2809,10 +2777,6 @@ msgctxt "tasks-cancel-action"
 msgid "取消"
 msgstr ""
 
-#: src/app/design/android/StylesChapter.tsx
-msgid "取消单独放在操作面板下方"
-msgstr ""
-
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "取消在左，主操作在右；危险确认的焦点落在取消上"
 msgstr ""
@@ -2852,10 +2816,6 @@ msgstr ""
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "只改变显示的名称，CLI 里的会话名不变；保存在这台服务器"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "只有主操作填充强调色，次要与危险操作是透明的着色文字"
 msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
@@ -3944,18 +3904,6 @@ msgid "导航栏标题"
 msgstr ""
 
 #: src/app/design/android/notes.ts
-msgid "导航栏标题 24，大标题加粗"
-msgstr ""
-
-#: src/app/design/android/StylesChapter.tsx
-msgid "导航栏标题居中"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "导航栏标题居中，56 高"
-msgstr ""
-
-#: src/app/design/android/notes.ts
 msgid "导航栏标题左对齐，底栏平铺并延伸到手势区"
 msgstr ""
 
@@ -4524,20 +4472,8 @@ msgstr ""
 msgid "底栏三个目的地，其余页面压栈打开；左右两个侧栏不是浮层，返回手势与系统一致。"
 msgstr ""
 
-#: src/app/design/android/notes.ts
-msgid "底栏浮在内容上，选中项是胶囊"
-msgstr ""
-
 #: src/app/design/android/StylesChapter.tsx
 msgid "底栏的选中"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "底栏选中项上方一条线"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "底栏选中项下方一个圆点"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -5177,17 +5113,9 @@ msgstr ""
 msgid "按下时的不透明度"
 msgstr ""
 
-#: src/app/design/android/notes.ts
-msgid "按下是表面高亮，没有 ripple"
-msgstr ""
-
 #: src/app/design/patterns/KeyboardChapter.tsx
 #: src/app/settings/ShortcutSettings.tsx
 msgid "按下组合键"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "按下降低不透明度，没有 ripple"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -5218,10 +5146,6 @@ msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "按钮，打开搜索浮层"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "按钮、开关、复选、输入与滑块用官方 Miuix 组件；分组、导航与面板用共享组件。"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
@@ -5324,10 +5248,6 @@ msgstr ""
 msgid "控件"
 msgstr ""
 
-#: src/app/design/android/notes.ts
-msgid "控件圆角 4，分组 8"
-msgstr ""
-
 #: src/app/settings/StorageSection.tsx
 msgid "控制数据"
 msgstr ""
@@ -5346,10 +5266,6 @@ msgstr ""
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "措辞"
-msgstr ""
-
-#: src/app/design/android/StylesChapter.tsx
-msgid "描边"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -7034,10 +6950,6 @@ msgstr ""
 msgid "正文字色、代码块纸底与按钮层级会随所选配色实时变化。"
 msgstr ""
 
-#: src/app/design/android/notes.ts
-msgid "正文密度与 Material 3 相同"
-msgstr ""
-
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "正文排版"
 msgstr ""
@@ -7313,10 +7225,6 @@ msgstr ""
 msgid "浮层的选用"
 msgstr ""
 
-#: src/app/design/android/StylesChapter.tsx
-msgid "浮层表面"
-msgstr ""
-
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "浮层进入"
 msgstr ""
@@ -7536,10 +7444,6 @@ msgstr ""
 msgid "状态码分布"
 msgstr ""
 
-#: src/app/design/android/StylesChapter.tsx
-msgid "独立的胶囊"
-msgstr ""
-
 #: src/app/design/mac/WindowChapter.tsx
 msgid "独立窗口，⌘, 打开；分类保持原样，顶部搜索按分类和设置项筛选。"
 msgstr ""
@@ -7604,10 +7508,6 @@ msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "用 {platform} 扫码"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "用 Compose 画出的 iOS 外观；iPhone 原生端与它取同样的值。"
 msgstr ""
 
 #: src/app/settings/AssistantSettingsSection.tsx
@@ -8161,10 +8061,6 @@ msgstr ""
 
 #: src/app/design/android/PhoneMiniature.tsx
 msgid "简体中文"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "简单的操作面板把取消单独放在下方"
 msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
@@ -8730,10 +8626,6 @@ msgstr ""
 
 #: src/app/design/android/PlatformChapter.tsx
 msgid "行为跟 Material 3 与 Android 系统，外观跟风格配方；数值以 material3 风格为准，其余风格只改配方里写到的字段。"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "行之间有分隔线"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
@@ -9779,10 +9671,6 @@ msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "选中项在行尾打勾"
-msgstr ""
-
-#: src/app/design/android/notes.ts
-msgid "选中项在行尾打勾，分组标题用次级墨色"
 msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx

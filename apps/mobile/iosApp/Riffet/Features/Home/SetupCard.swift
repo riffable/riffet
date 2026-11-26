@@ -161,6 +161,7 @@ struct LanServerRow: View {
 
 /// The server step's body: the servers to pick from, then scanning, then typing an address.
 struct ServerStepBody<Rows: View>: View {
+    @Environment(\.palette) private var palette
     let discovery: BonjourDiscovery
     let scan: () -> Void
     let connect: (DiscoveredRiffetServer) -> Void
@@ -176,7 +177,7 @@ struct ServerStepBody<Rows: View>: View {
             Button(action: scan) {
                 Label(String(localized: "扫码配对", bundle: .riffet), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent).controlSize(.large)
+            .buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).controlSize(.large)
             .accessibilityIdentifier("pairNew")
             Button(String(localized: "输入地址", bundle: .riffet), action: manual)
                 .buttonStyle(.borderless).frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget)
@@ -268,7 +269,7 @@ struct ConnectedSetupCard: View {
                         Button(String(localized: "跳过", bundle: .riffet), action: skip)
                             .buttonStyle(.bordered).tint(palette.fg).controlSize(.large).fixedSize()
                         Button(action: pickProject) { Text(String(localized: "选择项目", bundle: .riffet)).frame(maxWidth: .infinity) }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
+                            .buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).controlSize(.large)
                             .accessibilityIdentifier("newTaskProject")
                     }
                 }

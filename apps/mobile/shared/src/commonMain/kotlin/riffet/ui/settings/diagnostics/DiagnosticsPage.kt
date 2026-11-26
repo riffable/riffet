@@ -199,7 +199,7 @@ private fun EnvironmentSection(controller: SettingsController, onOpenModels: () 
             )
         } else {
             SettingsValueRow(stringResource(Res.string.settings_version), capabilities.cliVersion ?: stringResource(Res.string.settings_unknown))
-            SettingsValueRow(stringResource(Res.string.settings_path), capabilities.cliPath)
+            SettingsValueRow(stringResource(Res.string.settings_path), capabilities.cliPath, mono = true)
             val custom = capabilities.authMessage?.startsWith("Custom Cursor provider") == true
             SettingsValueRow(
                 if (custom) stringResource(Res.string.settings_custom_service) else stringResource(Res.string.settings_account),

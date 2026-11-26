@@ -24,7 +24,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 - **平台**：同一条规则在各端的写法。行为跟平台，数值跟同一份定义（§3）。设计规范页切到 macOS 或 Android 时目录的分组不变，只换内容；各端的差异写在平台文档：[macOS](macos.md)、[Android](android.md)、[iOS](ios.md)。
 - **风格**：每个语义取什么值、组件画成什么形态。语义层不写数值，风格层不改交互。同一个组件在桌面 Riffet 风格下是 28pt 的透明图标按钮，在 iOS 上是系统按钮加 44pt 点击区，但两者的状态、键盘操作、无障碍名称和文案规则相同。
   - **桌面**（Mac、Web）：只有 Riffet 一种风格，规则见 [Riffet 风格](../riffet-style.md)，Mac 的平台行为与动效见 [macOS 设计语言](../macos-native.md)。尺寸在 `packages/contracts/src/interface-styles.ts`，`pnpm gen:styles` 生成 Mac 的 `StyleSpec`。
-  - **移动**（Android、iOS）：Android 有 material3、ios、expressive、miuix、fluent 五种风格，规则见 [主题契约](../../THEMES.md) §8–9。iOS 原生端用系统控件，结构与 Android 的 `IosPreset` 对齐，规则见 [iOS](ios.md)，架构见 [iPhone 原生方案](../../IOS.md)。
+  - **移动**（Android、iOS）：Android 有 riffet 与 material3 两种风格，规则见 [主题契约](../../THEMES.md) §8–9。iOS 原生端用系统控件，规则见 [iOS](ios.md)，架构见 [iPhone 原生方案](../../IOS.md)。
 
 颜色不属于风格：53 个颜色角色由主题提供，规则见 [主题契约](../../THEMES.md)。代码里的分层（源、生成文件、组件、模式、页面，依赖只向下）见 [架构](architecture.md)。
 

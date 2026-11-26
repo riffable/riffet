@@ -90,10 +90,6 @@ internal fun applyWorkbenchAppearance(
                 put("name", when (entry) {
                     InterfaceStyle.RIFFET -> "Riffet"
                     InterfaceStyle.MATERIAL3 -> "Material 3"
-                    InterfaceStyle.EXPRESSIVE -> "Material 3 Expressive"
-                    InterfaceStyle.MIUIX -> "Miuix"
-                    InterfaceStyle.FLUENT -> "Fluent"
-                    InterfaceStyle.IOS -> "iOS"
                 })
             }
         }

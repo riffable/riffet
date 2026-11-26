@@ -118,7 +118,7 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             bottom {
                 Button { go(.connect) } label: { Text(String(localized: "开始", bundle: .riffet)).frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                    .buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).controlSize(.large)
             }
         }
     }
@@ -142,7 +142,7 @@ struct OnboardingView: View {
                 Button { target = PairingPrefill(scan: true) } label: {
                     Label(String(localized: "扫码配对", bundle: .riffet), systemImage: "qrcode.viewfinder").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent).controlSize(.large)
+                .buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).controlSize(.large)
                 .accessibilityIdentifier("pairNew")
                 Button { target = PairingPrefill() } label: {
                     Text(String(localized: "输入地址", bundle: .riffet)).frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget)
@@ -171,7 +171,7 @@ struct OnboardingView: View {
                         model.finishOnboarding()
                     }
                 } label: { Text(String(localized: "允许通知", bundle: .riffet)).frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent).controlSize(.large).disabled(requesting)
+                    .buttonStyle(.borderedProminent).tint(palette.primary).foregroundStyle(palette.primaryFg).controlSize(.large).disabled(requesting)
                 Button { model.finishOnboarding() } label: {
                     Text(String(localized: "以后再说", bundle: .riffet)).frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget)
                 }

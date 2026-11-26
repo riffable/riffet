@@ -112,6 +112,9 @@ fun PairingScreen(
     connectionOperation: MutableState<String?> = remember { mutableStateOf<String?>(null) },
 ) {
     val clipboard = LocalClipboardManager.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    // The page that follows a pairing has no field: the keyboard goes with this one, not after it.
+    val paired: (RiffetApi) -> Unit = { api -> focusManager.clearFocus(force = true); onPaired(api) }
     val composedScope = rememberCoroutineScope()
     val scope = operationScope ?: composedScope
     val scannedUnreadable = stringResource(Res.string.settings_extra_pair_scanned_unreadable)
@@ -174,7 +177,7 @@ fun PairingScreen(
         scope.launch {
             try {
                 when (val outcome = attemptPair(connection, target, cleanCode, serverName)) {
-                    is PairingOutcome.Success -> onPaired(connection.requireApi())
+                    is PairingOutcome.Success -> paired(connection.requireApi())
                     is PairingOutcome.Failure -> error = outcome.error
                 }
             } finally {
@@ -222,7 +225,7 @@ fun PairingScreen(
         scope.launch {
             try {
                 when (val outcome = redeemPayload(connection, payload)) {
-                    is PairingOutcome.Success -> onPaired(connection.requireApi())
+                    is PairingOutcome.Success -> paired(connection.requireApi())
                     is PairingOutcome.Failure -> error = outcome.error
                 }
             } finally {

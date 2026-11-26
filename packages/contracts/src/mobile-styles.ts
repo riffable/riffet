@@ -1,8 +1,8 @@
 /**
  * The mobile interface styles' default values (docs/design/system/foundations.md §11; docs/THEMES.md
- * §8–9): sizes, radii and floating shadows in dp, motion in ms and spring terms, and the ios style's
- * type scale. Their one definition: `pnpm gen:tokens` writes them into Kotlin for Android and into the
- * iPhone app, which follows the ios style (docs/IOS.md). A theme's `design` may still override any of
+ * §8–9): sizes, radii and floating shadows in dp, motion in ms and spring terms, and the iPhone app's
+ * type scale. Their one definition: `pnpm gen:tokens` writes the Android styles' into Kotlin and the
+ * iPhone's own (`MOBILE_IPHONE_DIMENSIONS`, `MOBILE_SHARED_MOTION`, `MOBILE_IOS_TEXT`) into the iPhone app (docs/IOS.md). A theme's `design` may still override any of
  * them within `THEME_DIMENSION_BOUNDS` / `THEME_MOTION_BOUNDS`. Component recipes (which component a
  * style draws) stay in `ThemePresets.kt`: they are code, not values.
  */
@@ -25,7 +25,7 @@ export const MOBILE_BASE_DIMENSIONS: Dimensions = {
   buttonIconSize: 20, contentMaxWidth: 840, pageTitleGap: 16,
 };
 
-/** Each style's changes to the base; material3 has none. */
+/** The Android styles' changes to the base; material3 has none. */
 export const MOBILE_STYLE_DIMENSIONS = {
   // Riffet (docs/design/system/android.md §10): the web's four radius tiers scaled for touch, lighter
   // icons beside regular-weight rows, and one wide soft shadow under the things that float.
@@ -37,30 +37,18 @@ export const MOBILE_STYLE_DIMENSIONS = {
     switchWidth: 46, switchHeight: 28, switchThumbSize: 24, sliderTrackHeight: 4, sliderThumbSize: 22,
     floatingShadowRadius: 18, floatingShadowLiftedRadius: 28, floatingShadowOffset: 6, floatingShadowSpread: -6,
   },
-  ios: {
-    iconSize: 22, sliderTrackHeight: 4,
-    groupRadius: 12, menuRadius: 10, controlRadius: 10, rowRadius: 8, selectionRadius: 6, composerRadius: 14,
-    barHeight: 56, tabBarHeight: 58, tabBarInset: 18, tabBarBottomInset: 8, alertWidth: 270, dialogInset: 16,
-    segmentedHeight: 34, sendButtonSize: 36, menuGroupGap: 6,
-    floatingShadowRadius: 14, floatingShadowLiftedRadius: 22, floatingShadowOffset: 4, floatingShadowSpread: -3,
-  },
-  expressive: {
-    groupRadius: 28, composerRadius: 28, controlRadius: 24, selectionRadius: 16, rowRadius: 16, menuRadius: 20,
-    segmentedHeight: 44, tabBarInset: 16, tabBarBottomInset: 8,
-  },
-  miuix: {
-    groupRadius: 20, composerRadius: 20, controlRadius: 16, selectionRadius: 12, sendButtonSize: 36,
-    menuRadius: 20, rowHeight: 56, rowSubtitleHeight: 72, sectionGap: 24, barHeight: 60, tabBarInset: 20,
-    tabBarBottomInset: 8, sliderTrackHeight: 8, alertWidth: 320,
-  },
-  fluent: {
-    groupRadius: 8, composerRadius: 12, controlRadius: 4, menuRadius: 8, rowRadius: 4, selectionRadius: 4,
-    barHeight: 56, tabBarHeight: 56, sliderTrackHeight: 4, switchWidth: 44, switchHeight: 24, switchThumbSize: 18,
-    sliderThumbSize: 18, sendButtonSize: 32,
-  },
 } as const satisfies Record<string, Partial<Dimensions>>;
 
-/** Material motion: material3, expressive and fluent. */
+/** The iPhone app's changes to the base (before `IOS_NATIVE_OVERRIDES`); Android does not read them. */
+export const MOBILE_IPHONE_DIMENSIONS = {
+  iconSize: 22, sliderTrackHeight: 4,
+  groupRadius: 12, menuRadius: 10, controlRadius: 10, rowRadius: 8, selectionRadius: 6, composerRadius: 14,
+  barHeight: 56, tabBarHeight: 58, tabBarInset: 18, tabBarBottomInset: 8, alertWidth: 270, dialogInset: 16,
+  segmentedHeight: 34, sendButtonSize: 36, menuGroupGap: 6,
+  floatingShadowRadius: 14, floatingShadowLiftedRadius: 22, floatingShadowOffset: 4, floatingShadowSpread: -3,
+} as const satisfies Partial<Dimensions>;
+
+/** Material motion: material3. */
 export const MOBILE_MOTION: Motion = {
   pageEnter: 300, pageExit: 200, coveredPageShift: 0.08, coveredPageDim: 0.16, pressOpacity: 0.8, disabledOpacity: 0.38,
   floatingShadowOpacity: 0.12, popScale: 0.8, sharedAxisFraction: 1 / 6,
@@ -68,7 +56,7 @@ export const MOBILE_MOTION: Motion = {
   settleDamping: 1, settleStiffness: 550, spatialDamping: 0.9, spatialStiffness: 700, effectsStiffness: 1600,
 };
 
-/** The softer motion the ios and miuix styles share, as changes to `MOBILE_MOTION`. */
+/** The iPhone app's softer motion, as changes to `MOBILE_MOTION`. */
 export const MOBILE_SHARED_MOTION = {
   pageEnter: 350, pageExit: 250, coveredPageShift: 0.25, coveredPageDim: 0.12, pressOpacity: 0.55, popScale: 0.94,
   sharedAxisFraction: 0.25, short: 180, medium: 280, exit: 250,
@@ -86,10 +74,7 @@ export const MOBILE_RIFFET_MOTION = {
   settleStiffness: 500, spatialDamping: 0.82, spatialStiffness: 520, effectsStiffness: 1400,
 } as const satisfies Partial<Motion>;
 
-/** The expressive style's bouncier spatial spring, as changes to `MOBILE_MOTION`. */
-export const MOBILE_EXPRESSIVE_MOTION = { spatialDamping: 0.7, spatialStiffness: 500 } as const satisfies Partial<Motion>;
-
-/** Tween curves: Material's standard; the shared (CSS `ease`) curve of the ios and miuix styles. */
+/** Tween curves: Material's standard; the shared (CSS `ease`) curve of the iPhone app. */
 export const MOBILE_EASING = {
   standard: [0.2, 0, 0, 1],
   shared: [0.25, 0.1, 0.25, 1],
@@ -98,9 +83,8 @@ export const MOBILE_EASING = {
 export interface MobileTextStyle { size: number; lineHeight: number; weight?: 400 | 500 | 600 | 700 }
 
 /**
- * The ios style's type scale, in Material 3's slots (ThemePresets.kt maps slots to the app's text
- * roles: `bodyLarge` is body, `labelLarge` label, `bodySmall` caption, `titleLarge` the bar title,
- * `titleMedium` the headline, `headlineLarge` the large title). Slots left out keep Material's.
+ * The iPhone app's type scale, in Material 3's slots (`bodyLarge` is body, `labelLarge` label, `bodySmall`
+ * caption, `titleLarge` the bar title, `titleMedium` the headline, `headlineLarge` the large title).
  */
 export const MOBILE_IOS_TEXT = {
   headlineLarge: { size: 34, lineHeight: 41, weight: 700 },
@@ -119,8 +103,8 @@ export const MOBILE_CODE_TEXT = {
 } as const satisfies Record<string, MobileTextStyle>;
 
 /**
- * Where the iPhone app departs from the ios style, and why. Everything else it draws from the ios
- * style above.
+ * Where the iPhone app departs from `MOBILE_IPHONE_DIMENSIONS`, and why. Everything else it draws
+ * from those.
  */
 export const IOS_NATIVE_OVERRIDES = {
   dimensions: {

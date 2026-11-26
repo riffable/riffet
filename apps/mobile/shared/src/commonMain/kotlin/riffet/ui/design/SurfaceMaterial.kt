@@ -386,7 +386,7 @@ internal fun Modifier.riffetMaterial(
     val islandInk = islandColors.fg
     val secondaryInk = islandColors.fg3
     val spec = remember(environment.material, role, opticalRole, environment.strength, surfaces.dark, tintBase, islandInk,
-        secondaryInk, navigation.accentSelection, surfaces.focus, surfaces.selected) {
+        secondaryInk, navigation.accentSelection, surfaces.primaryAction, surfaces.selected) {
         val resolved = materialSpec(environment.material, opticalRole, environment.strength, surfaces.dark)
         if (opticalRole == MaterialRole.NAVIGATION) {
             val textFloor = islandTintFloor(tintBase, islandInk)
@@ -394,7 +394,7 @@ internal fun Modifier.riffetMaterial(
                 tintBase, secondaryInk, minimumContrast = 3f,
             ) else 0f
             val accentFloor = if (navigation.accentSelection) islandTintFloor(
-                tintBase, surfaces.focus, minimumContrast = 3f, overlay = surfaces.selected.copy(alpha = 0.72f),
+                tintBase, surfaces.primaryAction, minimumContrast = 3f, overlay = surfaces.selected.copy(alpha = 0.72f),
             ) else 0f
             resolved.copy(tintAlpha = maxOf(resolved.tintAlpha, textFloor, secondaryFloor, accentFloor))
         } else resolved

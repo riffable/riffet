@@ -48,7 +48,7 @@ private val sectionAliases = mapOf(
     SettingsSection.LANGUAGE to "language locale follow system simplified chinese english 语言 跟随系统 简体中文 中文 英文 英语 yuyan gen sui xi tong jian ti zhong wen ying wen ying yu yy",
     SettingsSection.MOTION to "motion animation transition 动效 动画 dongxiao donghua",
     SettingsSection.GESTURES to "gestures swipe back haptics vibration interaction 手势 返回 触觉 振动 shoushi fanhui chujue jiaohu",
-    SettingsSection.STYLE to "interface style material expressive miuix fluent ios glass liquid frosted blur 材质 玻璃 液态 磨砂 fengge jiemian yangshi caizhi boli",
+    SettingsSection.STYLE to "interface style material glass liquid frosted blur 材质 玻璃 液态 磨砂 fengge jiemian yangshi caizhi boli",
     SettingsSection.APPEARANCE to "theme palette colors appearance 配色 颜色 明暗 zhuti peise waiguan zt",
     SettingsSection.TYPOGRAPHY to "typography font text spacing 字体 字号 字间距 paiban ziti zihao wenzi jianju pb",
     SettingsSection.ICONS to "icons lucide fluent mdi remix octicons tubiao",

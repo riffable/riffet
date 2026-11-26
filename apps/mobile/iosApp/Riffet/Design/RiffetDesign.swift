@@ -2,9 +2,9 @@ import SwiftUI
 import UIKit
 
 // The iPhone's design layer: the type scale, metrics, motion and the few drawn
-// components every page shares. The generated regions come from the ios style in
-// packages/contracts/src/mobile-styles.ts (`pnpm gen:tokens`), the same values the
-// Android client's `IosPreset` draws; materials are the system's.
+// components every page shares. The generated regions come from the iPhone values in
+// packages/contracts/src/mobile-styles.ts (`MOBILE_IPHONE_DIMENSIONS`, `pnpm gen:tokens`);
+// materials are the system's.
 
 /// Text roles. Sizes scale with Dynamic Type relative to the listed text style.
 enum RiffetText {
@@ -155,7 +155,7 @@ enum RiffetMetrics {
     static let codeOutputMaxHeight: CGFloat = 288
 }
 
-/// Motion shared by every page, generated from the ios style's tokens: a spring's response is one
+/// Motion shared by every page, generated from the iPhone tokens: a spring's response is one
 /// period of the Compose stiffness, its damping the same ratio.
 enum RiffetMotion {
     // BEGIN GENERATED motion (scripts/gen-design-tokens.ts)
@@ -329,7 +329,7 @@ struct RiffetChipBar<Value: Hashable>: View {
                             .background {
                                 Capsule().fill(palette.press)
                                 if selected {
-                                    Capsule().fill(palette.selected).matchedGeometryEffect(id: "chip", in: indicator)
+                                    Capsule().fill(palette.accentSoft).matchedGeometryEffect(id: "chip", in: indicator)
                                 }
                             }
                             .frame(minHeight: RiffetMetrics.hitTarget)
@@ -379,7 +379,7 @@ struct RiffetMenuChip<Leading: View, Items: View>: View {
             }
             .riffetFont(.label).foregroundStyle(highlighted ? palette.fg : palette.fg2)
             .padding(.horizontal, RiffetMetrics.chipInset).frame(minHeight: RiffetMetrics.chipHeight)
-            .background(Capsule().fill(highlighted ? palette.selected : palette.press))
+            .background(Capsule().fill(highlighted ? palette.accentSoft : palette.press))
             .frame(minHeight: RiffetMetrics.hitTarget)
             .contentShape(Rectangle())
         }
@@ -404,7 +404,7 @@ struct RiffetChipButton<Leading: View>: View {
             }
             .riffetFont(.label).foregroundStyle(highlighted ? palette.fg : palette.fg2)
             .padding(.horizontal, RiffetMetrics.chipInset).frame(minHeight: RiffetMetrics.chipHeight)
-            .background(Capsule().fill(highlighted ? palette.selected : palette.press))
+            .background(Capsule().fill(highlighted ? palette.accentSoft : palette.press))
             .frame(minHeight: RiffetMetrics.hitTarget)
             .contentShape(Rectangle())
         }
@@ -559,7 +559,7 @@ struct RiffetContextRing: View {
     }
 }
 
-/// The composer's round send button: accent when there is something to send, a quiet disc when not.
+/// The composer's round send button: primary when there is something to send, a quiet disc when not.
 /// `stop` turns it into the stop control of a running turn; `symbol` and `busy` make it voice input's done.
 struct RiffetSendButton: View {
     var enabled: Bool
@@ -575,11 +575,11 @@ struct RiffetSendButton: View {
                     Circle().stroke(palette.danger, lineWidth: 1.5)
                     RoundedRectangle(cornerRadius: 2.5, style: .continuous).fill(palette.danger).frame(width: 11, height: 11)
                 } else {
-                    Circle().fill(enabled || busy ? palette.accent : palette.press)
-                    if busy { ProgressView().controlSize(.small).tint(Color.white) }
+                    Circle().fill(enabled || busy ? palette.primary : palette.press)
+                    if busy { ProgressView().controlSize(.small).tint(palette.primaryFg) }
                     else {
                         Image(systemName: symbol).font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(enabled ? Color.white : palette.fg4)
+                            .foregroundStyle(enabled ? palette.primaryFg : palette.fg4)
                     }
                 }
             }

@@ -149,7 +149,7 @@ internal fun Chip(
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .clip(RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-            .background(LocalRiffetSurfaces.current.floating)
+            .background(LocalRiffetSurfaces.current.card)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(horizontal = 6.dp, vertical = 3.dp),
     )
@@ -169,7 +169,7 @@ internal fun PathChip(path: String, line: Long?, onOpenFile: (String, Int?) -> U
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .clip(RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-            .background(LocalRiffetSurfaces.current.floating)
+            .background(LocalRiffetSurfaces.current.card)
             .heightIn(min = designMetrics.controlHeight),
     ) {
         Row(
@@ -395,8 +395,9 @@ internal fun MarkdownCodeBlockView(code: String, language: String?, codeStyle: T
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            // The web's `.md-code-head`: its own `bg-muted` surface, so the chrome does not sit on the code.
-            modifier = Modifier.fillMaxWidth().height(36.dp).background(LocalRiffetSurfaces.current.floating).padding(start = 12.dp, end = 2.dp),
+            // One block with the code: a header in another tone reads as a separate strip, and on a white page a
+            // raised (white) header loses the block's top edge.
+            modifier = Modifier.fillMaxWidth().height(36.dp).padding(start = 12.dp, end = 2.dp),
         ) {
             Text(
                 text = label,
@@ -644,7 +645,7 @@ internal fun ImageSlot(
         modifier = modifier
             .size(box.width, box.height)
             .clip(RoundedCornerShape(LocalInterfaceStyle.current.rowRadius))
-            .background(LocalRiffetSurfaces.current.floating),
+            .background(LocalRiffetSurfaces.current.card),
         contentAlignment = box.alignment,
     ) {
         Column(

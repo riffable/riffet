@@ -2,13 +2,19 @@ import SwiftUI
 
 extension View {
     /// A settings form: the system's grouped boxes. Every form uses this, never `.formStyle(.grouped)`.
-    func riffetForm() -> some View { formStyle(.grouped) }
+    /// Switches inside it turn on in the theme's `primary`; the window-wide tint stays `accent`.
+    func riffetForm() -> some View { formStyle(.grouped).modifier(SwitchTint()) }
 
     /// A text field in a form, with a rounded bezel when `bezeled`.
     @ViewBuilder
     func formField(bezeled: Bool = false) -> some View {
         if bezeled { textFieldStyle(.roundedBorder) } else { self }
     }
+}
+
+private struct SwitchTint: ViewModifier {
+    @Environment(\.palette) private var palette
+    func body(content: Content) -> some View { content.tint(palette.primary) }
 }
 
 /// A segmented choice in a form, written like a `Picker`: a title, then options tagged with their
@@ -29,9 +35,8 @@ struct FormSegmented<Value: Hashable, Content: View>: View {
     }
 }
 
-/// The quiet segmented control: the chosen option on the paper under a hairline, on a muted track,
-/// sliding to the next one rather than blinking over. It reads like the toolbar's segmented control,
-/// so a switch inside a page or panel does not take the accent colour the system gives its own there.
+/// The quiet segmented control: the chosen option filled with the soft theme tint (`accentSoft`) with
+/// ink text, on a muted track, sliding to the next one rather than blinking over.
 /// Options are written like a `Picker`'s, each tagged with its value.
 struct SegmentedTrack<Value: Hashable, Content: View>: View {
     @Binding var selection: Value
@@ -58,8 +63,7 @@ struct SegmentedTrack<Value: Hashable, Content: View>: View {
                         .background {
                             if on {
                                 RoundedRectangle(cornerRadius: max(Radius.control - 2, 2), style: .continuous)
-                                    .fill(palette.bgElevated)
-                                    .overlay(RoundedRectangle(cornerRadius: max(Radius.control - 2, 2), style: .continuous).strokeBorder(palette.line))
+                                    .fill(palette.accentSoft)
                                     .matchedGeometryEffect(id: "selection", in: namespace)
                             }
                         }

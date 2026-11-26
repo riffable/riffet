@@ -92,72 +92,6 @@ internal val RiffetDimensions = mapOf(
     "floatingShadowOffset" to 6.0,
     "floatingShadowSpread" to -6.0,
 )
-internal val IosDimensions = mapOf(
-    "iconSize" to 22.0,
-    "sliderTrackHeight" to 4.0,
-    "groupRadius" to 12.0,
-    "menuRadius" to 10.0,
-    "controlRadius" to 10.0,
-    "rowRadius" to 8.0,
-    "selectionRadius" to 6.0,
-    "composerRadius" to 14.0,
-    "barHeight" to 56.0,
-    "tabBarHeight" to 58.0,
-    "tabBarInset" to 18.0,
-    "tabBarBottomInset" to 8.0,
-    "alertWidth" to 270.0,
-    "dialogInset" to 16.0,
-    "segmentedHeight" to 34.0,
-    "sendButtonSize" to 36.0,
-    "menuGroupGap" to 6.0,
-    "floatingShadowRadius" to 14.0,
-    "floatingShadowLiftedRadius" to 22.0,
-    "floatingShadowOffset" to 4.0,
-    "floatingShadowSpread" to -3.0,
-)
-internal val ExpressiveDimensions = mapOf(
-    "groupRadius" to 28.0,
-    "composerRadius" to 28.0,
-    "controlRadius" to 24.0,
-    "selectionRadius" to 16.0,
-    "rowRadius" to 16.0,
-    "menuRadius" to 20.0,
-    "segmentedHeight" to 44.0,
-    "tabBarInset" to 16.0,
-    "tabBarBottomInset" to 8.0,
-)
-internal val MiuixDimensions = mapOf(
-    "groupRadius" to 20.0,
-    "composerRadius" to 20.0,
-    "controlRadius" to 16.0,
-    "selectionRadius" to 12.0,
-    "sendButtonSize" to 36.0,
-    "menuRadius" to 20.0,
-    "rowHeight" to 56.0,
-    "rowSubtitleHeight" to 72.0,
-    "sectionGap" to 24.0,
-    "barHeight" to 60.0,
-    "tabBarInset" to 20.0,
-    "tabBarBottomInset" to 8.0,
-    "sliderTrackHeight" to 8.0,
-    "alertWidth" to 320.0,
-)
-internal val FluentDimensions = mapOf(
-    "groupRadius" to 8.0,
-    "composerRadius" to 12.0,
-    "controlRadius" to 4.0,
-    "menuRadius" to 8.0,
-    "rowRadius" to 4.0,
-    "selectionRadius" to 4.0,
-    "barHeight" to 56.0,
-    "tabBarHeight" to 56.0,
-    "sliderTrackHeight" to 4.0,
-    "switchWidth" to 44.0,
-    "switchHeight" to 24.0,
-    "switchThumbSize" to 18.0,
-    "sliderThumbSize" to 18.0,
-    "sendButtonSize" to 32.0,
-)
 internal val DefaultMotionTokens = mapOf(
     "pageEnter" to 300.0,
     "pageExit" to 200.0,
@@ -178,25 +112,6 @@ internal val DefaultMotionTokens = mapOf(
     "spatialStiffness" to 700.0,
     "effectsStiffness" to 1600.0,
 )
-internal val SharedMotionTokens = DefaultMotionTokens + mapOf(
-    "pageEnter" to 350.0,
-    "pageExit" to 250.0,
-    "coveredPageShift" to 0.25,
-    "coveredPageDim" to 0.12,
-    "pressOpacity" to 0.55,
-    "popScale" to 0.94,
-    "sharedAxisFraction" to 0.25,
-    "short" to 180.0,
-    "medium" to 280.0,
-    "exit" to 250.0,
-    "settleStiffness" to 450.0,
-    "spatialDamping" to 0.86,
-    "spatialStiffness" to 550.0,
-)
-internal val ExpressiveMotionTokens = DefaultMotionTokens + mapOf(
-    "spatialDamping" to 0.7,
-    "spatialStiffness" to 500.0,
-)
 internal val RiffetMotionTokens = DefaultMotionTokens + mapOf(
     "pageEnter" to 320.0,
     "pageExit" to 220.0,
@@ -216,15 +131,5 @@ internal val RiffetMotionTokens = DefaultMotionTokens + mapOf(
     "effectsStiffness" to 1400.0,
 )
 internal val StandardMotionEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
-internal val SharedMotionEasing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
 internal val MobileMonoText = TextStyle(fontSize = 14.sp, lineHeight = 22.sp, fontFamily = FontFamily.Monospace)
 internal val MobileMonoSmallText = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, fontFamily = FontFamily.Monospace)
-internal val IosStyleTypography = MaterialStyleTypography.copy(
-    headlineLarge = TextStyle(fontSize = 34.sp, lineHeight = 41.sp, fontWeight = FontWeight.Bold),
-    titleLarge = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
-    titleMedium = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
-    bodyLarge = TextStyle(fontSize = 16.sp, lineHeight = 22.sp),
-    bodyMedium = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
-    labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
-)

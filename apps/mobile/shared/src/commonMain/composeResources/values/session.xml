@@ -109,9 +109,10 @@
     <string name="session_theme_light">浅色</string>
     <string name="session_theme_dark">深色</string>
     <string name="session_stats">统计</string>
-    <string name="session_offline_just_saved">离线 · 显示刚保存的列表 · 重试</string>
-    <string name="session_offline_saved_age">离线 · 显示 %1$s前保存的列表 · 重试</string>
+    <string name="session_offline_just_saved">离线 · 显示刚保存的列表</string>
+    <string name="session_offline_saved_age">离线 · 显示 %1$s前保存的列表</string>
     <string name="session_load_projects_failed">无法加载项目</string>
+    <string name="session_server_unreachable">连不上服务器</string>
     <string name="session_all_sessions_archived">会话都已归档</string>
     <string name="session_no_sessions">还没有会话</string>
     <string name="session_all_projects_archived">项目都已归档</string>

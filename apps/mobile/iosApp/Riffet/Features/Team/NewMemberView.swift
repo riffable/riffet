@@ -58,20 +58,20 @@ struct NewMemberView: View {
                     .lineLimit(3...10)
             } footer: { Text(String(localized: "写进它的 AGENTS.md", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3) }
             Section {
-                Picker(String(localized: "范围", bundle: .riffet), selection: $scope) {
-                    Text(String(localized: "个人", bundle: .riffet)).tag("personal")
-                    Text(String(localized: "项目", bundle: .riffet)).tag("project")
-                    Text(String(localized: "全局", bundle: .riffet)).tag("global")
-                }.pickerStyle(.menu)
+                RiffetPickerRow(title: String(localized: "范围", bundle: .riffet), options: [
+                    .init(id: "personal", title: String(localized: "个人", bundle: .riffet)),
+                    .init(id: "project", title: String(localized: "项目", bundle: .riffet)),
+                    .init(id: "global", title: String(localized: "全局", bundle: .riffet)),
+                ], selection: $scope)
                 if scope == "project" {
                     Button { projects = true } label: {
                         SettingsRowLabel(title: String(localized: "项目", bundle: .riffet), value: workbench.project(projectID)?.name).contentShape(Rectangle())
                     }.buttonStyle(RiffetRowPressStyle())
                 }
-                Picker(String(localized: "会话", bundle: .riffet), selection: Binding(get: { sessionMode }, set: { sessionMode = $0; modeChosen = true })) {
-                    Text(String(localized: "连续对话", bundle: .riffet)).tag("continuous")
-                    Text(String(localized: "每次新建", bundle: .riffet)).tag("fresh")
-                }.pickerStyle(.menu)
+                RiffetPickerRow(title: String(localized: "会话", bundle: .riffet), options: [
+                    .init(id: "continuous", title: String(localized: "连续对话", bundle: .riffet)),
+                    .init(id: "fresh", title: String(localized: "每次新建", bundle: .riffet)),
+                ], selection: Binding(get: { sessionMode }, set: { sessionMode = $0; modeChosen = true }))
                 Button { modelPanel = true } label: {
                     SettingsRowLabel(title: "Agent", value: NativeConfigurationSummary.shortModel(catalog: catalog, selection: draft.model)).contentShape(Rectangle())
                 }.buttonStyle(RiffetRowPressStyle())

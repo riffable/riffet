@@ -373,7 +373,7 @@ private struct NativeExtensionDetail: View {
                         if actions.contains(next) { Task { await action(next) } }
                     })) {
                         Text("启用").riffetFont(.body).foregroundStyle(palette.fg)
-                    }.tint(palette.accent)
+                    }.tint(palette.primary)
                 }
                 if let state { infoRow("状态", state) }
             } footer: {

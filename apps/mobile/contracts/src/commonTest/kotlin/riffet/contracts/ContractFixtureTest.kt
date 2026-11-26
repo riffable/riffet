@@ -69,10 +69,8 @@ class ContractFixtureTest {
             motion = mapOf("pressOpacity" to 0.4),
             colors = ThemeDesignColors(light = mapOf("card" to "#abcdef80")),
         ), styles = mapOf(
-            "ios" to ThemeDesignTokens(variants = mapOf("settingsIcons" to "plain")),
-            "expressive" to ThemeDesignTokens(motion = mapOf("spatialDamping" to 0.7)),
-            "miuix" to ThemeDesignTokens(dimensions = mapOf("rowHeight" to 56.0)),
-            "fluent" to ThemeDesignTokens(colors = ThemeDesignColors(dark = mapOf("input" to "#123456"))),
+            "riffet" to ThemeDesignTokens(variants = mapOf("settingsIcons" to "plain")),
+            "material3" to ThemeDesignTokens(colors = ThemeDesignColors(dark = mapOf("input" to "#123456"))),
         )))
         assertEquals(theme, json.decodeFromString(CustomTheme.serializer(), json.encodeToString(CustomTheme.serializer(), theme)))
         val invalid = listOf(

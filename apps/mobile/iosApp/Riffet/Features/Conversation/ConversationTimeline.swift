@@ -289,7 +289,7 @@ struct ConversationTimelineItem: View {
                 } else if !user.text.isEmpty {
                     Text(conversationUserMessageText(CallDeliveryKt.stripCallBrief(text: user.text), linkColor: palette.accent, underlineColor: palette.lineStrong).highlighting(findHighlight, only: findHighlight?.nth, color: palette.warning.opacity(0.4))).riffetFont(.body).lineSpacing(5).foregroundStyle(palette.fg).tint(palette.accent).textSelection(.enabled)
                         .padding(.horizontal, 14).padding(.vertical, 10)
-                        .background(palette.selected, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .frame(maxWidth: 300, alignment: .trailing)
                     let sender = conversationAgentSender(user.from)
                     let date = ServerTime.date(user.event.createdAt)

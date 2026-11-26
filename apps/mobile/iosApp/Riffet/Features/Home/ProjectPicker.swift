@@ -181,7 +181,7 @@ struct ProjectPicker: View {
                         RemoteDirectoryPicker(workbench: workbench) { project in selection = project.id; dismiss() }
                     } label: { Label("选择 Mac 上的其他目录", systemImage: "folder.badge.plus") }
                     .disabled(mutating != nil)
-                    Toggle("显示已归档项目", isOn: $showArchived)
+                    Toggle("显示已归档项目", isOn: $showArchived).tint(palette.primary)
                 }
             }
             .navigationTitle(String(localized: "项目范围", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)

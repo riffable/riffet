@@ -37,6 +37,7 @@ import riffet.shared.NativeSessionCreateResult
 import riffet.shared.SessionUpdate
 import riffet.shared.RiffetApi
 import riffet.shared.RiffetHttpException
+import riffet.shared.RiffetNetworkException
 import riffet.shared.RiffetUnauthenticatedException
 import riffet.shared.deleteSession
 import riffet.shared.sessionDeletion
@@ -212,7 +213,7 @@ internal class SessionLists(
         // Publish the job before starting: restoring a cache can immediately wake a list collector.
         val job = scope.launch(start = CoroutineStart.LAZY) {
             if (!list.value.loaded) restoreList()
-            _list.update { it.copy(loading = true, error = null) }
+            _list.update { it.copy(loading = true, error = null, unreachable = false) }
             try {
                 val read = ++listReads
                 val writesAtStart = settingsWrites
@@ -272,6 +273,7 @@ internal class SessionLists(
                         loading = false,
                         loaded = true,
                         error = if (error is RiffetUnauthenticatedException) UNAUTHENTICATED_REASON else error.message ?: L10n.uiText("sessionList.loadFailed"),
+                        unreachable = error is RiffetNetworkException,
                     )
                 }
             }
@@ -479,7 +481,7 @@ internal class SessionLists(
     }
 
     fun reportListError(message: String) {
-        _list.update { it.copy(error = message) }
+        _list.update { it.copy(error = message, unreachable = false) }
     }
 
     suspend fun openDirectory(path: String): Project {

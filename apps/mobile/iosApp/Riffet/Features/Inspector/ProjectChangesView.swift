@@ -264,19 +264,24 @@ struct UnifiedDiffView: View {
     var body: some View {
         Group {
             if let lines {
-                ScrollView([.horizontal, .vertical]) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
-                            HStack(alignment: .top, spacing: 8) {
-                                Text(line.oldNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(palette.fg3)
-                                Text(line.newNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(palette.fg3)
-                                Text(line.type == .add ? "+" : line.type == .del ? "−" : " ").foregroundStyle(line.type == .add ? palette.diffAddMarker : line.type == .del ? palette.diffDelMarker : palette.fg3)
-                                Text(line.text.isEmpty ? " " : line.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                GeometryReader { geo in
+                    ScrollView([.horizontal, .vertical]) {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                                HStack(alignment: .top, spacing: 8) {
+                                    Text(line.oldNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(palette.fg3)
+                                    Text(line.newNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(palette.fg3)
+                                    Text(line.type == .add ? "+" : line.type == .del ? "−" : " ").foregroundStyle(line.type == .add ? palette.diffAddMarker : line.type == .del ? palette.diffDelMarker : palette.fg3)
+                                    Text(line.text.isEmpty ? " " : line.text).textSelection(.enabled).fixedSize(horizontal: true, vertical: false).frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .riffetFont(.mono).padding(.vertical, 2).padding(.horizontal, 6)
+                                .background(line.type == .add ? palette.diffAdd : line.type == .del ? palette.diffDel : .clear)
                             }
-                            .riffetFont(.mono).padding(.vertical, 2).padding(.horizontal, 6)
-                            .background(line.type == .add ? palette.diffAdd : line.type == .del ? palette.diffDel : .clear)
                         }
-                    }.padding(.vertical)
+                        .padding(.vertical)
+                        .frame(minWidth: geo.size.width, alignment: .leading)
+                    }
+                    .defaultScrollAnchor(.topLeading)
                 }
             } else if fallback {
                 ContentUnavailableView(gitText("Too large to preview"), systemImage: "doc.text")

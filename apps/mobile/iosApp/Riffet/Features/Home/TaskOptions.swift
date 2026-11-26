@@ -419,7 +419,7 @@ private struct SessionContextUsageSection: View {
         Section("上下文用量") {
             if let context = reported {
                 let ratio = Double(context.used) / Double(context.size)
-                let tone: Color = ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.accent
+                let tone: Color = ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.primary
                 LabeledContent("已使用", value: context.used.formatted() + " tokens")
                     .accessibilityIdentifier("modelContextUsed")
                 LabeledContent(context.limitKind == "compaction" ? String(localized: "自动压缩阈值", bundle: .riffet) : String(localized: "上下文窗口", bundle: .riffet), value: context.size.formatted() + " tokens")
@@ -669,7 +669,7 @@ struct ModelParameterSection: View {
                             let hint = paramHint(param: param)
                             if !hint.isEmpty { Text(verbatim: hint).riffetFont(.caption).foregroundStyle(palette.fg3) }
                         }
-                    }
+                    }.tint(palette.primary)
                     .accessibilityIdentifier("modelParameter.\(param.id)")
                     if kind == .max && !isOn(param: param) && contextChoices(param: param).count > 1 {
                         if settingsControls {

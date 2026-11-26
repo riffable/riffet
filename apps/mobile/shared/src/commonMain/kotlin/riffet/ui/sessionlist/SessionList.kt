@@ -2,6 +2,8 @@ package riffet.ui.sessionlist
 
 import riffet.ui.design.RiffetSearchField
 import riffet.ui.design.ChipButton
+import riffet.ui.design.Notice
+import riffet.ui.design.NoticeKind
 import riffet.ui.home.ProjectPickerSheet
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -432,7 +434,9 @@ fun SessionList(
 
     val emptyMessage: @Composable ColumnScope.(Boolean) -> Unit = { searchEmpty ->
         val (title, body) = when {
-            list.error != null -> stringResource(Res.string.session_load_projects_failed) to list.error.orEmpty()
+            // With projects on screen the offline notice above the list already says it (one notice per page).
+            list.error != null && list.projects.isEmpty() -> stringResource(Res.string.session_load_projects_failed) to
+                if (list.unreachable) stringResource(Res.string.session_server_unreachable) else list.error.orEmpty()
             searchEmpty -> stringResource(Res.string.session_no_match) to null
             filter != SessionFilter.ALL || scope != null -> stringResource(Res.string.session_list_empty) to null
             layout == SidebarLayout.TIME && list.sessions.any { it.archivedAt != null && it.backendId != NativeBackendId.CHAT } ->
@@ -492,22 +496,19 @@ fun SessionList(
             savedAt?.let {
                 if (isJustNow(it, offlineNow)) stringResource(Res.string.session_offline_just_saved)
                 else stringResource(Res.string.session_offline_saved_age, relativeTimeLabel(it, offlineNow))
-            } ?: list.error.orEmpty()
+            } ?: if (list.unreachable) stringResource(Res.string.session_server_unreachable) else list.error.orEmpty()
         } else null
         val offlineHeld = remember { Held("") }
         if (offlineText != null) offlineHeld.value = offlineText
+        // The page's one notice (mobile.md §9.8): what the list on screen is, and a way to try again.
         AnimatedVisibility(visible = showOffline, enter = motion.expandIn(), exit = motion.collapseOut()) {
-            Text(
-                text = offlineHeld.value,
-                style = typography.caption,
-                color = scheme.error,
+            Notice(
+                message = offlineHeld.value,
+                kind = NoticeKind.WARNING,
+                action = stringResource(Res.string.session_retry),
+                onAction = { store.refresh() },
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = designMetrics.controlHeight)
-                    .clickable(onClickLabel = stringResource(Res.string.session_retry), role = Role.Button) { store.refresh() }
-                    .padding(horizontal = designMetrics.pageInset, vertical = designMetrics.controlInset * 2 / 3),
+                modifier = Modifier.padding(horizontal = designMetrics.pageInset, vertical = designMetrics.controlInset / 2),
             )
         }
     }
@@ -883,7 +884,7 @@ internal fun SessionRow(
             },
     ) {
         val container by animateColorAsState(
-            targetValue = if (selected) LocalRiffetSurfaces.current.selected else Color.Transparent,
+            targetValue = if (selected) LocalRiffetSurfaces.current.rowSelected else Color.Transparent,
             animationSpec = motion.effects(),
             label = "session-row-container",
         )

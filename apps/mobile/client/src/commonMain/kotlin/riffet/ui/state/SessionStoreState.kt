@@ -27,6 +27,11 @@ data class SessionListState(
     /** True once a load has finished, successfully or not; distinguishes "loading" from "empty". */
     val loaded: Boolean = false,
     val error: String? = null,
+    /**
+     * The last load never reached a response (DNS, TCP, TLS or a timeout). [error] keeps the transport's own text for a
+     * client that maps it (iOS reads `NSURLErrorDomain` codes); a client that cannot says the server is unreachable.
+     */
+    val unreachable: Boolean = false,
     /** When the lists shown were saved on the device; null once the server has answered. */
     val cachedAt: Long? = null,
     /** The server deletes conversations (`session-delete-v1`); learned from the bootstrap. */

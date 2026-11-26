@@ -91,7 +91,7 @@ function Axes() {
         <span className="flex flex-col gap-1"><span className="text-base font-medium text-fg">{t`风格`}</span><span className="text-xs text-fg-3">{t`换取值与形态：状态、键盘和文案不变`}</span></span>
         <ul className="flex flex-col edge-b">
           <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">{t`桌面`}<span className="flex flex-wrap justify-end gap-x-2 text-fg-2"><span>Riffet</span></span></li>
-          <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">Android<Token className="text-right text-fg-3">material3 · ios · expressive · miuix · fluent</Token></li>
+          <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">Android<Token className="text-right text-fg-3">riffet · material3</Token></li>
           <li className="flex items-baseline justify-between gap-4 py-2 edge-t text-sm text-fg">iOS<span className="text-fg-2">{t`系统控件`}</span></li>
         </ul>
       </div>

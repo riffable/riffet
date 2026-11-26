@@ -109,9 +109,10 @@
     <string name="session_theme_light">Light</string>
     <string name="session_theme_dark">Dark</string>
     <string name="session_stats">Stats</string>
-    <string name="session_offline_just_saved">Offline · showing the list saved just now · Retry</string>
-    <string name="session_offline_saved_age">Offline · showing list saved %1$s ago · Retry</string>
+    <string name="session_offline_just_saved">Offline · showing the list saved just now</string>
+    <string name="session_offline_saved_age">Offline · showing the list saved %1$s ago</string>
     <string name="session_load_projects_failed">Could not load projects</string>
+    <string name="session_server_unreachable">Can\'t reach the server</string>
     <string name="session_all_sessions_archived">All sessions are archived</string>
     <string name="session_no_sessions">No sessions yet</string>
     <string name="session_all_projects_archived">All projects are archived</string>

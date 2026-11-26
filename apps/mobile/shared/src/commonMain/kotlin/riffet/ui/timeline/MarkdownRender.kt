@@ -301,10 +301,9 @@ private fun MarkdownDocument(
         return
     }
     val typography = remember(colors, prose, style) { markdownTypography(colors, prose, style) }
-    // The quiet chip is the palette's `bgSubtle` on the palette's own page; a style that darkens the
-    // page would lose it there, so it becomes a step of ink over whatever the page is.
-    val chip = if (riffet.ui.design.LocalInterfaceStyle.current.components.surfaces.pageMix == 0f) colors.bgSubtle
-        else riffet.ui.design.LocalRiffetSurfaces.current.press
+    // A step of ink rather than the palette's `bgSubtle`: markdown also sits on grouped pages and cards,
+    // where that tone disappears.
+    val chip = riffet.ui.design.LocalRiffetSurfaces.current.press
     val markdownColors = remember(colors, color, chip) { markdownColors(colors, color, chip) }
     val quoteColors = remember(colors, chip) { markdownColors(colors, colors.fg2, chip) }
     // The library's annotator is kept for everything but `**strong**` (Medium, since CJK at 600

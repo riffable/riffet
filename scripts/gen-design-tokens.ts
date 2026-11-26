@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DESKTOP_TEXT, MAC_MOTION, MOTION_DURATION, MOTION_EASING, SPACE } from '../packages/contracts/src/design-tokens.js';
-import { IOS_NATIVE_OVERRIDES, MOBILE_BASE_DIMENSIONS, MOBILE_CODE_TEXT, MOBILE_EASING, MOBILE_EXPRESSIVE_MOTION, MOBILE_IOS_TEXT, MOBILE_MOTION, MOBILE_RIFFET_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS, type MobileTextStyle } from '../packages/contracts/src/mobile-styles.js';
+import { IOS_NATIVE_OVERRIDES, MOBILE_BASE_DIMENSIONS, MOBILE_CODE_TEXT, MOBILE_EASING, MOBILE_IOS_TEXT, MOBILE_IPHONE_DIMENSIONS, MOBILE_MOTION, MOBILE_RIFFET_MOTION, MOBILE_SHARED_MOTION, MOBILE_STYLE_DIMENSIONS, type MobileTextStyle } from '../packages/contracts/src/mobile-styles.js';
 import { THEME_DIMENSION_BOUNDS, THEME_MOTION_BOUNDS } from '../packages/contracts/src/theme-design.js';
 
 /**
@@ -41,8 +41,9 @@ const within = (label: string, values: Record<string, number>, bounds: Record<st
 };
 within('MOBILE_BASE_DIMENSIONS', MOBILE_BASE_DIMENSIONS, THEME_DIMENSION_BOUNDS);
 for (const [style, values] of Object.entries(MOBILE_STYLE_DIMENSIONS)) within(`MOBILE_STYLE_DIMENSIONS.${style}`, values, THEME_DIMENSION_BOUNDS);
+within('MOBILE_IPHONE_DIMENSIONS', MOBILE_IPHONE_DIMENSIONS, THEME_DIMENSION_BOUNDS);
 within('IOS_NATIVE_OVERRIDES', IOS_NATIVE_OVERRIDES.dimensions, THEME_DIMENSION_BOUNDS);
-for (const [label, values] of Object.entries({ MOBILE_MOTION, MOBILE_SHARED_MOTION, MOBILE_EXPRESSIVE_MOTION })) within(label, values, THEME_MOTION_BOUNDS);
+for (const [label, values] of Object.entries({ MOBILE_MOTION, MOBILE_SHARED_MOTION, MOBILE_RIFFET_MOTION })) within(label, values, THEME_MOTION_BOUNDS);
 
 const kd = (n: number) => (Number.isInteger(n) ? `${n}.0` : String(n));
 const kf = (n: number) => `${n}f`;
@@ -52,7 +53,7 @@ const kText = (style: MobileTextStyle, extra = '') => `TextStyle(fontSize = ${st
 const kList = (name: string, entries: string[], prefix = '') => [`internal val ${name} = ${prefix}mapOf(`, ...entries.map((entry) => `    ${entry},`), ')'];
 
 /** The ios style as the iPhone app draws it: the style's values with the iPhone's own overrides. */
-const ios = { ...MOBILE_BASE_DIMENSIONS, ...MOBILE_STYLE_DIMENSIONS.ios, ...IOS_NATIVE_OVERRIDES.dimensions };
+const ios = { ...MOBILE_BASE_DIMENSIONS, ...MOBILE_IPHONE_DIMENSIONS, ...IOS_NATIVE_OVERRIDES.dimensions };
 const iosMotion = { ...MOBILE_MOTION, ...MOBILE_SHARED_MOTION };
 /** A SwiftUI spring's response for a Compose stiffness (unit mass): one undamped period. */
 const response = (stiffness: number) => Math.round((2 * Math.PI / Math.sqrt(stiffness)) * 100) / 100;
@@ -83,16 +84,11 @@ const outputs: Record<string, (text: string, file: string) => string> = {
     ...kList('BaseDesignDimensions', kmap(MOBILE_BASE_DIMENSIONS)),
     ...Object.entries(MOBILE_STYLE_DIMENSIONS).flatMap(([style, values]) => kList(`${style[0]!.toUpperCase()}${style.slice(1)}Dimensions`, kmap(values))),
     ...kList('DefaultMotionTokens', kmap(MOBILE_MOTION)),
-    ...kList('SharedMotionTokens', kmap(MOBILE_SHARED_MOTION), 'DefaultMotionTokens + '),
-    ...kList('ExpressiveMotionTokens', kmap(MOBILE_EXPRESSIVE_MOTION), 'DefaultMotionTokens + '),
     ...kList('RiffetMotionTokens', kmap(MOBILE_RIFFET_MOTION), 'DefaultMotionTokens + '),
-    ...Object.entries(MOBILE_EASING).map(([name, points]) => `internal val ${name[0]!.toUpperCase()}${name.slice(1)}MotionEasing = CubicBezierEasing(${points.map(kf).join(', ')})`),
-    // Before IosStyleTypography: reading MaterialStyleTypography starts ThemePresets.kt's initialiser,
+    `internal val StandardMotionEasing = CubicBezierEasing(${MOBILE_EASING.standard.map(kf).join(', ')})`,
+    // Reading MaterialStyleTypography starts ThemePresets.kt's initialiser,
     // which reaches back for these through RiffetDefaultTypography.
     ...Object.entries(MOBILE_CODE_TEXT).map(([name, style]) => `internal val Mobile${name[0]!.toUpperCase()}${name.slice(1)}Text = ${kText(style, ', fontFamily = FontFamily.Monospace')}`),
-    'internal val IosStyleTypography = MaterialStyleTypography.copy(',
-    ...Object.entries(MOBILE_IOS_TEXT).map(([slot, style]) => `    ${slot} = ${kText(style)},`),
-    ')',
     '',
   ].join('\n'),
   'apps/mobile/iosApp/Riffet/Design/RiffetDesign.swift': (text, file) => {

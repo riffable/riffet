@@ -252,11 +252,14 @@ function Tile({ icon, label, value, format, unit, tone = 'accent', spark, badge,
         {badge && <span className="ml-auto">{badge}</span>}
       </div>
       <div className="flex items-end justify-between gap-2">
-        <p className="min-w-0 truncate text-2xl font-semibold leading-7 tracking-tight text-fg tabular-nums">
+        <p className="shrink-0 whitespace-nowrap text-2xl font-semibold leading-7 tracking-tight text-fg tabular-nums">
           {format(shown)}
           {unit && <span className="ml-1 text-xs font-normal tracking-normal text-fg-3">{unit}</span>}
         </p>
-        <Spark values={spark} width={76} height={28} className={cn('mb-0.5', TONE_TEXT[tone])} />
+        {/* The figure is the reading; the trend gives way to it and scales down in a narrow tile. */}
+        <span className="flex min-w-0 max-w-[76px] flex-1 justify-end">
+          <Spark values={spark} width={76} height={28} className={cn('mb-0.5 h-auto w-full', TONE_TEXT[tone])} />
+        </span>
       </div>
       {footer}
     </article>

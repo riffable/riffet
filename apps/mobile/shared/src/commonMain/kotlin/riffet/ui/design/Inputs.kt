@@ -188,22 +188,7 @@ internal fun RiffetTextField(
     val hint: (@Composable () -> Unit)? = placeholder?.let { { Text(it, style = textStyle) } }
     // A single-line field scrolls its text sideways: swipes starting on it stay in it.
     val fieldSwipes = if (singleLine) Modifier.horizontalSwipeChild() else Modifier
-    if (recipe.fields == ComponentBackend.MIUIX) {
-        Column(modifier.fillMaxWidth()) {
-            label?.invoke()
-            top.yukonga.miuix.kmp.basic.TextField(
-                value, onValueChange, modifier = Modifier.fillMaxWidth().heightIn(min = metrics.inputMinHeight).then(fieldSwipes),
-                cornerRadius = metrics.controlRadius, label = placeholder.orEmpty(), useLabelAsPlaceholder = true,
-                colors = top.yukonga.miuix.kmp.basic.TextFieldDefaults.textFieldColors(
-                    backgroundColor = s.input, labelColor = if (enabled) colors.fg3 else s.disabledContent, borderColor = s.focus,
-                ),
-                enabled = enabled, readOnly = readOnly, textStyle = textStyle.copy(color = if (enabled) colors.fg else s.disabledContent),
-                keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
-                trailingIcon = trailingIcon, singleLine = singleLine, minLines = minLines, maxLines = maxLines,
-                visualTransformation = transformation, interactionSource = source, cursorBrush = SolidColor(s.focus),
-            )
-        }
-    } else if (recipe.fields == ComponentBackend.MATERIAL) {
+    if (recipe.fields == ComponentBackend.MATERIAL) {
         OutlinedTextField(
             value = value, onValueChange = onValueChange, enabled = enabled, readOnly = readOnly,
             singleLine = singleLine, minLines = minLines, maxLines = maxLines, placeholder = hint,
@@ -348,13 +333,6 @@ internal fun RiffetSlider(
     val recipe = LocalInterfaceStyle.current.components.inputs
     // A slider drags from the press: sideways swipes on it are its own, not the page's or the tabs'.
     val claimed = modifier.horizontalSwipeChild { enabled }
-    if (recipe.sliders == ComponentBackend.MIUIX && !metrics.isOverridden("sliderTrackHeight") && valueRange.start < valueRange.endInclusive) {
-        top.yukonga.miuix.kmp.basic.Slider(
-            value, onValueChange, claimed.heightIn(min = metrics.controlHeight), enabled, valueRange, steps,
-            onValueChangeFinished = onValueChangeFinished, height = metrics.sliderThumbSize,
-        )
-        return
-    }
     if (recipe.sliders == ComponentBackend.MATERIAL) {
         val sliderColors = SliderDefaults.colors(thumbColor = s.primaryAction, activeTrackColor = s.primaryAction,
             disabledThumbColor = s.disabledContent, disabledActiveTrackColor = s.disabledContent)

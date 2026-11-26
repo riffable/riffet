@@ -1,6 +1,6 @@
 # Android
 
-本文把[基础](foundations.md)、[模式](patterns.md)和组件落到 Android：每条语义在 Android 上用哪个组件或取值、哪里跟平台而与桌面不同。六种界面风格的数值在 `packages/contracts/src/mobile-styles.ts`，组件配方在 `ui/design/ThemePresets.kt`；主题如何覆盖它们见 [主题契约](../../THEMES.md) §9。本文规定各风格共同遵守的结构与行为；默认的 Riffet 风格自己的规则在 §10。
+本文把[基础](foundations.md)、[模式](patterns.md)和组件落到 Android：每条语义在 Android 上用哪个组件或取值、哪里跟平台而与桌面不同。两种界面风格的数值在 `packages/contracts/src/mobile-styles.ts`，组件配方在 `ui/design/ThemePresets.kt`；主题如何覆盖它们见 [主题契约](../../THEMES.md) §9。本文规定各风格共同遵守的结构与行为；默认的 Riffet 风格自己的规则在 §10。
 
 每节末尾的「现状」是 2026-11-14 盘点时与规则不符的实现，迁移后删掉对应条目。路径相对 `apps/mobile/shared/src/commonMain/kotlin/riffet/`。
 
@@ -18,10 +18,10 @@
 | 系统字体倍率、动画时长缩放、触感 | |
 | 权限、文件选择、分享用系统界面 | |
 
-- **风格是配方，不是分支。** 六种风格（`shared/DisplaySettings.kt` 的 `InterfaceStyle`：riffet、material3、ios、expressive、miuix、fluent）只在 `ThemePresets.kt` 的 `themePreset()` 里按名字分派一次；组件读 `LocalInterfaceStyle.current` 的 `metrics`（尺寸）、`components`（配方）、`variants`（外观变体）和 `motion`，不判断风格名。
+- **风格是配方，不是分支。** 两种风格（`shared/DisplaySettings.kt` 的 `InterfaceStyle`：riffet、material3；[决定](../DECISIONS.md) 2026-11-26）只在 `ThemePresets.kt` 的 `themePreset()` 里按名字分派一次；组件读 `LocalInterfaceStyle.current` 的 `metrics`（尺寸）、`components`（配方）、`variants`（外观变体）和 `motion`，不判断风格名。
 - **新风格**：数值写进 `mobile-styles.ts` 的 `MOBILE_STYLE_DIMENSIONS`，运行 `pnpm gen:tokens`；配方在 `ThemePresets.kt` 加一个 preset，只改与 material3 不同的字段。需要新形态时，先在 `ComponentRecipes.kt` 加字段并在共享组件里实现，再让 preset 选用。
 - **覆盖顺序**：风格默认值 → 主题的 `design.tokens` → 主题的 `design.styles.<风格>` → 系统与本机设置（字体倍率、动画缩放、安全区）。主题只改取值，不改交互、授权和业务回调。
-- iOS 原生端（`apps/mobile/iosApp`）跟 ios 风格取同样的值，差异写在 `IOS_NATIVE_OVERRIDES`，不在本文范围内。
+- iOS 原生端（`apps/mobile/iosApp`）的取值是 `MOBILE_IPHONE_DIMENSIONS` 加 `IOS_NATIVE_OVERRIDES`，不在本文范围内。
 
 ## 2. 基础的 Android 写法
 
@@ -34,22 +34,24 @@
 | 阴影 | `Modifier.floatingShadow`（`ui/design/Surfaces.kt`） | 只有浮在内容上的东西有阴影：菜单、浮动底栏、输入框 |
 | 线 | `hairline` 色、`hairlineWidth`；焦点 `focus` 色、`focusWidth` | 按下靠背景反馈，不加框 |
 | 动效 | `LocalRiffetMotion`（`ui/theme/Motion.kt`） | 系统的动画时长缩放已乘进去，调用处不再乘 |
-| 按压 | `RiffetPressIndication`、`Modifier.pressScale`（`ui/design/PressIndication.kt`） | material3 与 expressive 用 ripple，其余风格用表面高亮 |
+| 按压 | `RiffetPressIndication`、`Modifier.pressScale`（`ui/design/PressIndication.kt`） | material3 用 ripple，riffet 用表面高亮 |
 | 图标 | `RiffetIcons`，经图标包换图形（`pnpm gen:icons` 生成 Lucide） | 尺寸 `iconSize` / `smallIconSize` / `buttonIconSize`；描边 1.25 按渲染尺寸折算 |
 
 ### 2.1 文字角色
 
 角色在 `ui/theme/RiffetTheme.kt` 的 `RiffetTypography`，每种风格从自己的字阶映射（`ThemePresets.kt` 的 `typographyDefaults`）。主题可以按角色覆盖。
 
-| [基础](foundations.md) §2 的角色 | `RiffetTypography` | material3 | expressive | miuix | fluent | ios |
-|---|---|---|---|---|---|---|
-| 正文 | `body` | 16 / 24 | 同左 | 同左 | 同左 | 16 / 22 |
-| 界面 | `label`、`button`、`menu` | 14 / 20，500 | 同左 | 同左；菜单 16 | 同左 | 15 / 20，500；菜单 16 |
-| 次要 | `caption` | 12 / 16 | 同左 | 同左 | 同左 | 13 / 18 |
-| 标题 · 导航栏 | `barTitle` | 22 / 28，500 | 24 / 30，600 | 18 / 28，600 | 20 / 28，600 | 17 / 24，500 |
-| 标题 · 大标题 | `largeTitle` | 32 / 40，500 | 32 / 40，700 | 32 / 40，700 | 28 / 40，600 | 34 / 41，700 |
-| 标题 · 弹窗 | `dialogTitle` | 24 / 32 | 同左 | 20 / 28，600 | 20 / 28，600 | 17 / 24，500 |
-| 代码 | `mono` | 14 / 22 | 同左 | 同左 | 同左 | 同左 |
+| [基础](foundations.md) §2 的角色 | `RiffetTypography` | material3 |
+|---|---|---|
+| 正文 | `body` | 16 / 24 |
+| 界面 | `label`、`button`、`menu` | 14 / 20，500 |
+| 次要 | `caption` | 12 / 16 |
+| 标题 · 导航栏 | `barTitle` | 22 / 28，500 |
+| 标题 · 大标题 | `largeTitle` | 32 / 40，500 |
+| 标题 · 弹窗 | `dialogTitle` | 24 / 32 |
+| 代码 | `mono` | 14 / 22 |
+
+riffet 的字阶见 §10。
 
 - 字距一律为 0：Material 字阶的拉丁字距会把中文标签撑开。
 - 设置用紧凑的导航栏标题；大标题只用于滚动时会收起的页面。
@@ -118,8 +120,6 @@
 - 行只有四种（[移动端页面](mobile.md) §2.4）：导航 `SettingsNavigationRow` / `SettingsLinkRow`，开关 `SettingsSwitchRow`，选择 `SettingsChoiceRow`（行尾当前值，点开菜单），操作 `SettingsActionRow`（标题是强调色的动词，删除类用 `danger` 并单独成组放最底下）。`SettingsRow { SettingsButton }` 和 `SettingsButtonsRow` 不再新增，`pnpm check:compose` 会拦下。
 - 表单有未保存的改动时，返回（取消、系统返回、右滑）先确认「放弃未保存的修改？」，只有放弃和继续编辑两个答案；保存是页面顶栏的按钮（`settings/UnsavedSettingsGuard.kt`）。
 
-**现状**：ios 风格浅色下，分组卡片与页面底色几乎分不出（2026-11-15 在设置首页和各子页看到），卡片看起来像无底色的平铺列表。
-
 ## 4. 浮层
 
 ### 4.1 选哪一种
@@ -137,14 +137,14 @@
 
 ### 4.2 弹窗
 
-- 只有一个弹窗组件：`ui/design/Dialogs.kt` 的 `AlertDialog` 和 `RiffetDialogContent`。material3 与 expressive 用 Material 的弹窗；其余风格用共享实现，宽度 `alertWidth`，按配方竖排或并排操作。
+- 只有一个弹窗组件：`ui/design/Dialogs.kt` 的 `AlertDialog` 和 `RiffetDialogContent`。material3 用 Material 的弹窗；riffet 用共享实现，宽度 `alertWidth`，按配方竖排或并排操作。
 - 确认一律用 `ConfirmDialog(title, confirmLabel, …, danger)`：标题写动作和对象（「删除会话「x」？」），正文只写推断不出的后果，主操作写动作本身，危险操作用 `danger` 色；取消在主操作之前。超大字体时操作改为竖排。
 - 弹窗只放确认和一两个字段；更长的表单压栈成页面，顶部放取消和保存。
 
 ### 4.3 菜单与底部面板
 
 - 菜单：`RiffetDropdownMenu`、`RiffetMenuItem`、`RiffetMenuLabel`、`RiffetMenuSeparator`（`ui/pickers/RiffetMenu.kt`）。行高 `menuRowHeight`，宽 `menuMinWidth`–`menuMaxWidth`，圆角 `menuRadius`；最高为屏高的 70%，超出时内容在固定的外壳里滚动。
-- 底部面板：`PickerSheetFrame` / `PickerSheet`（`ui/pickers/PickerUi.kt`）。最高为屏高的 70%，宽屏不超过 `sheetMaxWidth`；遮罩挂在窗口层，盖住顶栏和底栏。ios 风格的简单操作面板把取消单独放在下方。
+- 底部面板：`PickerSheetFrame` / `PickerSheet`（`ui/pickers/PickerUi.kt`）。最高为屏高的 70%，宽屏不超过 `sheetMaxWidth`；遮罩挂在窗口层，盖住顶栏和底栏。
 - 侧栏（§3.1）不是浮层：固定标题与关闭按钮，正文独立滚动，点遮罩关闭。
 
 **现状**：`ui/pickers/PickerUi.kt` 里还有第二个自定义 `Popup`。
@@ -152,7 +152,7 @@
 ### 4.4 反馈
 
 - **Snackbar**：`LocalRiffetSnackbar` 的 `show()`，整个应用一个队列，由外壳托管（`ui/app/RiffetSnackbar.kt`）。带操作的停留更久；页面用 `bottomBar()` 报告底部栏高度，Snackbar 不压在底栏上。Compose 之外（通知回调、安装下载）才用系统 `Toast`。
-- **进行中**：`RiffetProgressIndicator`（`ui/design/Progress.kt`）。material3 是弧形进度，ios 风格是辐条；确定进度画数据比例。
+- **进行中**：`RiffetProgressIndicator`（`ui/design/Progress.kt`）。material3 与 riffet 都是弧形进度；确定进度画数据比例。
 - **下拉刷新**：会话列表，以及传了 `onRefresh` 的 `ScrollablePage` / `SettingsPage`。
 
 **现状**：
@@ -167,9 +167,9 @@
 
 | Web | Android | 各风格的画法 |
 |---|---|---|
-| `Segmented` | `SegmentedControl` | `controls.segments`：相连（material3）、滑块（ios、miuix）、胶囊（expressive）、下划线（fluent） |
+| `Segmented` | `SegmentedControl` | `controls.segments`：相连（material3）、滑块（riffet） |
 | `Select` | `PickerSheet`；就近的少量选项用 `RiffetDropdownMenu` | 选中项在行尾打勾（`lists.selectionAtEnd`） |
-| `Switch` | `RiffetSwitch` | material3 与 expressive 用 Material 开关，miuix 用 Miuix 组件，ios 与 fluent 用共享实现 |
+| `Switch` | `RiffetSwitch` | material3 用 Material 开关，riffet 用共享实现 |
 | `Checkbox` | `RiffetCheckbox` | |
 | `RadioGroup` | 行尾的 `SelectionMark`；`RiffetRadioButton` 只在必须显示圆点时用 | |
 | `Slider` | `RiffetSlider` | 轨道高 `sliderTrackHeight`，滑块 `sliderThumbSize` |
@@ -224,7 +224,7 @@
 
 ## 8. 设计规范页
 
-- **Web 设计规范页的 Android 部分**（`/design?platform=android`，代码在 `apps/web/src/app/design/android/`）讲规范：平台分工、五种风格的数值与配方、文字角色、组件对照、页面与导航、浮层。尺寸和动效直接读 `MOBILE_BASE_DIMENSIONS` 与 `MOBILE_STYLE_DIMENSIONS`，每种风格画一张手机缩样；配方在 Kotlin 里，页面上的配方表按 `ThemePresets.kt` 誊写，改 preset 时同步改 `apps/web/src/app/design/android/values.ts`。
+- **Web 设计规范页的 Android 部分**（`/design?platform=android`，代码在 `apps/web/src/app/design/android/`）讲规范：平台分工、两种风格的数值与配方、文字角色、组件对照、页面与导航、浮层。尺寸和动效直接读 `MOBILE_BASE_DIMENSIONS` 与 `MOBILE_STYLE_DIMENSIONS`，每种风格画一张手机缩样；配方在 Kotlin 里，页面上的配方表按 `ThemePresets.kt` 誊写，改 preset 时同步改 `apps/web/src/app/design/android/values.ts`。
 - Android 上验收组件用 JVM 离屏渲染生产组件（[主题契约](../../THEMES.md) §8.5），系统键盘、手势和安全区以真机为准。
 
 ## 9. 落地顺序
@@ -241,7 +241,7 @@
 
 ## 10. Riffet 风格
 
-Android 的默认风格，与 Web、Mac 的 [Riffet 风格](../riffet-style.md)是同一套取向：值少，每一处都守着这些值。范本是 Linear 与 Things 的手机端列表，对话页看 Claude 的手机端。其他五种风格是可选的外观，结构与它相同。
+Android 的默认风格，与 Web、Mac 的 [Riffet 风格](../riffet-style.md)是同一套取向：值少，每一处都守着这些值。范本是 Linear 与 Things 的手机端列表，对话页看 Claude 的手机端。Material 3 是另一种可选的外观，结构与它相同。
 
 **文字**
 
@@ -260,12 +260,16 @@ Android 的默认风格，与 Web、Mac 的 [Riffet 风格](../riffet-style.md)�
 
 **面与线**
 
-- 分层靠明度，不靠线。页面是 `bg` 向墨色混 3%（`surfaces.pageMix`），卡片是 `bgElevated`，不描边、不加阴影。卡片、胶囊、底部面板、弹窗都没有外框。
+- 分层靠明度，不靠线，按 [Riffet 风格](../riffet-style.md) §4 的三层：
+  - **平铺页**（任务列表、会话、新会话页）的底是调色板的 `bg`，浅色主题里是白色。放在它上面的卡片（代码块、计划、提示、工具输出）是 `bg` 向墨色混 3.5% 的浅灰（`CardPresentation.STEPPED`）。
+  - **分组页**（设置的每一页、左右侧栏、会话详情面板）的底是 `bg` 向墨色混 3%（`surfaces.groupedPageMix`），卡片是 `bgElevated` 的白色。页面套一层 `GroupedSurfaces`，里面的 `pageColor()`、`Group`、`Notice` 自动取分组页的值，业务代码不另判断。
+  - **浮层**（会话输入框、新会话页的输入框、底栏、菜单、底部面板、弹窗）是 `bgElevated` 的白色加阴影。
+  - 卡片和它所在的底永远差一步，不描边、不加阴影。卡片、胶囊、底部面板、弹窗都没有外框。深色主题不变：页面是 `bg`，卡片和浮层是抬起的 `bgElevated`。
 - 线只用来分开同一张卡片里的行，取 `lineSoft`（`surfaces.softLines`）。会话页的顶栏下面不画线（`navigation.pageBarLine`）。任务列表的行之间、菜单的项之间不画线，靠间距分开。暗色下菜单保留一条细边，因为阴影在暗底上看不见。
 - 只有浮在内容上的东西有阴影：输入框、底栏、菜单、底部面板。阴影宽而淡（半径 18，下移 6，不透明度 0.10）。
 - 圆角四档：选中 8，行 10，控件与胶囊 12，菜单 14，卡片 16，输入框 24（收起时就是胶囊）。
-- 选中是卡片色向墨色混 9%（暗色 16%）的中性底（`surfaces.neutralSelection`），在页面和卡片上都看得出；主操作是墨色的 `primary`（`surfaces.inkPrimary`）。强调色只用于焦点、文本选区和链接。
-- 对话里的行内代码用按压色做底：页面已经压暗，`bgSubtle` 在它上面分辨不出。
+- 颜色按 [Riffet 风格](../riffet-style.md) §4 的三档：主操作、开关、勾选、确定进度、底栏当前图标和视图页签的指示条取 `primary`（`surfaces.primaryAction`）；选中的控件（筛选胶囊、分段、底栏当前项、自己的消息气泡）取主题色的淡底（`surfaces.selected`）；链接、焦点、文本选区取 `accent`。列表行的选中与高亮是中性的 `surfaces.rowSelected`（白色向墨色混 8%，暗色 16%）。
+- 对话里的行内代码用按压色做底：Markdown 也出现在分组页和卡片上，`bgSubtle` 在那里分辨不出。
 
 **组件**
 
@@ -273,7 +277,8 @@ Android 的默认风格，与 Web、Mac 的 [Riffet 风格](../riffet-style.md)�
 - **项目标题**：名字从标志的左边缘起，折叠箭头跟在名字后面；行尾只有「＋」，与时间一列对齐。与上一组隔 12。
 - **筛选胶囊**（`controls.bareChips`）：没选中的只是文字，选中的一个有底。
 - **底部面板**：面板就是一张卡片（`sheets.flatRows`）：行直接落在面板上，不另涂底色，行与行之间不画线，标题下面和底部参数栏上面也不画线（`sheets.headerLine`）。没有拖动条（`sheets.dragHandle`），标题栏高 56，标题到面板上边缘和到列表的距离相等；关闭按钮和下滑都能关。行尾的值与设置行相同（14 / 21，`fg3`）。
-- **弹窗**：两个按钮并排靠右（`controls.filledDialogActions`），不上下叠成整行宽。确认是主操作的墨色实底，取消是浅底，删除这类确认是红色浅底加红字。
+- **按钮**：有底的按钮（主按钮、弹窗里的两个按钮、有底的次要按钮）高 40，文字左右各 20（`buttonInset`），最小宽 72（`buttonMinWidth`），两个字的「取消」「保存」也读成横向的按钮，宽高比约 2:1，不是方块。没有底的文字按钮左右 12。按钮只属于一个字段时放在字段下方右对齐，不挂在分组标题旁；一屏收尾的提交（Git 的 Commit）整行宽。
+- **弹窗**：两个按钮并排靠右（`controls.filledDialogActions`），不上下叠成整行宽。确认是 `primary` 实底，取消是浅底，删除这类确认是红色浅底加红字。
 - **中性底**：输入框和次要按钮的底是墨色的一档透明度（浅色 5% / 7%，深色 10% / 12%），不取调色板的 `bgMuted`：深色下它和卡片几乎同色。
 - **设置里的单选组**用 `GroupRows` 排，选项之间和其他行一样有线。
 - **视图页签**（`ViewTabs`）只留选中项下面的指示条，没有横贯整页的底线。

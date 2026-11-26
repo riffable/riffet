@@ -30,20 +30,16 @@ composeMultiplatform = "1.12.1"
 # Material 3 has its own version line since CMP 1.10. 1.9.0 is what the CMP 1.12.1 Gradle plugin's
 # (deprecated) `compose.material3` accessor resolves to.
 composeMaterial3 = "1.9.0"
-miuix = "0.9.4"
 haze = "2.0.1"
 # Haze core/blur/glass share one version; Kotlin 2.4.20 and Compose 1.12.1 match this build.
 # Only its source-backed public API is used; platform window-backdrop remains experimental/off.
-# Miuix publishes Java 21 classes on Android and desktop. Mobile CI and local JVM UI runs
-# require JDK 21+, while application/compiler targets remain 17. Kotlin 2.4.20 / Foundation 1.12.0.
 ktor = "3.6.0"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 
 # The transcript's markdown renderer (mikepenz/multiplatform-markdown-renderer, Apache-2.0, CMP,
 # Android + iOS + jvm). Retained at the version verified with JVM 17 output: 0.40.0 and later ship
-# Java 21 class files (major 65) in both the jvm jar and Android AAR. The Miuix runtime requirement
-# does not automatically upgrade the renderer: check inline calls before changing its version
+# Java 21 class files (major 65) in both the jvm jar and Android AAR. Check inline calls before changing its version
 # because Kotlin refuses to inline JVM 21 bytecode into the JVM 17 application target.
 # 0.39.2 is major 61, declares kotlin-stdlib 2.3.0, and is built against Compose 1.10.
 #
@@ -100,7 +96,6 @@ androidxCamera = "1.4.2"
 zxing = "3.5.3"
 
 [libraries]
-miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
 haze-core = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
 haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
 haze-glass = { module = "dev.chrisbanes.haze:haze-glass", version.ref = "haze" }

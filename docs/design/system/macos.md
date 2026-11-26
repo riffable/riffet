@@ -198,7 +198,7 @@ PageScaffold(title: "自动化", column: .document, search: $query) {
 | `Segmented` | `SegmentedTrack` | `FormSegmented`（系统分段控件） |
 | `Select` | `ChoiceMenu`，经 `popUpStyled` | `Picker` 的菜单样式 |
 | 标题式 `Select` | `ChoiceMenu` 的标题外观（新增参数）：对象名用 `.barTitle`，无边框，后跟下拉箭头 | 同左 |
-| `Switch` | `Toggle` 加 `.switch`，墨色 | 同左；分组列表里用 `.controlSize(.mini)` |
+| `Switch` | `Toggle` 加 `.switch`，开为 `primary` | 同左；分组列表里用 `.controlSize(.mini)` |
 | `UnderlineTabs` | 胶囊页签 `PillTab`（§3.2） | Agent 与模型提供商页的对象导航，横向滚动 |
 
 - 系统的 `.pickerStyle(.segmented)` 只用在设置窗口和工具栏里（[macOS 设计语言](../macos-native.md) §2.1）。

@@ -98,6 +98,26 @@ function yellowness(h: number): number {
   return Math.max(0, Math.cos(((h - 100) * Math.PI) / 180)) ** 3;
 }
 
+const PRIMARY_CONTRAST = 4.6;
+
+/**
+ * The primary action in the accent's hue and chroma, moved in lightness until its label reads on it:
+ * darker than the accent under white text in light, lighter under the theme's own background in dark.
+ */
+function derivePrimary(accent: Rgba, bgHex: string, mode: Mode): { primary: string; hover: string; fg: string } {
+  const [l0, a, b] = toOklab(parseColor(colorToHex(accent))!);
+  const c = Math.hypot(a, b);
+  const h = ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360;
+  const light = mode === 'light';
+  const fgHex = light ? '#ffffff' : bgHex;
+  const fg = parseColor(fgHex)!;
+  let l = light ? l0 - 0.07 : l0 + 0.05;
+  for (let step = 0; step < 200 && contrastRatio(fit(l, c, h), fg) < PRIMARY_CONTRAST && (light || l < 0.97); step += 1) {
+    l += light ? -0.005 : 0.005;
+  }
+  return { primary: hex(l, c, h), hover: hex(light ? l - 0.06 : l - 0.05, c, h), fg: fgHex };
+}
+
 /** The colour a point shows on the canvas: the hue at a lightness every hue can reach. */
 export function pointColor(point: ThemeSeedPoint): string {
   return hex(0.74, 0.02 + point.radius * 0.15, point.hue);
@@ -171,6 +191,7 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
     const accentL = 0.57 + 0.12 * yellowness(ha);
     const accent = fit(accentL, ca, ha);
     const ink = Math.min(cs * 1.4, 0.05);
+    const primary = derivePrimary(accent, colorToHex(bg), 'light');
     const fg = readable(0.29, cs * 0.5, h, bg, 12, true);
     return {
       bg: colorToHex(bg),
@@ -189,9 +210,9 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
       line: hex(0.2, ink, h, 0.08),
       'line-soft': hex(0.2, ink, h, 0.055),
       'line-strong': hex(0.2, ink, h, 0.13),
-      primary: hex(0.2, cs * 0.5, h),
-      'primary-hover': hex(0.33, cs * 0.5, h),
-      'primary-fg': hex(elevatedL, cs * 0.4, h),
+      primary: primary.primary,
+      'primary-hover': primary.hover,
+      'primary-fg': primary.fg,
       accent: colorToHex(accent),
       'accent-hover': hex(accentL - 0.04, ca, ha),
       'accent-soft': colorToHex([accent[0], accent[1], accent[2], 0.1]),
@@ -207,6 +228,7 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
   const accentL = 0.7 + 0.08 * yellowness(ha);
   const accent = fit(accentL, ca, ha);
   const ink = Math.min(cs, 0.03);
+  const primary = derivePrimary(accent, bgHex, 'dark');
   return {
     bg: bgHex,
     'bg-sidebar': canvasStop(surface, 'dark', soft),
@@ -224,9 +246,9 @@ export function deriveSeedRoles(seed: ThemeSeed, mode: Mode): Record<SeedRole, s
     line: hex(0.98, ink, h, 0.075),
     'line-soft': hex(0.98, ink, h, 0.05),
     'line-strong': hex(0.98, ink, h, 0.12),
-    primary: hex(0.95, cs * 0.4, h),
-    'primary-hover': hex(0.87, cs * 0.4, h),
-    'primary-fg': bgHex,
+    primary: primary.primary,
+    'primary-hover': primary.hover,
+    'primary-fg': primary.fg,
     accent: colorToHex(accent),
     'accent-hover': hex(accentL - 0.04, ca, ha),
     'accent-soft': colorToHex([accent[0], accent[1], accent[2], 0.15]),

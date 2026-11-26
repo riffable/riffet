@@ -719,6 +719,8 @@ internal fun ComposerCard(
         }
     }
 
+    val raisedHero = hero && LocalInterfaceStyle.current.components.surfaces.card == riffet.ui.design.CardPresentation.STEPPED &&
+        !LocalRiffetSurfaces.current.dark
     // On the session page, the body yields space to the footer and scrolls when the keyboard shrinks
     // the viewport. The home composer keeps its intrinsic input height inside its scrolling page.
     Column(
@@ -726,13 +728,15 @@ internal fun ComposerCard(
             .fillMaxWidth()
             .keepsFocusOnTap()
             // The home's composer is the page itself, not a layer over it: nothing scrolls behind it
-            // to blur, so it is the page's solid card (the settings cards' fill), the strongest
-            // surface on the page, and the tools under it stay quieter. In a session it floats over
-            // the transcript as glass.
+            // to blur, so it is solid, the strongest surface on the page, and the tools under it stay
+            // quieter. Where cards are a quiet fill on a white page ([CardPresentation.STEPPED]) the
+            // strongest surface is the raised paper with its shadow; elsewhere it is the card. In a
+            // session it floats over the transcript as glass.
             .onGloballyPositioned { cardBounds.coordinates = it }
-            .then(if (hero) Modifier else Modifier.floatingShadow(shape, lifted = focused))
+            .then(if (hero && !raisedHero) Modifier else Modifier.floatingShadow(shape, lifted = focused))
             .clip(shape)
-            .then(if (hero) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card), shape)
+            .then(if (hero) Modifier.background(materialContentBackground(
+                    if (raisedHero) LocalRiffetSurfaces.current.floating else LocalRiffetSurfaces.current.card), shape)
                 else Modifier.riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating)),
     ) {
         // The overlay leaves as the finger lifts, in one motion, while the last sentence finishes in the bar; a failure brings it
@@ -1044,8 +1048,7 @@ private fun SettingsChip(settings: ComposerSettings, modifier: Modifier = Modifi
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     val style = LocalInterfaceStyle.current
-    val settingsSurface = style.components.composer.settingsSurface
-    val ink = if (!settings.enabled) LocalRiffetSurfaces.current.disabledContent else if (settingsSurface) colors.fg2 else colors.accent
+    val ink = if (!settings.enabled) LocalRiffetSurfaces.current.disabledContent else colors.fg2
     Row(
         modifier = modifier
             .heightIn(min = metrics.controlHeight)
@@ -1291,7 +1294,7 @@ private fun QueueDock(
                 Text(
                     text = stringResource(Res.string.composer_queued_count, runs.size),
                     style = if (LocalInterfaceStyle.current.components.composer.tonal) typography.label else typography.body,
-                    color = if (LocalInterfaceStyle.current.components.composer.tonal) colors.fg else colors.accent,
+                    color = colors.fg,
                     modifier = Modifier.weight(1f),
                 )
                 Chevron(open, size = 14.dp, tint = colors.fg4, icon = RiffetIcons.ChevronDown, openAngle = 180f)
@@ -1413,7 +1416,7 @@ private fun IconAction(
     val colors = LocalRiffetColors.current
     if (!LocalInterfaceStyle.current.components.composer.tonal) {
         IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, description, tint = if (enabled) colors.accent else LocalRiffetSurfaces.current.disabledContent, modifier = Modifier.size(16.dp))
+            Icon(icon, description, tint = if (enabled) colors.fg2 else LocalRiffetSurfaces.current.disabledContent, modifier = Modifier.size(16.dp))
         }
         return
     }

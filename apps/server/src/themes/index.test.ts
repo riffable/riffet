@@ -62,10 +62,8 @@ describe('ThemeService', () => {
         variants: { settingsIcons: 'plain' },
       },
       styles: {
-        ios: { typography: { input: { size: 17 } }, variants: { navigation: 'floating' } },
-        expressive: { motion: { spatialDamping: 0.7 } },
-        miuix: { dimensions: { rowHeight: 56 } },
-        fluent: { colors: { dark: { input: '#123456' } } },
+        riffet: { typography: { input: { size: 17 } }, variants: { navigation: 'floating' } },
+        material3: { colors: { dark: { input: '#123456' } } },
       },
     };
     const saved = await themes.replaceLibrary({ expectedRevision: revision, themes: [{ ...theme(), design }] });
@@ -85,13 +83,16 @@ describe('ThemeService', () => {
     // Key order, empty patches and colour case do not create a new revision.
     const reordered: ThemeDesign = {
       styles: {
-        fluent: design.styles!.fluent, miuix: design.styles!.miuix, expressive: design.styles!.expressive,
-        material3: {}, ios: { variants: { navigation: 'floating' }, typography: { input: { size: 17 } } },
+        material3: design.styles!.material3, riffet: { variants: { navigation: 'floating' }, typography: { input: { size: 17 } } },
       },
       tokens: { ...normalized.tokens, typography: { caption: {}, ...normalized.tokens.typography } },
       version: 1,
     };
     expect(await themes.replaceLibrary({ expectedRevision: revision, themes: [{ ...theme(), design: reordered }] })).toEqual(saved);
+    // An override for a style the apps no longer have is dropped instead of making the library unreadable.
+    const retired = { version: 1, styles: { ios: { variants: { navigation: 'floating' } }, material3: design.styles!.material3 } } as unknown as ThemeDesign;
+    const kept = await themes.replaceLibrary({ expectedRevision: saved.revision, themes: [{ ...theme(), design: retired }] });
+    expect(kept.themes[0]?.design).toEqual({ version: 1, styles: { material3: { colors: { dark: { input: '#123456' } } } } });
     const error = await themes.replaceLibrary({ expectedRevision: revision, themes: [theme()] }).catch(value => value);
     expect(error).toBeInstanceOf(AppError);
     expect(error.code).toBe('THEME_CONFLICT');

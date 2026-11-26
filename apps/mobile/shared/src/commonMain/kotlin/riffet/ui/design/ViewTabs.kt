@@ -40,7 +40,7 @@ internal fun ViewTabs(labels: List<String>, selected: Int, onSelect: (Int) -> Un
         edgePadding = 0.dp,
         containerColor = Color.Transparent,
         contentColor = colors.accent,
-        indicator = { TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(selected), color = colors.accent) },
+        indicator = { TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(selected), color = LocalRiffetSurfaces.current.primaryAction) },
         // Where tone separates surfaces the row keeps only its indicator: a rule across the page belongs to no card.
         divider = { if (!style.components.surfaces.softLines) TabRowDefaults.SecondaryIndicator(height = style.metrics.hairlineWidth, color = colors.line) },
     ) {

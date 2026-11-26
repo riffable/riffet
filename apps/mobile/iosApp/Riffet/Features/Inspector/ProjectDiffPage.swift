@@ -132,38 +132,44 @@ private struct PatchDiffView: View {
     }
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(rows) { row in
-                    if let chunk = row.chunk {
-                        HStack(spacing: 8) {
-                            if staged {
-                                hunkButton(gitText("Unstage"), palette.accent) { act(chunk, "unstage") }
-                            } else {
-                                hunkButton(gitText("Stage"), palette.accent) { act(chunk, "stage") }
-                                hunkButton(gitText("Discard"), palette.danger) { act(chunk, "discard") }
-                            }
-                        }
-                        .disabled(busy).padding(.horizontal, 6)
-                    }
-                    Text(row.text.isEmpty ? " " : row.text)
-                        .riffetFont(.mono).textSelection(.enabled)
-                        .foregroundStyle(row.text.hasPrefix("@@") ? palette.fg3 : palette.fg)
-                        .padding(.vertical, 2).padding(.horizontal, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(row.text.hasPrefix("+") ? palette.diffAdd : row.text.hasPrefix("-") ? palette.diffDel : .clear)
-                        .contextMenu {
-                            if let chunk = row.chunk {
+        GeometryReader { geo in
+            ScrollView([.horizontal, .vertical]) {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    ForEach(rows) { row in
+                        if let chunk = row.chunk {
+                            HStack(spacing: 8) {
                                 if staged {
-                                    Button(gitText("Unstage"), systemImage: "minus.circle") { act(chunk, "unstage") }
+                                    hunkButton(gitText("Unstage"), palette.accent) { act(chunk, "unstage") }
                                 } else {
-                                    Button(gitText("Stage"), systemImage: "plus.circle") { act(chunk, "stage") }
-                                    Button(gitText("Discard"), systemImage: "trash", role: .destructive) { act(chunk, "discard") }
+                                    hunkButton(gitText("Stage"), palette.accent) { act(chunk, "stage") }
+                                    hunkButton(gitText("Discard"), palette.danger) { act(chunk, "discard") }
                                 }
                             }
+                            .disabled(busy).padding(.horizontal, 6)
                         }
+                        Text(row.text.isEmpty ? " " : row.text)
+                            .riffetFont(.mono).textSelection(.enabled).fixedSize(horizontal: true, vertical: false)
+                            .foregroundStyle(row.text.hasPrefix("@@") ? palette.fg3 : palette.fg)
+                            .padding(.vertical, 2).padding(.horizontal, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(row.text.hasPrefix("+") ? palette.diffAdd : row.text.hasPrefix("-") ? palette.diffDel : .clear)
+                            .contextMenu {
+                                if let chunk = row.chunk {
+                                    if staged {
+                                        Button(gitText("Unstage"), systemImage: "minus.circle") { act(chunk, "unstage") }
+                                    } else {
+                                        Button(gitText("Stage"), systemImage: "plus.circle") { act(chunk, "stage") }
+                                        Button(gitText("Discard"), systemImage: "trash", role: .destructive) { act(chunk, "discard") }
+                                    }
+                                }
+                            }
+                    }
                 }
-            }.padding(.vertical)
+                .padding(.vertical)
+                // Lines keep their own width and scroll sideways; a short patch still fills the page width.
+                .frame(minWidth: geo.size.width, alignment: .leading)
+            }
+            .defaultScrollAnchor(.topLeading)
         }
     }
 }

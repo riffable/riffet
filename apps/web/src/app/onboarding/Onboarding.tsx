@@ -254,7 +254,7 @@ export function OnboardingFrame({ segments, index, onBack, onSkip, className, ch
       <div className="grid h-13 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-3">
         <div>{onBack && <Button variant="quiet" size="icon-sm" aria-label={t`返回`} onClick={onBack}><IconArrowLeft /></Button>}</div>
         <div aria-hidden className={cn('flex gap-1.5 transition-opacity duration-[var(--duration-base)]', index === 0 && 'opacity-0')}>
-          {Array.from({ length: segments }, (_, n) => <span key={n} className={cn('h-0.75 w-6 rounded-full transition-colors duration-[var(--duration-base)]', n < index ? 'bg-fg' : 'bg-line-strong')} />)}
+          {Array.from({ length: segments }, (_, n) => <span key={n} className={cn('h-0.75 w-6 rounded-full transition-colors duration-[var(--duration-base)]', n < index ? 'bg-primary' : 'bg-line-strong')} />)}
         </div>
         <div className="flex justify-end"><Button variant="quiet" size="sm" onClick={onSkip}><Trans>跳过</Trans></Button></div>
       </div>

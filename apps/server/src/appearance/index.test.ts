@@ -104,11 +104,11 @@ describe('appearance catalog', () => {
   });
 
   it('gives a palette that stands alone under the key clients paint it, and nothing for one that is not held', async () => {
-    const design = { version: 1, styles: { ios: { variants: { settingsIcons: 'plain' }, colors: { light: { card: '#ABCDEF' } } } } };
+    const design = { version: 1, styles: { riffet: { variants: { settingsIcons: 'plain' }, colors: { light: { card: '#ABCDEF' } } } } };
     const bytes = Buffer.from(JSON.stringify({ ...palette(), design }));
     const appearances = service(await pack({ 'theme.json': bytes }), declarations());
     const key = `plugin-${sha(bytes).slice(0, 16)}`;
-    expect(await appearances.palette(key)).toMatchObject({ id: `custom-plugin-${sha(bytes).slice(0, 16)}`, name: 'Pack', design: { ...design, styles: { ios: { ...design.styles.ios, colors: { light: { card: '#abcdef' } } } } } });
+    expect(await appearances.palette(key)).toMatchObject({ id: `custom-plugin-${sha(bytes).slice(0, 16)}`, name: 'Pack', design: { ...design, styles: { riffet: { ...design.styles.riffet, colors: { light: { card: '#abcdef' } } } } } });
     expect(await appearances.palette('plugin-0000000000000000')).toBeUndefined();
     expect(await appearances.palette('custom-pack-theme')).toBeUndefined();
     expect(await service(await pack({ 'theme.json': bytes }), declarations(), false).palette(key)).toBeUndefined();

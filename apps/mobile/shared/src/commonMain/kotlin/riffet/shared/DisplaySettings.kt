@@ -28,10 +28,6 @@ enum class InterfaceStyle(val key: String) {
     /** The app's own style and the default (docs/design/system/android.md §10). */
     RIFFET("riffet"),
     MATERIAL3("material3"),
-    EXPRESSIVE("expressive"),
-    MIUIX("miuix"),
-    FLUENT("fluent"),
-    IOS("ios"),
 }
 
 /** Surface material is independent of layout/style and stored only on this device. */

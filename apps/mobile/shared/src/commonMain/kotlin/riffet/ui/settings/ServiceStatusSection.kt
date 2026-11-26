@@ -226,12 +226,12 @@ private fun ColumnScope.ServiceOverview(
     }
 
     SettingsGroup(stringResource(Res.string.settings_service_service)) {
-        SettingsValueRow(stringResource(Res.string.settings_version), stringResource(Res.string.settings_service_version_value, data.process.version, data.process.pid), mono = false)
-        SettingsValueRow(stringResource(Res.string.settings_service_runtime), "Node ${data.process.nodeVersion} · ${data.process.platform}/${data.process.arch}", mono = false)
-        SettingsValueRow(stringResource(Res.string.settings_service_host), "${data.host.hostname} · ${data.host.cpuModel}", mono = false)
-        SettingsValueRow(stringResource(Res.string.settings_service_connections), stringResource(Res.string.settings_service_connection_detail, data.connections.eventStreams, data.connections.terminalSockets), mono = false)
-        SettingsValueRow(stringResource(Res.string.settings_service_terminals), stringResource(Res.string.settings_service_terminal_detail, data.terminals.live, data.terminals.total), mono = false)
-        SettingsValueRow(stringResource(Res.string.settings_service_sessions), stringResource(Res.string.settings_service_session_detail, data.sessions.running, data.sessions.waiting, data.sessions.total), mono = false)
+        SettingsValueRow(stringResource(Res.string.settings_version), stringResource(Res.string.settings_service_version_value, data.process.version, data.process.pid))
+        SettingsValueRow(stringResource(Res.string.settings_service_runtime), "Node ${data.process.nodeVersion} · ${data.process.platform}/${data.process.arch}")
+        SettingsValueRow(stringResource(Res.string.settings_service_host), "${data.host.hostname} · ${data.host.cpuModel}")
+        SettingsValueRow(stringResource(Res.string.settings_service_connections), stringResource(Res.string.settings_service_connection_detail, data.connections.eventStreams, data.connections.terminalSockets))
+        SettingsValueRow(stringResource(Res.string.settings_service_terminals), stringResource(Res.string.settings_service_terminal_detail, data.terminals.live, data.terminals.total))
+        SettingsValueRow(stringResource(Res.string.settings_service_sessions), stringResource(Res.string.settings_service_session_detail, data.sessions.running, data.sessions.waiting, data.sessions.total))
     }
 
     if (data.processes.isNotEmpty()) {
@@ -312,14 +312,14 @@ private fun ProcessRow(process: ServiceProcess, usage: AgentProcessUsage?, onOpe
 @Composable
 private fun ColumnScope.ProcessDetail(process: ServiceProcess, onEnd: () -> Unit) {
     SettingsGroup("") {
-        SettingsValueRow(stringResource(Res.string.setm_process_kind), processKind(process), mono = false)
-        SettingsValueRow("PID", process.pid.toString(), mono = false)
-        SettingsValueRow(stringResource(Res.string.setm_process_parent), process.ppid.toString(), mono = false)
-        SettingsValueRow("CPU", percent(process.cpuPercent), mono = false)
-        SettingsValueRow(stringResource(Res.string.settings_service_memory), bytes(process.rssBytes), mono = false)
-        SettingsValueRow(stringResource(Res.string.setm_process_elapsed), duration(process.elapsedSec), mono = false)
-        process.sessionTitle?.let { SettingsValueRow(stringResource(Res.string.settings_service_sessions), it, mono = false) }
-        SettingsValueRow(stringResource(Res.string.setm_process_command), process.command)
+        SettingsValueRow(stringResource(Res.string.setm_process_kind), processKind(process))
+        SettingsValueRow("PID", process.pid.toString())
+        SettingsValueRow(stringResource(Res.string.setm_process_parent), process.ppid.toString())
+        SettingsValueRow("CPU", percent(process.cpuPercent))
+        SettingsValueRow(stringResource(Res.string.settings_service_memory), bytes(process.rssBytes))
+        SettingsValueRow(stringResource(Res.string.setm_process_elapsed), duration(process.elapsedSec))
+        process.sessionTitle?.let { SettingsValueRow(stringResource(Res.string.settings_service_sessions), it) }
+        SettingsValueRow(stringResource(Res.string.setm_process_command), process.command, mono = true)
     }
     if (process.canTerminate) SettingsGroup("") {
         SettingsActionRow(stringResource(Res.string.settings_service_end_process), onClick = onEnd, danger = true)

@@ -78,7 +78,7 @@ struct InspectorView: View {
     }
 }
 
-/// A tab in a row of pills: a filled pill when current. With a symbol it is the
+/// A tab in a row of pills: a pill filled with the soft theme tint when current. With a symbol it is the
 /// icon alone, a 28pt square, and the current one adds its name; without one, the name alone.
 struct PillTab: View {
     let title: String
@@ -100,7 +100,7 @@ struct PillTab: View {
             .foregroundStyle(selected ? palette.fg : palette.fg3)
             .padding(.horizontal, symbol != nil && !selected ? 0 : compact ? Space.xs + 2 : Space.sm)
             .frame(minWidth: compact ? 24 : 28, minHeight: compact ? 24 : 28)
-            .background(selected ? palette.bgActive : (hovering ? palette.bgHover : .clear), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .background(selected ? palette.accentSoft : (hovering ? palette.bgHover : .clear), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

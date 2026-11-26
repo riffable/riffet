@@ -340,10 +340,6 @@
     <string name="settings_interface_style">界面风格</string>
     <string name="settings_style_riffet">Riffet</string>
     <string name="settings_style_material">Material 3</string>
-    <string name="settings_style_ios">iOS 风格</string>
-    <string name="settings_style_expressive">Material 3 Expressive</string>
-    <string name="settings_style_miuix">Miuix</string>
-    <string name="settings_style_fluent">Fluent</string>
     <string name="settings_amoled">AMOLED 纯黑</string>
     <string name="settings_amoled_desc">仅在深色模式生效</string>
     <string name="settings_style_footnote">仅保存在这台设备</string>

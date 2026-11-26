@@ -391,15 +391,16 @@ private struct NativeProfileEditor: View {
                         ForEach(nativeApiProtocols, id: \.id) { item in Text(item.label).tag(item.id) }
                     }
                     .pickerStyle(.menu)
+                    .tint(palette.fg3)
                 }
             } header: { RiffetSectionTitle(String(localized: "连接", bundle: .riffet)) } footer: { Text("Key 只发送到当前服务器，不会回显") }
         }
         Section {
             RiffetField(label: String(localized: "默认模型", bundle: .riffet), prompt: String(localized: "自动", bundle: .riffet), text: $defaultModel).textInputAutocapitalization(.never).autocorrectionDisabled()
-            Toggle("提供全部模型", isOn: $allModels)
+            Toggle("提供全部模型", isOn: $allModels).tint(palette.primary)
             ForEach(models, id: \.value) { model in
                 if allModels { Text(model.name).riffetFont(.body).foregroundStyle(palette.fg2) }
-                else { Toggle(model.name, isOn: Binding(get: { enabled.contains(model.value) }, set: { on in if on { enabled.insert(model.value) } else { enabled.remove(model.value) } })) }
+                else { Toggle(model.name, isOn: Binding(get: { enabled.contains(model.value) }, set: { on in if on { enabled.insert(model.value) } else { enabled.remove(model.value) } })).tint(palette.primary) }
             }
             if !allModels {
                 RiffetField(prompt: String(localized: "添加模型 ID", bundle: .riffet), text: $manualModel).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -430,7 +431,7 @@ private struct NativeProfileEditor: View {
             RiffetField(label: String(localized: "CLI 路径", bundle: .riffet), prompt: "", text: $executable, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
             if backend != .droid && backend != .antigravity { RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $configDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
             if backend == .dsh { RiffetField(label: String(localized: "DSH 源码目录", bundle: .riffet), prompt: "", text: $sourceDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
-            if backend == .claude { Toggle("关闭自动更新", isOn: $autoUpdateOff) }
+            if backend == .claude { Toggle("关闭自动更新", isOn: $autoUpdateOff).tint(palette.primary) }
         } footer: { Text("更换配置目录会切换账号与原生历史范围") }
     }
 
@@ -442,7 +443,7 @@ private struct NativeProfileEditor: View {
                     if projectOptions.count >= 5 {
                         RiffetPickerRow(title: String(localized: "项目", bundle: .riffet), options: projectOptions, selection: $projectID)
                     } else {
-                        Picker("项目", selection: $projectID) { ForEach(projectOptions) { Text($0.title).tag($0.id) } }.pickerStyle(.menu)
+                        Picker("项目", selection: $projectID) { ForEach(projectOptions) { Text($0.title).tag($0.id) } }.pickerStyle(.menu).tint(palette.fg3)
                     }
                     RiffetActionRow("从服务器读取", busy: probing == false) { Task { await catalog(probe: false) } }
                         .disabled(projectID.isEmpty)
@@ -596,7 +597,7 @@ private struct NativeCursorGateway: View {
                         DisclosureGroup("CLI 启动参数") {
                             RiffetField(label: String(localized: "CLI 路径", bundle: .riffet), prompt: "", text: $executable, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
                             RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $configDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
-                            Toggle("关闭自动更新", isOn: $autoUpdateOff)
+                            Toggle("关闭自动更新", isOn: $autoUpdateOff).tint(palette.primary)
                         }
                     } header: { RiffetSectionTitle(String(localized: "高级启动配置", bundle: .riffet)) } }
                     if hasSavedKey && !launchOnly {

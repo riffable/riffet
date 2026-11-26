@@ -46,7 +46,7 @@ const sameList = <T,>(a: readonly T[], b: readonly T[]) => a.length === b.length
 function TabLead({ session }: { session: Session }) {
   const { t } = useLingui();
   const backend = sessionBackend(session);
-  if (session.state === 'running' || session.state === 'starting') return <span className="grid size-3.5 place-items-center" role="status" aria-label={t`运行中`}><Spinner className="size-3 text-accent" /></span>;
+  if (session.state === 'running' || session.state === 'starting') return <span className="grid size-3.5 place-items-center" role="status" aria-label={t`运行中`}><Spinner className="size-3 text-fg-3" /></span>;
   if (backend === 'chat') return <IconMessageSquareText className="size-3.5 text-fg-3" aria-hidden />;
   return <AgentLogo backend={backend} size={14} style={agentMarkStyle(backend)} />;
 }

@@ -83,12 +83,11 @@ internal fun systemBarsPadding(includeDisplayCutout: Boolean = true): PaddingVal
 internal fun pageColor(): Color = LocalRiffetColors.current.bg
 
 /**
- * The app's one card treatment on [pageColor]: Material's filled container
- * (`surfaceContainerHighest`), the same role as 任务's search field. A settings group, a statistics
- * or Git card, a download row and a notice banner all use it.
+ * The app's one card treatment on [pageColor]: the surfaces' card, one step from the page under it. A settings
+ * group, a statistics or Git card, a download row and a notice banner all use it.
  */
 @Composable
-internal fun cardColor(): Color = MaterialTheme.colorScheme.surfaceContainerHighest
+internal fun cardColor(): Color = riffet.ui.design.LocalRiffetSurfaces.current.card
 
 /** The root backdrop owns the system insets, so page transitions never expose a solid inset fill. */
 @Composable

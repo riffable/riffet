@@ -393,7 +393,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   onOpenChange?: (open: boolean) => void;
 }) {
   const { t } = useLingui();
-  const shownPlaceholder = placeholder ?? 'Default model';
+  const shownPlaceholder = placeholder ?? t`默认模型`;
   const [openState, setOpenState] = useState(false);
   const controlled = openProp !== undefined;
   const open = controlled ? openProp : openState;

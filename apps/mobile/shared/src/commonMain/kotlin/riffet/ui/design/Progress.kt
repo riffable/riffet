@@ -83,6 +83,6 @@ private fun progressStrokeWidth(): Dp {
     return when (style.components.progress) {
         ComponentBackend.MATERIAL -> if (style.metrics.isOverridden("hairlineWidth"))
             style.metrics.hairlineWidth * 8 else ProgressIndicatorDefaults.CircularStrokeWidth
-        ComponentBackend.MIUIX, ComponentBackend.SHARED -> style.metrics.hairlineWidth * 4
+        ComponentBackend.SHARED -> style.metrics.hairlineWidth * 4
     }
 }

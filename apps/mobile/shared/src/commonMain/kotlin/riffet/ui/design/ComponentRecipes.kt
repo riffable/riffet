@@ -3,11 +3,15 @@ package riffet.ui.design
 import androidx.compose.runtime.Immutable
 
 /** Implementation choice at a component boundary, never an interface-style identity. */
-internal enum class ComponentBackend { MATERIAL, MIUIX, SHARED }
+internal enum class ComponentBackend { MATERIAL, SHARED }
 internal enum class SegmentPresentation { CONNECTED, SLIDING, PILLS, UNDERLINE }
 internal enum class InlinePresentation { TONAL, NEUTRAL, OUTLINED, TRANSPARENT }
 internal enum class NavigationIndicator { FILL, TOP_LINE, BOTTOM_DOT }
-internal enum class CardPresentation { TONAL, ELEVATED, WHITE_BLEND }
+/**
+ * How a card relates to the page under it. [STEPPED] keeps a card one step from its ground: a quiet
+ * fill on a plain (white) page, the raised paper on a grouped page, with floating chrome raised too.
+ */
+internal enum class CardPresentation { TONAL, ELEVATED, STEPPED }
 
 @Immutable
 internal data class ControlRecipe(
@@ -129,7 +133,11 @@ internal data class ComposerRecipe(
 
 @Immutable
 internal data class SurfaceRecipe(
-    val pageMix: Float = 0f,
+    /**
+     * How far, in a light theme, the page under grouped cards ([RiffetSurfaces.groupedPage]) mixes toward the ink.
+     * A plain page (a list, a transcript) always stays the palette's own `bg`.
+     */
+    val groupedPageMix: Float = 0f,
     val card: CardPresentation = CardPresentation.TONAL,
     val selectionLightMix: Float = 0.13f,
     val pressAlpha: Float = 0.08f,
@@ -138,12 +146,10 @@ internal data class SurfaceRecipe(
     val scrimAlpha: Float = 0.32f,
     val tonalSecondary: Boolean = true,
     val accentThumb: Boolean = true,
-    /** The selected fill is a neutral step of ink over the card; the accent is left to focus, selection and links. */
-    val neutralSelection: Boolean = false,
+    /** Fields and quiet buttons are a step of ink over whatever they sit on, not the palette's muted tone. */
+    val neutralFills: Boolean = false,
     /** Lines (the dividers in a card, a menu's rim) take the palette's soft line: tone separates surfaces, lines only rows. */
     val softLines: Boolean = false,
-    /** The primary action is the palette's ink (`primary`), not its accent. */
-    val inkPrimary: Boolean = false,
 )
 
 /** Independent recipes let new presets reuse components without inheriting unrelated behavior. */
@@ -160,5 +166,4 @@ internal data class ComponentRecipes(
     val surfaces: SurfaceRecipe = SurfaceRecipe(),
     val progress: ComponentBackend = ComponentBackend.MATERIAL,
     val ripple: Boolean = true,
-    val nativeFeedback: Boolean = false,
 )

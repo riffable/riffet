@@ -357,7 +357,7 @@ private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = fal
             Box(Modifier.matchParentSize().riffetMaterial(MaterialRole.SIDEBAR, shape, surface.groupedPage))
             Column(Modifier.fillMaxSize().padding(padding)) {
                 RiffetMaterialContent(baseBackground = surface.groupedPage) {
-                    Box(Modifier.fillMaxWidth().weight(1f)) { content() }
+                    Box(Modifier.fillMaxWidth().weight(1f)) { riffet.ui.design.GroupedSurfaces(content) }
                 }
             }
         }
@@ -378,7 +378,7 @@ private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = fal
                 if (navigation) RoundedCornerShape(topEnd = style.metrics.groupRadius, bottomEnd = style.metrics.groupRadius)
                 else RoundedCornerShape(topStart = style.metrics.groupRadius, bottomStart = style.metrics.groupRadius), surface.groupedPage))
             RiffetMaterialContent(baseBackground = surface.groupedPage) {
-                Box(Modifier.fillMaxSize().padding(padding)) { content() }
+                Box(Modifier.fillMaxSize().padding(padding)) { riffet.ui.design.GroupedSurfaces(content) }
             }
         }
     }

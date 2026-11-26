@@ -64,7 +64,9 @@ export interface ThemeDesign {
   tokens?: ThemeDesignTokens;
   styles?: Partial<Record<(typeof THEME_INTERFACE_STYLES)[number], ThemeDesignTokens>>;
 }
-export const THEME_INTERFACE_STYLES = ['riffet', 'material3', 'ios', 'expressive', 'miuix', 'fluent'] as const;
+export const THEME_INTERFACE_STYLES = ['riffet', 'material3'] as const;
+/** Styles the apps no longer have. A saved design may still carry their overrides; they are accepted and dropped. */
+const RETIRED_INTERFACE_STYLES = ['ios', 'expressive', 'miuix', 'fluent'] as const;
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -145,8 +147,10 @@ export function checkThemeDesign(issues: ThemeValidationIssue[], path: string, v
   if (!object(issues, path, value, ['version', 'tokens', 'styles'])) return;
   if (value.version !== 1) issues.push({ path: path + '.version', message: 'must be 1' });
   if (value.tokens !== undefined) checkTokens(issues, path + '.tokens', value.tokens);
-  if (value.styles !== undefined && object(issues, path + '.styles', value.styles, THEME_INTERFACE_STYLES)) {
-    for (const [style, tokens] of Object.entries(value.styles)) checkTokens(issues, path + '.styles.' + style, tokens);
+  if (value.styles !== undefined && object(issues, path + '.styles', value.styles, [...THEME_INTERFACE_STYLES, ...RETIRED_INTERFACE_STYLES])) {
+    for (const [style, tokens] of Object.entries(value.styles)) {
+      if ((THEME_INTERFACE_STYLES as readonly string[]).includes(style)) checkTokens(issues, path + '.styles.' + style, tokens);
+    }
   }
 }
 

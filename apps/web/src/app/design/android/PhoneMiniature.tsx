@@ -20,26 +20,6 @@ export function PhoneMiniature({ style }: { style: AndroidStyle }) {
   const chosen = 1;
   const segmented = (() => {
     const label = (text: string, index: number) => <span className="truncate">{index === chosen && r.segments === 'connected' && <IconCheck className="mr-1 inline size-4 align-[-3px]" />}{text}</span>;
-    if (r.segments === 'underline') {
-      return (
-        <div className="flex edge-b" style={{ height: d.segmentedHeight }}>
-          {modes.map((mode, index) => (
-            <span key={mode} className={cn('relative flex flex-1 items-center justify-center', index === chosen ? 'text-fg' : 'text-fg-3')} style={font(type.label)}>
-              {mode}{index === chosen && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent" />}
-            </span>
-          ))}
-        </div>
-      );
-    }
-    if (r.segments === 'pills') {
-      return (
-        <div className="flex gap-1.5" style={{ height: d.segmentedHeight }}>
-          {modes.map((mode, index) => (
-            <span key={mode} className={cn('flex flex-1 items-center justify-center rounded-full', index === chosen ? 'bg-accent/20 text-fg' : 'bg-fg/[0.05] text-fg-2')} style={font(type.label)}>{mode}</span>
-          ))}
-        </div>
-      );
-    }
     if (r.segments === 'sliding') {
       return (
         <div className="flex bg-fg/[0.06] p-0.5" style={{ height: d.segmentedHeight, borderRadius: d.controlRadius }}>
@@ -70,7 +50,7 @@ export function PhoneMiniature({ style }: { style: AndroidStyle }) {
     { icon: <IconGlobe />, title: t`语言`, value: t`简体中文`, trailing: chevron },
     { icon: <IconHand />, title: t`手势与触觉`, trailing: chevron },
   ];
-  const card = r.card === 'elevated' ? 'bg-elevated shadow-soft' : r.card === 'whiteBlend' ? 'bg-elevated' : 'bg-fg/[0.045]';
+  const card = r.card === 'elevated' ? 'bg-elevated shadow-soft' : 'bg-fg/[0.045]';
   const group = (
     <div className="flex flex-col">
       <span className={cn('pb-2', r.accentSections ? 'font-medium text-accent' : 'text-fg-3')} style={{ ...font(type.caption), paddingLeft: r.card === 'tonal' ? 0 : d.rowPadding }}>{t`外观`}</span>
@@ -90,7 +70,7 @@ export function PhoneMiniature({ style }: { style: AndroidStyle }) {
   );
 
   const buttonHeight = Math.max(32, d.controlHeight - 8);
-  const secondary = r.secondaryButtons === 'plain' ? 'text-accent' : r.secondaryButtons === 'outlined' ? 'text-fg shadow-[inset_0_0_0_1px_var(--line-strong)]' : 'bg-fg/[0.08] text-fg';
+  const secondary = r.secondaryButtons === 'plain' ? 'text-accent' : 'bg-fg/[0.08] text-fg';
   const buttons = (
     <div className="flex justify-end gap-2">
       <span className={cn('flex items-center px-5', secondary)} style={{ ...font(type.label), height: buttonHeight, borderRadius: d.controlRadius }}>{t`取消`}</span>
@@ -103,19 +83,16 @@ export function PhoneMiniature({ style }: { style: AndroidStyle }) {
   const selectedTab = 2;
   const tabBar = (
     <div
-      className={cn('absolute flex items-stretch', floating ? 'rounded-full bg-elevated/95 p-1.5 shadow-pop' : 'bg-elevated', !floating && r.indicator === 'topLine' && 'edge-t')}
+      className={cn('absolute flex items-stretch', floating ? 'rounded-full bg-elevated/95 p-1.5 shadow-pop' : 'bg-elevated')}
       style={floating
         ? { left: d.tabBarInset, right: d.tabBarInset, bottom: gesture + d.tabBarBottomInset, height: d.tabBarHeight }
         : { left: 0, right: 0, bottom: 0, height: d.tabBarHeight + gesture, paddingBottom: gesture }}
     >
       {tabs.map((icon, index) => {
         const on = index === selectedTab;
-        const fill = r.indicator === 'fill' || r.indicator === 'capsule';
         return (
           <span key={index} className="relative flex flex-1 items-center justify-center">
-            {on && fill && <span className={cn('absolute bg-accent/15', floating ? 'inset-0 rounded-full' : 'h-8 w-16')} style={floating ? undefined : { borderRadius: r.indicator === 'capsule' ? 999 : d.rowRadius }} />}
-            {on && r.indicator === 'topLine' && <span className="absolute inset-x-6 top-0 h-0.5 rounded-full bg-accent" />}
-            {on && r.indicator === 'bottomDot' && <span className="absolute bottom-2 size-1 rounded-full bg-accent" />}
+            {on && <span className={cn('absolute bg-accent/15', floating ? 'inset-0 rounded-full' : 'h-8 w-16')} style={floating ? undefined : { borderRadius: r.indicator === 'capsule' ? 999 : d.rowRadius }} />}
             <span className={cn('relative flex items-center justify-center [&_svg]:size-full', on ? 'text-accent' : 'text-fg-3')} style={{ width: d.iconSize, height: d.iconSize }}>{icon}</span>
           </span>
         );
@@ -127,15 +104,14 @@ export function PhoneMiniature({ style }: { style: AndroidStyle }) {
     <div
       role="img"
       aria-label={t`${style.id} 风格的手机缩样`}
-      // A grouped list on the ios style sits on a darker page, so its white cards read as cards.
-      className={cn('relative shrink-0 overflow-hidden shadow-[0_0_0_1px_var(--line-strong)]', r.card === 'whiteBlend' ? 'bg-canvas' : 'bg-bg')}
+      className={'relative shrink-0 overflow-hidden bg-bg shadow-[0_0_0_1px_var(--line-strong)]'}
       style={{ width, height, borderRadius: 32, fontFamily: 'Roboto, "Noto Sans SC", system-ui, sans-serif' }}
     >
       <div className="flex items-center justify-between px-6 text-fg-2" style={{ height: status, fontSize: 12 }} aria-hidden>
         <span className="tabular-nums">9:41</span>
         <span className="flex gap-1"><span className="size-2.5 rounded-full bg-fg/30" /><span className="h-2.5 w-4 rounded-sm bg-fg/30" /></span>
       </div>
-      <div className={cn('flex items-center', r.centeredTitle && 'justify-center')} style={{ height: d.barHeight, paddingLeft: d.pageInset, paddingRight: d.pageInset }}>
+      <div className="flex items-center" style={{ height: d.barHeight, paddingLeft: d.pageInset, paddingRight: d.pageInset }}>
         <span className="text-fg" style={font(type.barTitle)}>{t`设置`}</span>
       </div>
       <div className="flex flex-col" style={{ paddingLeft: d.pageInset, paddingRight: d.pageInset, paddingTop: d.pageTitleGap / 2, gap: d.sectionGap }}>

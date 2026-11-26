@@ -279,8 +279,10 @@ internal fun SettingsPage(
         LocalRiffetTypography provides typography.copy(subhead = typography.bodySmall, caption = typography.bodySmall),
         LocalSettingsSearchTarget provides searchTarget,
     ) {
-        riffet.ui.app.ScrollablePage(title, onBack, large, compactTitle = true, navigation = navigation, search = search,
-            refreshing = refreshing, onRefresh = onRefresh, actions = actions, content = content)
+        riffet.ui.design.GroupedSurfaces {
+            riffet.ui.app.ScrollablePage(title, onBack, large, compactTitle = true, navigation = navigation, search = search,
+                refreshing = refreshing, onRefresh = onRefresh, actions = actions, content = content)
+        }
     }
 }
 
@@ -750,14 +752,16 @@ private fun FilesSettingsSection(controller: SettingsController) {
         )
     }
     SettingsFootnote(stringResource(Res.string.settings_server_effect_note))
-    SettingsGroup(stringResource(Res.string.settings_editor), action = {
-        SettingsButton(if (busy) stringResource(Res.string.settings_saving) else stringResource(Res.string.settings_save), enabled = dirty && !busy, primary = true, onClick = { save() })
-    }) {
+    SettingsGroup(stringResource(Res.string.settings_editor)) {
         Column(Modifier.padding(metrics.pageInset)) {
             Text(stringResource(Res.string.settings_editor_command), style = LocalRiffetTypography.current.body, color = LocalRiffetColors.current.fg)
             Text(stringResource(Res.string.settings_editor_command_desc), style = LocalRiffetTypography.current.caption, color = LocalRiffetColors.current.fg3)
             Spacer(Modifier.height(8.dp))
             SettingsField(editor, onValueChange = { editor = it }, placeholder = "cursor", enabled = !busy, mono = true)
+            // The save belongs to this one field, so it sits under it rather than beside the group's title.
+            Spacer(Modifier.height(metrics.controlInset))
+            SettingsButton(if (busy) stringResource(Res.string.settings_saving) else stringResource(Res.string.settings_save), enabled = dirty && !busy,
+                primary = true, onClick = { save() }, modifier = Modifier.align(Alignment.End))
         }
     }
 }

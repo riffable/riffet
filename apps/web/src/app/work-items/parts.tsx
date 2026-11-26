@@ -83,7 +83,7 @@ export function LiveMark({ live, words = true, className }: { live: WorkItemLive
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1.5 text-2xs', live === 'waiting' ? 'text-warning' : 'text-danger', className)}>
       {live === 'running'
-        ? <span role="img" aria-label={label(live)} title={label(live)} className="inline-flex"><Spinner className="size-3 text-accent" /></span>
+        ? <span role="img" aria-label={label(live)} title={label(live)} className="inline-flex"><Spinner className="size-3 text-fg-3" /></span>
         : <StatusDot tone={tone} label={spoken ? undefined : label(live)} />}
       {spoken && label(live)}
     </span>

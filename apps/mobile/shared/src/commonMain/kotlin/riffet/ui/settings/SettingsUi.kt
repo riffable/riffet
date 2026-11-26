@@ -289,8 +289,9 @@ internal fun SettingsSegmented(
 
 /** Compatibility adapter; the shared design layer owns the button renderer. */
 @Composable
-internal fun SettingsButton(text: String, onClick: () -> Unit, enabled: Boolean = true, primary: Boolean = false, danger: Boolean = false) {
-    RiffetButton(text, onClick, enabled, primary, danger)
+internal fun SettingsButton(text: String, onClick: () -> Unit, enabled: Boolean = true, primary: Boolean = false, danger: Boolean = false,
+    modifier: Modifier = Modifier) {
+    RiffetButton(text, onClick, enabled, primary, danger, modifier)
 }
 
 /** A coloured dot plus text, for `已配置 / 未配置` and capability rows. */
@@ -325,12 +326,23 @@ internal fun SettingsMessageBanner(
 internal fun PageBanner(message: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) =
     riffet.ui.design.Notice(message, kind, action = action, onAction = onAction)
 
-/** A label and its value in a group, free to wrap; [mono] for what is code (a path, a command, an id). */
+/**
+ * A label and its value in a group; [mono] for what is code (a path, a command, an id). A short value sits at the
+ * row's end; a long one (a sentence, a full path) goes under the label instead of being squeezed into a right column.
+ */
 @Composable
-internal fun SettingsValueRow(label: String, value: String, mono: Boolean = true) {
+internal fun SettingsValueRow(label: String, value: String, mono: Boolean = false) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
+    val valueStyle = if (mono) typography.monoSmall else typography.bodySmall.copy(fontFeatureSettings = "tnum")
+    if (value.length > LongSettingsValue) {
+        Column(Modifier.fillMaxWidth().heightIn(min = metrics.controlHeight).padding(horizontal = metrics.pageInset, vertical = metrics.rowPadding * 3 / 4)) {
+            Text(text = label, style = typography.body, color = colors.fg)
+            Text(text = value, style = valueStyle, color = colors.fg3, maxLines = 4, overflow = TextOverflow.Ellipsis)
+        }
+        return
+    }
     Row(
         modifier = Modifier.fillMaxWidth().heightIn(min = metrics.controlHeight).padding(horizontal = metrics.pageInset, vertical = metrics.rowPadding),
         verticalAlignment = Alignment.CenterVertically,
@@ -340,12 +352,15 @@ internal fun SettingsValueRow(label: String, value: String, mono: Boolean = true
             modifier = if (!LocalInterfaceStyle.current.components.lists.grouped) Modifier.weight(1f) else Modifier)
         Text(
             text = value,
-            style = if (mono) typography.monoSmall else typography.bodySmall.copy(fontFeatureSettings = "tnum"),
+            style = valueStyle,
             color = colors.fg3,
             textAlign = TextAlign.End,
-            maxLines = 3,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
     }
 }
+
+/** Past this many characters a value reads as a sentence or a full path and moves under its label. */
+private const val LongSettingsValue = 28

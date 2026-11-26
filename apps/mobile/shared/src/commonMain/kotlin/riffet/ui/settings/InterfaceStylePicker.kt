@@ -47,10 +47,6 @@ import riffet_mobile.shared.generated.resources.*
 internal fun interfaceStyleLabel(style: InterfaceStyle): String = stringResource(when (style) {
     InterfaceStyle.RIFFET -> Res.string.settings_style_riffet
     InterfaceStyle.MATERIAL3 -> Res.string.settings_style_material
-    InterfaceStyle.EXPRESSIVE -> Res.string.settings_style_expressive
-    InterfaceStyle.MIUIX -> Res.string.settings_style_miuix
-    InterfaceStyle.FLUENT -> Res.string.settings_style_fluent
-    InterfaceStyle.IOS -> Res.string.settings_style_ios
 })
 
 /** Each style as a thumbnail of a row, a button and the tab bar in its own shapes, two to a line. */
@@ -155,7 +151,7 @@ private fun StylePreview(style: InterfaceStyle, shape: RoundedCornerShape, modif
             ) {
                 repeat(3) { index ->
                     val on = index == 0
-                    val ink = if (!on) colors.fg4 else if (recipe.navigation.accentSelection) colors.accent else colors.fg
+                    val ink = if (!on) colors.fg4 else if (recipe.navigation.accentSelection) colors.primary else colors.fg
                     val mark = recipe.navigation.indicator
                     Box(Modifier.fillMaxHeight().width(line * 9), contentAlignment = Alignment.Center) {
                         if (on && mark == NavigationIndicator.FILL) Box(Modifier.fillMaxHeight(0.72f).fillMaxWidth().clip(CircleShape).background(look.selected))

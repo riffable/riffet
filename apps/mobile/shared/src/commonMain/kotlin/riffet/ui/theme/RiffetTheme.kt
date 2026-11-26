@@ -274,7 +274,7 @@ fun RiffetTheme(
                 surfaceContainerLow = surfaces.card,
                 surfaceContainer = surfaces.floating,
                 surfaceContainerHigh = surfaces.floating,
-                surfaceContainerHighest = if (design.preset.mutedNativeContainer) colors.bgMuted else surfaces.selected,
+                surfaceContainerHighest = if (design.preset.mutedNativeContainer) colors.bgMuted else surfaces.card,
                 outline = if ("hairline" in design.colors) surfaces.hairline else colors.fg3,
                 secondaryContainer = surfaces.selected,
                 onSecondaryContainer = surfaces.selectedContent,
@@ -293,43 +293,7 @@ fun RiffetTheme(
                 LocalIndication provides if (style.components.ripple) ripple() else RiffetPressIndication(surfaces.press, surfaces.focus, style.motion, style.metrics.focusWidth),
                 LocalRippleConfiguration provides if (style.components.ripple) RippleConfiguration() else RippleConfiguration(colors.fg, PressRippleAlpha),
             ) {
-                // Keep the wrapper at the same composition position across style changes.
-                // Only presentation locals change; remembered navigation and drafts stay alive.
-                val fallbackIndication = LocalIndication.current
-                val fallbackOverscroll = LocalOverscrollFactory.current
-                val base = if (darkTheme) top.yukonga.miuix.kmp.theme.darkColorScheme() else top.yukonga.miuix.kmp.theme.lightColorScheme()
-                top.yukonga.miuix.kmp.theme.MiuixTheme(colors = base.copy(
-                    primary = surfaces.primaryAction, onPrimary = surfaces.primaryActionContent,
-                    primaryVariant = colors.accent, onPrimaryVariant = colors.accentFg,
-                    primaryContainer = surfaces.primaryAction, onPrimaryContainer = surfaces.primaryActionContent,
-                    disabledPrimary = surfaces.press, disabledOnPrimary = surfaces.disabledContent,
-                    disabledPrimarySlider = surfaces.disabledContent,
-                    error = colors.danger, onError = colors.dangerFg, errorContainer = colors.dangerSoft, onErrorContainer = colors.danger,
-                    background = surfaces.page, onBackground = colors.fg, onBackgroundVariant = colors.fg3,
-                    surface = surfaces.groupedPage, onSurface = colors.fg, surfaceVariant = surfaces.card,
-                    surfaceContainer = surfaces.floating, onSurfaceContainer = colors.fg, onSurfaceContainerVariant = colors.fg3,
-                    surfaceContainerHigh = colors.bgMuted, onSurfaceContainerHigh = colors.fg2,
-                    surfaceContainerHighest = surfaces.selected, onSurfaceContainerHighest = surfaces.selectedContent,
-                    onSurfaceSecondary = colors.fg2, onSurfaceVariantSummary = colors.fg3, onSurfaceVariantActions = colors.fg3,
-                    secondaryVariant = surfaces.secondaryAction, onSecondaryVariant = surfaces.secondaryActionContent,
-                    secondary = surfaces.secondaryAction, onSecondary = surfaces.secondaryActionContent,
-                    secondaryContainer = surfaces.card, onSecondaryContainer = colors.fg3,
-                    secondaryContainerVariant = surfaces.input, onSecondaryContainerVariant = colors.fg3,
-                    disabledSecondary = surfaces.press, disabledOnSecondary = surfaces.disabledContent,
-                    tertiaryContainer = surfaces.selected, onTertiaryContainer = colors.accent,
-                    tertiaryContainerVariant = surfaces.selected,
-                    sliderKeyPoint = colors.fg3, sliderKeyPointForeground = colors.accent, sliderBackground = surfaces.press,
-                    outline = surfaces.hairline, dividerLine = surfaces.hairline, windowDimming = surfaces.scrim,
-                    disabledOnSurface = surfaces.disabledContent, disabledPrimaryButton = surfaces.press,
-                    disabledOnPrimaryButton = surfaces.disabledContent, disabledSecondaryVariant = surfaces.press,
-                    disabledOnSecondaryVariant = surfaces.disabledContent,
-                )) {
-                    CompositionLocalProvider(
-                        LocalIndication provides if (style.components.nativeFeedback) LocalIndication.current else fallbackIndication,
-                        LocalOverscrollFactory provides if (style.components.nativeFeedback) LocalOverscrollFactory.current else fallbackOverscroll,
-                        content = { riffet.shared.AppLanguageEnvironment { RiffetVisualWorkScope { RiffetMaterialScope(surfaceMaterial, materialStrength, content) } } },
-                    )
-                }
+                riffet.shared.AppLanguageEnvironment { RiffetVisualWorkScope { RiffetMaterialScope(surfaceMaterial, materialStrength, content) } }
             }
         }
     }

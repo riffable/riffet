@@ -321,7 +321,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
               {sessionServer && <Badge tone={sessionServer.offline ? 'warning' : 'neutral'} className="max-w-24 shrink-0 truncate">{sessionServer.multiPeer ? sessionServer.alias : sessionServer.name}</Badge>}
               <span className="min-w-0 truncate font-medium leading-5 text-fg" title={title}>{title}</span>
               {worktreeBadge}
-              {state && status === undefined && <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}>{state.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : <StatusDot tone={state.tone} pulse={state.pulse} />}</span>}
+              {state && status === undefined && <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}>{state.tone === 'accent' ? <Spinner className="size-3 text-fg-3" /> : <StatusDot tone={state.tone} pulse={state.pulse} />}</span>}
               {/* Inside this button a status pill stays a badge: the phone keeps its own row for the
                   action in the conversation, or the sheet this opens lists it. */}
               {status && <span className="flex shrink-0" role="status"><StatusPillActions.Provider value={false}>{status}</StatusPillActions.Provider></span>}
@@ -347,7 +347,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
             </Tip>}
             {/* Running is a spinner alone, its word in the tooltip; anything else keeps its label. */}
             {state && status === undefined && (state.tone === 'accent'
-              ? <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}><Spinner className="size-3 text-accent" /></span>
+              ? <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}><Spinner className="size-3 text-fg-3" /></span>
               : <span className={cn('flex shrink-0 items-center gap-1.5', stateText[state.tone])} role="status"><StatusDot tone={state.tone} />{state.label}</span>)}
             {status && <span className="shrink-0" role="status">{status}</span>}
           </div>}
@@ -381,7 +381,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
             <DialogTitle className="break-words text-base leading-6">{title}</DialogTitle>
             {(state || !quickChat) && (
               <DialogDescription className="flex min-w-0 items-center gap-1.5">
-                {state && (state.tone === 'accent' ? <Spinner className="size-3 shrink-0 text-accent" /> : <StatusDot tone={state.tone} pulse={state.pulse} />)}
+                {state && (state.tone === 'accent' ? <Spinner className="size-3 shrink-0 text-fg-3" /> : <StatusDot tone={state.tone} pulse={state.pulse} />)}
                 <span className={cn('min-w-0 truncate', state && stateText[state.tone])}>
                   {[state?.label, quickChat || !session ? undefined : label(sessionBackend(session))].filter(Boolean).join(' · ')}
                 </span>

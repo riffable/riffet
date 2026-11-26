@@ -125,7 +125,6 @@ internal fun RiffetTabBar(
     // Keep the selection pill translucent over live backdrop materials so blur and refraction show through.
     val faceBase = when {
         !backdropEnabled -> s.selected
-        style.components.surfaces.neutralSelection -> colors.fg.copy(alpha = if (s.dark) 0.16f else 0.09f)
         else -> s.selected.copy(alpha = 0.72f)
     }
     // Folded, the disc itself says where you are; the face would only repeat its outline.
@@ -182,7 +181,7 @@ internal fun RiffetTabBar(
                             val tint = animateColorAsState(
                                 when {
                                     on && folded -> s.selectedContent
-                                    on && recipe.accentSelection -> s.focus
+                                    on && recipe.accentSelection -> s.primaryAction
                                     on -> s.selectedContent
                                     else -> colors.fg3
                                 },
@@ -246,7 +245,7 @@ internal fun RiffetTabBar(
     ) { measurables, constraints ->
         val t = fold()
         val side = maxOf(24.dp, metrics.tabBarInset).roundToPx()
-        val full = minOf(400.dp.roundToPx(), ((constraints.maxWidth - 2 * side) * 0.86f).roundToInt()).coerceAtLeast(0)
+        val full = minOf(400.dp.roundToPx(), ((constraints.maxWidth - 2 * side) * 0.94f).roundToInt()).coerceAtLeast(0)
         geometry.full = full
         val height = metrics.tabBarPanelHeight.roundToPx()
         val disc = metrics.tabDockSize.roundToPx()

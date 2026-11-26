@@ -57,13 +57,13 @@ class DisplaySettingsTest {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             snapshotFlow { settings.interfaceStyle }.collect { observed.add(it) }
         }
-        settings.changeInterfaceStyle(InterfaceStyle.IOS)
+        settings.changeInterfaceStyle(InterfaceStyle.MATERIAL3)
         Snapshot.sendApplyNotifications()
         runCurrent()
-        assertEquals(listOf(InterfaceStyle.RIFFET, InterfaceStyle.IOS), observed)
-        assertEquals(InterfaceStyle.IOS, DisplaySettings(preferences).interfaceStyle)
+        assertEquals(listOf(InterfaceStyle.RIFFET, InterfaceStyle.MATERIAL3), observed)
+        assertEquals(InterfaceStyle.MATERIAL3, DisplaySettings(preferences).interfaceStyle)
         assertEquals(TextSize.LARGE, DisplaySettings(preferences).textSize)
-        assertEquals(mapOf("theme-id" to "catppuccin", "display.text-size" to "large", "icon-pack" to "tabler", DisplaySettings.INTERFACE_STYLE_KEY to "ios"), stored)
+        assertEquals(mapOf("theme-id" to "catppuccin", "display.text-size" to "large", "icon-pack" to "tabler", DisplaySettings.INTERFACE_STYLE_KEY to "material3"), stored)
         val observedAnimations = mutableListOf<PageAnimation>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             snapshotFlow { settings.pageAnimation }.collect { observedAnimations.add(it) }
@@ -74,11 +74,11 @@ class DisplaySettingsTest {
             runCurrent()
             assertEquals(animation, DisplaySettings(preferences).pageAnimation)
             assertEquals(animation.key, stored[DisplaySettings.PAGE_ANIMATION_KEY])
-            assertEquals(InterfaceStyle.IOS, DisplaySettings(preferences).interfaceStyle)
+            assertEquals(InterfaceStyle.MATERIAL3, DisplaySettings(preferences).interfaceStyle)
         }
         assertEquals(PageAnimation.entries.toList(), observedAnimations)
         settings.changeAmoled(true)
-        for (style in listOf(InterfaceStyle.EXPRESSIVE, InterfaceStyle.MIUIX, InterfaceStyle.FLUENT)) {
+        for (style in InterfaceStyle.entries) {
             settings.changeInterfaceStyle(style)
             val restored = DisplaySettings(preferences)
             assertEquals(style, restored.interfaceStyle)
@@ -91,10 +91,18 @@ class DisplaySettingsTest {
     }
 
     @Test
+    fun removedStyleKeysFallBackToRiffet() {
+        for (key in listOf("ios", "expressive", "miuix", "fluent")) {
+            val preferences = MemoryPreferences(mutableMapOf(DisplaySettings.INTERFACE_STYLE_KEY to key))
+            assertEquals(InterfaceStyle.RIFFET, DisplaySettings(preferences).interfaceStyle)
+        }
+    }
+
+    @Test
     fun materialPreferencesArePersistedWithoutChangingStylePaletteOrIcons() = runTest {
         val stored = mutableMapOf(
             "theme-id" to "catppuccin", "icon-pack" to "tabler", "display.text-size" to "large",
-            DisplaySettings.INTERFACE_STYLE_KEY to "miuix", "display.amoled" to "true",
+            DisplaySettings.INTERFACE_STYLE_KEY to "material3", "display.amoled" to "true",
         )
         val preferences = MemoryPreferences(stored)
         val settings = DisplaySettings(preferences)
@@ -110,7 +118,7 @@ class DisplaySettingsTest {
             val restored = DisplaySettings(preferences)
             assertEquals(material, restored.surfaceMaterial)
             assertEquals(0.8f, restored.materialStrength)
-            assertEquals(InterfaceStyle.MIUIX, restored.interfaceStyle)
+            assertEquals(InterfaceStyle.MATERIAL3, restored.interfaceStyle)
             assertEquals(true, restored.amoled)
             assertEquals(TextSize.LARGE, restored.textSize)
             assertEquals("catppuccin", stored["theme-id"])

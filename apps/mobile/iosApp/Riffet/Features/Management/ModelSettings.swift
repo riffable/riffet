@@ -213,8 +213,7 @@ struct TaskBoardSettingsView: View {
                 Toggle(String(localized: "新会话作为任务", bundle: .riffet), isOn: Binding(
                     get: { saved?.composerSessions?.boolValue == true },
                     set: { on in save { try await $0.setWorkItemComposerSessions(on: on) } }
-                ))
-                .tint(palette.accent).disabled(saving)
+                )).tint(palette.primary).disabled(saving)
                 RiffetPickerRow(
                     title: String(localized: "默认 Agent", bundle: .riffet),
                     options: [.init(id: Self.follow, title: String(localized: "跟随新会话", bundle: .riffet))] + agents.map { .init(id: $0.backendId.name, title: $0.label) },
@@ -230,11 +229,11 @@ struct TaskBoardSettingsView: View {
                             save { try await $0.setWorkItemAgent(backendId: backendId, profileId: profileID, model: model) }
                         }
                     } label: {
-                        SettingsRowLabel(title: String(localized: "默认模型", bundle: .riffet), value: saved.model?.isEmpty == false ? saved.model : nil)
+                        SettingsRowLabel(title: String(localized: "默认模型", bundle: .riffet), value: saved.model?.isEmpty == false ? saved.model : String(localized: "自动", bundle: .riffet))
                     }
                     .disabled(saving)
                 } else {
-                    SettingsRowLabel(title: String(localized: "默认模型", bundle: .riffet))
+                    SettingsRowLabel(title: String(localized: "默认模型", bundle: .riffet), value: String(localized: "跟随新会话", bundle: .riffet))
                 }
             }
             RiffetNotice.section(.error, error)
@@ -306,9 +305,8 @@ struct AssistantSettingsView: View {
                         Toggle(isOn: Binding(get: { pack.installed }, set: { on in
                             if !on && !pack.builtIn { removing = pack } else { setPack(pack, on: on) }
                         })) {
-                            describedLabel(pack.title, pack.description)
-                        }
-                        .tint(palette.accent).disabled(saving)
+                            describedLabel(pack.title, pack.description_)
+                        }.tint(palette.primary).disabled(saving)
                     }
                 } header: {
                     RiffetSectionTitle(String(localized: "能力包", bundle: .riffet))
@@ -319,12 +317,10 @@ struct AssistantSettingsView: View {
             Section {
                 Toggle(isOn: Binding(get: { assistant?.supervision?.boolValue == true }, set: { on in save { try await $0.setAssistantSupervision(on: on) } })) {
                     describedLabel(String(localized: "跟进任务", bundle: .riffet), spent("supervise") ?? String(localized: "任务的会话停下、你不在时，核对交付或推动它", bundle: .riffet))
-                }
-                .tint(palette.accent).disabled(saving)
+                }.tint(palette.primary).disabled(saving)
                 Toggle(isOn: Binding(get: { assistant?.consolidation?.boolValue != false }, set: { on in save { try await $0.setAssistantConsolidation(on: on) } })) {
                     describedLabel(String(localized: "记忆整理", bundle: .riffet), spent("consolidate") ?? String(localized: "每晚，以及主对话压缩前", bundle: .riffet))
-                }
-                .tint(palette.accent).disabled(saving)
+                }.tint(palette.primary).disabled(saving)
                 NavigationLink { AssistantDelegationsView(workbench: workbench, setup: setup) } label: {
                     SettingsRowLabel(title: String(localized: "委托", bundle: .riffet), value: spent("delegation") ?? active.map { String(localized: "\($0) 项进行中", bundle: .riffet) })
                 }

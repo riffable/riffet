@@ -81,11 +81,9 @@
 | 桌面 · Riffet | | |
 | 桌面 · 原生 | | |
 | 桌面 · 线条 | | |
+| 移动 · riffet | | |
 | 移动 · material3 | | |
-| 移动 · ios | | |
 | iOS 原生 | | |
-
-<Android 的 expressive、miuix、fluent 风格未单列时，按 material3 取值。>
 
 ## 实现
 

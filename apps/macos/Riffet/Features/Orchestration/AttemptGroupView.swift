@@ -129,7 +129,7 @@ struct AttemptGroupView: View {
                     .help("刷新")
             }
             ProgressView(value: alive.isEmpty ? 0 : Double(doneCount) / Double(alive.count))
-                .progressViewStyle(.linear).tint(palette.accent)
+                .progressViewStyle(.linear).tint(palette.primary)
         }
     }
 

@@ -73,7 +73,7 @@ struct RiffetViewTabs<Value: Hashable>: View {
                             .frame(minHeight: RiffetMetrics.hitTarget)
                             .overlay(alignment: .bottom) {
                                 if selected {
-                                    Capsule().fill(palette.fg).frame(height: 2)
+                                    Capsule().fill(palette.primary).frame(height: 2)
                                         .matchedGeometryEffect(id: "tab", in: indicator)
                                 }
                             }
@@ -113,7 +113,7 @@ struct RiffetToggleChip: View {
             .foregroundStyle(isOn ? palette.fg : palette.fg2)
             .padding(.horizontal, RiffetMetrics.chipInset)
             .frame(minHeight: RiffetMetrics.chipHeight)
-            .background(Capsule().fill(isOn ? palette.selected : palette.press))
+            .background(Capsule().fill(isOn ? palette.accentSoft : palette.press))
             .frame(minHeight: RiffetMetrics.hitTarget)
             .contentShape(Rectangle())
         }

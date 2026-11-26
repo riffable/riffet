@@ -182,14 +182,6 @@ struct Palette: Sendable, Equatable {
         return ThemeColors.shared.color(storage.id, key: "groupedRow") { (storage.values.light.bg, storage.values.dark.bgElevated) }
     }
 
-    /// A selected row, chip or bubble: the card with a little accent mixed in (Android's `selected`).
-    var selected: Color {
-        let storage = storage
-        return ThemeColors.shared.color(storage.id, key: "selected") {
-            (storage.values.light.bg.mixed(with: storage.values.light.accent, 0.09),
-             storage.values.dark.bgElevated.mixed(with: storage.values.dark.accent, 0.22))
-        }
-    }
     /// The pressed and resting-control fill: the text colour at 5.5%.
     var press: Color {
         let storage = storage

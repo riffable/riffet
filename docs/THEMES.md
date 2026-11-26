@@ -268,9 +268,8 @@ riffet plugin install /tmp/mono-icons.tgz
 
 以下为组件接入约定；具体默认值与主题覆盖规则见第 9 节。Android 的页面结构、浮层、组件对照与无障碍以 [设计体系 · Android](design/system/android.md) 为准，本节与第 9 节保留各风格的画法、主题格式和验证记录。
 
-Android 的「设置 → 外观 → 界面风格」提供 material3（默认）、ios、expressive、miuix、fluent 五个内置风格。
-这里的 iOS 指 Compose 绘制的视觉风格，不是 Android 上运行 UIKit。各风格共用现有主题配色
-和图标包，不绑定 SF Symbols。Miuix 使用官方组件库，其他风格复用现有依赖；扩展细节见第 10 节。
+Android 的「设置 → 外观 → 界面风格」提供 riffet（默认）和 material3 两个内置风格（[决定](design/DECISIONS.md) 2026-11-26）。
+两种风格共用现有主题配色和图标包。
 
 ### 8.1 三个独立维度
 
@@ -411,18 +410,18 @@ iOS 左右侧栏使用镜像圆角、主题分组底色、内侧细边和安全�
 
 ## 9. 可覆盖的移动设计系统
 
-移动界面由同一套语义规范驱动，MD3 与 iOS 是两套默认渲染风格。自定义主题在原有
+移动界面由同一套语义规范驱动，Riffet 与 MD3 是两套渲染风格；下文标为 iOS 风格的规则是已删除风格的历史描述，不再适用于 Android。自定义主题在原有
 53个颜色角色及 ANSI 表之外，可以通过可选的 design 描述排版、组件尺寸、表面、状态和动效。
 旧主题不需要迁移：缺少 design 时使用当前风格的默认值；未扩展的旧主题 canonical JSON 和 revision 不变。
 
 ### 9.1 分层与覆盖顺序
 
-1. 用户选择的界面风格决定组件结构和默认值：MD3 或 iOS。
+1. 用户选择的界面风格决定组件结构和默认值：Riffet 或 MD3。
 2. 主题的 palette 提供颜色，design.tokens 提供公共设计覆盖。
-3. design.styles.material3 或 design.styles.ios 对当前风格逐字段覆盖。
+3. design.styles.riffet 或 design.styles.material3 对当前风格逐字段覆盖。
 4. 系统及本机辅助设置最后生效：字体倍率、减少动态效果、屏幕可用空间与安全区。
 
-覆盖按叶子合并。例如公共 body 指定 size，iOS body 仅指定 weight，字号不会因后者缺少 size 而丢失。
+覆盖按叶子合并。例如公共 body 指定 size，Riffet body 仅指定 weight，字号不会因后者缺少 size 而丢失。
 排版过大的行高下限、组件的派生间距与视觉尺寸关系在合并后处理。点击目标至少48dp，
 视觉图形可以更小；减小图形不缩小点击区域。主题不替换业务动作、权限确认、菜单回调、
 消息顺序、服务器状态、触摸识别阈值或数据重试间隔。
@@ -483,7 +482,7 @@ Android 上的具体 dp/sp 数值属于本项目设计，不能当作 Apple 系�
       }
     },
     "styles": {
-      "ios": {
+      "riffet": {
         "typography": { "body": { "weight": 400 } },
         "variants": { "settingsIcons": "plain", "navigation": "floating" }
       },
@@ -575,6 +574,8 @@ Android 共享界面按可见组件的层级取圆角，并由界面风格约束
 
 
 ## 10. Android 扩展风格与图标（2026-11-08）
+
+> 2026-11-26 起 Android 只保留 riffet 与 material3，本节的 expressive、miuix、fluent、ios 风格与 `miuix-ui` 依赖已删除（[决定](design/DECISIONS.md) 2026-11-26）；以下为历史记录，图标包部分仍然有效。
 
 界面风格增加 `expressive`、`miuix`、`fluent`，与 `material3`、`ios` 一起提供五个选择。
 风格选择与 AMOLED 开关仍是设备偏好，分别保存为 `display.interface-style`、`display.amoled`；

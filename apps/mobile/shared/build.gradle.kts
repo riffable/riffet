@@ -44,7 +44,6 @@ kotlin {
             // `api`: the UI screens are part of this module, and the Android host renders them.
             api(libs.compose.foundation)
             api(libs.compose.material3)
-            implementation(libs.miuix.ui)
             // One source-backed material engine for every interface-style preset.
             implementation(libs.haze.core)
             implementation(libs.haze.blur)

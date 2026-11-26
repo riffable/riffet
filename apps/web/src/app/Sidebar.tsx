@@ -166,8 +166,8 @@ export function SessionIndicator({ session, mobile, selected, taskStatus }: { se
   if (running) {
     if (taskStatus) return <StatusIcon status={taskStatus} running />;
     return mobile
-      ? <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>
-      : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
+      ? <><Spinner className="size-3.5 text-fg-3" /><span className="sr-only">{t`运行中`}</span></>
+      : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-fg-3" /></span>;
   }
   if (session.state === 'waiting') {
     return mobile
@@ -185,8 +185,8 @@ function CouncilIndicator({ state, mobile, selected }: { state: CouncilAttention
   const { t } = useLingui();
   if (state === 'running') {
     return mobile
-      ? <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>
-      : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
+      ? <><Spinner className="size-3.5 text-fg-3" /><span className="sr-only">{t`运行中`}</span></>
+      : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-fg-3" /></span>;
   }
   // The page itself lists which one settled; on it the row needs no mark.
   if (selected) return null;

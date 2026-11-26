@@ -132,7 +132,7 @@ Radix `role="switch"`，`aria-checked`；Space 切换。名称来自 `aria-label
 
 ### 状态
 
-选中块是一个滑动的滑块（`--duration-base`），首次与尺寸变化时不动画；单项禁用不透明度 50%。
+选中块是一个滑动的 `accent-soft` 滑块、文字墨色 `fg`（小字放在浅色底上用 `accent` 对比度不够；`--duration-base`），首次与尺寸变化时不动画；单项禁用不透明度 50%。
 
 ### 键盘与无障碍
 
@@ -206,7 +206,7 @@ Radix `role="switch"`，`aria-checked`；Space 切换。名称来自 `aria-label
 
 ### 变体与尺寸
 
-16 见方，圆角 `rounded-xs`；`no-hover` 下命中区放大到 44。选中与半选为 `primary` 实心加 `primary-fg` 的勾或横线（墨色，与 `Switch` 一致）。
+16 见方，圆角 `rounded-xs`；`no-hover` 下命中区放大到 44。选中与半选为 `primary` 实心加 `primary-fg` 的勾或横线（主题色，与 `Switch` 一致）。
 
 ### 状态
 

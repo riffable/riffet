@@ -24,6 +24,10 @@ internal class DesignMetrics internal constructor(private val values: Map<String
     val iconTileRadius: Dp get() = values.getValue("iconTileRadius").toFloat().dp
     val controlHeight: Dp get() = values.getValue("controlHeight").toFloat().dp
     val buttonHeight: Dp get() = (controlHeight - 8.dp).coerceAtLeast(32.dp)
+    /** A filled button's side padding: a short label (保存, 取消) still reads as a button, not a square tile. */
+    val buttonInset: Dp get() = controlInset + 8.dp
+    /** A filled button is at least this wide, about 1.8 times its height. */
+    val buttonMinWidth: Dp get() = controlHeight * 1.5f
     val inlineControlHeight: Dp get() = (controlHeight - 16.dp).coerceAtLeast(28.dp)
     val controlInset: Dp get() = values.getValue("controlInset").toFloat().dp
     val groupRadius: Dp get() = values.getValue("groupRadius").toFloat().dp

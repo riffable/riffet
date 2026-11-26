@@ -33,34 +33,26 @@ function Sheet() {
   );
 }
 
-/** The confirmation in material3 (Material's dialog) and in ios (the shared one), each at its style's width. */
+/** The confirmation in material3 (Material's dialog) at its style's width. */
 function Alerts() {
   const { t } = useLingui();
   const note = useAndroidStyleNote();
-  const shown = ANDROID_STYLES.filter((style) => style.id === 'material3' || style.id === 'ios');
+  const shown = ANDROID_STYLES.filter((style) => style.id === 'material3');
   return (
     <div className="flex flex-wrap items-end justify-center gap-4">
       {shown.map((style) => {
         const d = style.dimensions;
-        const material = style.recipes.dialogs === 'material';
         return (
           <div key={style.id} className="flex flex-col items-center gap-3">
-            <div className={cn('flex flex-col bg-elevated shadow-pop', material ? 'gap-4 p-6' : 'text-center')} style={{ width: d.alertWidth, borderRadius: d.groupRadius }}>
-              <div className={cn('flex flex-col gap-2', !material && 'px-4 pb-4 pt-5')}>
+            <div className="flex flex-col gap-4 bg-elevated p-6 shadow-pop" style={{ width: d.alertWidth, borderRadius: d.groupRadius }}>
+              <div className="flex flex-col gap-2">
                 <span className="text-fg" style={{ fontSize: style.type.dialogTitle.size, lineHeight: `${style.type.dialogTitle.line}px`, fontWeight: style.type.dialogTitle.weight }}>{t`删除这个会话？`}</span>
                 <span className="text-sm text-fg-2">{t`转录与附件一起删除，无法恢复。`}</span>
               </div>
-              {material ? (
-                <div className="flex justify-end gap-2">
-                  <span className="flex h-10 items-center px-3 text-sm font-medium text-accent">{t`取消`}</span>
-                  <span className="flex h-10 items-center px-3 text-sm font-medium text-danger">{t`删除`}</span>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 edge-t">
-                  <span className="flex h-11 items-center justify-center text-base text-accent">{t`取消`}</span>
-                  <span className="flex h-11 items-center justify-center text-base font-medium text-danger shadow-[inset_1px_0_0_var(--line)]">{t`删除`}</span>
-                </div>
-              )}
+              <div className="flex justify-end gap-2">
+                <span className="flex h-10 items-center px-3 text-sm font-medium text-accent">{t`取消`}</span>
+                <span className="flex h-10 items-center px-3 text-sm font-medium text-danger">{t`删除`}</span>
+              </div>
             </div>
             <Value className="text-fg-3">{note(style).title} · alertWidth {d.alertWidth}</Value>
           </div>
@@ -98,7 +90,7 @@ export function OverlayChapter() {
       <Plate number={2} title={t`底部面板`} note={t`选项多或要读说明时用；就在触发点旁的两三个选项用菜单。`}>
         <Frame className="flex justify-center p-8 max-md:p-4"><Sheet /></Frame>
       </Plate>
-      <Plate number={3} title={t`确认框`} note={t`material3 与 expressive 用 Material 的弹窗；其余风格用共享实现，宽度和操作排列读配方。`}>
+      <Plate number={3} title={t`确认框`} note={t`material3 用 Material 的弹窗，宽度和操作排列读配方。`}>
         <Frame className="p-8 max-md:p-4"><Alerts /></Frame>
       </Plate>
     </Chapter>

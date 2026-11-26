@@ -87,21 +87,18 @@ function useValueGroups(): Array<{ title: string; note?: string; rows: CompareRo
 function useRecipeRows(): CompareRow[] {
   const { t } = useLingui();
   const names: { [K in keyof Recipes]: { label: string; options?: Record<string, string> } } = {
-    buttons: { label: t`按钮的实现`, options: { material: 'Material', miuix: 'Miuix', shared: t`共享实现` } },
-    segments: { label: t`分段控件`, options: { connected: t`相连的按钮`, sliding: t`轨道加滑块`, pills: t`独立的胶囊`, underline: t`下划线页签` } },
-    secondaryButtons: { label: t`次要按钮`, options: { tonal: t`浅色填充`, plain: t`着色文字`, outlined: t`描边` } },
+    buttons: { label: t`按钮的实现`, options: { material: 'Material', shared: t`共享实现` } },
+    segments: { label: t`分段控件`, options: { connected: t`相连的按钮`, sliding: t`轨道加滑块` } },
+    secondaryButtons: { label: t`次要按钮`, options: { tonal: t`浅色填充`, plain: t`着色文字` } },
     navigation: { label: t`底栏`, options: { flat: t`平铺`, floating: t`浮动` } },
-    indicator: { label: t`底栏的选中`, options: { fill: t`色块`, capsule: t`胶囊`, topLine: t`上方的线`, bottomDot: t`下方的点` } },
-    homeTabs: { label: t`首页的模式切换`, options: { underline: t`下划线页签`, segmented: t`分段控件` } },
-    centeredTitle: { label: t`导航栏标题居中` },
+    indicator: { label: t`底栏的选中`, options: { fill: t`色块`, capsule: t`胶囊` } },
+    homeTabs: { label: t`首页的模式切换`, options: { underline: t`下划线页签` } },
     dividers: { label: t`行之间的分隔线` },
     selectionAtEnd: { label: t`选中项在行尾打勾` },
     accentSections: { label: t`分组标题用强调色` },
-    card: { label: t`分组卡片`, options: { tonal: t`浅色填充`, elevated: t`抬起的表面`, whiteBlend: t`浮层表面` } },
+    card: { label: t`分组卡片`, options: { tonal: t`浅色填充`, elevated: t`抬起的表面` } },
     dialogs: { label: t`弹窗的实现`, options: { material: 'Material', shared: t`共享实现` } },
-    actionSheet: { label: t`取消单独放在操作面板下方` },
     press: { label: t`按下`, options: { ripple: 'ripple', highlight: t`表面高亮` } },
-    underlineInput: { label: t`下划线输入框` },
   };
   return (Object.keys(names) as Array<keyof Recipes>).map((key) => {
     const { label, options } = names[key];

@@ -1,6 +1,6 @@
 # 操作
 
-触发一次动作的控件：`Button` 与 `StatusPill`。画面在 `/design/components/actions`，实现在 `apps/web/src/components/ui/button.tsx`、`controls.tsx`。画法依据见 [DECISIONS](../../DECISIONS.md) 2026-11-14「Web 组件收紧为墨色与浅底」。
+触发一次动作的控件：`Button` 与 `StatusPill`。画面在 `/design/components/actions`，实现在 `apps/web/src/components/ui/button.tsx`、`controls.tsx`。画法依据见 [DECISIONS](../../DECISIONS.md) 2026-11-14「Web 组件收紧为墨色与浅底」；主按钮的颜色已由 2026-11-26「主题色分三档，墨色只给文字」改为 `primary`。
 
 ## Button
 
@@ -12,7 +12,7 @@
 
 | 变体 | 画法 | 用于 | 每个区域最多 |
 |---|---|---|---|
-| `primary` | 墨色实心 | 这一屏的主操作 | 1 个 |
+| `primary` | 主题色实心（`primary`） | 这一屏的主操作 | 1 个 |
 | `secondary`（默认） | 墨色 7% 浅底，悬停 11% | 平行的次要操作 | 不限 |
 | `ghost` | 透明，文字 `fg-2` | 工具栏、对话框的取消 | 不限 |
 | `quiet` | 透明，文字 `fg-3` | 图标按钮、行内操作 | 不限 |

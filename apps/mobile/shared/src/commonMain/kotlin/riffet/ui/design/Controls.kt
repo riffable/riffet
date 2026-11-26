@@ -109,16 +109,6 @@ internal fun RiffetSwitch(
     val colors = LocalRiffetColors.current
     val s = surfaces
     val recipe = LocalInterfaceStyle.current.components.controls
-    if (recipe.switches == ComponentBackend.MIUIX && listOf("switchWidth", "switchHeight", "switchThumbSize").none(metrics::isOverridden)) {
-        top.yukonga.miuix.kmp.basic.Switch(checked, onCheckedChange, modifier, enabled = enabled,
-            colors = top.yukonga.miuix.kmp.basic.SwitchDefaults.switchColors(
-                checkedTrackColor = s.primaryAction, checkedThumbColor = s.switchThumb,
-                uncheckedTrackColor = colors.bgMuted, uncheckedThumbColor = s.switchThumb,
-                disabledCheckedTrackColor = s.press, disabledUncheckedTrackColor = s.press,
-                disabledCheckedThumbColor = s.disabledContent, disabledUncheckedThumbColor = s.disabledContent,
-            ))
-        return
-    }
     if (recipe.switches == ComponentBackend.MATERIAL) {
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides metrics.controlHeight) {
             Switch(checked = checked, onCheckedChange = onCheckedChange, modifier = modifier, enabled = enabled,
@@ -133,7 +123,8 @@ internal fun RiffetSwitch(
     val inset = (metrics.switchHeight - thumbSize) / 2
     val travel by animateFloatAsState(if (checked) 1f else 0f, motion.spatial(), label = "switch")
     val stretch by animateDpAsState(if (down) thumbSize * 0.18f else 0.dp, motion.spatial(), label = "stretch")
-    val track by animateColorAsState(if (checked) s.primaryAction else s.press, motion.effects(), label = "track")
+    // Off, the track is a clear step of ink: the press tone all but vanishes on a white card.
+    val track by animateColorAsState(if (checked) s.primaryAction else colors.fg.copy(alpha = if (s.dark) 0.22f else 0.13f), motion.effects(), label = "track")
     val thumbColor by animateColorAsState(if (recipe.outlineSwitchThumb && !checked) colors.fg2 else s.switchThumb, motion.effects(), label = "switch-thumb")
     val toggle = if (onCheckedChange != null) {
         Modifier.sizeIn(minWidth = metrics.controlHeight, minHeight = metrics.controlHeight)
@@ -354,6 +345,13 @@ internal fun ChipRow(
         }
         Row(horizontalArrangement = Arrangement.spacedBy((metrics.controlInset / 2))) {
             leading?.invoke()
+            // Where unselected filters are bare text, the leading picker is a filled chip like the selected one; a short
+            // rule says it is a different control, not a second selection.
+            if (leading != null && LocalInterfaceStyle.current.components.controls.bareChips) {
+                Box(Modifier.height(metrics.controlHeight), contentAlignment = Alignment.Center) {
+                    Box(Modifier.width(metrics.hairlineWidth).height(metrics.smallIconSize).background(s.hairline))
+                }
+            }
             items.forEach { item ->
                 val on = item.key == selected
                 val tint by animateColorAsState(if (on) s.selectedContent else colors.fg2, motion.effects(), label = "chip")
@@ -496,20 +494,6 @@ fun RiffetButton(
         ) { Text(text, style = type.button) }
         return
     }
-    if (recipe.buttons == ComponentBackend.MIUIX) {
-        val background = if (primary) { if (danger) colors.danger else s.primaryAction } else s.secondaryAction
-        val foreground = if (primary) { if (danger) colors.dangerFg else s.primaryActionContent }
-            else if (danger) colors.danger else s.secondaryActionContent
-        top.yukonga.miuix.kmp.basic.Button(
-            onClick, modifier.minimumInteractiveComponentSize(), enabled, cornerRadius = metrics.controlRadius, minHeight = metrics.buttonHeight,
-            colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(
-                color = background, contentColor = foreground,
-                disabledColor = s.press, disabledContentColor = s.disabledContent,
-            ),
-        ) { Text(text, style = type.button, color = if (!enabled) s.disabledContent else foreground,
-            maxLines = 1, overflow = TextOverflow.Ellipsis) }
-        return
-    }
     if (recipe.buttons == ComponentBackend.MATERIAL) {
         // Material keeps the 48dp touch target outside its 40dp button surface.
         val buttonHeight = metrics.buttonHeight
@@ -528,7 +512,9 @@ fun RiffetButton(
         return
     }
     SharedAction(onClick, modifier, enabled, danger, primary, tinted = tinted) {
-        Text(text, modifier = Modifier.padding(horizontal = metrics.controlInset, vertical = metrics.controlInset / 2),
+        // Only a filled face needs room around its label; a bare text action keeps the tighter inset.
+        val side = if (primary || tinted) metrics.buttonInset else metrics.controlInset
+        Text(text, modifier = Modifier.padding(horizontal = side, vertical = metrics.controlInset / 2),
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -575,7 +561,13 @@ internal fun RiffetTextButton(
             ) { CompositionLocalProvider(LocalTextStyle provides LocalRiffetTypography.current.button) { content() } }
         }
     } else SharedAction(onClick, modifier, enabled, danger) {
-        Row(Modifier.padding(if (LocalDialogAction.current) PaddingValues(horizontal = (metrics.controlInset / 2)) else contentPadding), verticalAlignment = Alignment.CenterVertically, content = content)
+        val filledDialog = LocalDialogAction.current && LocalInterfaceStyle.current.components.controls.filledDialogActions
+        val padding = when {
+            filledDialog -> PaddingValues(horizontal = metrics.buttonInset)
+            LocalDialogAction.current -> PaddingValues(horizontal = metrics.controlInset / 2)
+            else -> contentPadding
+        }
+        Row(Modifier.padding(padding), verticalAlignment = Alignment.CenterVertically, content = content)
     }
 }
 
@@ -666,6 +658,7 @@ private fun SharedAction(
     }
     Box(
         modifier.then(if (dialogAction && !filledDialog) Modifier.fillMaxWidth() else Modifier)
+            .then(if (filledDialog || filled || tinted) Modifier.widthIn(min = metrics.buttonMinWidth) else Modifier)
             .minimumInteractiveComponentSize()
             .heightIn(min = if (filled || tinted) metrics.buttonHeight else metrics.controlHeight)
             .graphicsLayer { alpha = if (pressed && enabled) motion.pressOpacity else opacity }
@@ -691,13 +684,6 @@ private fun SharedAction(
 @Composable
 internal fun RiffetCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val metrics = LocalInterfaceStyle.current.metrics
-    if (LocalInterfaceStyle.current.components.controls.choices == ComponentBackend.MIUIX && !metrics.isOverridden("iconSize")) {
-        top.yukonga.miuix.kmp.basic.Checkbox(
-            state = if (checked) androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off,
-            onClick = onCheckedChange?.let { change -> { change(!checked) } }, modifier = modifier, enabled = enabled,
-        )
-        return
-    }
     if (LocalInterfaceStyle.current.components.controls.choices == ComponentBackend.MATERIAL) {
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides metrics.controlHeight) {
             androidx.compose.material3.Checkbox(checked, onCheckedChange, modifier = modifier, enabled = enabled)
@@ -708,13 +694,13 @@ internal fun RiffetCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Uni
     val focused by source.collectIsFocusedAsState()
     val colors = LocalRiffetColors.current
     val shape = RoundedCornerShape(metrics.selectionRadius / 2)
-    val tint = if (enabled) colors.accent else surfaces.disabledContent
+    val tint = if (enabled) surfaces.primaryAction else surfaces.disabledContent
     val action = if (onCheckedChange == null) Modifier else Modifier.sizeIn(minWidth = metrics.controlHeight, minHeight = metrics.controlHeight)
         .toggleable(value = checked, interactionSource = source, indication = LocalIndication.current, enabled = enabled, role = Role.Checkbox, onValueChange = onCheckedChange)
     Box(modifier.then(action), contentAlignment = Alignment.Center) {
         Box(Modifier.size(metrics.iconSize).background(if (checked) tint else Color.Transparent, shape)
             .border(if (focused) metrics.focusWidth else metrics.hairlineWidth, if (focused) surfaces.focus else if (checked) tint else colors.fg4, shape), contentAlignment = Alignment.Center) {
-            if (checked) riffet.ui.icons.Icon(riffet.ui.icons.RiffetIcons.Check, null, tint = colors.accentFg, modifier = Modifier.size(metrics.smallIconSize))
+            if (checked) riffet.ui.icons.Icon(riffet.ui.icons.RiffetIcons.Check, null, tint = surfaces.primaryActionContent, modifier = Modifier.size(metrics.smallIconSize))
         }
     }
 }
@@ -722,13 +708,6 @@ internal fun RiffetCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Uni
 @Composable
 internal fun RiffetRadioButton(selected: Boolean, onClick: (() -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true, tint: Color? = null) {
     val metrics = LocalInterfaceStyle.current.metrics
-    if (LocalInterfaceStyle.current.components.controls.choices == ComponentBackend.MIUIX && !metrics.isOverridden("iconSize")) {
-        top.yukonga.miuix.kmp.basic.RadioButton(selected, onClick, modifier, enabled = enabled,
-            colors = top.yukonga.miuix.kmp.basic.RadioButtonDefaults.radioButtonColors(
-                selectedColor = tint ?: surfaces.focus, disabledSelectedColor = surfaces.disabledContent,
-            ))
-        return
-    }
     if (LocalInterfaceStyle.current.components.controls.choices == ComponentBackend.MATERIAL) {
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides metrics.controlHeight) {
             androidx.compose.material3.RadioButton(selected, onClick, modifier = modifier, enabled = enabled,
@@ -740,7 +719,7 @@ internal fun RiffetRadioButton(selected: Boolean, onClick: (() -> Unit)?, modifi
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     val colors = LocalRiffetColors.current
-    val resolvedTint = if (enabled) tint ?: colors.accent else surfaces.disabledContent
+    val resolvedTint = if (enabled) tint ?: surfaces.primaryAction else surfaces.disabledContent
     val action = if (onClick == null) Modifier else Modifier.sizeIn(minWidth = metrics.controlHeight, minHeight = metrics.controlHeight)
         .selectable(selected = selected, interactionSource = source, indication = LocalIndication.current, enabled = enabled, role = Role.RadioButton, onClick = onClick)
     Box(modifier.then(action).sizeIn(minWidth = metrics.iconSize, minHeight = metrics.iconSize)

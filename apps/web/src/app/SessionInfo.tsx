@@ -286,7 +286,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
           <div className="min-w-0 flex-1">
             <div className="line-clamp-2 break-words text-(length:--text-h3) font-semibold leading-[22px] text-fg" title={title}>{title}</div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fg-3" role="status">
-              {state?.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : state && <StatusDot tone={state.tone} pulse={state.pulse} />}
+              {state?.tone === 'accent' ? <Spinner className="size-3 text-fg-3" /> : state && <StatusDot tone={state.tone} pulse={state.pulse} />}
               <span className={cn('min-w-0 truncate', state?.tone === 'warning' && 'text-warning', state?.tone === 'danger' && 'text-danger')}>
                 {state ? state.label : t({ message: '空闲', context: 'session-info-idle' })}
                 <span className="text-fg-4"> · </span>

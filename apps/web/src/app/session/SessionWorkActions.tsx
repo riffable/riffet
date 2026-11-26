@@ -85,7 +85,7 @@ function SubagentRow({ entry, brief, onOpen }: { entry: StoredSubagent; brief?: 
         title={entry.transcript.agentId}
         className={infoRow}
       >
-        <span className="grid size-3.5 place-items-center">{running ? <Spinner className="text-accent" /> : failed ? <StatusDot tone="danger" /> : <IconCheck className="size-3.5 text-fg-4" />}</span>
+        <span className="grid size-3.5 place-items-center">{running ? <Spinner className="text-fg-3" /> : failed ? <StatusDot tone="danger" /> : <IconCheck className="size-3.5 text-fg-4" />}</span>
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {duration && <span className="text-xs tabular-nums text-fg-4">{duration}</span>}
       </button>

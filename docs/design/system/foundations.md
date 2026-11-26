@@ -80,13 +80,13 @@
 | 标题 · 大标题 | 无 | 34 / 41，700 | 32 / 40，500 | `largeTitle` |
 | 代码 | 13 / 20（行内 0.86em） | 14 / 22 | 14 / 22 | `mono` |
 
-移动端的值取自 `ThemePresets.kt`：material3 风格是 Material 3 的字阶（`bodyLarge`、`labelLarge`、`bodySmall`……）去掉字距；ios 风格是 Cupertino 的字阶。iOS 原生端与 ios 风格取同样的值，用 Dynamic Type 的文字样式缩放。
+移动端的值取自 `ThemePresets.kt`：material3 风格是 Material 3 的字阶（`bodyLarge`、`labelLarge`、`bodySmall`……）去掉字距；iOS 原生端是 Cupertino 的字阶（`MOBILE_IOS_TEXT`），用 Dynamic Type 的文字样式缩放。
 
 - 桌面只用 400、500 两种字重，600 只给品牌名。移动端的大标题字重跟平台。
 - 注脚是桌面对话里特有的一档，移动端屏幕小、字号已经是触摸尺寸，不再细分，用次要。
 - 移动端的组件文字角色（`button`、`menu`、`segmented`、`dialogTitle`……，见 `THEME_TEXT_ROLES`）默认取上表对应的角色，风格可以单独覆盖。
 - 注脚只用在对话里每条消息下的元信息，界面其他地方用次要。
-- iOS 原生的导航栏标题用 600，和系统导航栏的标题一致；Android 的 ios 风格是 500。这是 iOS 原生端有意的覆盖，写在 `packages/contracts/src/mobile-styles.ts` 的 `IOS_NATIVE_OVERRIDES`。
+- iOS 原生的导航栏标题用 600，和系统导航栏的标题一致，比 `MOBILE_IOS_TEXT` 的 500 重。这是 iOS 原生端有意的覆盖，写在 `packages/contracts/src/mobile-styles.ts` 的 `IOS_NATIVE_OVERRIDES`。
 - 现状：Web 的弹窗标题是 600，改为 500。
 
 ### 2.3 字体
@@ -176,7 +176,7 @@
 - 嵌套时内圆角 = 外圆角 − 内边距，小于 4 时取 4。
 - 胶囊和圆形按钮取高度的一半（Web `rounded-full`）。例：高 26 的胶囊半径 13。
 - 圆角用连续曲线（Apple 的 `.continuous`），Web 用普通圆角。
-- iOS 原生的分组 16、输入框 24，比 Android 的 ios 风格（12、14）圆：Liquid Glass 的形状与屏幕圆角同心，Compose 的模仿不需要。这是 iOS 原生端有意的覆盖，同样写在 `IOS_NATIVE_OVERRIDES`。
+- iOS 原生的分组 16、输入框 24，比 `MOBILE_IPHONE_DIMENSIONS`（12、14）圆：Liquid Glass 的形状与屏幕圆角同心。这是 iOS 原生端有意的覆盖，同样写在 `IOS_NATIVE_OVERRIDES`。
 
 ## 6. 层级与阴影
 
@@ -218,7 +218,7 @@
 | 柔和减速 | 图片放大、面板出现 | `cubic-bezier(0.2, 0.7, 0.2, 1)` |
 | 底部面板 | 移动端的底部面板 | `cubic-bezier(0.32, 0.72, 0, 1)` |
 
-- Android 的 ios 风格用 `cubic-bezier(0.25, 0.1, 0.25, 1)`，与 material3 的标准曲线不同，这是风格差异，不是漂移。
+- iOS 原生端用 `cubic-bezier(0.25, 0.1, 0.25, 1)`，与 material3 的标准曲线不同，这是平台差异，不是漂移。
 - Mac 用 SwiftUI 的 `snappy` / `smooth`，iOS 用弹簧（`RiffetMotion`）。弹簧不换算成贝塞尔，按平台习惯，档位与上表对应。例外是整列滑动（Mac 的侧栏开合、内容区跟随）：行程长，弹簧收尾的逐像素爬行很显眼，用 `Motion.slide`（`medium` 时长、`standard` 曲线），准时停下。
 
 ### 7.3 规则
@@ -325,7 +325,7 @@
 | 桌面风格：配方、圆角、文字、布局 | `packages/contracts/src/interface-styles.ts` | `pnpm gen:styles` → Mac（Web CSS 待接入） |
 | 间距、桌面文字阶梯、动效时长与曲线 | `packages/contracts/src/design-tokens.ts` | `pnpm gen:tokens` → Web 的 CSS 变量（`index.css` 的标记区）、Mac 的 `Space` 和 `Motion`（`Controls.swift` 的标记区）；移动端待接入 |
 | 图标尺寸 | 待定 | |
-| 移动风格：尺寸、圆角、阴影、动效、ios 风格的文字 | `packages/contracts/src/mobile-styles.ts`（字段名和上下限在 `theme-design.ts`，生成时检查取值在上下限内） | `pnpm gen:tokens` → Android 的 `MobileStyles.generated.kt`；iOS `RiffetDesign.swift` 的标记区（`RiffetText`、`RiffetMetrics`、`RiffetMotion`），取 ios 风格的值加上 `IOS_NATIVE_OVERRIDES` |
+| 移动风格：尺寸、圆角、阴影、动效、iPhone 的文字 | `packages/contracts/src/mobile-styles.ts`（字段名和上下限在 `theme-design.ts`，生成时检查取值在上下限内） | `pnpm gen:tokens` → Android 的 `MobileStyles.generated.kt`；iOS `RiffetDesign.swift` 的标记区（`RiffetText`、`RiffetMetrics`、`RiffetMotion`），取 `MOBILE_IPHONE_DIMENSIONS` 加上 `IOS_NATIVE_OVERRIDES` |
 | 移动风格：组件配方 | `ThemePresets.kt` | 是代码，不是数值，留在 Kotlin |
 
 落地顺序：

@@ -22,8 +22,10 @@ import riffet.ui.theme.LocalRiffetMotion
  * new colour role:
  *
  *  - [page]: a plain page (the 任务 list, a transcript), the palette's own `bg`;
- *  - [groupedPage]: the page under grouped cards (设置, 新会话, sheets, the drawer), the same palette background as other pages;
- *  - [card]: a grouped card on [groupedPage];
+ *  - [groupedPage]: the page under grouped cards (设置, the drawer, side panes): in a light theme a step toward the
+ *    ink ([SurfaceRecipe.groupedPageMix]) so a white card reads on it; in a dark one the page itself;
+ *  - [card]: a card on [page]; [groupedCard] and [groupedHairline] are the card and its lines on [groupedPage]
+ *    ([GroupedSurfaces] swaps them in);
  *  - [floating]: chrome that floats over content (the composer, menus, sheets' rows);
  *  - [press]: the highlight a pressed surface shows ([RiffetPressIndication]).
  *
@@ -33,10 +35,14 @@ import riffet.ui.theme.LocalRiffetMotion
 data class RiffetSurfaces(
     val page: Color,
     val groupedPage: Color,
+    val groupedCard: Color,
+    val groupedHairline: Color,
     val card: Color,
     val floating: Color,
     val press: Color,
     val selected: Color,
+    /** A selected or highlighted list row: a neutral step of ink. Rows are large, so a tint would turn a whole column blue. */
+    val rowSelected: Color,
     val selectedContent: Color,
     val disabledContent: Color,
     val focus: Color,
@@ -57,41 +63,50 @@ data class RiffetSurfaces(
 
 internal fun riffetSurfaces(colors: RiffetColors, dark: Boolean, recipe: SurfaceRecipe = SurfaceRecipe(), overrides: Map<String, String> = emptyMap()): RiffetSurfaces {
     fun color(role: String, default: Color) = overrides[role]?.let(::designColor) ?: default
-    val page = color("page", if (dark) colors.bg else lerp(colors.bg, colors.fg, recipe.pageMix))
+    val page = color("page", colors.bg)
+    val stepped = recipe.card == CardPresentation.STEPPED && !dark
     val card = color("card", when (recipe.card) {
         CardPresentation.TONAL -> lerp(page, colors.fg, if (dark) 0.07f else 0.035f)
         CardPresentation.ELEVATED -> colors.bgElevated
-        CardPresentation.WHITE_BLEND -> if (dark) colors.bgElevated else lerp(page, Color.White, 0.42f)
+        CardPresentation.STEPPED -> if (dark) colors.bgElevated else lerp(page, colors.fg, 0.035f)
     })
-    // Menus, dialogs and the composer sit on the card tone: an accent cast read as a blue wash.
-    val floating = color("floating", card)
+    val groupedPage = color("groupedPage", if (dark) page else lerp(page, colors.fg, recipe.groupedPageMix))
+    val groupedCard = if (stepped && "card" !in overrides) colors.bgElevated else card
+    // Menus, dialogs and the composer sit on the raised paper, or on the card tone where cards are raised:
+    // an accent cast read as a blue wash.
+    val floating = color("floating", if (stepped) colors.bgElevated else card)
+    val ground = if (stepped) floating else card
     // The neutral fill has to read on the page and on a card alike, so it is a step of ink, not the palette's faint hover tone.
-    val selected = color("selected", if (recipe.neutralSelection) lerp(card, colors.fg, if (dark) 0.16f else 0.09f)
-        else lerp(card, colors.accent, if (dark) 0.22f else recipe.selectionLightMix))
+    val selected = color("selected", lerp(ground, colors.accent, if (dark) 0.22f else recipe.selectionLightMix))
+    fun lines(over: Color) = if (recipe.softLines) colors.lineSoft.compositeOver(over) else colors.line
     return RiffetSurfaces(
         page = page,
-        groupedPage = color("groupedPage", page),
+        groupedPage = groupedPage,
+        groupedCard = groupedCard,
+        groupedHairline = color("hairline", lines(groupedCard)),
         card = card,
         floating = floating,
         press = color("press", colors.fg.copy(alpha = recipe.pressAlpha)),
         selected = selected,
+        rowSelected = color("rowSelected", lerp(ground, colors.fg, if (dark) 0.16f else 0.08f)),
         selectedContent = color("selectedContent", colors.fg),
         disabledContent = color("disabledContent", colors.fg.copy(alpha = 0.38f)),
         focus = color("focus", colors.accent),
-        hairline = color("hairline", if (recipe.softLines) colors.lineSoft.compositeOver(card) else colors.line),
+        hairline = color("hairline", lines(card)),
         shadow = color("shadow", if (dark) Color.Black else colors.fg),
         dark = dark,
         // Neutral fills are a step of ink over whatever they sit on: the palette's muted tone is the card's own in a dark
         // theme, where a field or a quiet button drawn in it has no edge at all.
         input = color("input", if (recipe.transparentInput) Color.Transparent
-            else if (recipe.neutralSelection) colors.fg.copy(alpha = if (dark) 0.1f else 0.05f)
+            else if (recipe.neutralFills) colors.fg.copy(alpha = if (dark) 0.1f else 0.05f)
             else colors.bgMuted.copy(alpha = if (dark) 0.8f else 0.5f)),
         navigation = color("navigation", floating.copy(alpha = recipe.navigationAlpha)),
         scrim = color("scrim", Color.Black.copy(alpha = recipe.scrimAlpha)),
-        primaryAction = color("primaryAction", if (recipe.inkPrimary) colors.primary else colors.accent),
-        primaryActionContent = color("primaryActionContent", if (recipe.inkPrimary) colors.primaryFg else colors.accentFg),
+        // The theme's colour one step deeper (riffet-style.md §4): the solid fill of every primary action and switch.
+        primaryAction = color("primaryAction", colors.primary),
+        primaryActionContent = color("primaryActionContent", colors.primaryFg),
         secondaryAction = color("secondaryAction", if (recipe.tonalSecondary) selected
-            else if (recipe.neutralSelection) colors.fg.copy(alpha = if (dark) 0.12f else 0.07f) else colors.bgMuted),
+            else if (recipe.neutralFills) colors.fg.copy(alpha = if (dark) 0.12f else 0.07f) else colors.bgMuted),
         secondaryActionContent = color("secondaryActionContent", colors.fg),
         switchThumb = color("switchThumb", if (recipe.accentThumb) colors.accentFg else Color.White),
     )
@@ -110,6 +125,21 @@ val LocalRiffetSurfaces = staticCompositionLocalOf { riffetSurfaces(riffet.theme
 
 internal val surfaces: RiffetSurfaces
     @Composable @ReadOnlyComposable get() = LocalRiffetSurfaces.current
+
+/**
+ * A grouped page's scope (设置, the drawer, side panes): the page becomes [RiffetSurfaces.groupedPage] and its cards
+ * [RiffetSurfaces.groupedCard], so [pageColor][riffet.ui.app.pageColor], [Group] and [Notice] pick them up unchanged.
+ */
+@Composable
+internal fun GroupedSurfaces(content: @Composable () -> Unit) {
+    val s = surfaces
+    val colors = riffet.ui.theme.LocalRiffetColors.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalRiffetSurfaces provides s.copy(page = s.groupedPage, card = s.groupedCard, hairline = s.groupedHairline),
+        riffet.ui.theme.LocalRiffetColors provides colors.copy(bg = s.groupedPage, bgElevated = s.groupedCard),
+        content = content,
+    )
+}
 
 /** Grouped surfaces use tone and separators, not a decorative card rim. */
 @Composable

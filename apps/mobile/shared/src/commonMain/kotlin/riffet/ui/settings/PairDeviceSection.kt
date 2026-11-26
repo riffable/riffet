@@ -121,7 +121,7 @@ internal fun PairDeviceSection(api: RiffetApi) {
         }
         val host = response.hosts.firstOrNull().orEmpty().let { if (':' in it && !it.startsWith("[")) "[$it]" else it }
         SettingsGroup("") {
-            SettingsValueRow(stringResource(Res.string.pairing_server_address), "${response.scheme}://$host:${response.port}")
+            SettingsValueRow(stringResource(Res.string.pairing_server_address), "${response.scheme}://$host:${response.port}", mono = true)
             SettingsRow(stringResource(Res.string.pairing_code)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SelectionContainer { Text(response.code, style = typography.mono, color = colors.fg) }

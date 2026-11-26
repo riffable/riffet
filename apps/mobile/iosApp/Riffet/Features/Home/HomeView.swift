@@ -24,6 +24,7 @@ enum RootTab: String, CaseIterable {
 /// server show `NeedsServerView`, and 新会话 holds the setup card (patterns.md §1.5).
 struct RiffetRootView: View {
     let workbench: Workbench?
+    @Environment(\.palette) private var palette
     @Environment(AppModel.self) private var model
     @Environment(\.horizontalSizeClass) private var widthClass
     @Environment(\.verticalSizeClass) private var heightClass
@@ -86,6 +87,7 @@ struct RiffetRootView: View {
                     .navigationDestination(for: MobileRoute.self) { destination($0) }
             }
             .riffetToastHost()
+            .tint(palette.accent)
             .tabItem { Image(systemName: "plus.bubble").environment(\.symbolVariants, .none).accessibilityLabel("新会话") }
             .tag(RootTab.newTask)
             NavigationStack(path: $assistantPath) {
@@ -100,6 +102,7 @@ struct RiffetRootView: View {
             }
             .environment(\.teamNavigator, refreshedTeamNavigator)
             .riffetToastHost()
+            .tint(palette.accent)
             .tabItem { Image(systemName: teamTab ? "person.2" : "sparkles").environment(\.symbolVariants, .none).accessibilityLabel(RootTab.assistant.title(team: teamTab)) }
             .tag(RootTab.assistant)
             .badge(Int(waiting?.team ?? 0))
@@ -119,6 +122,7 @@ struct RiffetRootView: View {
                 }
             }
             .riffetToastHost()
+            .tint(palette.accent)
             .tabItem { Image(systemName: "checklist").environment(\.symbolVariants, .none).accessibilityLabel("任务") }
             .tag(RootTab.tasks)
             .badge(Int(waiting?.tasks ?? 0))
@@ -126,9 +130,12 @@ struct RiffetRootView: View {
                 SettingsView(workbench: workbench)
             }
             .riffetToastHost()
+            .tint(palette.accent)
             .tabItem { Image(systemName: "gearshape").environment(\.symbolVariants, .none).accessibilityLabel("设置") }
             .tag(RootTab.settings)
         }
+        // The bar's current icon is primary; each page below goes back to accent.
+        .tint(palette.primary)
         .task {
             consumeNavigation()
             if workbench == nil || model.landOnNewTask { tabRaw = RootTab.newTask.rawValue; model.landOnNewTask = false }
@@ -732,7 +739,7 @@ private struct SessionRowLabel: View {
         }
         .padding(.horizontal, 8).padding(.vertical, 10)
         .frame(maxWidth: .infinity, minHeight: RiffetMetrics.rowMinHeight, alignment: .leading)
-        .background(openSessionID == session.id ? palette.selected : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(openSessionID == session.id ? palette.bgActive : .clear, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([name, session.state.label, time].filter { !$0.isEmpty }.joined(separator: "，"))
     }

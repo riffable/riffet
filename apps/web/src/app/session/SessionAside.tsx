@@ -109,7 +109,7 @@ const Work = memo(function Work({ subagentStore, jobStore, tasks, reportedBackgr
                     onClick={() => opener?.open({ toolCallId: entry.toolCallId, ...(entry.transcript.running !== undefined ? { running: entry.transcript.running } : {}) })}
                     className="flex h-7 w-full min-w-0 items-center gap-2.5 rounded-lg px-2 text-left text-sm transition-colors hover:bg-hover"
                   >
-                    <span className="grid size-3.5 shrink-0 place-items-center">{running ? <Spinner className="size-3.5 text-accent" /> : <StatusDot tone={entry.transcript.status === 'failed' ? 'danger' : entry.transcript.running === false ? 'success' : 'idle'} />}</span>
+                    <span className="grid size-3.5 shrink-0 place-items-center">{running ? <Spinner className="size-3.5 text-fg-3" /> : <StatusDot tone={entry.transcript.status === 'failed' ? 'danger' : entry.transcript.running === false ? 'success' : 'idle'} />}</span>
                     <span className={cn('min-w-0 flex-1 truncate', running ? 'text-fg' : 'text-fg-3')}>{title}</span>
                     {duration && <span className="shrink-0 text-2xs tabular-nums text-fg-4">{duration}</span>}
                   </button>

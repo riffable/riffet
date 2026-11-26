@@ -428,7 +428,7 @@ private struct NotificationSettingsView: View {
                     }
                 )) {
                     SettingsRowLabel(title: String(localized: "任务提醒", bundle: .riffet), symbol: "bell")
-                }.tint(palette.accent)
+                }.tint(palette.primary)
             } footer: { Text(pushStatus) }
             if authorization == .denied {
                 RiffetNotice.section(.warning, String(localized: "系统通知已关闭", bundle: .riffet), actionTitle: String(localized: "去系统设置", bundle: .riffet)) {
@@ -479,7 +479,7 @@ private struct FilesSettingsView: View {
                 Toggle("允许预览项目外的文件", isOn: Binding(
                     get: { workbench.settings?.allowOutsideRead?.boolValue != false },
                     set: { value in Task { error = await save(managementSettingsPatch(allowOutsideRead: value)) } }
-                )).tint(palette.accent).disabled(saving)
+                )).tint(palette.primary).disabled(saving)
             } header: { RiffetSectionTitle(String(localized: "文件访问", bundle: .riffet)) } footer: { Text("只读打开项目外路径；文件树与搜索仍限项目内。") }
 
             Section {
@@ -550,8 +550,7 @@ private struct InteractionSettingsView: View {
                     }
                 })) {
                     SettingsRowLabel(title: String(localized: "确认操作前验证本人", bundle: .riffet), symbol: "faceid")
-                }
-                .tint(palette.accent)
+                }.tint(palette.primary)
             } footer: { Text("仅保存在这台设备") }
             RiffetNotice.section(.error, error)
         }
@@ -754,7 +753,7 @@ private struct DevicesView: View {
                     Task { await setAppearanceAllowed(enabled) }
                 })) {
                     Text(String(localized: "允许助理修改本机 Riffet 外观", bundle: .riffet))
-                }
+                }.tint(palette.primary)
                 .disabled(savingAppearance || currentID == nil)
             } footer: {
                 Text(String(localized: "仅在 Riffet 连接此服务器并在前台时生效。", bundle: .riffet))
@@ -872,12 +871,15 @@ private struct DevicesView: View {
     private static let relative: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .named
         return formatter
     }()
 
     private static func relativeText(_ date: Date) -> String {
         relative.locale = AppLocalization.shared.locale
-        return relative.localizedString(for: date, relativeTo: Date())
+        let now = Date()
+        // A server clock a moment ahead still reads as "now", not "in 0 seconds".
+        return relative.localizedString(for: min(date, now), relativeTo: now)
     }
 
     private static func date(_ value: String) -> Date? { ServerTime.date(value) }
