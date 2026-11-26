@@ -60,6 +60,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- A conversation handed off from a task’s conversation now gets a task of its own instead of sharing the original’s, matching forked conversations so their statuses move independently.
 - When a turn continues running tools after a mid-turn reply (such as an async status update), the working indicator now stays at the bottom below the active work instead of appearing above it, and live process headers across Web, Android, and iPhone now show "Working" without a second ticking timer (matching Mac).
 - On iPhone, the setup card on New session is laid out like the rest of the app: saved and nearby servers are plain rows with one action each, an expired pairing shows Pair again on its row, and Skip next to Choose project is no longer squeezed out.
 - `riffet restart` and `riffet start` no longer report "Riffet did not start" while a large state directory is still starting: they wait as long as the server makes progress and show the phase it is in (opening databases, loading plugins, recovering tasks…); when the server does exit, only its own log lines are shown. Running `start`, `restart` or `stop` while a server is starting now waits for it instead of launching another, and `riffet status` shows it as starting.

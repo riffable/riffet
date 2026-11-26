@@ -621,11 +621,8 @@ export class Store {
       } else {
         this.getProject(normalized.projectId);
         const stamp = now();
-        const originId = normalized.origin?.kind === 'handoff' ? normalized.origin.sessionId : undefined;
-        const inherited = !normalized.workItemId && originId ? this.get<Session>('sessions', originId)?.workItemId : undefined;
         session = {
           ...normalized,
-          ...(inherited ? { workItemId: inherited } : {}),
           ...clientTitleSource(normalized.title),
           id: clientSessionId, kind: 'native', state: 'idle', configRevision: 0, creationFingerprint,
           lastActivityAt: stamp, seenActivityAt: stamp, createdAt: stamp, updatedAt: stamp,

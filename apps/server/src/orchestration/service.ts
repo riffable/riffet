@@ -473,9 +473,10 @@ export class OrchestrationService {
   /**
    * Moves the work to another backend in the same checkout. The source must be idle — two agents
    * editing one tree at once is the failure this exists to avoid — and is marked as handed off so a
-   * client can point readers to where the thread went.
+   * client can point readers to where the thread went. [attach] puts the new conversation on its
+   * own task in the same write.
    */
-  async handoff(sessionId: string, options: { target: LaunchTarget; note?: string; text?: string } & Ids): Promise<{ session: Session; run: Run }> {
+  async handoff(sessionId: string, options: { target: LaunchTarget; note?: string; text?: string; attach?: (session: Session, source: Session) => void } & Ids): Promise<{ session: Session; run: Run }> {
     return this.withOperation(`launch:${options.sessionId ?? randomUUID()}`, async () => {
       const { store } = this.deps;
       const provenance: SessionOrigin = { kind: 'handoff', sessionId };
@@ -502,8 +503,9 @@ export class OrchestrationService {
           options.commandId ?? randomUUID(),
           textInput(text),
         );
+        options.attach?.(created.session, source);
         const marked = store.updateSession(source.id, { handedOffTo: created.session.id });
-        return { result: created, updated: marked };
+        return { result: options.attach ? { ...created, session: store.getSession(created.session.id) } : created, updated: marked };
       });
       store.appendEvent(source.id, 'session', { session: updated });
       this.deps.dispatch.kick();

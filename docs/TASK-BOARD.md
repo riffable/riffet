@@ -122,7 +122,7 @@
 | `blockedBy?` | 前置任务：要先完成的任务（§4.4），最多 10 个 |
 | `labels` | 字符串数组 |
 
-会话通过 `Session.workItemId` 挂到任务上，一个会话最多属于一个任务。交接出来的会话继承原会话的任务；分叉出来的会话另建一个任务（同「转为任务」，跟随会话标题，进行中），两边状态互不影响，原会话不属于任务时分叉也不建。任务的活动（创建、状态变化、挂上会话、评论、交付、提问、核对结论）记在 `work_item_events`。
+会话通过 `Session.workItemId` 挂到任务上，一个会话最多属于一个任务。分叉或交接出来的会话各自另建一个任务（同「转为任务」，跟随会话标题，进行中），与原会话的任务状态互不影响；原会话不属于任务时分叉和交接也不建。任务的活动（创建、状态变化、挂上会话、评论、交付、提问、核对结论）记在 `work_item_events`。
 
 ### 4.3 从哪里来
 
@@ -274,7 +274,7 @@ Mac：M，概览随 `/tasks` 在 Web 查看。插件审批同属收件箱：Web 
   - `GET /api/work-items/:id/events`、`POST /api/work-items/:id/comments`。
   - `POST /api/sessions/:id/work-item`（挂上、转为任务、移出）。
   - `POST /api/sessions` 可带 `workItemId`；不带时按设置建任务，与会话在同一事务里创建，重试找回同一个任务。
-- **分层。** 模块 `apps/server/src/work-items/` 在 features 层，路由 `routes/work-items.ts`，会话创建的接线在 `routes/sessions.ts`，交接的继承在 `store.ts`，分叉另建任务在 `routes/orchestration.ts`。Web 在 `apps/web/src/app/work-items/` 和 `state/workItemsStore.ts`。
+- **分层。** 模块 `apps/server/src/work-items/` 在 features 层，路由 `routes/work-items.ts`，会话创建的接线在 `routes/sessions.ts`，分叉与交接另建任务在 `routes/orchestration.ts`。Web 在 `apps/web/src/app/work-items/` 和 `state/workItemsStore.ts`。
 - **兼容。** 旧客户端看不到任务；老服务端没有 `/api/work-items` 时，Web 隐藏任务看板入口。
 
 P2 已加：
@@ -312,7 +312,7 @@ P5 已加：
 
 | 期 | 范围 | 验收 |
 | --- | --- | --- |
-| P1 | 任务、看板、任务详情、自动建任务、会话挂接与继承。Web 已完成 | 新建任务后看板出现卡片，状态随会话变化；交接的会话挂在原任务下，分叉的会话有自己的任务 |
+| P1 | 任务、看板、任务详情、自动建任务、会话挂接。Web 已完成 | 新建任务后看板出现卡片，状态随会话变化；分叉与交接出来的会话各有自己的任务 |
 | P2 任务闭环 | 验收标准、简报、`task_submit` 与 `task_ask`、服务端证据、收件箱三类与就地处理、两个北极星指标。Mac 按 [范围规范](guide/mac-scope.md) 处理：看板页先给打开 Web 的入口，收件箱进菜单栏与通知（规范 §5 第 5 项） | 带两条验收标准的任务开始后，执行者交付，待验收里有逐条说明和服务端采集的命令与退出码；统计页能看到每天打扰次数和等待时长 |
 | P3 跟进 | 后台跟进、唤醒与合并、用户在场时让路、核对与返工、推动停下的会话、推不动进收件箱 | 用户离开后，一个停在中间的会话被跟进推动并完成；一个不合格的交付被退回一次后通过；打扰次数低于 P2 |
 | P4 助理主对话 | 助理页、拆任务与计划卡片、手机首页改成助理 | 在手机上一句话派出两个任务，最后只在验收时被打扰 |

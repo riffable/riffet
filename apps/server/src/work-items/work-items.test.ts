@@ -79,7 +79,7 @@ describe('work items', () => {
     expect((await items()).items).toHaveLength(1);
   });
 
-  it('attaches a conversation, moving todo to doing with its events, a handoff inherits the task and a fork gets its own', async () => {
+  it('attaches a conversation, moving todo to doing with its events, and gives a fork or handoff a task of its own', async () => {
     const { store, call, project } = await boot();
     const item = (await call('POST', '/api/work-items', { id: 'w1', title: '  Ship it  ', labels: ['a', 'a', 'b'] })).json() as WorkItem;
     expect(item).toMatchObject({ title: 'Ship it', status: 'todo', labels: ['a', 'b'], number: 1 });
@@ -103,12 +103,24 @@ describe('work items', () => {
     expect((await call('PATCH', '/api/work-items/w1', { status: 'done' })).json()).toMatchObject({ status: 'done' });
     expect(((await call('GET', '/api/work-items')).json() as { items: WorkItem[] }).items.find(entry => entry.id === forked)).toMatchObject({ status: 'doing', titleSessionId: 'fork-1' });
     expect((await call('POST', `/api/sessions/${session.id}/fork`, { clientSessionId: 'fork-1', commandId: 'c1' })).json()).toMatchObject({ session: { workItemId: forked } });
-    // A handoff carries on the same work.
-    const handoff = store.createNativeSubmission('handoff-1', { projectId: project.id, backendId: 'cursor', origin: { kind: 'handoff', sessionId: session.id } }, 'c2', { text: 'go', attachmentIds: [], context: [] });
-    expect(handoff.session.workItemId).toBe('w1');
+
+    // A handoff also gets a task of its own rather than inheriting the source's (even when the source task is already done).
+    const handoffBody = { clientSessionId: 'handoff-1', commandId: 'c2', target: { backendId: 'cursor' }, text: 'Continue here' };
+    const handoff = (await call('POST', `/api/sessions/${session.id}/handoff`, handoffBody)).json() as { session: Session };
+    const handedOff = handoff.session.workItemId!;
+    expect(handedOff).toBeDefined();
+    expect(handedOff).not.toBe('w1');
+    expect(handedOff).not.toBe(forked);
+    expect(((await call('GET', '/api/work-items')).json() as { items: WorkItem[] }).items.find(entry => entry.id === handedOff)).toMatchObject({ status: 'doing', titleSessionId: 'handoff-1' });
+    expect((await call('POST', `/api/sessions/${session.id}/handoff`, handoffBody)).json()).toMatchObject({ session: { workItemId: handedOff } });
+    // Store-level creation with a handoff origin does not inherit the source's workItemId either.
+    const rawHandoff = store.createNativeSubmission('handoff-raw', { projectId: project.id, backendId: 'cursor', origin: { kind: 'handoff', sessionId: session.id } }, 'c3', { text: 'go', attachmentIds: [], context: [] });
+    expect(rawHandoff.session.workItemId).toBeUndefined();
 
     expect((await call('DELETE', '/api/work-items/w1')).statusCode).toBe(204);
     expect(store.getSession(session.id).workItemId).toBeUndefined();
+    expect(store.getSession('fork-1').workItemId).toBe(forked);
+    expect(store.getSession('handoff-1').workItemId).toBe(handedOff);
     expect((await call('GET', '/api/work-items/w1/events')).statusCode).toBe(404);
   });
 

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { AppError, requireString } from '../errors.js';
 import { launchTarget, reviewComments } from '../orchestration/service.js';
 import { backendVisibleToClient, defaultBackendForClient, projectVisibleToClient, requireProjectVisibleToClient, requireSessionVisibleToClient, sessionVisibleToClient, visibleLaunchTargetForClient } from '../native/client-features.js';
-import type { Automation } from '../../../../packages/contracts/src/index.js';
+import type { Automation, Session } from '../../../../packages/contracts/src/index.js';
 import type { RouteDeps } from './deps.js';
 
 type Body = Record<string, unknown>;
@@ -31,6 +31,12 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     const session=store.getSession(request.params.id);
     return (await git.checkpoints(store.getProject(session.projectId))).filter(item=>item.sessionId===session.id&&item.runId);
   });
+  // A fork or handoff of a task's conversation gets a task of its own, so their statuses move apart.
+  const attachOwnTask = (session: Session, source: Session) => {
+    if (!source.workItemId) return;
+    const project = store.getProject(session.projectId);
+    workItems.createFromSession(session, project.system ? undefined : project.id);
+  };
   app.post<{Params:{id:string};Body:Body}>('/api/sessions/:id/fork',async(request,reply)=>{
     const body=request.body??{};
     reply.code(202);
@@ -39,8 +45,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     const target=requested?{...requested,backendId:requested.backendId??await fallbackTarget(request)}:undefined;
     return orchestration.fork(request.params.id,{...ids(body),...(optionalText(body.runId,'runId',100)?{runId:body.runId as string}:{}),
       ...(target?{target}:{}),isolate:body.isolate===true,...(optionalText(body.note,'note',20_000)?{note:body.note as string}:{}),
-      // A fork of a task's conversation is a task of its own, so their statuses move apart.
-      attach:(session,source)=>{if(!source.workItemId)return;const project=store.getProject(session.projectId);workItems.createFromSession(session,project.system?undefined:project.id);}});
+      attach:attachOwnTask});
   });
   /** Can take a model's full answer; a reader who closes the dialog stops it. */
   app.post<{Params:{id:string};Body:Body}>('/api/sessions/:id/handoff/draft',async(request,reply)=>{
@@ -56,7 +61,7 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     const body=request.body??{};
     reply.code(202);
     return orchestration.handoff(request.params.id,{...ids(body),target:visibleLaunchTargetForClient(request.headers,launchTarget(body.target)),...(optionalText(body.note,'note',20_000)?{note:body.note as string}:{}),
-      ...(optionalText(body.text,'text',200_000)?{text:body.text as string}:{})});
+      ...(optionalText(body.text,'text',200_000)?{text:body.text as string}:{}),attach:attachOwnTask});
   });
 
   app.get<{Params:{id:string}}>('/api/projects/:id/attempts',async(request)=>{
