@@ -121,7 +121,7 @@ export class Consolidation {
     const messages = this.deps.store.indexedMessages(target.mainSessionId).filter(message => message.kind !== 'tool' && (!since || message.at > since));
     if (!messages.length) return;
     // The newest are kept when it is too much: older ones were there for an earlier night.
-    const rendered = messages.map(message => `[${message.at.slice(0, 16).replace('T', ' ')}] ${message.kind === 'user' ? '用户' : '助理'}：${clip(message.text.trim().replace(/<\/?riffet-context>/g, ''), MESSAGE_CHARS)}`);
+    const rendered = messages.map(message => `[${message.at.slice(0, 16).replace('T', ' ')}] ${message.kind === 'user' ? '用户' : '你'}：${clip(message.text.trim().replace(/<\/?riffet-context>/g, ''), MESSAGE_CHARS)}`);
     let total = 0, first = rendered.length;
     while (first > 0 && total + rendered[first - 1]!.length <= ASSISTANT_BUDGET.consolidationChars) total += rendered[--first]!.length + 2;
     if (first === rendered.length) first = rendered.length - 1;

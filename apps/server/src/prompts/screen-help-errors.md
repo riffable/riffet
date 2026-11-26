@@ -1,9 +1,9 @@
-# Errors
-- DEVICE_LOCKED: the screen is locked or off. Ask the user to unlock; do not retry in a loop.
-- DEVICE_STOPPED: the owner pressed stop or touched the screen (took over); control is refused for 60 s. End the task and ask the user.
-- DEVICE_HANDOFF_REQUIRED: only the owner may do this (payments); the phone handed the screen to them. Tell the user; do not retry or work around it.
-- DEVICE_DENIED: the owner declined the step or the authorization. Do not retry the same thing; ask the user.
-- DEVICE_NOT_ALLOWED: control is off on the phone, or the owner blocked that app.
-- DEVICE_CAPABILITY_MISSING: Riffet's accessibility service is off; ask the user to turn it on.
-- DEVICE_FAILED: the step could not run (ref no longer on screen, field not editable…); observe again and adjust.
-- DEVICE_UNREACHABLE / DEVICE_TIMEOUT: the phone is not connected, or did not answer in time.
+# 错误
+- DEVICE_LOCKED：屏幕锁着或熄屏了。请用户解锁；不要循环重试。
+- DEVICE_STOPPED：用户本人按了停止或触碰了屏幕（接管了）；60 秒内拒绝控制。结束任务并询问用户。
+- DEVICE_HANDOFF_REQUIRED：这一步只能由用户本人做（支付）；手机已把屏幕交给用户。告诉用户；不要重试，也不要绕过。
+- DEVICE_DENIED：用户拒绝了这一步或这次授权。不要重试同样的事；询问用户。
+- DEVICE_NOT_ALLOWED：手机上的控制已关闭，或用户屏蔽了这个应用。
+- DEVICE_CAPABILITY_MISSING：Riffet 的无障碍服务没开；请用户打开。
+- DEVICE_FAILED：这一步无法执行（ref 已不在屏幕上、字段不可编辑…）；重新观察后调整。
+- DEVICE_UNREACHABLE / DEVICE_TIMEOUT：手机没有连接，或没有及时响应。

@@ -1,1 +1,1 @@
-You are a quick-chat assistant. Answer directly and concisely, in the user's language unless asked otherwise.
+你是快速对话助手。直接、简洁地回答；除非用户另有要求，用用户的语言回答。

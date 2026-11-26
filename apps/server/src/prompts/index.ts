@@ -29,6 +29,10 @@ export const quickChatSystemPrompt = () => render('quick-chat-system');
 export const assistantInstructions = () => render('assistant');
 export const assistantSystemPrompt = () => render('assistant-system');
 export const historyCompactionPrompt = () => render('history-compaction');
+/** The user message that asks the handoff model for its note; the system prompt is `handoff-summary`. */
+export const handoffRequest = () => render('handoff-request');
+/** The instructions a side discussion starts with: the main conversation and the passage, as reference data. */
+export const chatDiscussionInstructions = (vars: { snapshot: string; quote: string }) => render('chat-discussion', vars);
 /** The first message of one of the 助理's background runs (docs/ASSISTANT.md §7); every value is filled by the server. */
 /** The first message of a task's 核验 (docs/TASK-BOARD.md §6.1). */
 export const taskVerifyBrief = (vars: Record<string, string | number>) => render('task-verify', vars);
@@ -115,6 +119,26 @@ function section(name: PromptName, part: string, vars?: Record<string, string | 
 /** One fragment of the context a continuing conversation starts from, in `language`. */
 export function briefPart(language: BriefLanguage, part: BriefPart, vars?: Record<string, string | number>): string {
   return section(`brief.${language}`, part, vars);
+}
+
+export type MemberEnvironmentPart = 'head' | 'workdirOwn' | 'workdirProject' | 'userReadOnly' | 'userWritable' | 'continuous' | 'fresh';
+/** One part of what a member's system prompt says about its own setting, after the shared `assistant-system` (docs/TEAM.md §3.3). */
+export function memberEnvironmentPart(part: MemberEnvironmentPart, vars?: Record<string, string | number>): string {
+  return section('member-environment', part, vars);
+}
+/** The workbench queries and settings, for a member with `workbenchAdmin`. */
+export const workbenchAdminPrompt = () => render('workbench-admin');
+
+export type AssistantContextPart = 'now' | 'workbench' | 'paired' | 'gap' | 'pending' | 'compact' | 'carried';
+/** One line of the `<riffet-context>` a 助理 or team member conversation is given with a message. */
+export function assistantContextPart(part: AssistantContextPart, vars?: Record<string, string | number>): string {
+  return section('assistant-context', part, vars);
+}
+
+export type SessionReferencePart = 'head' | 'partial' | 'unfinished';
+/** One fragment of what a referenced session puts before its excerpt. */
+export function sessionReferencePart(part: SessionReferencePart, vars?: Record<string, string | number>): string {
+  return section('session-reference', part, vars);
 }
 
 export type TaskPart = 'head' | 'description' | 'criteria' | 'prerequisites' | 'previous' | 'answered' | 'comments' | 'tools' | 'answer' | 'rework';

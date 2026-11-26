@@ -1,5 +1,5 @@
 import { complete, streamComplete, type CompletionMetrics, type CompletionRequest, type GatewayEndpoint, type StreamCompletionRequest } from '../auxiliary/gateway.js';
-import { handoffSummaryPrompt } from '../prompts/index.js';
+import { handoffRequest, handoffSummaryPrompt } from '../prompts/index.js';
 
 /**
  * Sections follow what continuing agents tend to lose (Claude Code's compaction summary, Cline's
@@ -23,7 +23,7 @@ export async function requestHandoffSummary(
     streamComplete?: (request: StreamCompletionRequest) => Promise<string>;
   } = {},
 ): Promise<string> {
-  const content = [material, ...(options.goal ? [`<handoff_goal>\n${options.goal}\n</handoff_goal>`] : []), 'Write the handoff note.'].join('\n\n');
+  const content = [material, ...(options.goal ? [`<handoff_goal>\n${options.goal}\n</handoff_goal>`] : []), handoffRequest()].join('\n\n');
   const raw = options.onDelta && !options.complete
     ? await (options.streamComplete ?? streamComplete)({
       ...endpoint, system: handoffSummaryPrompt(), content, maxOutputTokens: MAX_OUTPUT_TOKENS, timeoutMs: TIMEOUT_MS, onDelta: options.onDelta,

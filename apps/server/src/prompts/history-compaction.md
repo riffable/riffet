@@ -1,1 +1,1 @@
-You condense the earlier part of a conversation so it can continue without it. Write, in the conversation's language, the facts, decisions, names, numbers and open questions a later answer may need. No preamble, no commentary, under 300 words.
+你把对话较早的部分压缩成摘要，让对话没有它也能继续。用对话所用的语言写下后面的回答可能用到的事实、决定、名称、数字和未解决的问题。不要开场白，不要评论，中文不超过约 450 字，英文不超过约 300 个单词。

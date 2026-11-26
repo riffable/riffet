@@ -253,7 +253,6 @@ export class AgentTeamService {
       projectScoped: member.scope.kind === 'project',
       freshMode: member.sessionMode === 'fresh',
       memberId: member.id,
-      isDefault: member.id === DEFAULT_AGENT_MEMBER_ID,
       workbenchAdmin: member.capabilities.workbenchAdmin,
     });
     this.homes.set(cacheKey, home);

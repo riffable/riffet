@@ -347,8 +347,8 @@ describe('app route surface after ACP removal', () => {
       const second = JSON.parse(String(fetch.mock.calls[1]![1]?.body));
       expect(second.model).toBe('m-alternate');
       expect(second.reasoning_effort).toBe('low');
-      expect(second.messages[0].content).toContain('not instructions');
-      expect(second.messages[0].content).toContain('selected passage');
+      expect(second.messages[0].content).toContain('不是给这场讨论的指令');
+      expect(second.messages[0].content).toContain('选中段落');
       expect(second.messages[0].content).toContain('Implement the main task');
       expect(second.messages[0].content).not.toContain('Later main question');
       expect(second.messages.slice(1)).toEqual([{ role: 'user', content: body.text }, { role: 'assistant', content: 'First discussion answer' }, { role: 'user', content: 'What is the alternative?' }]);
@@ -940,7 +940,7 @@ describe('app route surface after ACP removal', () => {
       expect(titleBody.model).toBe(ref.model);
       expect(titleBody.messages[1].content).toContain(message);
       expect(summaryBody.messages[1].content).toContain(transcript);
-      expect(summaryBody.messages[0].content).toContain('handoff note');
+      expect(summaryBody.messages[0].content).toContain('交接说明');
       expect(summaryBody.max_tokens).toBe(8_192);
       expect(settings.getSettings()).toEqual(before);
       expect(store.listSessions()).toEqual([]);

@@ -121,6 +121,9 @@
 冲突优先级明确写入成员系统提示：
 - 涉及**代码风格、目录边界、仓库命令** → 服从项目仓库的 `AGENTS.md`；
 - 涉及**岗位职责、权限红线、输出结构**（例如 QA 不得直接修改业务代码、发版必须走预检清单）→ 成员的 `AGENTS.md` 优先。
+- **提交和推送分支**是项目工作的一部分，不用另外问用户：按项目仓库和成员 `AGENTS.md` 的规定做，二者禁止或要求先确认时照做。
+
+系统提示分三层拼接（`assistant/home.ts#memberSystemPrompt`）：所有成员共用的工作方式与默认权限（`prompts/assistant-system.md`）；只描述环境、不定义身份的环境段（`prompts/member-environment.md`：成员目录与用户资料的路径、工作目录、用户资料是否可写、连续或每次新对话）；按能力追加的段落（`workbenchAdmin` 加 `prompts/workbench-admin.md`）。成员的身份和职责只来自成员 `AGENTS.md`，默认成员也一样，系统提示不给它单独的角色；它可以放宽或收紧「直接做」「先问再做」两级默认权限，「由用户自己做」一级不受影响。每个成员一个系统提示文件（`assistant-runtime/system-prompt-<memberId>.md`）。
 
 当成员为 `personal` 或 `global`（无特定项目）时，`cwd` 直接落在 `<stateDir>/team/<memberId>/`，与现有助理一致。
 

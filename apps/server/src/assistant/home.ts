@@ -3,7 +3,7 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, rea
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { AssistantFile, AssistantMemory } from '../../../../packages/contracts/src/index.js';
-import { assistantSystemPrompt, riffetSkills } from '../prompts/index.js';
+import { assistantSystemPrompt, memberEnvironmentPart, riffetSkills, workbenchAdminPrompt } from '../prompts/index.js';
 import { SERVER_VERSION } from '../version.js';
 
 /*
@@ -16,8 +16,8 @@ const run = promisify(execFile);
 const USER_FILE = 'USER.md';
 const MEMORY_DIR = 'memory';
 const MEMORY_INDEX = 'MEMORY.md';
-const USER_SEED = '# Owner\n\n<!-- Who the owner is and how they want to be helped. The assistant keeps this short. -->\n';
-const MEMORY_SEED = '# Memory\n\n<!-- One line per entry. Details live in topic files beside this one. -->\n';
+const USER_SEED = '# 用户\n\n<!-- 用户是谁、希望怎么被帮助：稳定的事实和偏好，保持简短。 -->\n';
+const MEMORY_SEED = '# 记忆\n\n<!-- 每条一行；细节写在旁边的主题文件里。 -->\n';
 /** The CLI's own per-machine files, which are not the 助理's notes. */
 const IGNORED = '.claude/settings.local.json\n.cursor/\n';
 /**
@@ -61,8 +61,10 @@ export interface MemberHomeOptions {
   projectScoped?: boolean;
   /** Whether each invocation starts a fresh isolated conversation (`sessionMode === 'fresh'`). */
   freshMode?: boolean;
-  /** Member display name for contextual system prompt guidance. */
-  memberName?: string;
+  /** The member the directory belongs to; names its system prompt file. */
+  memberId?: string;
+  /** Whether the member may query and change the workbench (`capabilities.workbenchAdmin`). */
+  workbenchAdmin?: boolean;
 }
 
 /** Path to the cross-member read-only owner profile (docs/TEAM.md §3.1). */
@@ -105,25 +107,19 @@ export function writeGlobalUserProfile(stateDir: string, text: string): { text: 
   return { text: normalized, updatedAt: stat.mtime.toISOString() };
 }
 
-function memberSystemPrompt(options: MemberHomeOptions): string {
-  const parts = [assistantSystemPrompt()];
-  if (options.projectScoped) {
-    parts.push(
-      '## Project-Scoped Member Rules',
-      '- You are a dedicated team member working inside a bound code project directory.',
-      '- Follow the repository\'s `AGENTS.md` / `CLAUDE.md` for code conventions, architecture, and build/test commands.',
-      '- Follow your own member `AGENTS.md` for your role mandate, review/release standards, permission red lines, and output format; where role boundaries conflict with general coding defaults, your member mandate takes precedence.',
-      '- Store durable project operational facts, environment quirks, verified baselines (e.g., last verified commit or release version), and recurring pitfalls inside your own memory directory — do not modify the shared global `USER.md`.',
-    );
-  }
-  if (options.freshMode) {
-    parts.push(
-      '## Fresh-Run Memory Handover',
-      '- Each invocation of your role starts in a fresh conversation without prior chat history.',
-      '- Before delivering your final answer, update your memory files (`MEMORY.md` and topic files in your memory directory) with any newly discovered environment facts, workarounds, or updated baselines so the next run does not repeat exploration.',
-    );
-  }
-  parts.push('- The shared global `USER.md` is read-only owner context; never edit or overwrite it directly.');
+/**
+ * The shared way of working, then what holds for this member only: where its directory and the owner's profile are,
+ * what its working directory is, and whether it is one long conversation. Who a member is comes from its `AGENTS.md`
+ * alone; the default member is not set apart.
+ */
+function memberSystemPrompt(options: MemberHomeOptions, memberDir: string, userFile: string, userWritable: boolean): string {
+  const environment = [
+    memberEnvironmentPart('head', { memberDir, userFile }),
+    memberEnvironmentPart(options.projectScoped ? 'workdirProject' : 'workdirOwn'),
+    memberEnvironmentPart(userWritable ? 'userWritable' : 'userReadOnly'),
+    memberEnvironmentPart(options.freshMode ? 'fresh' : 'continuous'),
+  ].join('\n');
+  const parts = [assistantSystemPrompt(), environment, ...(options.workbenchAdmin ? [workbenchAdminPrompt()] : [])];
   return `${parts.join('\n\n')}\n`;
 }
 
@@ -136,17 +132,14 @@ export function ensureMemberHome(stateDir: string, cwd: string, options: MemberH
   seed(join(cwd, '.gitignore'), IGNORED);
   const runtimeDir = join(stateDir, 'assistant-runtime');
   mkdirSync(runtimeDir, { recursive: true, mode: 0o700 });
-  const variant = `${options.projectScoped ? 'project' : 'standing'}-${options.freshMode ? 'fresh' : 'continuous'}`;
-  const systemPromptFile = join(runtimeDir, options.projectScoped || options.freshMode ? `system-prompt-${variant}.md` : 'system-prompt.md');
-  const text = options.projectScoped || options.freshMode || options.globalUserFile
-    ? memberSystemPrompt(options)
-    : `${assistantSystemPrompt()}\n`;
-  if (read(systemPromptFile) !== text) writeFileSync(systemPromptFile, text, { mode: 0o600 });
   const pluginDir = join(runtimeDir, 'riffet');
   writeSkillPlugin(pluginDir);
   const mcp = join(cwd, '.mcp.json');
   const globalUserFile = options.globalUserFile && existsSync(options.globalUserFile) ? options.globalUserFile : undefined;
   const userFile = globalUserFile ?? join(cwd, USER_FILE);
+  const systemPromptFile = join(runtimeDir, `system-prompt-${/^[\w-]+$/.test(options.memberId ?? '') ? options.memberId : 'assistant'}.md`);
+  const text = memberSystemPrompt(options, cwd, userFile, !globalUserFile);
+  if (read(systemPromptFile) !== text) writeFileSync(systemPromptFile, text, { mode: 0o600 });
   const protectedFiles = [
     ...PROTECTED.map(file => join(cwd, file)),
     ...(globalUserFile ? [globalUserFile] : []),
@@ -159,7 +152,7 @@ export function ensureMemberHome(stateDir: string, cwd: string, options: MemberH
 
 /** The files a conversation of the 助理 starts with; each is written only when missing. */
 export function ensureAssistantHome(stateDir: string, cwd: string): AssistantHome {
-  return ensureMemberHome(stateDir, cwd);
+  return ensureMemberHome(stateDir, cwd, { workbenchAdmin: true });
 }
 
 /** The pack folders that are plugins; each one's memory seed is written once, beside the index, as `<pack>.md`. */
