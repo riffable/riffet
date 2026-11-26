@@ -2,6 +2,7 @@ import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { LaunchTarget, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
 import { api } from '@/lib/api';
+import { backendSelection } from '@/lib/backends';
 import { cachedCatalog, rememberCatalog } from '@/lib/catalog-cache';
 import { catalogParams, catalogSelection, parseSelection, pickedSelection } from '@/lib/models';
 import { cleanLabel } from '@/lib/utils';
@@ -106,12 +107,13 @@ export function LaunchTargetBar({ value, onChange, backends, catalogs, pending, 
   const key = catalogKey(projectId, backendId, value.profileId);
   const catalog = catalogs.get(key);
   const capabilities = catalog?.capabilities ?? entry?.capabilities;
-  const models: Choice[] = [{ id: '', label: t`默认模型` }, ...(catalog?.models ?? []).map((model) => ({ id: model.value, label: cleanLabel(model.name) }))];
-  // The model selection carries its parameters (effort, fast, …) in the same string the
-  // session composer submits; the picker edits them through the catalog's own definitions.
-  const parsedModel = parseSelection(value.model ?? '');
-  const selectedModel = (catalog?.models ?? []).some((model) => model.value === parsedModel.model) ? parsedModel.model : '';
-  const modelParams = catalog ? catalogParams(catalog.models, selectedModel, parsedModel.params) : [];
+  const catalogModels = catalog?.models ?? [];
+  const models: Choice[] = [{ id: '', label: t`默认模型` }, ...catalogModels.map((model) => ({ id: model.value, label: cleanLabel(model.name) }))];
+  // Normalize native variant ids (e.g. `gemini-4-neon-high`) back to the catalog's family model
+  // and config options so picking a variant-grouped model highlights the family and shows its params.
+  const parsedModel = parseSelection(value.model ? backendSelection(backendId, catalogModels, value.model) : '');
+  const selectedModel = catalogModels.some((model) => model.value === parsedModel.model) ? parsedModel.model : '';
+  const modelParams = catalog ? catalogParams(catalogModels, selectedModel, parsedModel.params) : [];
   const modes = capabilities?.modes ?? [];
   const permissions = capabilities?.permissions ?? [];
   return (
@@ -120,7 +122,7 @@ export function LaunchTargetBar({ value, onChange, backends, catalogs, pending, 
       {entry && entry.profiles.length > 1 && (
         <ProfilePicker profiles={entry.profiles} value={value.profileId} disabled={disabled} onChange={(profileId) => onChange({ profileId, model: undefined })} />
       )}
-      <ModelPicker side="bottom" models={models} value={selectedModel} params={modelParams} placeholder={t`默认模型`} loading={pending.has(key) && !catalog} disabled={disabled || (pending.has(key) && !catalog)} refreshCatalog={() => refreshCatalog?.(backendId, value.profileId)} usageScopeKey={`${backendId}|${value.profileId ?? ''}`} onChange={(id) => onChange({ model: id ? pickedSelection(catalog?.models ?? [], id, parsedModel.params) : undefined })} onParamChange={(id, next) => { if (selectedModel) onChange({ model: catalogSelection(catalog?.models ?? [], selectedModel, { ...parsedModel.params, [id]: next }, id) }); }} />
+      <ModelPicker side="bottom" models={models} value={selectedModel} params={modelParams} placeholder={t`默认模型`} loading={pending.has(key) && !catalog} disabled={disabled || (pending.has(key) && !catalog)} refreshCatalog={() => refreshCatalog?.(backendId, value.profileId)} usageScopeKey={`${backendId}|${value.profileId ?? ''}`} onChange={(id) => onChange({ model: id ? pickedSelection(catalogModels, id, parsedModel.params) : undefined })} onParamChange={(id, next) => { if (selectedModel) onChange({ model: catalogSelection(catalogModels, selectedModel, { ...parsedModel.params, [id]: next }, id) }); }} />
       {showMode && capabilities?.supportsModeSelection && modes.length > 0 && (
         <ModePicker modes={modes} value={value.mode ?? modes.find((mode) => mode.id === 'agent')?.id ?? modes[0]?.id} disabled={disabled} onChange={(id) => onChange({ mode: id })} />
       )}

@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import { catalogEntry, catalogParams, catalogSelection, parseSelection, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { IconMessageSquareText } from '@/components/icons';
-import { agentMarkStyle, useBackendLabel } from '@/lib/backends';
+import { agentMarkStyle, backendSelection, useBackendLabel } from '@/lib/backends';
 import { cleanLabel } from '@/lib/utils';
 import { useAgentModels } from './agentModels';
 import type { ModelProviderChoices } from './ModelPicker';
@@ -81,9 +81,10 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
   };
   const workers = backends.filter((entry) => (quickChat || entry.backendId !== 'chat') && entry.available !== false);
   const providers: ModelProviderChoices[] | undefined = agents ? workers.flatMap(providersOf) : backend && profiles.length ? providersOf(backend) : undefined;
-  // The saved model names the model alone; its parameters ride along when another model is picked.
-  const saved = parseSelection(choice?.model);
-  const savedModel = backendId && saved.model ? catalogEntry(agentModels.read(backendId, activeProfileId) ?? [], saved.model)?.value ?? saved.model : saved.model;
+  const catalog = backendId ? agentModels.read(backendId, activeProfileId) ?? [] : [];
+  // Normalize native variant ids back to family model + params so effort/fast/context controls stay in sync.
+  const saved = parseSelection(backendId && choice?.model ? backendSelection(backendId, catalog, choice.model) : choice?.model);
+  const savedModel = backendId && saved.model ? catalogEntry(catalog, saved.model)?.value ?? saved.model : saved.model;
   const withProfile = profiles.length ? activeProfileId : undefined;
   const value = backendId && savedModel ? choiceId(backendId, withProfile, savedModel) : undefined;
   /** A model found beside others is filed under its agent, and its provider where the agent has several. */
@@ -102,7 +103,6 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
   };
 
   /** The saved model's parameters (effort, Fast…), for a form that keeps them; see `withParam`. */
-  const catalog = backendId ? agentModels.read(backendId, activeProfileId) ?? [] : [];
   const params = savedModel ? catalogParams(catalog, savedModel, saved.params) : [];
   /** The choice with one parameter changed, as the composer's model menu changes it. */
   const withParam = (id: string, next: string): AgentModelValue | undefined => !backendId || !savedModel ? undefined
