@@ -50,14 +50,14 @@ const Plan = memo(function Plan({ goal, todos }: { goal?: SessionGoal; todos: To
       {goal?.objective && <p className={cn('mb-2 line-clamp-4 px-2 text-sm text-fg-2 wrap-anywhere', goal.status === 'blocked' && 'text-warning')} title={goal.objective}>{goal.objective}</p>}
       {goal?.status === 'blocked' && goal.reason && <p className="mb-2 line-clamp-3 px-2 text-2xs text-warning">{goal.reason}</p>}
       {todos.length > 0 && (
-        <ul className="flex flex-col">
+        <ul className="flex flex-col gap-1">
           {folds && settled.length > 0 && (
             <li><button type="button" onClick={() => setExpanded(true)} className={foldButton}><span className="flex h-5 shrink-0 items-center"><TodoMark status="completed" /></span><Trans>已完成 {settled.length} 项</Trans></button></li>
           )}
           {visible.map((todo, index) => (
             <li key={`${todo.content}:${index}`} className="flex min-w-0 items-start gap-2.5 px-2 py-1 text-sm" title={todo.content}>
               <span className="flex h-5 shrink-0 items-center"><TodoMark status={todo.status} /></span>
-              <span className={cn('min-w-0 flex-1 wrap-anywhere', todo.status === 'in_progress' ? 'line-clamp-4 font-medium text-fg' : 'line-clamp-2', todo.status === 'pending' ? 'text-fg-2' : todo.status !== 'in_progress' && 'text-fg-4', todo.status === 'cancelled' && 'line-through')}>{todo.content}</span>
+              <span className={cn('line-clamp-2 min-w-0 flex-1 wrap-anywhere', todo.status === 'in_progress' ? 'text-fg' : todo.status === 'pending' ? 'text-fg-3' : 'text-fg-4', todo.status === 'cancelled' && 'line-through')}>{todo.content}</span>
             </li>
           ))}
           {hiddenOpen > 0 && <li><button type="button" onClick={() => setExpanded(true)} className={cn(foldButton, 'pl-8')}><Trans>还有 {hiddenOpen} 项</Trans></button></li>}

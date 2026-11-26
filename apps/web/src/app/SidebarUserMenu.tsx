@@ -108,33 +108,26 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, inboxCount = 0,
           </span>
           <IconChevronRight className="size-3.5 text-fg-4" />
         </DropdownMenuItem>
-        {onOpenInbox && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onOpenInbox} textValue={t`收件箱`}>
-              <IconInbox />
-              <span className="min-w-0 flex-1 truncate"><Trans>收件箱</Trans></span>
-              {inboxCount > 0 && (
-                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-2xs font-medium leading-none tabular-nums text-danger-fg">
-                  {badgeText}
-                </span>
-              )}
-            </DropdownMenuItem>
-          </>
-        )}
         <DropdownMenuSeparator />
+        {onOpenInbox && (
+          <DropdownMenuItem onSelect={onOpenInbox} textValue={t`收件箱`}>
+            <IconInbox />
+            <span className="min-w-0 flex-1 truncate"><Trans>收件箱</Trans></span>
+            {inboxCount > 0 && (
+              <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-2xs font-medium leading-none tabular-nums text-danger-fg">
+                {badgeText}
+              </span>
+            )}
+          </DropdownMenuItem>
+        )}
         <ThemeMenu onOpenTheme={onOpenTheme} />
         {mobile && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={onOpenSettings} textValue={t`设置`}>
-              <IconSettings />
-              <span className="min-w-0 flex-1 truncate"><Trans>设置</Trans></span>
-              {backendNotice && <StatusDot tone="warning" />}
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem onSelect={onOpenSettings} textValue={t`设置`}>
+            <IconSettings />
+            <span className="min-w-0 flex-1 truncate"><Trans>设置</Trans></span>
+            {backendNotice && <StatusDot tone="warning" />}
+          </DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
         <MenuSub icon={<HostIcon className={offline ? 'text-warning' : undefined} />} label={hostLabel} value={offline ? t`无法连接服务器` : stale ? t`正在同步` : address} className="w-64">
           <DropdownMenuLabel>{hostLabel}</DropdownMenuLabel>
           <p className="px-2 pb-1 font-mono text-xs text-fg-2 wrap-anywhere">{address}</p>
