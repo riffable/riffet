@@ -10693,6 +10693,10 @@ msgstr "Default model"
 msgid "默认菜单"
 msgstr "Default menu"
 
+#: src/app/settings/channels/BotDetail.tsx
+msgid "默认项目"
+msgstr "Default project"
+
 #: src/app/design/android/notes.ts
 msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
 msgstr "The default style. Ink in place of the accent, layers told apart by tone instead of lines, regular-weight rows, with weight kept for titles and unread items."

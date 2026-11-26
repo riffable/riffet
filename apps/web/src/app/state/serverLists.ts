@@ -191,6 +191,7 @@ export function createServerLists(deps: ListsDeps) {
     onDevices: entry.onDevices,
     onChannels: entry.onChannels,
     onPluginApprovals: entry.onPluginApprovals,
+    onInbox: entry.onInbox,
     onCouncil: entry.onCouncil,
     onServers: entry.onServers,
     onSecurity: entry.onSecurity,

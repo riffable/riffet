@@ -430,8 +430,82 @@ export interface PluginHost {
     complete(request: ModelCompletionRequest): Promise<string>;
     stream?(request: ModelStreamRequest): Promise<string>;
   };
+  /**
+   * Lists available Agents, Team Members (`AgentMember`) and open projects, and runs a full agent turn returning its
+   * final Markdown answer and `sessionId` (docs/PLUGIN_ARCHITECTURE.md). The conversation is real and inspectable in
+   * Riffet. In-process packages only (built-in, development, explicitly trusted installs); absent for isolated installs
+   * and on a host that predates it.
+   */
+  agents?: PluginAgentHost;
   /** An error whose message reaches the client unchanged when `statusCode` is below 500. */
   error(code: string, message: string, statusCode?: number): Error;
+}
+
+export interface PluginAgentBackendSummary {
+  id: NativeBackendId;
+  label: string;
+  available: boolean;
+  defaultModel?: string;
+}
+
+export interface PluginAgentMemberSummary {
+  id: string;
+  name: string;
+  description?: string;
+  scope: 'global' | 'personal' | 'project';
+  projectIds?: string[];
+  backendId?: NativeBackendId;
+  model?: string;
+}
+
+export interface PluginAgentProjectSummary {
+  id: string;
+  name: string;
+  cwd: string;
+}
+
+export interface PluginAgentTarget {
+  /** Run as a Riffet Team Member (uses its AGENTS.md, memory, skills, MCP, and default agent/model). */
+  memberId?: string;
+  /** Or run with a specific Agent backend (e.g. `claude`, `codex`, `cursor`) and optional profile/model. */
+  backendId?: NativeBackendId;
+  profileId?: string;
+  model?: string;
+  /** Required when running without `memberId`; optional override for project-scoped members. */
+  projectId?: string;
+  /** Optional permission mode override (e.g. `read-only`, `dontAsk`). */
+  approval?: string;
+  /** Continue an existing non-archived session instead of creating a new one. */
+  sessionId?: string;
+  /** Optional title when opening a fresh session. */
+  title?: string;
+}
+
+export interface PluginAgentRunRequest {
+  target: PluginAgentTarget;
+  /** Full prompt text (may combine custom instructions, external context, and user input). */
+  prompt: string;
+  /** Optional idempotency key for this turn; defaults to a generated UUID. */
+  commandId?: string;
+  /** Max wait before aborting the wait (default 5 min, max 15 min). */
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
+export interface PluginAgentRunResult {
+  sessionId: string;
+  runId: string;
+  status: 'completed' | 'failed' | 'cancelled' | 'interrupted';
+  /** Clean final assistant Markdown answer from the turn's timeline. */
+  answer: string;
+  error?: string;
+}
+
+export interface PluginAgentHost {
+  listBackends(): Promise<PluginAgentBackendSummary[]>;
+  listMembers(): PluginAgentMemberSummary[];
+  listProjects(): PluginAgentProjectSummary[];
+  run(request: PluginAgentRunRequest): Promise<PluginAgentRunResult>;
 }
 
 /** `host.code`. `projectId` is a project of this server; an agent tool passes its context's. */

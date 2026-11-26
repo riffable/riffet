@@ -127,6 +127,14 @@ msgstr "保存为 AGENTS.md，下次启动时生效"
 msgid "停下待处理"
 msgstr "停下待处理"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "全部"
+msgstr "全部"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "全部标为已读"
+msgstr "全部标为已读"
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "全部项目"
 msgstr "全部项目"
@@ -159,6 +167,10 @@ msgstr "写下回答…"
 msgid "写评论…"
 msgstr "写评论…"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "切换到「全部」可查看历史消息"
+msgstr "切换到「全部」可查看历史消息"
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "列表"
 msgstr "列表"
@@ -166,6 +178,10 @@ msgstr "列表"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "创建"
 msgstr "创建"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "删除"
+msgstr "删除"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "删除…"
@@ -267,6 +283,10 @@ msgstr "完成标准，一条一行"
 msgid "定时 {0}"
 msgstr "定时 {0}"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "定时提醒"
+msgstr "定时提醒"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "定时检查"
 msgstr "定时检查"
@@ -304,10 +324,19 @@ msgstr "开启追踪"
 msgid "开始"
 msgstr "开始"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "待你确认"
+msgstr "待你确认"
+
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-status"
 msgid "待办"
 msgstr "待办"
+
+#: src/app/work-items/WorkItemOverview.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "待处理"
+msgstr "待处理"
 
 #: src/app/work-items/PlanDock.tsx
 msgid "待开始的任务"
@@ -349,6 +378,10 @@ msgstr "恢复默认"
 msgid "成功"
 msgstr "成功"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "成员消息"
+msgstr "成员消息"
+
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-assignee"
 msgid "我"
@@ -358,6 +391,8 @@ msgstr "我"
 msgid "或者写下回答…"
 msgstr "或者写下回答…"
 
+#: src/app/work-items/ApprovalRow.tsx
+#: src/app/work-items/InboxPage.tsx
 #: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -396,6 +431,10 @@ msgstr "提问"
 msgid "提问：{0}"
 msgstr "提问：{0}"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "插件待确认操作，以及团队成员主动发给你的重要消息会出现在这里"
+msgstr "插件待确认操作，以及团队成员主动发给你的重要消息会出现在这里"
+
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "搜索任务"
@@ -405,10 +444,13 @@ msgstr "搜索任务"
 msgid "搜索任务、#编号…"
 msgstr "搜索任务、#编号…"
 
-#: src/app/work-items/WorkItemOverview.tsx
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/InboxPage.tsx
 msgid "收件箱"
 msgstr "收件箱"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "收件箱为空"
+msgstr "收件箱为空"
 
 #: src/app/work-items/ApprovalRow.tsx
 #: src/app/work-items/WorkItemPanel.tsx
@@ -523,9 +565,25 @@ msgstr "更多操作"
 msgid "有新结果"
 msgstr "有新结果"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "未处理"
+msgstr "未处理"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "未处理 ({unreadTotal})"
+msgstr "未处理 ({unreadTotal})"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "未读"
+msgstr "未读"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "未达成"
 msgstr "未达成"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "标为已读"
+msgstr "标为已读"
 
 #: src/app/work-items/parts.tsx
 msgid "标准 {met}/{total}"
@@ -560,9 +618,17 @@ msgstr "核验失败"
 msgid "核验通过"
 msgstr "核验通过"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "没有匹配的条目"
+msgstr "没有匹配的条目"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "没有可选的任务"
 msgstr "没有可选的任务"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "没有未处理的条目"
+msgstr "没有未处理的条目"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "活动"
@@ -646,9 +712,14 @@ msgstr "等 #{0}"
 msgid "等 #{0} +{1}"
 msgstr "等 #{0} +{1}"
 
+#: src/app/work-items/InboxPage.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "筛选"
 msgstr "筛选"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "筛选收件箱"
+msgstr "筛选收件箱"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "绑定助理自动追踪"
@@ -834,6 +905,10 @@ msgstr "退出码 {0}"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "重新打开"
 msgstr "重新打开"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "重要消息"
+msgstr "重要消息"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx

@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { useLingui } from '@lingui/react/macro';
 import type { PluginApproval, PluginApprovalAction } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { IconShieldCheck } from '@/components/icons';
+import { IconMessageSquareText, IconShieldCheck } from '@/components/icons';
 import { relativeTime } from '@/lib/i18n/format';
 import { localizedText } from '@/lib/plugins';
 import { toast } from '@/lib/toast';
@@ -18,7 +18,7 @@ const COLLAPSED_BODY = 'max-h-[4.5rem] overflow-hidden';
  * A plugin's pending write, waiting in the inbox's 要你回答 for a button (docs/TASK-BOARD.md §7). The plugin does the
  * write when one is pressed; a refusal is shown and the row stays, so the owner can press again.
  */
-export function ApprovalRow({ approval }: { approval: PluginApproval }) {
+export function ApprovalRow({ approval, onOpenSession }: { approval: PluginApproval; onOpenSession?: (sessionId: string) => void }) {
   const { t } = useLingui();
   const { approvals } = useStores();
   const [busy, setBusy] = useState<string>();
@@ -70,6 +70,12 @@ export function ApprovalRow({ approval }: { approval: PluginApproval }) {
               {action.label}
             </Button>
           ))}
+          {approval.sessionId && onOpenSession && (
+            <Button size="sm" variant="quiet" onClick={() => onOpenSession(approval.sessionId!)}>
+              <IconMessageSquareText />
+              {t`打开会话`}
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -102,6 +102,8 @@ export interface PluginRegistryOptions {
   emitAssistantEvent?: Parameters<typeof createPluginHost>[1]['emitAssistantEvent'];
   /** `host.approvals` of an in-process plugin: the inbox's approvals, keyed by plugin. */
   approvals?: Parameters<typeof createPluginHost>[1]['approvals'];
+  /** `host.agents` of an in-process plugin: lists Agents/Team Members/projects and runs a turn returning the final answer. */
+  agents?: Parameters<typeof createPluginHost>[1]['agents'];
 }
 
 /**
@@ -136,6 +138,7 @@ export class PluginRegistry {
   private readonly hostOptions: Parameters<typeof createPluginHost>[1];
   private readonly emitAssistantEvent?: Parameters<typeof createPluginHost>[1]['emitAssistantEvent'];
   private readonly approvals?: Parameters<typeof createPluginHost>[1]['approvals'];
+  private readonly agents?: Parameters<typeof createPluginHost>[1]['agents'];
   /** Why a plugin's capability pack is not installed, by plugin id; set by whoever installs packs (`setAssistantPackProblem`). */
   private readonly packProblems = new Map<string, string>();
   /** Development and installed packages are loaded once, before anything evaluates. */
@@ -170,6 +173,7 @@ export class PluginRegistry {
     this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}), ...(options.code ? { code: options.code } : {}), ...(options.completeModel ? { completeModel: options.completeModel } : {}), ...(options.streamModel ? { streamModel: options.streamModel } : {}) };
     if (options.emitAssistantEvent) this.emitAssistantEvent = options.emitAssistantEvent;
     if (options.approvals) this.approvals = options.approvals;
+    if (options.agents) this.agents = options.agents;
     this.runningTasks = options.runningTasks ?? (() => 0);
     this.statusTimeoutMs = options.statusTimeoutMs ?? STATUS_TIMEOUT_MS;
     this.packages = new PackageStore(options.stateDir);
@@ -733,7 +737,11 @@ export class PluginRegistry {
       if (failure) throw failure;
     }
     // A setting a source reads can change its catalog without changing whether it is on.
-    if (patch.settings || patch.secrets) { if (entry.active) this.invalidate(); this.changed(); }
+    if (patch.settings || patch.secrets) {
+      const hasModelSources = Boolean(entry.plugin.manifest.contributes?.modelSources?.length || entry.active?.contributions?.modelSources?.length);
+      if (entry.active && hasModelSources) this.invalidate();
+      this.changed();
+    }
     return descriptorsApi.describeEntry(this.ctx, entry);
   }
 
@@ -774,6 +782,7 @@ export class PluginRegistry {
       ownModelUses: manifest.contributes?.modelUses ?? [],
       invalidateViews,
       ...(this.approvals ? { approvals: this.approvals } : {}),
+      ...(this.agents ? { agents: this.agents } : {}),
       ...(this.emitAssistantEvent ? { emitAssistantEvent: this.emitAssistantEvent, ownAssistantEvents: (manifest.contributes?.assistantEvents ?? []).map(declared => declared.id) } : {}),
       service: (pluginId, name, range) => this.serviceOf(manifest.id, pluginId, name, range),
     });

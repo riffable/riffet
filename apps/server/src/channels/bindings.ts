@@ -37,6 +37,8 @@ export interface StoredAccount {
   source?: 'scan' | 'manual';
   /** Only what was changed from the defaults; read through `mergeCard`. */
   card?: CardPatch;
+  /** Fallback project for chats under this account that have not bound a project of their own. */
+  defaultProjectId?: string;
 }
 
 /** Normalizes a stored account from either the legacy Feishu shape or the generic `config` shape. */
@@ -193,7 +195,7 @@ export class ChannelBindings {
   }
   bind(address: ChannelAddress, flat: boolean, sessionId: string, anchorMessageId?: string): void {
     const all = this.read<StoredConversation>('conversations');
-    const { aliases: _aliases, ...primary } = address;
+    const { aliases: _aliases, chatName: _chatName, ...primary } = address;
     for (const key of addressKeys(address, flat)) all[key] = { sessionId, address: primary, ...(anchorMessageId ? { anchorMessageId } : {}) };
     this.write('conversations', all);
   }

@@ -13,7 +13,7 @@ type ActivityDay = Overview['days'][number];
 
 export function WorkItemOverview({ data }: { data: Overview }) {
   const { t } = useLingui();
-  const facts = [[t`收件箱`, data.inbox], [t`运行中`, data.running], [t`关联会话`, data.conversations]] as const;
+  const facts = [[t`待处理`, data.inbox], [t`运行中`, data.running], [t`关联会话`, data.conversations]] as const;
   return (
     <ChartCard title={t`任务概览`} className="mb-5 h-auto gap-4 p-5 max-md:p-4 @container" actions={
       <dl className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs max-md:gap-x-3">

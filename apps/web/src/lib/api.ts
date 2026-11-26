@@ -4,7 +4,7 @@ import { withShownTitle } from './shown-title';
 import type {
   ListRevisions, SessionListDelta,
   AgentMember, AgentMemberCreate, AgentMemberList, AgentMemberUpdate, AgentMemberUserProfile,
-  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, PluginApprovalDecision, PluginApprovalList, PluginApprovalResult, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
+  AssistantDelegation, AssistantDelegationTrigger, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, InboxNoticeList, NorthStarReport, PluginApprovalDecision, PluginApprovalList, PluginApprovalResult, RiffetNotice, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, WorkItemStartResult, WorkItemSummary, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -1098,6 +1098,11 @@ export const api = {
   /** What plugins ask the owner to approve (docs/TASK-BOARD.md §7); deciding runs the plugin's write. */
   pluginApprovals: (signal?: AbortSignal) => request<PluginApprovalList>('/api/plugin-approvals', { signal }),
   decidePluginApproval: (pluginId: string, id: string, body: PluginApprovalDecision) => request<PluginApprovalResult>(`/api/plugin-approvals/${encodeURIComponent(pluginId)}/${encodeURIComponent(id)}/decide`, json('POST', body)),
+  /** Explicit messages sent to the owner's Inbox (e.g. from team members via `notify_user`). */
+  inboxNotices: (signal?: AbortSignal) => request<InboxNoticeList>('/api/inbox/notices', { signal }),
+  markInboxNoticeRead: (id: string) => request<{ notice: RiffetNotice }>(`/api/inbox/notices/${encodeURIComponent(id)}/read`, { method: 'POST' }),
+  markAllInboxNoticesRead: () => request<{ count: number }>('/api/inbox/notices/read-all', { method: 'POST' }),
+  deleteInboxNotice: (id: string) => request<{ ok: true }>(`/api/inbox/notices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   /** Idempotent on the client-generated `id`. */
   createWorkItem: (body: WorkItemCreate) => request<WorkItem>('/api/work-items', json('POST', body)),
   updateWorkItem: (id: string, body: WorkItemPatch) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}`, json('PATCH', body)),

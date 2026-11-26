@@ -55,6 +55,10 @@ msgstr "{0}到期"
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 
+#: src/app/SidebarUserMenu.tsx
+msgid "{inboxCount} 条收件箱待处理"
+msgstr "{inboxCount} 条收件箱待处理"
+
 #: src/app/SessionDeletion.tsx
 msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
 msgstr "{schedules, plural, other {# 个定时计划继续运行。}}"
@@ -1487,6 +1491,11 @@ msgctxt "workbench-action-failed"
 msgid "操作失败"
 msgstr "操作失败"
 
+#: src/app/SidebarUserMenu.tsx
+#: src/app/Workbench.tsx
+msgid "收件箱"
+msgstr "收件箱"
+
 #: src/app/DirectoryPicker.tsx
 msgid "收藏"
 msgstr "收藏"
@@ -2100,6 +2109,10 @@ msgstr "来自 {0}"
 #: src/app/use-session-actions.ts
 msgid "查看"
 msgstr "查看"
+
+#: src/app/Workbench.tsx
+msgid "查看收件箱"
+msgstr "查看收件箱"
 
 #: src/app/SessionInfo.tsx
 msgctxt "session-info-tags"

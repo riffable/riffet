@@ -8,7 +8,7 @@ export type DesignPlatform = (typeof DESIGN_PLATFORMS)[number];
  * The pages with an address of their own. A page covers the conversation, so its address does not
  * name one: a reload restores the conversation underneath from the stored selection.
  */
-const PAGES = ['tasks', 'automations', 'council', 'marks', 'stats', 'extensions', 'plugins', 'design', 'settings', 'view'] as const;
+const PAGES = ['inbox', 'tasks', 'automations', 'council', 'marks', 'stats', 'extensions', 'plugins', 'design', 'settings', 'view'] as const;
 export type AddressPage = (typeof PAGES)[number];
 
 /**

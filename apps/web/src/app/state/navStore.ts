@@ -38,6 +38,8 @@ export interface NavState {
   projectVisits: Record<string, number>;
   sessionId: string;
   statsOpen: boolean;
+  /** 独立收件箱页（`/inbox`）。 */
+  inboxOpen: boolean;
   /** 任务 (docs/TASK-BOARD.md). */
   tasksOpen: boolean;
   /** 自动化. */
@@ -82,7 +84,7 @@ export interface NavState {
 }
 
 /** The pages that cover the conversation. */
-export type NavPage = 'stats' | 'tasks' | 'automations' | 'council' | 'extensions' | 'marks' | 'plugins';
+export type NavPage = 'stats' | 'inbox' | 'tasks' | 'automations' | 'council' | 'extensions' | 'marks' | 'plugins';
 
 /** One way a conversation is shown, by view id: `chat`, `terminal`, or a plugin's `<pluginId>/<name>`. */
 export type SessionView = string;
@@ -124,7 +126,7 @@ function startingSelection(link: DeepLink | undefined, lists: { projects: Projec
 }
 
 /** Closes every page that covers the conversation, for a destination that is a conversation or project. */
-export const NO_PAGE = { statsOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, settingsOpen: false, pluginsOpen: false, mainViewId: '', attemptsGroupId: '' } as const satisfies Partial<NavState>;
+export const NO_PAGE = { statsOpen: false, inboxOpen: false, tasksOpen: false, automationsOpen: false, councilOpen: false, marksOpen: false, settingsOpen: false, pluginsOpen: false, mainViewId: '', attemptsGroupId: '' } as const satisfies Partial<NavState>;
 
 /**
  * What is selected and which page is showing, and the gate every change of destination goes through.
@@ -150,6 +152,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     })(),
     projectVisits: readProjectVisits(),
     statsOpen: view === 'stats',
+    inboxOpen: view === 'inbox',
     tasksOpen: view === 'tasks',
     automationsOpen: view === 'automations',
     councilOpen: view === 'council',
@@ -190,7 +193,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
   store.subscribe(() => {
     const current = store.get();
     if (current.projectId !== previousDestination.projectId || current.memberId !== previousDestination.memberId || current.sessionId !== previousDestination.sessionId
-      || current.statsOpen !== previousDestination.statsOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen || current.councilOpen !== previousDestination.councilOpen
+      || current.statsOpen !== previousDestination.statsOpen || current.inboxOpen !== previousDestination.inboxOpen || current.tasksOpen !== previousDestination.tasksOpen || current.automationsOpen !== previousDestination.automationsOpen || current.councilOpen !== previousDestination.councilOpen
       || current.councilDiscussionId !== previousDestination.councilDiscussionId
       || current.extensionsOpen !== previousDestination.extensionsOpen || current.marksOpen !== previousDestination.marksOpen
       || current.settingsOpen !== previousDestination.settingsOpen || current.settingsSection !== previousDestination.settingsSection
@@ -294,7 +297,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     /** Closes settings without disturbing the page or conversation underneath. */
     closeSettings() { store.set({ settingsOpen: false }); },
     openPage(page: NavPage) {
-      store.set({ settingsOpen: false, pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', mainViewId: '', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
+      store.set({ settingsOpen: false, pluginsOpen: page === 'plugins', statsOpen: page === 'stats', inboxOpen: page === 'inbox', tasksOpen: page === 'tasks', automationsOpen: page === 'automations', councilOpen: page === 'council', marksOpen: page === 'marks', mainViewId: '', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
     },
     openMainView(viewId: string) {
       store.set({ ...NO_PAGE, extensionsOpen: false, mainViewId: viewId });

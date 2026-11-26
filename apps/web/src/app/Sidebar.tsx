@@ -68,6 +68,9 @@ interface Props {
   onCustomizeSidebar: () => void;
   /** Opens settings on the personal info page. */
   onOpenProfile: () => void;
+  /** Standalone Inbox page (`/inbox`) and its unread/pending count shown on the footer avatar. */
+  onOpenInbox?: () => void;
+  inboxCount?: number;
   onOpenStats: () => void;
   /** 任务 (docs/TASK-BOARD.md); absent on a server without work items. */
   onOpenTasks?: () => void;
@@ -850,6 +853,8 @@ export function Sidebar(props: Props) {
           backend={props.backend}
           stale={props.stale}
           mobile={mobile}
+          inboxCount={props.inboxCount}
+          onOpenInbox={props.onOpenInbox}
           onOpenProfile={props.onOpenProfile}
           onOpenSettings={() => props.onOpenSettings()}
           onOpenTheme={() => props.onOpenSettings('appearance')}

@@ -55,6 +55,10 @@ msgstr "Expires {0}"
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, one {Also deletes # side chat.} other {Also deletes # side chats.}}"
 
+#: src/app/SidebarUserMenu.tsx
+msgid "{inboxCount} 条收件箱待处理"
+msgstr "{inboxCount} pending in Inbox"
+
 #: src/app/SessionDeletion.tsx
 msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
 msgstr "{schedules, plural, one {# scheduled task keeps running.} other {# scheduled tasks keep running.}}"
@@ -1487,6 +1491,11 @@ msgctxt "workbench-action-failed"
 msgid "操作失败"
 msgstr "Action failed"
 
+#: src/app/SidebarUserMenu.tsx
+#: src/app/Workbench.tsx
+msgid "收件箱"
+msgstr "Inbox"
+
 #: src/app/DirectoryPicker.tsx
 msgid "收藏"
 msgstr "Favorite"
@@ -2100,6 +2109,10 @@ msgstr "From {0}"
 #: src/app/use-session-actions.ts
 msgid "查看"
 msgstr "View"
+
+#: src/app/Workbench.tsx
+msgid "查看收件箱"
+msgstr "View inbox"
 
 #: src/app/SessionInfo.tsx
 msgctxt "session-info-tags"

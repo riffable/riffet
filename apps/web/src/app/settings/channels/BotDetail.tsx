@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ChannelAccountInfo, ChannelChat, ChannelHealth, ChannelProviderInfo, ChannelsState } from '@contracts';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,8 @@ import { confirmDialog } from '@/lib/dialogs';
 import { copyWithToast } from '@/lib/files';
 import { formatDate } from '@/lib/i18n/format';
 import { localizedText } from '@/lib/plugins';
+import { regularProjects } from '@/lib/project-family';
+import { serverOfObject } from '@/lib/server-routing';
 import { useLists } from '../../state/stores';
 import { SettingsGroup, SettingsLinkRow, SettingsRow } from '../SettingsLayout';
 import type { AddBotMode } from './AddBotDialog';
@@ -30,6 +32,15 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
 }) {
   const { t, i18n } = useLingui();
   const projects = useLists((current) => current.projects);
+  const defaultProjectOptions = useMemo(
+    () => [
+      { value: '', label: '—' },
+      ...regularProjects(projects)
+        .filter((project) => !project.archivedAt && !serverOfObject(project.id))
+        .map((project) => ({ value: project.id, label: project.name })),
+    ],
+    [projects],
+  );
   const { health, loading, refresh } = useChannelHealth(account);
   const [bindOpen, setBindOpen] = useState(false);
   const provider = providerOf(state, account.kind);
@@ -107,6 +118,16 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
     <SettingsGroup>
       <SettingsRow title={t`启用`}>
         <Switch aria-label={t`启用`} checked={account.enabled} disabled={busy} onCheckedChange={(enabled) => void run(() => api.updateChannelAccount(account.id, { enabled }), t`无法保存`)} />
+      </SettingsRow>
+      <SettingsRow title={t`默认项目`}>
+        <Select
+          label={t`默认项目`}
+          className="w-44 max-md:w-full"
+          value={account.defaultProjectId ?? ''}
+          disabled={busy}
+          onChange={(projectId) => void run(() => api.updateChannelAccount(account.id, { defaultProjectId: projectId || null }), t`无法保存`)}
+          options={defaultProjectOptions}
+        />
       </SettingsRow>
       {hasCardSettings && <SettingsLinkRow title={t`卡片`} onClick={onOpenCard} />}
     </SettingsGroup>

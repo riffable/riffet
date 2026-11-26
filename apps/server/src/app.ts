@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { eventLoopBusy, startLoopHealth } from './loop-health.js';
 import { LAUNCHED_BY, SERVER_BUILD, SERVER_VERSION } from './version.js';
 import Fastify, { type FastifyRequest } from 'fastify';
@@ -38,6 +38,7 @@ import { ThemeService } from './themes/index.js';
 import { codexGeneratedImageHomes, migratePluginStorage } from './compat.js';
 import { SessionLock } from './agent-host/session-lock.js';
 import { NativeDispatcher } from './native/dispatch.js';
+import { resolveNativeSessionInput } from './native/session-input.js';
 import { buildSessionControlSnapshot } from './native/control.js';
 import { defaultBackendForClient, effectiveSettingsForClient, registerProjectVisibilityHook, registerSessionVisibilityHook } from './native/client-features.js';
 import { ClientLogs } from './clientLogs.js';
@@ -273,6 +274,7 @@ export async function createApp(options: AppOptions = {}) {
   // Agent calls (docs/AGENT-CALLS.md) need the orchestration and the timeline made further down; the MCP tools and delivery reach them through this.
   let agentCallsRef:AgentCallService|undefined;
   let teamRef:AgentTeamService|undefined;
+  let pluginAgentsRef:((pluginId:import('@riffet/plugin-api').PluginManifest['id'])=>import('@riffet/plugin-api').PluginAgentHost)|undefined;
   const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,team:()=>teamRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
     const session=store.getSession(sessionId);
     if(session.archivedAt || session.state==='archived') return undefined;
@@ -305,6 +307,12 @@ export async function createApp(options: AppOptions = {}) {
     // docs/ASSISTANT.md §7.3: an event of an in-process plugin starts the runs of the delegations subscribed to its topic.
     emitAssistantEvent:(topic,payload,key)=>{if(!assistantDelegationsRef)throw new AppError('SERVICE_STARTING','The assistant is starting; emit again after activation',503);if(!plugins.assistantEventDeclared(topic))throw new AppError('PLUGIN_ASSISTANT_EVENT_UNAVAILABLE','The plugin is off; its events go nowhere',409);assistantDelegationsRef.pluginEvent(topic,payload,key);},
     approvals:{request:(pluginId,request)=>pluginApprovals.request(pluginId,request),withdraw:(pluginId,id)=>pluginApprovals.withdraw(pluginId,id)},
+    agents:pluginId=>({
+      listBackends:async()=>{if(!pluginAgentsRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return pluginAgentsRef(pluginId).listBackends();},
+      listMembers:()=>pluginAgentsRef?pluginAgentsRef(pluginId).listMembers():[],
+      listProjects:()=>pluginAgentsRef?pluginAgentsRef(pluginId).listProjects():[],
+      run:request=>{if(!pluginAgentsRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return pluginAgentsRef(pluginId).run(request);},
+    }),
     // docs/PLUGINS.md「代码导航」: read-only, through the same scoped paths the project routes use.
     code:{
       status:id=>workspace.codeIndexStatus(store.getProject(id)),
@@ -562,6 +570,73 @@ export async function createApp(options: AppOptions = {}) {
     listJobs:id=>nativeBackends.listJobs(id),onJobChanged:listener=>nativeBackends.onJobChanged(listener),
     activity:id=>store.sessionActivity(id),
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
+  pluginAgentsRef=pluginId=>({
+    listBackends:async()=>(await nativeBackends.catalog.listBackends()).map(entry=>({id:entry.backendId,label:entry.label,available:entry.available,...(entry.defaultModel?{defaultModel:entry.defaultModel}:{})})),
+    listMembers:()=>team.list().map(member=>({id:member.id,name:member.name,...(member.description?{description:member.description}:{}),scope:member.scope.kind,...(member.scope.projectIds?.length?{projectIds:member.scope.projectIds}:{}),...(member.target?.backendId?{backendId:member.target.backendId}:{}),...(member.target?.model?{model:member.target.model}:{})})),
+    listProjects:()=>store.listProjects().filter(project=>!project.archivedAt&&!project.system).map(project=>({id:project.id,name:project.name,cwd:project.cwd})),
+    run:async request=>{
+      const prompt=typeof request.prompt==='string'?request.prompt.trim():'';
+      if(!prompt)throw new AppError('INVALID_INPUT','prompt is required');
+      const target=request.target??{};
+      const commandId=request.commandId?.trim()||randomUUID();
+      const timeoutMs=Math.min(15*60_000,Math.max(5_000,Math.floor(request.timeoutMs??5*60_000)));
+      const input={text:prompt,attachmentIds:[],context:[]};
+      let sessionId:string;
+      let run:import('../../../packages/contracts/src/index.js').Run;
+      if(target.sessionId){
+        const session=store.getSession(target.sessionId);
+        if(session.archivedAt)throw new AppError('SESSION_ARCHIVED','Restore this conversation before continuing it',409);
+        if(session.kind!=='native')throw new AppError('NOT_NATIVE','Only native conversations accept text input',409);
+        const existing=store.findRunByCommand(session.id,commandId);
+        if(existing){run=store.acceptNativeRun(session.id,commandId,input,existing.native!.config);}
+        else{
+          sessionCommands.admit(session);
+          nativeBackends.assertAvailable(session);
+          run=store.acceptNativeRun(session.id,commandId,input,{model:session.model,mode:session.mode,approval:session.approval});
+        }
+        sessionId=session.id;
+        dispatch.kick();
+      }else{
+        const sessionInput=await resolveNativeSessionInput({store,settings,nativeBackends,team:()=>team},{
+          ...(target.memberId?{agentMemberId:target.memberId}:{agentMemberId:null}),
+          ...(target.projectId?{projectId:target.projectId}:{}),
+          ...(target.backendId?{backendId:target.backendId}:{}),
+          ...(target.profileId?{backendProfileId:target.profileId}:{}),
+          ...(target.model?{model:target.model}:{}),
+          ...(target.approval?{approval:target.approval}:{}),
+          ...(target.title?{title:target.title}:{}),
+        });
+        const created=store.createNativeSubmission(randomUUID(),{...sessionInput,origin:{kind:'plugin',pluginId}},commandId,input);
+        sessionId=created.session.id;
+        run=created.run;
+        dispatch.kick();
+      }
+      const terminal=(state:string):state is 'completed'|'failed'|'cancelled'|'interrupted'=>state==='completed'||state==='failed'||state==='cancelled'||state==='interrupted';
+      const settled=await new Promise<import('../../../packages/contracts/src/index.js').Run>((resolve,reject)=>{
+        const finish=(current:import('../../../packages/contracts/src/index.js').Run)=>{cleanup();resolve(current);};
+        const fail=(error:Error)=>{cleanup();reject(error);};
+        const onAbort=()=>fail(new AppError('PLUGIN_AGENT_ABORTED','Agent run wait aborted',499));
+        const timer=setTimeout(()=>fail(new AppError('PLUGIN_AGENT_TIMEOUT',`Agent run did not settle within ${Math.round(timeoutMs/1000)}s`,504)),timeoutMs);
+        timer.unref?.();
+        const off=store.onRunChanged(changed=>{if(changed.id===run.id&&terminal(changed.state))finish(changed);});
+        const cleanup=()=>{clearTimeout(timer);off();request.signal?.removeEventListener('abort',onAbort);};
+        if(request.signal?.aborted){onAbort();return;}
+        request.signal?.addEventListener('abort',onAbort,{once:true});
+        const current=store.getRun(run.id);
+        if(terminal(current.state))finish(current);
+      });
+      await ingest.read(sessionId)?.catch(()=>undefined);
+      await timeline.ready(sessionId,'main').catch(()=>undefined);
+      const turn=timeline.outline(sessionId,'main',20).turns.find(item=>item.runId===settled.id);
+      let answer=turn?(timeline.turnText(sessionId,turn.turn)?.answer?.trim()??''):'';
+      if(!answer&&turn){
+        const page=timeline.page(sessionId,'main',{from:turn.startPos,rows:400});
+        const last=page.rows.filter(row=>row.turn===turn.turn).findLast(row=>row.kind==='assistant'&&'text' in row&&typeof row.text==='string'&&Boolean(row.text.trim()));
+        answer=last&&'text' in last&&typeof last.text==='string'?last.text.trim():'';
+      }
+      return {sessionId,runId:settled.id,status:settled.state as 'completed'|'failed'|'cancelled'|'interrupted',answer,...(settled.error?{error:settled.error}:{})};
+    },
+  });
   cacheRegistry.register({name:'store',stats:()=>store.cacheStats(),trim:()=>store.trimCaches()});
   cacheRegistry.register({name:'timeline',stats:()=>timeline.cacheStats(),trim:()=>timeline.trimCaches()});
   cacheRegistry.register({name:'exec-worker',stats:()=>execWorkerStats(),trim:()=>trimExecWorker()});

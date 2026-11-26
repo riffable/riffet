@@ -1228,7 +1228,8 @@
                   "assistant",
                   "council",
                   "call",
-                  "link"
+                  "link",
+                  "plugin"
                 ],
                 "open": true
               },
@@ -1245,6 +1246,9 @@
                 "type": "string"
               },
               "serverId": {
+                "type": "string"
+              },
+              "pluginId": {
                 "type": "string"
               },
               "templateId": {
@@ -1702,7 +1706,8 @@
                         "assistant",
                         "council",
                         "call",
-                        "link"
+                        "link",
+                        "plugin"
                       ],
                       "open": true
                     },
@@ -1719,6 +1724,9 @@
                       "type": "string"
                     },
                     "serverId": {
+                      "type": "string"
+                    },
+                    "pluginId": {
                       "type": "string"
                     },
                     "templateId": {
@@ -3326,7 +3334,8 @@
                           "assistant",
                           "council",
                           "call",
-                          "link"
+                          "link",
+                          "plugin"
                         ],
                         "open": true
                       },
@@ -3343,6 +3352,9 @@
                         "type": "string"
                       },
                       "serverId": {
+                        "type": "string"
+                      },
+                      "pluginId": {
                         "type": "string"
                       },
                       "templateId": {
@@ -11501,7 +11513,8 @@
                           "assistant",
                           "council",
                           "call",
-                          "link"
+                          "link",
+                          "plugin"
                         ],
                         "open": true
                       },
@@ -11518,6 +11531,9 @@
                         "type": "string"
                       },
                       "serverId": {
+                        "type": "string"
+                      },
+                      "pluginId": {
                         "type": "string"
                       },
                       "templateId": {

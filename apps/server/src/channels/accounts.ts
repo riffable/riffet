@@ -164,9 +164,20 @@ export class ChannelAccounts {
   }
 
   private missingRequiredSecrets(provider: ChannelProvider, secrets: Record<string, string>): string[] {
-    const fields = provider.meta?.fields;
-    if (!fields?.length) return Object.values(secrets).some(Boolean) ? [] : ['secret'];
-    return fields.filter(field => field.kind === 'secret' && field.required && !secrets[field.key]).map(field => field.key);
+    if (provider.meta !== undefined) {
+      return provider.meta.fields.filter(field => field.kind === 'secret' && field.required && !secrets[field.key]).map(field => field.key);
+    }
+    return Object.values(secrets).some(Boolean) ? [] : ['secret'];
+  }
+
+  private resolveDefaultProject(value: string | null | undefined, previous?: string): string | undefined {
+    if (value === undefined) return previous;
+    if (value === null) return undefined;
+    const trimmed = requireString(value, 'defaultProjectId', MAX_FIELD_LEN).trim();
+    if (!trimmed) return undefined;
+    const project = this.state.projectOf(trimmed);
+    if (!project || project.archivedAt || project.system) throw new AppError('INVALID_PROJECT', 'Choose an open project');
+    return project.id;
   }
 
   private toChannelAccount(stored: StoredAccount, secrets: Record<string, string>): ChannelAccount {
@@ -209,6 +220,7 @@ export class ChannelAccounts {
       status,
       links,
       card: mergeCard(account.card),
+      ...(account.defaultProjectId ? { defaultProjectId: account.defaultProjectId } : {}),
     };
   }
 
@@ -217,12 +229,14 @@ export class ChannelAccounts {
     const provider = kind ? this.state.provider(kind) : undefined;
     if (!kind || !provider) throw new AppError('INVALID_CHANNEL_KIND', 'Unsupported channel kind');
     const { config, secrets } = this.resolveFields(provider, incomingConfig(input), incomingSecrets(input));
+    const defaultProjectId = this.resolveDefaultProject(input.defaultProjectId);
     const externalId = primaryExternalId(provider, config);
     const account: StoredAccount = {
       id: this.newAccountId(kind),
       kind,
       config,
       ...(externalId ? { externalId } : {}),
+      ...(defaultProjectId ? { defaultProjectId } : {}),
       enabled: input.enabled !== false,
       source: 'manual',
     };
@@ -238,8 +252,13 @@ export class ChannelAccounts {
     const provider = this.state.provider(current.kind);
     const hasConfigOrSecret = patch.config !== undefined || patch.secrets !== undefined
       || patch.appId !== undefined || patch.domain !== undefined || patch.appSecret !== undefined;
-    if (patch.card !== undefined && !hasConfigOrSecret && patch.enabled === undefined) {
-      const next: StoredAccount = { ...current, card: mergeCard(current.card, validCard(patch.card)) };
+    const nextDefaultProjectId = this.resolveDefaultProject(patch.defaultProjectId, current.defaultProjectId);
+    if ((patch.card !== undefined || patch.defaultProjectId !== undefined) && !hasConfigOrSecret && patch.enabled === undefined) {
+      const next: StoredAccount = {
+        ...current,
+        ...(patch.card !== undefined ? { card: mergeCard(current.card, validCard(patch.card)) } : {}),
+      };
+      if (nextDefaultProjectId) next.defaultProjectId = nextDefaultProjectId; else delete next.defaultProjectId;
       this.state.bindings.setAccount(next);
       this.state.changed();
       return this.info(next);
@@ -257,6 +276,7 @@ export class ChannelAccounts {
       ...(patch.enabled !== undefined ? { enabled: Boolean(patch.enabled) } : {}),
       ...(patch.card !== undefined ? { card: mergeCard(current.card, validCard(patch.card)) } : {}),
     };
+    if (nextDefaultProjectId) next.defaultProjectId = nextDefaultProjectId; else delete next.defaultProjectId;
     delete next.appId;
     delete next.domain;
     if (hasConfigOrSecret) this.writeSecrets(id, resolved.secrets);
@@ -447,6 +467,10 @@ export class ChannelAccounts {
         const connection = await provider.connect(this.toChannelAccount(stored, secrets), context);
         if (runtime.abort.signal.aborted) { await connection.close().catch(() => undefined); return; }
         runtime.connection = connection;
+        if (connection.ownerIdentity?.id && !this.state.identities.isBound(id, connection.ownerIdentity.id)) {
+          this.state.identities.bindKnown(id, { id: connection.ownerIdentity.id, name: connection.ownerIdentity.name ?? this.state.deps.owner.get().name });
+          this.state.changed();
+        }
         if (runtime.status.state === 'connecting') setStatus({ state: 'connected' });
         try { await this.handlers.onResume(id, connection); }
         finally {

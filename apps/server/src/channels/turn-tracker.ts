@@ -36,6 +36,7 @@ export class ChannelTurnTracker {
     const own = this.state.anchors.get(run.commandId);
     this.state.anchors.delete(run.commandId);
     const source = resumed?.source ?? (own ? 'channel' : 'other-client');
+    if (!resumed && source === 'other-client' && runtime.provider?.capabilities.mirrorOtherClients === false) return undefined;
     const anchor = resumed ? resumed.anchor : own ?? this.state.threadAnchor(run.sessionId, address);
     const stopRef = this.state.addRef({ kind: 'stop', account: address.account, sessionId: run.sessionId, runId: run.id });
     const tracker: Tracker = { runId: run.id, sessionId: run.sessionId, commandId: run.commandId, address, source, ...(anchor ? { anchor } : {}), ...(resumed ? { surface: resumed.surface } : {}), finishing: false, stopRef };

@@ -87,6 +87,7 @@ plugins/riffet/channel-telegram/ Telegram 内置插件
 - `ChannelKind` 是声明 ID（如 `riffet.channel-feishu/feishu`、`riffet.channel-telegram/telegram`）。`ChannelsState.providers` 列出当前可用平台的 `id`、`title`、`register`、`fields`、`capabilities`、`card` 与 `hints`。
 - 存量数据不改写：账号读取时把旧 `kind: 'feishu'` 与 `'riffet.feishu/feishu'` 视为 `riffet.channel-feishu/feishu`，把旧的顶层 `appId`/`domain` 归入 `config`，把旧的纯文本 `.secret` 文件视为 `{ appSecret }`；创建与更新接口同时接受新字段（`config`/`secrets`）和旧字段（`appId`/`appSecret`/`domain`），返回体保留兼容的 `appId`/`domain`，旧版 Mac 客户端照常可用。新账号 ID 用声明名的最后一段（如 `feishu-1a2b3c4d`、`telegram-1a2b3c4d`），保持为一个 URL 段。
 - 表单字段与平台提示由各插件的 `ImChannelProvider.meta` 声明，核心按字段定义做校验与存储，不再写死飞书的 `appId`/`appSecret`/`domain` 或长连接检查步骤。
+- 面向纯文本、无卡片交互或用户态代理通道的通用能力：`ChannelAccount.defaultProjectId` 为未单独绑定项目的聊天提供账号级默认项目（仅普通未归档项目，修改不重连）；`ImChannelProvider.capabilities.mirrorOtherClients`（默认 `true`）可关闭其他端回合向 IM 的反向镜像；声明了 `meta` 且无必填 `secret` 字段的通道允许免密建连，并在 `ChannelConnection.ownerIdentity` 提供已认证本人身份时自动绑定；`ChannelAddress.chatName` 入站自动同步聊天名称；`capabilities.actions === 'none'` 时缺项目与 `/help` 走纯文本降级而不发交互卡。
 
 ### 设置页
 

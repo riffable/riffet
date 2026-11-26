@@ -103,6 +103,8 @@ export interface ChannelAccountInfo {
   /** `open`: a chat with the bot in the platform's client; `console`: the app in the developer console. */
   links: { open?: string; console?: string };
   card: ChannelCardOptions;
+  /** Fallback project for chats under this account that have not picked a project of their own. */
+  defaultProjectId?: string;
 }
 
 /**
@@ -169,7 +171,7 @@ export interface ChannelProviderInfo {
   title: LocalizedText;
   register: boolean;
   fields: ChannelFieldSpec[];
-  capabilities: { edit: boolean; actions: 'forms' | 'buttons' | 'none'; threads: boolean };
+  capabilities: { edit: boolean; actions: 'forms' | 'buttons' | 'none'; threads: boolean; mirrorOtherClients?: boolean };
   card?: ChannelCardCapabilities;
   hints?: ChannelProviderHints;
 }
@@ -197,6 +199,8 @@ export interface ChannelAccountInput {
   enabled?: boolean;
   /** PATCH only; a partial value is merged (and `footer` field by field). Changing it never reconnects. */
   card?: Partial<Omit<ChannelCardOptions, 'footer'>> & { footer?: Partial<ChannelCardOptions['footer']> };
+  /** Fallback project for chats without a per-chat binding; `null` or `""` clears it without reconnecting. */
+  defaultProjectId?: string | null;
 }
 
 /** `POST /api/channels/accounts/:id/bind-code`: the user sends `/bind <code>` to the bot in a private chat. */

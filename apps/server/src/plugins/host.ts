@@ -44,6 +44,8 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   ownAssistantEvents?: readonly string[];
   /** The inbox's approvals (`host.approvals`), keyed by plugin here. Absent for an isolated installed package, which gets none. */
   approvals?: { request(pluginId: string, request: Parameters<NonNullable<PluginHost['approvals']>['request']>[0]): void; withdraw(pluginId: string, id: string): void };
+  /** Agent & team member runner (`host.agents`), bound to the calling plugin's id. Absent for isolated installed packages. */
+  agents?: (pluginId: PluginManifest['id']) => NonNullable<PluginHost['agents']>;
 }): PluginHost {
   const directory = join(options.stateDir, 'plugin-data', id);
   return {
@@ -97,6 +99,7 @@ export function createPluginHost(id: PluginManifest['id'], options: {
       request: request => options.approvals!.request(id, request),
       withdraw: approvalId => options.approvals!.withdraw(id, approvalId),
     } } : {}),
+    ...(options.agents ? { agents: options.agents(id) } : {}),
     ...(options.invalidateViews ? { views: { invalidate: topic => options.invalidateViews!(topic) } } : {}),
     error: (code, message, statusCode) => new AppError(code, message, statusCode),
   };

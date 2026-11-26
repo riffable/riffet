@@ -105,7 +105,7 @@ export function WorkbenchEffects() {
   useEffect(() => {
     return onSessionsDeleted((ids) => { tabs.retire(ids); lists.removeSessions(ids); });
   }, [tabs, lists]);
-  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designPlatform, designChapter, settingsOpen, settingsSection, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, mainViewId, statsState } = useStore(nav, (state) => state, (a, b) => a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.settingsOpen === b.settingsOpen && a.settingsSection === b.settingsSection && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.automationsOpen === b.automationsOpen && a.councilOpen === b.councilOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId && a.mainViewId === b.mainViewId);
+  const { projectId, taskProjectId, sessionId, statsOpen, inboxOpen, extensionsOpen, marksOpen, designPlatform, designChapter, settingsOpen, settingsSection, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, mainViewId, statsState } = useStore(nav, (state) => state, (a, b) => a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.settingsOpen === b.settingsOpen && a.settingsSection === b.settingsSection && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.inboxOpen === b.inboxOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.automationsOpen === b.automationsOpen && a.councilOpen === b.councilOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId && a.mainViewId === b.mainViewId);
   const sidebarCollapsed = useStore(ui, (state) => state.sidebarCollapsed);
   const dockHeight = useStore(ui, (state) => state.dockHeight);
   const sidebarWidth = useStore(ui, (state) => state.sidebarWidth);
@@ -118,7 +118,7 @@ export function WorkbenchEffects() {
     let timer: number | undefined;
     const unseenOnScreen = () => {
       const state = nav.get();
-      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.settingsOpen || state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.extensionsOpen || state.marksOpen || state.mainViewId || state.attemptsGroupId) return undefined;
+      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.settingsOpen || state.pluginsOpen || state.statsOpen || state.inboxOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.extensionsOpen || state.marksOpen || state.mainViewId || state.attemptsGroupId) return undefined;
       const session = lists.get().sessions.find((item) => item.id === state.sessionId);
       return session && isUnread(session) ? session : undefined;
     };
@@ -165,9 +165,9 @@ export function WorkbenchEffects() {
    */
   useEffect(() => {
     if (!loaded) return;
-    const page = settingsOpen ? (settingsSection === 'design' ? 'design' : 'settings') : mainViewId ? 'view' : pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : tasksOpen ? 'tasks' : automationsOpen ? 'automations' : councilOpen ? 'council' : undefined;
+    const page = settingsOpen ? (settingsSection === 'design' ? 'design' : 'settings') : mainViewId ? 'view' : pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : inboxOpen ? 'inbox' : tasksOpen ? 'tasks' : automationsOpen ? 'automations' : councilOpen ? 'council' : undefined;
     replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, ...(mainViewId ? { mainViewId } : {}), stats: statsState, designPlatform, designChapter, settingsSection }));
-  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designPlatform, designChapter, settingsOpen, settingsSection, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, mainViewId, statsState]);
+  }, [loaded, projectId, sessionId, statsOpen, inboxOpen, extensionsOpen, marksOpen, designPlatform, designChapter, settingsOpen, settingsSection, tasksOpen, automationsOpen, councilOpen, pluginsOpen, pluginId, mainViewId, statsState]);
 
   return null;
 }

@@ -10693,6 +10693,10 @@ msgstr "默认模型"
 msgid "默认菜单"
 msgstr "默认菜单"
 
+#: src/app/settings/channels/BotDetail.tsx
+msgid "默认项目"
+msgstr "默认项目"
+
 #: src/app/design/android/notes.ts
 msgid "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"
 msgstr "默认风格。墨色代替强调色，分层靠明度不靠线，行用常规字重，标题和未读才加重。"

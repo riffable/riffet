@@ -1,4 +1,4 @@
-import type { PluginApproval } from '@contracts';
+import type { PluginApproval, RiffetNotice } from '@contracts';
 import { api } from '@/lib/api';
 import { HttpError } from '@/lib/errors';
 import { createStore } from '@/lib/store';
@@ -8,35 +8,49 @@ import type { ListsStore } from './listsStore';
 const PUSH_DEBOUNCE_MS = 250;
 
 export interface ApprovalsState {
-  /** What plugins of the entry server ask the owner to approve, oldest first (docs/TASK-BOARD.md §7). */
+  /** Actionable write approvals plugins ask the owner to confirm (`host.approvals`). */
   approvals: PluginApproval[];
+  /** Explicit messages sent to the owner's Inbox (team members' `notify_user`, wake-ups, plugin notices). */
+  notices: RiffetNotice[];
+  /** True once the initial read has completed, so clients only alert on items arriving afterwards. */
+  loaded: boolean;
 }
 
 const keyOf = (approval: Pick<PluginApproval, 'pluginId' | 'id'>) => `${approval.pluginId}\n${approval.id}`;
 
 /**
- * The plugin approvals of the inbox. Read when the workbench opens and on every `plugin-approvals` push; an older server
- * answers 404 and leaves the list empty.
+ * The Riffet Inbox store: actionable plugin approvals + explicit user-facing messages (`notices`).
+ * Deliberately excludes work-item board status transitions so the Inbox stays high-signal.
  */
-export function createApprovalsStore(lists: Pick<ListsStore, 'onPluginApprovals'>) {
-  const store = createStore<ApprovalsState>({ approvals: [] });
+export function createApprovalsStore(lists: Pick<ListsStore, 'onPluginApprovals' | 'onInbox'>) {
+  const store = createStore<ApprovalsState>({ approvals: [], notices: [], loaded: false });
   let timer: number | undefined;
   let ticket = 0;
 
   const read = async () => {
     const begun = ++ticket;
-    try {
-      const { approvals } = await api.pluginApprovals();
-      if (begun !== ticket) return;
-      store.set({ approvals });
-    } catch (error) {
-      if (error instanceof HttpError && error.status === 404) store.set({ approvals: [] });
-      /* otherwise keep what is shown; the next push reads again */
-    }
+    const [approvalsResult, noticesResult] = await Promise.allSettled([
+      api.pluginApprovals(),
+      api.inboxNotices(),
+    ]);
+    if (begun !== ticket) return;
+    const current = store.get();
+    const approvals = approvalsResult.status === 'fulfilled'
+      ? approvalsResult.value.approvals
+      : approvalsResult.reason instanceof HttpError && approvalsResult.reason.status === 404
+        ? []
+        : current.approvals;
+    const notices = noticesResult.status === 'fulfilled'
+      ? noticesResult.value.notices
+      : noticesResult.reason instanceof HttpError && noticesResult.reason.status === 404
+        ? []
+        : current.notices;
+    store.set({ approvals, notices, loaded: true });
   };
   const later = () => { window.clearTimeout(timer); timer = window.setTimeout(() => void read(), PUSH_DEBOUNCE_MS); };
 
   lists.onPluginApprovals(later);
+  lists.onInbox(later);
   void read();
 
   return {
@@ -49,7 +63,30 @@ export function createApprovalsStore(lists: Pick<ListsStore, 'onPluginApprovals'
       store.set((current) => ({ approvals: current.approvals.filter((entry) => keyOf(entry) !== keyOf(approval)) }));
       return result;
     },
+    async markNoticeRead(id: string) {
+      const now = new Date().toISOString();
+      store.set((current) => ({
+        notices: current.notices.map((entry) => (entry.id === id && !entry.readAt ? { ...entry, readAt: now } : entry)),
+      }));
+      try {
+        const { notice } = await api.markInboxNoticeRead(id);
+        store.set((current) => ({
+          notices: current.notices.map((entry) => (entry.id === id ? notice : entry)),
+        }));
+      } catch {
+        void read();
+      }
+    },
+    async markAllNoticesRead() {
+      const now = new Date().toISOString();
+      store.set((current) => ({
+        notices: current.notices.map((entry) => (entry.readAt ? entry : { ...entry, readAt: now })),
+      }));
+      try { await api.markAllInboxNoticesRead(); } catch { void read(); }
+    },
+    async deleteNotice(id: string) {
+      store.set((current) => ({ notices: current.notices.filter((entry) => entry.id !== id) }));
+      try { await api.deleteInboxNotice(id); } catch { void read(); }
+    },
   };
 }
-
-export type ApprovalsStore = ReturnType<typeof createApprovalsStore>;

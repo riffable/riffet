@@ -271,7 +271,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
 }
 
 const LIST_CHANGE_DEBOUNCE_MS = 250;
-type ListEvent = 'changed' | 'notice' | 'task' | 'integrations' | 'plugin-data' | 'owner' | 'devices' | 'channels' | 'plugin-approvals' | 'servers' | 'council' | 'team' | 'security';
+type ListEvent = 'changed' | 'notice' | 'inbox' | 'task' | 'integrations' | 'plugin-data' | 'owner' | 'devices' | 'channels' | 'plugin-approvals' | 'servers' | 'council' | 'team' | 'security';
 
 /** Both transports notify clients of the same revisions and changes. */
 function subscribeLists({ store, notices, tasks, plugins, owner, devices, channels, pluginApprovals, links, council, team, securityAudit }: RouteDeps, request: FastifyRequest, unwatch: () => void, write: (event: ListEvent, json: string) => void): () => void {
@@ -307,6 +307,7 @@ function subscribeLists({ store, notices, tasks, plugins, owner, devices, channe
     devices.onChange(() => emit('devices', {})),
     channels.onChange(() => emit('channels', {})),
     pluginApprovals.onChange(() => emit('plugin-approvals', { revision: pluginApprovals.revision })),
+    notices.onChange(() => emit('inbox', {})),
     // A linked server is added, removed, or comes up or down (docs/SERVER-LINKS.md §5); a peer is never told this server's links.
     ...(request.headers['x-riffet-link'] ? [] : [links?.()?.onChange(() => emit('servers', {})) ?? (() => {})]),
     // Discussions in the sidebar (created, deleted, settled, opened); council is `deny` over links, so a peer is not told.

@@ -39,7 +39,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
   onStart: (item: WorkItem) => Promise<boolean>;
   onOpenSession: (sessionId: string) => void;
   onOpenItem: (id: string) => void;
-  onNewChild: (parent: WorkItem) => void;
+  onNewChild?: (parent: WorkItem) => void;
   onClose: () => void;
 }) {
   const { t } = useLingui();
@@ -106,7 +106,7 @@ export function WorkItemPanel({ view, views, projects, backends, starting, onSta
             <DropdownMenu>
               <Tip label={t`更多操作`}><DropdownMenuTrigger asChild><Button size="icon-xs" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></DropdownMenuTrigger></Tip>
               <DropdownMenuContent align="end">
-                {!item.parentId && <DropdownMenuItem onSelect={() => onNewChild(item)}><IconListTodo /><Trans>新建子任务</Trans></DropdownMenuItem>}
+                {!item.parentId && onNewChild && <DropdownMenuItem onSelect={() => onNewChild?.(item)}><IconListTodo /><Trans>新建子任务</Trans></DropdownMenuItem>}
                 {item.status !== 'cancelled' && <DropdownMenuItem onSelect={() => update({ status: 'cancelled' })}><IconSlash /><Trans>无需关注</Trans></DropdownMenuItem>}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="danger" onSelect={() => void remove()}><IconTrash2 /><Trans>删除…</Trans></DropdownMenuItem>

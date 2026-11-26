@@ -1059,3 +1059,10 @@
 - **原因**：用户让 Agent 画图时，生成的图片本身是核心交付物；若收进自动折叠的「已处理」，回合结束后只能看到文字说明、看不到成品图。仅在完成且有图时外露，避免生成中拆碎过程块或把失败调用孤立在主线。
 - **否决**：把 `imageGeneration` 留在 `TurnProcess` 里（用户看不到图）；一启动就放到过程块外（生成中与失败态会拆出多余分段）；复用 `question` / `plan` 清除前置无 phase 正文的规则（画图前的思路说明属于过程旁白，不应被带到外层）。
 - **规则**：[界面](system/surfaces.md) §1.4；`packages/timeline/src/toolTitle.ts#isArtifactToolData`、`apps/web/src/app/session/transcriptRows.ts`、`apps/mobile/client/src/commonMain/kotlin/riffet/ui/timeline/TimelineRows.kt`。
+
+## 2026-11-26 · 独立收件箱能力与任务看板「待处理」分离
+
+- **决定**：将「收件箱」升级为 Riffet 的独立一级平台能力（`/inbox`，`PageScaffold column="document"`），入口位于侧栏左下角头像的个人菜单，头像右上角红点数字仅统计收件箱未处理/未读数（上限 `99+`）。收件箱**只承接显式发给主人的高信噪比事项**：（1）插件请求用户确认的写操作（`host.approvals`，如外部插件的发送或写入确认）；（2）团队成员（如领域顾问、个人助理）或定时提醒通过 `notify_user` 主动发来的重要消息（支持已读、全部标为已读与删除，经 `/api/inbox/notices`）。任务看板（`/tasks`）顶部的任务聚合区块与概览指标更名为「待处理」，不再叫「收件箱」，也不再混入插件审批或向收件箱刷任务流转。同步修改 2026-11-14「任务页：收件箱在列上方」、2026-11-16「头像菜单不放页面入口」与 2026-11-17「手机 Web 点头像直接进入设置」的对应条款。
+- **原因**：把任务看板的「待验收」等用户自己流转的任务混进收件箱，会迅速堆出数十条低紧迫度条目，把真正需要主人拍板或查看的重要消息（如插件写入审批、团队成员主动提醒）彻底淹没，也让头像未读数字失去信号价值。
+- **否决**：把任务流转继续塞进收件箱（滥用收件箱、噪音大）；在任务看板里继续叫「收件箱」（与平台级收件箱语义混淆）；在侧栏顶部导航再加一行固定「收件箱」（挤压会话列表高度）。
+- **规则**：`apps/web/src/app/work-items/InboxPage.tsx`、`apps/web/src/app/SidebarUserMenu.tsx`、`apps/server/src/riffet-mcp/notices.ts`、`apps/server/src/routes/plugin-approvals.ts`。

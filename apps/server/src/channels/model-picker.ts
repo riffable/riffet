@@ -91,7 +91,8 @@ export class ChannelModelPicker {
     if (!chat) return undefined;
     const defaults = this.state.bindings.chatModel(chat.key);
     const backendId = defaults.backendId ?? await defaultBackendForClient(undefined, this.state.deps.settings.getSettings().defaultBackendId, this.state.deps.nativeBackends);
-    return { backendId, project: chat.projectId ? this.state.projectOf(chat.projectId) : undefined, selection: defaults.model ?? '' };
+    const projectId = chat.projectId ?? this.state.bindings.accounts().find(item => item.id === chat.account)?.defaultProjectId;
+    return { backendId, project: projectId ? this.state.projectOf(projectId) : undefined, selection: defaults.model ?? '' };
   }
 
   private async modelView(entry: ModelRef, ref: string, options: { selection?: string; error?: string; stale?: boolean } = {}): Promise<ModelPickerView> {
@@ -119,6 +120,11 @@ export class ChannelModelPicker {
     const ref = this.state.addRef(entry);
     try {
       const view = await this.modelView(entry, ref);
+      if (this.state.runtimes.get(m.account)?.provider?.capabilities.actions === 'none') {
+        this.state.refs.delete(ref);
+        await this.state.reply(connection, m.address, m.anchor, `${view.backend.name} · ${view.summary}`);
+        return;
+      }
       try { entry.sent = await connection.showPanel(m.address, view, m.anchor); }
       catch (error) { console.warn('[channels] model card failed', errorMessage(error)); await this.state.reply(connection, m.address, m.anchor, `${REPLY.modelUnavailable}：${view.summary}`); }
     } catch (error) {

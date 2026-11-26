@@ -217,14 +217,27 @@ export class ChannelService {
       }
       return;
     }
-    const chat = this.bindings.chat(chatKey(m.account, m.address.chatId)) ?? this.bindings.touchChat(m.account, m.address.chatId, m.address.chatType);
+    const incomingName = m.address.chatName?.trim();
+    const existingChat = this.bindings.chat(chatKey(m.account, m.address.chatId));
+    const chat = !existingChat
+      ? this.bindings.touchChat(m.account, m.address.chatId, m.address.chatType, incomingName ? { name: incomingName } : {})
+      : incomingName && existingChat.name !== incomingName
+        ? this.bindings.touchChat(m.account, m.address.chatId, m.address.chatType, { name: incomingName })
+        : existingChat;
+    if (!existingChat || (incomingName && existingChat.name !== incomingName)) this.changed();
     const conversation = this.bindings.conversation(m.address, chat.flat);
     if (m.address.chatType === 'group' && !m.mentionsBot && !conversation) return;
     if (command) { await this.command(command, m, chat, conversation?.sessionId, connection); return; }
     if (!m.text.trim() && !m.attachments.length) return;
     void connection.acknowledge(m.anchor, 'received').catch(() => undefined);
-    if (!chat.projectId || !this.projectUsable(chat.projectId, chat.chatType)) { await this.askProject(m, chat, connection, true); return; }
-    await this.submit(m, chat.projectId, connection);
+    const fallbackProjectId = this.accounts.account(m.account).defaultProjectId;
+    const projectId = chat.projectId && this.projectUsable(chat.projectId, chat.chatType)
+      ? chat.projectId
+      : fallbackProjectId && this.projectUsable(fallbackProjectId, chat.chatType)
+        ? fallbackProjectId
+        : undefined;
+    if (!projectId) { await this.askProject(m, chat, connection, true); return; }
+    await this.submit(m, projectId, connection);
   }
 
   private async command(command: ChannelCommand, m: InboundMessage, chat: ChannelChat, sessionId: string | undefined, connection: ChannelConnection): Promise<void> {
@@ -261,6 +274,10 @@ export class ChannelService {
   }
 
   private async showHelp(m: InboundMessage, connection: ChannelConnection): Promise<void> {
+    if (this.runtimes.get(m.account)?.provider?.capabilities.actions === 'none') {
+      await this.reply(connection, m.address, m.anchor, helpText());
+      return;
+    }
     try {
       const ref = this.addRef({ kind: 'panel', account: m.account, address: m.address, anchor: m.anchor, at: Date.now() });
       await connection.showPanel(m.address, { kind: 'command-panel', ref, ...panelContent(m.address.chatType) }, m.anchor);
@@ -283,7 +300,8 @@ export class ChannelService {
 
   private statusText(chat: ChannelChat, sessionId: string | undefined): string {
     const lines: string[] = [];
-    const project = chat.projectId ? this.projectOf(chat.projectId) : undefined;
+    const effectiveProjectId = chat.projectId ?? this.bindings.accounts().find(item => item.id === chat.account)?.defaultProjectId;
+    const project = effectiveProjectId ? this.projectOf(effectiveProjectId) : undefined;
     lines.push(`项目：${project?.name ?? '未选择'}`);
     if (sessionId) {
       try {
@@ -316,6 +334,10 @@ export class ChannelService {
   }
 
   private async askProject(m: InboundMessage, chat: ChannelChat, connection: ChannelConnection, hold: boolean): Promise<void> {
+    if (this.runtimes.get(m.account)?.provider?.capabilities.actions === 'none') {
+      await this.reply(connection, m.address, m.anchor, REPLY.projectRequiredInRiffet);
+      return;
+    }
     const projects = this.projectChoices(chat.chatType);
     if (!projects.length) { await this.reply(connection, m.address, m.anchor, REPLY.noProjects); return; }
     if (hold) this.held.set(chat.key, { message: m, at: Date.now() });

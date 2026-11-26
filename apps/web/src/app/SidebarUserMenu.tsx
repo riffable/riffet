@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeBackendCatalogEntry, OwnerInfo } from '@contracts';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { ThemeSwatch } from '@/components/theme-swatch';
-import { IconChevronRight, IconCopy, IconLaptop, IconMonitor, IconMoon, IconServer, IconSettings, IconSun, IconSwatchBook } from '@/components/icons';
+import { IconChevronRight, IconCopy, IconInbox, IconLaptop, IconMonitor, IconMoon, IconServer, IconSettings, IconSun, IconSwatchBook } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { StatusDot } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
@@ -21,6 +21,9 @@ interface Props {
   backend?: NativeBackendCatalogEntry;
   stale?: { mode: 'syncing' | 'offline' };
   mobile?: boolean;
+  /** Unread / pending items in the standalone Inbox, shown as a numeric badge on the avatar and inside the menu. */
+  inboxCount?: number;
+  onOpenInbox?: () => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenTheme?: () => void;
@@ -59,29 +62,34 @@ export function SidebarSettingsButton({ backend, onOpen }: { backend?: NativeBac
   );
 }
 
-/** The sidebar footer's account menu: profile, theme, and connection info (phones go straight to Settings). */
-export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, onOpenSettings, onOpenTheme }: Props) {
+/** The sidebar footer's account menu: profile, inbox, theme, and connection info. */
+export function SidebarUserMenu({ owner, backend, stale, mobile, inboxCount = 0, onOpenInbox, onOpenProfile, onOpenSettings, onOpenTheme }: Props) {
   const { t } = useLingui();
   const { local, address } = hostInfo();
   const offline = stale?.mode === 'offline';
   const backendNotice = backend?.needsLogin ? t`${backend.label} 未登录` : backend && !backend.available ? t`${backend.label} 不可用` : undefined;
   const warning = offline ? t`无法连接服务器` : mobile ? backendNotice : undefined;
   const label = t`个人资料与更多`;
-  const tooltip = [owner?.name, label, warning].filter(Boolean).join(' · ');
+  const inboxNotice = inboxCount > 0 ? t`${inboxCount} 条收件箱待处理` : undefined;
+  const tooltip = [owner?.name, label, inboxNotice, warning].filter(Boolean).join(' · ');
   const HostIcon = local ? IconLaptop : IconServer;
   const hostLabel = local ? t`本机` : t({ message: '远端', context: 'workbench-remote-host' });
+  const badgeText = inboxCount > 99 ? '99+' : String(inboxCount);
   const avatar = <>
     <OwnerAvatar owner={owner} size={24} />
+    {inboxCount > 0 && (
+      <span
+        aria-hidden="true"
+        className={cn(
+          'pointer-events-none absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-2xs font-medium leading-none tabular-nums text-danger-fg ring-2',
+          mobile ? 'ring-sidebar' : 'ring-canvas',
+        )}
+      >
+        {badgeText}
+      </span>
+    )}
     {warning && <StatusDot tone="warning" className={cn('absolute right-0 bottom-0 ring-2', mobile ? 'ring-sidebar' : 'ring-canvas')} />}
   </>;
-  // The phone's settings page leads with the profile and the theme, so the avatar goes straight there.
-  if (mobile) {
-    return (
-      <Button size="icon-sm" variant="quiet" aria-label={[owner?.name, t`设置`, warning].filter(Boolean).join(' · ')} onPointerDown={preloadSettings} onClick={onOpenSettings} className="relative rounded-full">
-        {avatar}
-      </Button>
-    );
-  }
   return (
     <DropdownMenu>
       <Tip label={tooltip} side="top">
@@ -100,8 +108,32 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
           </span>
           <IconChevronRight className="size-3.5 text-fg-4" />
         </DropdownMenuItem>
+        {onOpenInbox && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onOpenInbox} textValue={t`收件箱`}>
+              <IconInbox />
+              <span className="min-w-0 flex-1 truncate"><Trans>收件箱</Trans></span>
+              {inboxCount > 0 && (
+                <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-danger px-1 text-2xs font-medium leading-none tabular-nums text-danger-fg">
+                  {badgeText}
+                </span>
+              )}
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <ThemeMenu onOpenTheme={onOpenTheme} />
+        {mobile && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onOpenSettings} textValue={t`设置`}>
+              <IconSettings />
+              <span className="min-w-0 flex-1 truncate"><Trans>设置</Trans></span>
+              {backendNotice && <StatusDot tone="warning" />}
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <MenuSub icon={<HostIcon className={offline ? 'text-warning' : undefined} />} label={hostLabel} value={offline ? t`无法连接服务器` : stale ? t`正在同步` : address} className="w-64">
           <DropdownMenuLabel>{hostLabel}</DropdownMenuLabel>

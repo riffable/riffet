@@ -160,7 +160,7 @@ export function OverlayChapter() {
         <Specimen name={t`侧栏`}><SidebarDemo /></Specimen>
         <Specimen name={t`个人资料`}>
           <div className="flex h-12 w-64 items-center gap-1 px-2">
-            <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
+            <SidebarUserMenu owner={{ revision: 0, name: 'River' }} inboxCount={3} onOpenInbox={() => {}} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenTheme={() => {}} />
             <div className="ml-auto flex items-center gap-1"><SidebarSettingsButton onOpen={() => {}} /></div>
           </div>
         </Specimen>

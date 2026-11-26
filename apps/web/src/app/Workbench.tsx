@@ -75,6 +75,7 @@ import { MemberConfigDialog } from './team/MemberConfigDialog';
 import { MemberSessionSheet, MemberSessionSidebar } from './team/MemberSessionSidebar';
 import { confirmDialog } from '@/lib/dialogs';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
+const InboxPage = lazy(() => import('./work-items/InboxPage').then((module) => ({ default: module.InboxPage })));
 const WorkItemsPage = lazy(() => import('./work-items/WorkItemsPage').then((module) => ({ default: module.WorkItemsPage })));
 const AutomationsPage = lazy(() => import('./automations/AutomationsPage').then((module) => ({ default: module.AutomationsPage })));
 const CouncilPage = lazy(() => import('./council/CouncilPage').then((module) => ({ default: module.CouncilPage })));
@@ -130,6 +131,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const pluginDetailTab = useNav((state) => state.pluginDetailTab);
   const pluginOpenRevision = useNav((state) => state.pluginOpenRevision);
   const statsOpen = useNav((state) => state.statsOpen);
+  const inboxOpen = useNav((state) => state.inboxOpen);
   const tasksOpen = useNav((state) => state.tasksOpen);
   const automationsOpen = useNav((state) => state.automationsOpen);
   const councilOpen = useNav((state) => state.councilOpen);
@@ -359,7 +361,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const openMainView = (viewId: string) => {
     void nav.navigate(() => { nav.openMainView(viewId); ui.setMobileSidebar(false); });
   };
-  const pageOpen = settingsOpen || pluginsOpen || statsOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || Boolean(mainViewId);
+  const pageOpen = settingsOpen || pluginsOpen || statsOpen || inboxOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || Boolean(mainViewId);
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
   const sidebarSelectedSessionId = anyPageOpen ? '' : session?.id ?? '';
@@ -368,7 +370,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const assistantPage = Boolean((activeMember || isAssistantProject(project)) && !anyPageOpen);
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : inboxOpen ? t`收件箱` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -491,8 +493,47 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [loaded, assistantMain, selectedProjectId, selectedSessionId, activeMember, nav]);
   const onAssistantMain = Boolean(assistantMain && session?.id === assistantMain.id);
   useEffect(() => { if (onAssistantMain) settingsStore.syncAssistantTimeZone(); }, [onAssistantMain, settings.assistant?.timeZone]);
-  const approvalCount = useApprovals((state) => state.approvals.length);
-  const inboxCount = useMemo(() => (workItemSummaries ? countWorkItemInbox(workItemSummaries, sessions) : 0) + approvalCount, [workItemSummaries, sessions, approvalCount]);
+  const approvalsList = useApprovals((state) => state.approvals);
+  const inboxNotices = useApprovals((state) => state.notices);
+  const approvalsLoaded = useApprovals((state) => state.loaded);
+  const seenInboxRef = useRef<Set<string> | undefined>(undefined);
+  useEffect(() => {
+    if (!approvalsLoaded) return;
+    const keys = new Set([
+      ...approvalsList.map((item) => `approval:${item.pluginId}:${item.id}`),
+      ...inboxNotices.filter((item) => !item.readAt).map((item) => `notice:${item.id}`),
+    ]);
+    const previous = seenInboxRef.current;
+    seenInboxRef.current = keys;
+    if (!previous) return;
+    const alertInbox = (tag: string, message: string) => {
+      toast.info(message, {
+        action: { label: t`查看收件箱`, onClick: () => openPage('inbox') },
+        duration: 10_000,
+      });
+      if (settings.notifications === true && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          const notification = new Notification('Riffet', { body: message, tag });
+          notification.onclick = () => { window.focus(); openPage('inbox'); };
+        } catch { /* ignore */ }
+      }
+    };
+    for (const item of approvalsList) {
+      const key = `approval:${item.pluginId}:${item.id}`;
+      if (!previous.has(key)) alertInbox(key, item.title);
+    }
+    for (const notice of inboxNotices) {
+      if (notice.readAt) continue;
+      const key = `notice:${notice.id}`;
+      if (!previous.has(key)) {
+        const headline = [notice.senderName, notice.title || notice.body].filter(Boolean).join(' · ').slice(0, 120);
+        alertInbox(key, headline);
+      }
+    }
+  }, [approvalsLoaded, approvalsList, inboxNotices, openPage, settings.notifications, t]);
+  const unreadNoticeCount = useMemo(() => inboxNotices.filter((item) => !item.readAt).length, [inboxNotices]);
+  const inboxUnreadCount = approvalsList.length + unreadNoticeCount;
+  const tasksAttentionCount = useMemo(() => (workItemSummaries ? countWorkItemInbox(workItemSummaries, sessions) : 0), [workItemSummaries, sessions]);
   /** 开始 on a 任务: its first conversation, with its assignee's defaults, while the reader stays on the board. */
   const startWorkItem = async (item: WorkItem): Promise<boolean> => {
     if (item.assignee.kind !== 'agent') return false;
@@ -672,6 +713,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onOpenSettings={openSettingsAt}
       onCustomizeSidebar={() => openSettingsAt('sidebar')}
       onOpenProfile={() => openSettingsAt('profile')}
+      onOpenInbox={() => openPage('inbox')}
+      inboxCount={inboxUnreadCount}
       onOpenStats={() => openPage('stats')}
       {...(assistantProject && listsState !== 'syncing' && !teamMembers.length ? { onOpenAssistant: openAssistant, assistantActive: assistantPage, ...(assistantMain ? { assistantSession: assistantMain } : {}) } : {})}
       teamMembers={teamMembers}
@@ -681,7 +724,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onCreateMember={() => { setCreateMemberOpen(true); ui.setMobileSidebar(false); }}
       onEditMember={(member) => { setEditingMemberId(member.id); ui.setMobileSidebar(false); }}
       onDeleteMember={deleteMember}
-      {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: inboxCount } : {})}
+      {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: tasksAttentionCount } : {})}
       onOpenAutomations={() => openPage('automations')}
       onOpenCouncil={() => openPage('council')}
       councilActive={councilOpen}
@@ -843,6 +886,16 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onAdopted={onWorktreeMerged}
         onError={pushError}
         onClose={() => nav.set({ attemptsGroupId: '' })}
+      />
+    );
+  } else if (inboxOpen) {
+    content = (
+      <InboxPage
+        sidebarCollapsed={desktop && sidebarCollapsed}
+        onClose={() => nav.set({ inboxOpen: false })}
+        onOpenSidebar={openMobileSidebar}
+        onExpandSidebar={expandSidebar}
+        onOpenSession={openSessionById}
       />
     );
   } else if (tasksOpen) {

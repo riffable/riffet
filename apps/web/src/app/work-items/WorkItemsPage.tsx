@@ -9,15 +9,14 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { listRowClass, RowActions, rowConceal } from '@/components/ui/list-row';
 import { SearchField } from '@/components/ui/search-field';
 import { Tip } from '@/components/ui/tooltip';
-import { IconCheck, IconChevronDown, IconChevronRight, IconEye, IconInbox, IconList, IconListFilter, IconMessageSquareText, IconPlay, IconPlus, IconSlash, IconSquareKanban } from '@/components/icons';
+import { IconCheck, IconChevronDown, IconChevronRight, IconEye, IconList, IconListFilter, IconListTodo, IconMessageSquareText, IconPlay, IconPlus, IconSlash, IconSquareKanban } from '@/components/icons';
 import { formatDateTime, relativeTime } from '@/lib/i18n/format';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { cn, readStored, writeStored } from '@/lib/utils';
 import { PageScaffold } from '../PageScaffold';
-import { useApprovals, useStores, useWorkItems } from '../state/stores';
+import { useStores, useWorkItems } from '../state/stores';
 import { BOARD_STATUSES, WORK_ITEM_DRAG_TYPE, byAttention, byInbox, bySettled, DONE_SHOWN_MS, LIST_STATUSES, summarizeWorkItems, viewWorkItems, type WorkItemView } from './model';
 import { activateWorkItem, AssigneeMark, LiveMark, SectionHeading, StatusIcon, useAssigneeLabel, useStatusLabel, useSubmissionClue, WorkItemNumber } from './parts';
-import { ApprovalRow } from './ApprovalRow';
 import { NewWorkItemDialog, type NewWorkItemDraft } from './NewWorkItemDialog';
 import { WorkItemCard } from './WorkItemCard';
 import { WorkItemOverview } from './WorkItemOverview';
@@ -107,17 +106,9 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
   }), [views, activeProjectId, filters, needle, projects]);
 
   const inbox = useMemo(() => shown.filter((entry) => entry.inInbox).sort(byInbox), [shown]);
-  // What plugins ask the owner to approve belongs to no project or label, so only a search narrows it; it comes first, as 要你回答 does.
-  const allApprovals = useApprovals((state) => state.approvals);
-  const approvals = useMemo(() => activeProjectId !== ALL || filters.size
-    ? []
-    : allApprovals.filter((approval) => !needle || `${approval.title}\n${approval.body}\n${approval.pluginName}`.toLowerCase().includes(needle)), [allApprovals, activeProjectId, filters, needle]);
   const watching = useMemo(() => shown.filter((entry) => entry.item.status === 'watching').sort(byAttention), [shown]);
   const today = new Date().setHours(0, 0, 0, 0);
-  const overview = useMemo(() => {
-    const summary = summarizeWorkItems(shown, today);
-    return approvals.length ? { ...summary, inbox: summary.inbox + approvals.length } : summary;
-  }, [shown, today, approvals.length]);
+  const overview = useMemo(() => summarizeWorkItems(shown, today), [shown, today]);
   const selected = views.find((entry) => entry.item.id === selectedId);
   const family = useMemo(() => familyOf(views), [views]);
 
@@ -152,8 +143,7 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
   }, [views]);
   const labels = useMemo(() => [...new Set(views.flatMap(({ item }) => item.labels))].sort(), [views]);
 
-  // A pending plugin approval keeps the inbox on screen even before the first task exists.
-  const empty = items !== undefined && views.length === 0 && approvals.length === 0;
+  const empty = items !== undefined && views.length === 0;
   const newDraft = (overrides: Partial<NewWorkItemDraft> = {}): NewWorkItemDraft => ({ projectId: activeProjectId || liveProjects[0]?.id, ...overrides });
 
   return <>
@@ -266,14 +256,13 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
 
         {items !== undefined && <WorkItemOverview data={overview} />}
 
-        {inbox.length + approvals.length > 0 && (
+        {inbox.length > 0 && (
           <section className="mb-5">
             <CollapsibleHeader open={inboxOpen} onToggle={toggleInbox}>
-              <SectionHeading icon={<IconInbox />} count={inbox.length + approvals.length}><Trans>收件箱</Trans></SectionHeading>
+              <SectionHeading icon={<IconListTodo />} count={inbox.length}><Trans>待处理</Trans></SectionHeading>
             </CollapsibleHeader>
             <Collapse open={inboxOpen} keep>
               <div className="rounded-xl p-1 shadow-[inset_0_0_0_1px_var(--line)]">
-                {approvals.map((approval) => <ApprovalRow key={`${approval.pluginId}/${approval.id}`} approval={approval} />)}
                 {inbox.map((entry) => (
                   <InboxRow
                     key={entry.item.id}
@@ -494,7 +483,7 @@ function AttentionRowEnd({ reason, tone, assignee, time, children }: {
   );
 }
 
-function InboxRow({
+export function InboxRow({
   entry, projectName, selected, onOpen, onOpenSession, onDone, onResume, onDismiss,
 }: {
   entry: WorkItemView;

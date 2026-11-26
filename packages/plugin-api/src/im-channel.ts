@@ -44,6 +44,8 @@ export interface ChannelAddress {
   account: string;
   chatId: string;
   chatType: 'p2p' | 'group';
+  /** Human-readable chat or peer title learned from the platform, saved for the settings list. */
+  chatName?: string;
   threadKey?: string;
   aliases?: string[];
 }
@@ -221,6 +223,12 @@ export interface ChannelConnection {
   readonly avatarUrl?: string;
   /** Optional copyable identifier learned after connecting (e.g. Telegram `@bot_username`). */
   readonly identity?: ChannelAccountIdentity;
+  /**
+   * Optional platform user already authenticated by this connection (for user-scoped or local-CLI
+   * channels that act as the signed-in owner without a `/bind` code flow). Automatically bound to
+   * this account once connected; does not open access to other senders.
+   */
+  readonly ownerIdentity?: { id: string; name?: string };
   /** Optional deep links learned after connecting (merged over `provider.links`). */
   readonly links?: { open?: string; console?: string };
   openTurn(address: ChannelAddress, view: TurnView, anchor?: ReplyAnchor): Promise<TurnSurface>;
@@ -265,7 +273,17 @@ export interface ProviderRegistration {
 
 /** One IM platform, keyed in `Contributions.imChannels` by the id declared in `contributes.imChannels`. */
 export interface ImChannelProvider {
-  capabilities: { edit: boolean; actions: 'forms' | 'buttons' | 'none'; threads: boolean };
+  capabilities: {
+    edit: boolean;
+    actions: 'forms' | 'buttons' | 'none';
+    threads: boolean;
+    /**
+     * Whether turns started from Web/Mac/mobile on a bound conversation are mirrored back to this IM.
+     * Defaults to `true`. Set to `false` for channels that should only reply to explicit IM triggers
+     * (e.g. user-scoped or shared-chat proxies).
+     */
+    mirrorOtherClients?: boolean;
+  };
   /** Describes manual fields, card options and platform hints for the settings UI. */
   meta?: ChannelProviderMeta;
   connect(account: ChannelAccount, context: ChannelContext): Promise<ChannelConnection>;

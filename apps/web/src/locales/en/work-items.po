@@ -127,6 +127,14 @@ msgstr "Saved as AGENTS.md. Takes effect on the next start"
 msgid "停下待处理"
 msgstr "Idle"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "全部"
+msgstr "All"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "全部标为已读"
+msgstr "Mark all as seen"
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "全部项目"
 msgstr "All projects"
@@ -159,6 +167,10 @@ msgstr "Write an answer…"
 msgid "写评论…"
 msgstr "Write a comment…"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "切换到「全部」可查看历史消息"
+msgstr "Switch to All to see earlier messages"
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "列表"
 msgstr "List"
@@ -166,6 +178,10 @@ msgstr "List"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "创建"
 msgstr "Create"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "删除"
+msgstr "Delete"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "删除…"
@@ -267,6 +283,10 @@ msgstr "Completion criteria, one per line"
 msgid "定时 {0}"
 msgstr "Schedule {0}"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "定时提醒"
+msgstr "Reminder"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "定时检查"
 msgstr "Schedule"
@@ -304,10 +324,19 @@ msgstr "Start tracking"
 msgid "开始"
 msgstr "Start"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "待你确认"
+msgstr "Needs your approval"
+
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-status"
 msgid "待办"
 msgstr "To do"
+
+#: src/app/work-items/WorkItemOverview.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "待处理"
+msgstr "Pending"
 
 #: src/app/work-items/PlanDock.tsx
 msgid "待开始的任务"
@@ -349,6 +378,10 @@ msgstr "Reset to default"
 msgid "成功"
 msgstr "Success"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "成员消息"
+msgstr "Member message"
+
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-assignee"
 msgid "我"
@@ -358,6 +391,8 @@ msgstr "Me"
 msgid "或者写下回答…"
 msgstr "Or write an answer…"
 
+#: src/app/work-items/ApprovalRow.tsx
+#: src/app/work-items/InboxPage.tsx
 #: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -396,6 +431,10 @@ msgstr "Question"
 msgid "提问：{0}"
 msgstr "Asked: {0}"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "插件待确认操作，以及团队成员主动发给你的重要消息会出现在这里"
+msgstr "Pending plugin approvals and important messages from team members appear here"
+
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "搜索任务"
@@ -405,10 +444,13 @@ msgstr "Search tasks"
 msgid "搜索任务、#编号…"
 msgstr "Search tasks, #number…"
 
-#: src/app/work-items/WorkItemOverview.tsx
-#: src/app/work-items/WorkItemsPage.tsx
+#: src/app/work-items/InboxPage.tsx
 msgid "收件箱"
 msgstr "Inbox"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "收件箱为空"
+msgstr "Inbox is empty"
 
 #: src/app/work-items/ApprovalRow.tsx
 #: src/app/work-items/WorkItemPanel.tsx
@@ -523,9 +565,25 @@ msgstr "More actions"
 msgid "有新结果"
 msgstr "New results"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "未处理"
+msgstr "Unread"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "未处理 ({unreadTotal})"
+msgstr "Unread ({unreadTotal})"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "未读"
+msgstr "Unread"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "未达成"
 msgstr "Not met"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "标为已读"
+msgstr "Mark read"
 
 #: src/app/work-items/parts.tsx
 msgid "标准 {met}/{total}"
@@ -560,9 +618,17 @@ msgstr "Verification error"
 msgid "核验通过"
 msgstr "Verified"
 
+#: src/app/work-items/InboxPage.tsx
+msgid "没有匹配的条目"
+msgstr "No matching items"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "没有可选的任务"
 msgstr "No tasks to choose"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "没有未处理的条目"
+msgstr "All caught up"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "活动"
@@ -646,9 +712,14 @@ msgstr "Waiting on #{0}"
 msgid "等 #{0} +{1}"
 msgstr "Waiting on #{0} +{1}"
 
+#: src/app/work-items/InboxPage.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "筛选"
 msgstr "Filter"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "筛选收件箱"
+msgstr "Filter inbox"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "绑定助理自动追踪"
@@ -834,6 +905,10 @@ msgstr "Exit code {0}"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "重新打开"
 msgstr "Reopen"
+
+#: src/app/work-items/InboxPage.tsx
+msgid "重要消息"
+msgstr "Messages"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx

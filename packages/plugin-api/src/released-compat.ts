@@ -24,7 +24,7 @@ import type * as Released from '../released/1.0.0/index.js';
  * assertions below rather than compared.
  */
 export const PROPOSED_CONTRIBUTIONS = ['agentBackends', 'runtimeHooks', 'services', 'channels', 'agentTools', 'speechRecognizer', 'imChannels', 'approvals'] as const;
-export const PROPOSED_HOST_MEMBERS = ['agentProfiles', 'services', 'sessions', 'approvals'] as const;
+export const PROPOSED_HOST_MEMBERS = ['agentProfiles', 'services', 'sessions', 'approvals', 'agents'] as const;
 
 type Proposed = (typeof PROPOSED_CONTRIBUTIONS)[number];
 type ProposedHost = (typeof PROPOSED_HOST_MEMBERS)[number];

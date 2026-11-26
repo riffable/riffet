@@ -77,6 +77,7 @@ export const REPLY = {
   flatOff: '这个群按话题分会话',
   flatGroupOnly: '只有群聊可以设置',
   noProjects: '还没有可用的项目，请先在 Riffet 里添加',
+  projectRequiredInRiffet: '这个聊天还没有绑定项目，请先在 Riffet 的机器人设置里选择默认项目或为该聊天绑定项目',
   projectChanged: (name: string) => `项目已切换为 ${name}`,
   modelSwitched: (summary: string) => `已切换为 ${summary}`,
   modelNextTurn: '下一个回合生效',

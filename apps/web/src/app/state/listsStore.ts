@@ -144,6 +144,9 @@ export function createListsStore(deps: ListsDeps) {
   /** Told when what plugins ask the owner to approve may have changed, and after a reconnect. */
   const approvalListeners = new Set<() => void>();
   const announceApprovals = () => { for (const listener of [...approvalListeners]) listener(); };
+  /** Told when explicit user-facing inbox messages (`notify_user` / read / delete) changed. */
+  const inboxListeners = new Set<() => void>();
+  const announceInbox = () => { for (const listener of [...inboxListeners]) listener(); };
   /** Told when a model collaboration started, settled, was read or deleted, and after a reconnect. */
   const councilListeners = new Set<() => void>();
   const announceCouncil = () => { for (const listener of [...councilListeners]) listener(); };
@@ -297,6 +300,11 @@ export function createListsStore(deps: ListsDeps) {
     onPluginApprovals(listener: () => void): () => void {
       approvalListeners.add(listener);
       return () => { approvalListeners.delete(listener); };
+    },
+    /** Calls [listener] when explicit user-facing inbox messages changed (`GET /api/inbox/notices`). */
+    onInbox(listener: () => void): () => void {
+      inboxListeners.add(listener);
+      return () => { inboxListeners.delete(listener); };
     },
     /** Calls [listener] when the entry server's model collaborations may read differently (`GET /api/council`). */
     onCouncil(listener: () => void): () => void {
@@ -607,7 +615,7 @@ export function createListsStore(deps: ListsDeps) {
         }).catch(() => {});
       };
       const reconnected = () => {
-        if (!linked) { refreshOwner(); refreshTeam(); announceTask(undefined); announcePlugins(); emitPluginData(undefined); announceDevices(); announceChannels(); announceApprovals(); announceCouncil(); announceServers(); }
+        if (!linked) { refreshOwner(); refreshTeam(); announceTask(undefined); announcePlugins(); emitPluginData(undefined); announceDevices(); announceChannels(); announceApprovals(); announceInbox(); announceCouncil(); announceServers(); }
         // A `list-delta` server opens the stream with a `changed` naming every list's revision; an older one is read again.
         if (hasDelta()) return;
         announce({}); refreshProjects(true); poll();
@@ -642,7 +650,7 @@ export function createListsStore(deps: ListsDeps) {
       };
       // A linked server's stream says only that its lists moved; everything else on it belongs to that server's own workbench.
       const events: Record<string, (event: Event) => void> = linked ? { changed } : {
-        changed, task, owner, team: refreshTeam, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, council: announceCouncil, servers: announceServers, security: announceSecurity,
+        changed, task, owner, team: refreshTeam, integrations: announcePlugins, 'plugin-data': pluginData, devices: announceDevices, channels: announceChannels, 'plugin-approvals': announceApprovals, inbox: announceInbox, notice: announceInbox, council: announceCouncil, servers: announceServers, security: announceSecurity,
       };
       const retry = () => {
         pushed = false;

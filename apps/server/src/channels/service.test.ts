@@ -273,4 +273,86 @@ describe('channel core', () => {
     await channels.connected(created.id);
     expect(seen[1]).toEqual({ config: {}, secrets: { botToken: '123:secret-token' } });
   });
+
+  it('supports secretless self-authenticated channels with defaultProjectId, chatName sync, actions:none fallback and mirrorOtherClients:false', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-channels-proxy-'));
+    const projectDir = await mkdtemp(join(tmpdir(), 'riffet-channels-proxy-project-'));
+    const sent: string[] = [];
+    const openedTurns: Array<{ runId: string; source: string }> = [];
+    const pickers: ProjectPickerView[] = [];
+    let ctx!: ChannelContext;
+    const connectSpy = vi.fn(async (_account, context: ChannelContext): Promise<ChannelConnection> => {
+      ctx = context;
+      return {
+        botName: 'Local Proxy',
+        ownerIdentity: { id: 'ou_self', name: 'Owner' },
+        openTurn: async (_address, view) => {
+          openedTurns.push({ runId: view.runId, source: view.source });
+          return { update: () => undefined, finish: async () => undefined, state: () => ({ kind: 'demo.proxy/proxy', data: {} }) };
+        },
+        resumeTurn: async () => undefined,
+        showInteraction: async () => ({ messageId: 'i' }),
+        updateInteraction: async () => undefined,
+        showProjectPicker: async (_address, view) => { pickers.push(view); return { messageId: 'p' }; },
+        showPanel: async () => ({ messageId: 'panel' }),
+        updatePanel: async () => undefined,
+        send: async (_address, text) => { sent.push(text); return { messageId: 's' }; },
+        acknowledge: async () => undefined,
+        close: async () => undefined,
+      };
+    });
+    const proxyProvider: ChannelProvider = {
+      kind: 'demo.proxy/proxy',
+      title: { 'zh-Hans': '本地代理', en: 'Local Proxy' },
+      capabilities: { edit: false, actions: 'none', threads: true, mirrorOtherClients: false },
+      meta: { fields: [] },
+      connect: connectSpy,
+    };
+    const { app, channels, store, dispatch, nativeBackends } = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent', channelProviders: [proxyProvider] });
+    cleanups.push(async () => { await app.close(); await rm(stateDir, { recursive: true, force: true }); await rm(projectDir, { recursive: true, force: true }); });
+    vi.spyOn(dispatch, 'kick').mockImplementation(() => undefined);
+    vi.spyOn(nativeBackends, 'assertAvailable').mockImplementation(() => undefined);
+    vi.spyOn(nativeBackends.catalog, 'availableBackendIds').mockResolvedValue(['claude']);
+    const project = store.createProject(projectDir, 'workspace');
+    const assistant = store.listProjects().find(item => item.system === 'assistant')!;
+
+    // Secretless channel connects without any secret fields and auto-binds `ownerIdentity`.
+    const account = await channels.createAccount({ kind: 'demo.proxy/proxy', enabled: true });
+    await channels.connected(account.id);
+    expect(channels.state().accounts[0]!.status.state).toBe('connected');
+    expect(channels.state().identities).toEqual([expect.objectContaining({ account: account.id, userId: 'ou_self', name: 'Owner' })]);
+
+    // Without a default project, an `actions: 'none'` channel replies with plain text instead of hanging on a picker card.
+    ctx.inbound({
+      account: account.id, messageId: 'm0', sender: { id: 'ou_self' }, text: 'hello', attachments: [], mentionsBot: true, inThread: false,
+      address: { account: account.id, chatId: 'oc_team', chatType: 'group', chatName: 'Core Team', threadKey: 'm0' },
+      anchor: { messageId: 'm0', inThread: true },
+    });
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(pickers).toHaveLength(0);
+    expect(channels.state().chats).toEqual([expect.objectContaining({ chatId: 'oc_team', name: 'Core Team' })]);
+
+    // System projects are refused as account-level defaultProjectId; setting a normal project updates without reconnecting.
+    await expect(channels.updateAccount(account.id, { defaultProjectId: assistant.id })).rejects.toThrow();
+    const updated = await channels.updateAccount(account.id, { defaultProjectId: project.id });
+    expect(updated.defaultProjectId).toBe(project.id);
+    expect(connectSpy).toHaveBeenCalledTimes(1);
+
+    // Inbound message now routes straight to the account's default project and tracks the channel-originated run.
+    ctx.inbound({
+      account: account.id, messageId: 'm1', sender: { id: 'ou_self' }, text: 'summarize thread', attachments: [], mentionsBot: true, inThread: false,
+      address: { account: account.id, chatId: 'oc_team', chatType: 'group', chatName: 'Core Team', threadKey: 'm1' },
+      anchor: { messageId: 'm1', inThread: true },
+    });
+    await vi.waitFor(() => expect(store.listSessions()).toHaveLength(1), { timeout: 5_000 });
+    const [session] = store.listSessions();
+    expect(session!.projectId).toBe(project.id);
+    await vi.waitFor(() => expect(openedTurns).toHaveLength(1));
+    expect(openedTurns[0]!.source).toBe('channel');
+
+    // A follow-up turn started from another client is never mirrored back to this IM channel.
+    store.acceptNativeRun(session!.id, 'web-cmd-1', { text: 'private follow-up from web', attachmentIds: [], context: [] }, { model: session!.model, mode: session!.mode, approval: session!.approval });
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(openedTurns).toHaveLength(1);
+  });
 });

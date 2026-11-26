@@ -228,9 +228,11 @@ export interface ExternalSessionDirectory {
  * conversation opened from a linked server's workbench (docs/SERVER-LINKS.md §4); `serverId` names that server.
  */
 export interface SessionOrigin {
-  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council' | 'call' | 'link';
+  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant' | 'council' | 'call' | 'link' | 'plugin';
   /** An IM chat the conversation was opened from (docs/design/channels.md). */
   channel?: { kind: string; account: string; chatId: string };
+  /** The plugin that opened this conversation via `host.agents` (docs/PLUGIN_ARCHITECTURE.md). */
+  pluginId?: string;
   sessionId?: string; runId?: string; groupId?: string; automationId?: string;
   /** The linked server a `link` conversation was opened from. */
   serverId?: string;

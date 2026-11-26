@@ -21,7 +21,20 @@ export interface RiffetWakeup {
   firedAt?: string; runId?: string; error?: string;
 }
 /** Something an agent asked to show the user (`notify_user`); `wakeup` marks the workbench's own notice about a wake-up that could not run. */
-export interface RiffetNotice { id: string; sessionId: string; title?: string; body: string; createdAt: string; source: 'agent' | 'wakeup'; }
+export interface RiffetNotice {
+  id: string;
+  sessionId: string;
+  title?: string;
+  body: string;
+  createdAt: string;
+  source: 'agent' | 'wakeup' | 'plugin';
+  /** ISO timestamp once the owner marked this inbox message as read. */
+  readAt?: string;
+  /** Optional display name of the sender (e.g. team member name or plugin name). */
+  senderName?: string;
+}
+
+export interface InboxNoticeList { notices: RiffetNotice[] }
 
 /*
  * The device channel (docs/DEVICES.md §3). A paired device reports what it can do, keeps its own
