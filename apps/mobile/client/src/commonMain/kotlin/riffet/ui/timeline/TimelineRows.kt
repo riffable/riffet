@@ -198,7 +198,11 @@ fun buildTimelineGrouping(
     val finalAnswerIndexByTurn = HashMap<String, Int>()
     val lastSteerIndexByTurn = HashMap<String, Int>()
     items.forEachIndexed { index, item ->
-        if (item is TimelineItem.Assistant && item.phase == AssistantPhase.FINAL_ANSWER) finalAnswerIndexByTurn[turnKeys[index]] = index
+        if (item is TimelineItem.Assistant && item.phase == AssistantPhase.FINAL_ANSWER) {
+            finalAnswerIndexByTurn[turnKeys[index]] = index
+        } else if (item.kind != TimelineItemKind.ACTIVITY && item.kind != TimelineItemKind.TASK_NOTIFICATION) {
+            finalAnswerIndexByTurn.remove(turnKeys[index])
+        }
         if (item is TimelineItem.User && item.run?.native?.intent == "steer") lastSteerIndexByTurn[turnKeys[index]] = index
         if (item is TimelineItem.User && item.run?.native?.intent != "steer") {
             if (item.run?.native?.stage == "turn_outcome_unknown") {
@@ -349,7 +353,7 @@ fun buildTimelineGrouping(
         // regardless of where the live tail sits.
         val finalAnswer = finalAnswerIndexByTurn[turnKey]
         val carries = when (item) {
-            is TimelineItem.Assistant -> if (finalAnswer == null) endsTurn(index) else finalAnswer == index
+            is TimelineItem.Assistant -> if (finalAnswer == null) analysis.lastIndexByTurn[turnKey] == index else finalAnswer == index
             is TimelineItem.Status -> finalAnswer == null && analysis.lastIndexByTurn[turnKey] == index
             is TimelineItem.Tool -> finalAnswer == null && item.isInteractionTool() && analysis.lastIndexByTurn[turnKey] == index
             else -> false

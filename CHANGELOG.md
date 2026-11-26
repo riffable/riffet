@@ -58,6 +58,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- When a turn continues running tools after a mid-turn reply (such as an async status update), the working indicator now stays at the bottom below the active work instead of appearing above it, and live process headers across Web, Android, and iPhone now show "Working" without a second ticking timer (matching Mac).
 - On iPhone, the setup card on New session is laid out like the rest of the app: saved and nearby servers are plain rows with one action each, an expired pairing shows Pair again on its row, and Skip next to Choose project is no longer squeezed out.
 - `riffet restart` and `riffet start` no longer report "Riffet did not start" while a large state directory is still starting: they wait as long as the server makes progress and show the phase it is in (opening databases, loading plugins, recovering tasks…); when the server does exit, only its own log lines are shown. Running `start`, `restart` or `stop` while a server is starting now waits for it instead of launching another, and `riffet status` shows it as starting.
 - `riffet restart` and `riffet stop` leave one line per finished step with how long it took; a step that takes more than 2 seconds shows its elapsed time.

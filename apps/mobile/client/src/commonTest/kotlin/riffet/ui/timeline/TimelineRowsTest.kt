@@ -3,7 +3,9 @@ package riffet.ui.timeline
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import riffet.contracts.WorkbenchEvent
+import riffet.core.AssistantPhase
 import riffet.core.ProjectedEvent
+import riffet.core.TaskNotificationStatus
 import riffet.core.TimelineItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -135,5 +137,54 @@ class TimelineRowsTest {
         assertEquals(false, beforeAsk.turnActive)
         assertEquals(true, afterAsk.running)
         assertEquals(true, afterAsk.turnActive)
+    }
+
+    @Test
+    fun `moves held footer to trailing work after a mid-turn final_answer and keeps it when only a notification follows`() {
+        val midAnswer = TimelineItem.Assistant(
+            key = "asst:3",
+            text = "Please push the wrapper branch.",
+            event = projected(3, "agent_message_chunk"),
+            phase = AssistantPhase.FINAL_ANSWER,
+        )
+        val liveTool = TimelineItem.Tool(
+            key = "tool:4",
+            event = projected(4, "tool_call", mapOf("toolCallId" to "call-4", "kind" to "execute", "toolName" to "Run", "status" to "in_progress")),
+        )
+        val running = buildTimelineGrouping(listOf(user(1, "Build and deploy"), tool(2, "execute", "Run"), midAnswer, liveTool), sessionRunning = true)
+        assertEquals(listOf("user:1:NONE", "process(tool:2)", "asst:3:NONE", "process(tool:4)"), describe(running.rows))
+        val trailing = running.rows[3] as TimelineRow.Process
+        assertEquals(TurnFooter.HELD, trailing.footer)
+        assertEquals(trailing.key, heldFooterRow(running.rows))
+
+        // Incremental patch on the trailing tool keeps the same held footer.
+        val patched = updateTimelineGrouping(
+            running,
+            listOf(user(1, "Build and deploy"), tool(2, "execute", "Run"), midAnswer, liveTool.copy(event = projected(4, "tool_call", mapOf("toolCallId" to "call-4", "kind" to "execute", "toolName" to "Run", "status" to "running")))),
+            sessionRunning = true,
+        )
+        assertEquals(trailing.key, heldFooterRow(patched.rows))
+
+        // Settling with a later final_answer moves the footer to the true final answer.
+        val closingAnswer = TimelineItem.Assistant(
+            key = "asst:5",
+            text = "Package built.",
+            event = projected(5, "agent_message_chunk"),
+            phase = AssistantPhase.FINAL_ANSWER,
+        )
+        val settled = buildTimelineRows(listOf(user(1, "Build and deploy"), tool(2, "execute", "Run"), midAnswer, tool(4, "execute", "Run"), closingAnswer), sessionRunning = false)
+        assertEquals(listOf("user:1:NONE", "process(tool:2)", "asst:3:NONE", "process(tool:4)", "asst:5:SHOWN"), describe(settled))
+
+        // Only a same-turn task_notification after final_answer keeps the footer on that answer.
+        val notice = TimelineItem.TaskNotification(key = "notice:4", taskKind = "shell", status = TaskNotificationStatus.COMPLETED, title = "build", event = projected(4, "task_notification"))
+        val withNotice = buildTimelineRows(listOf(user(1, "Run in background"), midAnswer, notice), sessionRunning = false)
+        assertEquals(TurnFooter.SHOWN, (withNotice[1] as TimelineRow.Single).footer)
+
+        // If further work follows that same-turn notification, the mid-turn answer must not keep a duplicate footer.
+        val resumedAfterNotice = buildTimelineRows(listOf(user(1, "Run in background"), midAnswer, notice, liveTool), sessionRunning = true)
+        assertEquals(TurnFooter.NONE, (resumedAfterNotice[1] as TimelineRow.Single).footer)
+        val trailingAfterNotice = resumedAfterNotice.last() as TimelineRow.Process
+        assertEquals(TurnFooter.HELD, trailingAfterNotice.footer)
+        assertEquals(trailingAfterNotice.key, heldFooterRow(resumedAfterNotice))
     }
 }

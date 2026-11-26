@@ -3,7 +3,6 @@ import { useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconSparkles } from '@/components/icons';
 import { Collapse } from '@/components/ui/collapse';
 import { formatDuration } from '@/lib/format-duration';
-import { useNow } from '@/lib/use-now';
 import { cn, formatDateTime } from '@/lib/utils';
 import { canReleaseDeferredProcessFold, decideProcessFold, TRANSCRIPT_ATTR, type ProcessFoldMetrics } from './readingAnchor';
 import { ASSEMBLY_MS, revealOnOwnHover, useLingering, useRestReveal } from './sessionLayout';
@@ -176,12 +175,10 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
     };
   }, [deferredFold]);
 
-  const now = useNow(running);
-  const elapsedMs = startedAt ? Math.max(0, (running ? now : (endedAt ?? now)) - startedAt) : 0;
-  const durationLabel = formatDuration(elapsedMs);
+  const elapsedMs = !running && startedAt !== undefined && endedAt !== undefined ? Math.max(0, endedAt - startedAt) : 0;
   const rest = useRestReveal();
   const done = stopped ? t`已停止` : t`已处理`;
-  const label = running ? `${t`处理中`} · ${durationLabel}` : elapsedMs >= 1000 ? `${done} · ${durationLabel}` : done;
+  const label = running ? t`处理中` : elapsedMs >= 1000 ? `${done} · ${formatDuration(elapsedMs)}` : done;
   // A held footer keeps its gap whether or not the working line shows in it, so the line coming and
   // going moves nothing.
   const hasFooter = Boolean(footerTime || progress !== undefined);

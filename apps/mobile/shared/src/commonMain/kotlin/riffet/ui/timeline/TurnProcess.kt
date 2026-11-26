@@ -1,7 +1,5 @@
 package riffet.ui.timeline
 
-import riffet.ui.theme.visualWorkVisibility
-
 import riffet.ui.design.LocalInterfaceStyle
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
@@ -48,15 +46,9 @@ internal fun TurnProcessHeader(
     val running = row.running
     val startMillis = instantMillis(row.startedAt)
     val endMillis = instantMillis(row.endedAt)
-    val visibility = riffet.ui.theme.rememberVisualWorkVisibility()
-    val now = rememberTickingNow(running, visible = visibility.visible)
-    val seconds = when {
-        startMillis == null -> 0L
-        running -> ((now - startMillis) / 1_000L).coerceAtLeast(0L)
-        else -> (((endMillis ?: now) - startMillis) / 1_000L).coerceAtLeast(0L)
-    }
+    val seconds = if (running || startMillis == null || endMillis == null) 0L else ((endMillis - startMillis) / 1_000L).coerceAtLeast(0L)
     val label = when {
-        running -> stringResource(Res.string.timeline_process_working, formatElapsed(seconds))
+        running -> stringResource(Res.string.timeline_process_working)
         row.stopped && seconds > 0 -> stringResource(Res.string.timeline_process_stopped_elapsed, formatElapsed(seconds))
         row.stopped -> stringResource(Res.string.timeline_process_stopped)
         seconds > 0 -> stringResource(Res.string.timeline_process_processed_elapsed, formatElapsed(seconds))
@@ -65,7 +57,7 @@ internal fun TurnProcessHeader(
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.visualWorkVisibility(visibility)
+        modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = TimelineRhythm.toolRowHeight)
             .clip(RoundedCornerShape(LocalInterfaceStyle.current.rowRadius))

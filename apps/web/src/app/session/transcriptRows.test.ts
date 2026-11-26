@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineItem } from './model';
-import { transcriptTurns, type TranscriptRow } from './transcriptRows';
+import { heldFooterRow, transcriptTurns, type TranscriptRow } from './transcriptRows';
 
 const TURN = 'run:turn-1';
 const AT = '2026-11-22T05:39:00.000Z';
@@ -156,5 +156,64 @@ describe('transcriptTurns interaction tool boundaries', () => {
     const process = turn!.rows.find(row => row.type === 'process');
     expect(process && process.type === 'process' && process.running).toBe(true);
     expect(process && process.type === 'process' && process.interrupted).toBe(false);
+  });
+
+  it('moves the held footer to trailing work after a mid-turn final_answer and settles on the true end', () => {
+    const runningTimeline: TimelineItem[] = [
+      user(1, 'Build and deploy'),
+      tool(2, 'execute', 'Run', 'completed'),
+      assistant(3, 'Please push the wrapper branch.', 'final_answer'),
+      tool(4, 'execute', 'Run', 'in_progress'),
+    ];
+    const [runningTurn] = transcriptTurns(runningTimeline, true, undefined);
+    const runningRows = runningTurn!.rows;
+    expect(runningRows.map(describeRow)).toEqual([
+      'user:user:1:none',
+      'process(tool:2)',
+      'assistant:asst:3:none',
+      'process(tool:4)',
+    ]);
+    const firstProcess = runningRows[1]!;
+    const trailingProcess = runningRows[3]!;
+    expect(firstProcess.type === 'process' && !firstProcess.running && firstProcess.canAutoFold && firstProcess.footer === 'none').toBe(true);
+    expect(trailingProcess.type === 'process' && trailingProcess.running && trailingProcess.footer === 'held').toBe(true);
+    expect(heldFooterRow(runningRows)).toBe(trailingProcess.key);
+
+    // Settling without another reply puts the footer on the trailing process block, copying the earlier prose.
+    const endedOnProcess: TimelineItem[] = [
+      runningTimeline[0]!,
+      runningTimeline[1]!,
+      runningTimeline[2]!,
+      tool(4, 'execute', 'Run', 'completed'),
+    ];
+    const [endedTurn] = transcriptTurns(endedOnProcess, false, undefined);
+    const endedTrailing = endedTurn!.rows[3]!;
+    expect(endedTurn!.rows[2]!.type === 'item' && endedTurn!.rows[2]!.footer === 'none').toBe(true);
+    expect(endedTrailing.type === 'process' && endedTrailing.footer === 'shown' && endedTrailing.answerText === 'Please push the wrapper branch.').toBe(true);
+
+    // A later final_answer takes back the turn footer and allows the trailing process to fold.
+    const settledTimeline: TimelineItem[] = [
+      ...endedOnProcess,
+      assistant(5, 'Package built and uploaded.', 'final_answer'),
+    ];
+    const [settledTurn] = transcriptTurns(settledTimeline, false, undefined);
+    expect(settledTurn!.rows.map(describeRow)).toEqual([
+      'user:user:1:none',
+      'process(tool:2)',
+      'assistant:asst:3:none',
+      'process(tool:4)',
+      'assistant:asst:5:shown',
+    ]);
+    expect(settledTurn!.rows[3]!.type === 'process' && settledTurn!.rows[3]!.canAutoFold).toBe(true);
+  });
+
+  it('keeps the footer on a final_answer when only a same-turn task_notification follows it', () => {
+    const timeline: TimelineItem[] = [
+      user(1, 'Run in background'),
+      assistant(2, 'Started in background.', 'final_answer'),
+      { kind: 'task_notification', turn: TURN, key: 'notice:3', taskKind: 'shell', status: 'completed', title: 'build', event: projected(3, 'task_notification') },
+    ];
+    const [turn] = transcriptTurns(timeline, false, undefined);
+    expect(turn!.rows[1]!.type === 'item' && turn!.rows[1]!.footer === 'shown').toBe(true);
   });
 });

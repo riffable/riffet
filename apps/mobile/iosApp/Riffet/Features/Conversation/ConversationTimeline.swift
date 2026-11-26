@@ -223,11 +223,7 @@ struct ConversationProcessHeader: View {
             .accessibilityIdentifier("process.\(row.key)")
     }
     @ViewBuilder private var status: some View {
-        if live, let start {
-            TimelineView(.periodic(from: start, by: 1)) { context in
-                Text("处理中 · \(conversationElapsed(from: start, to: context.date))")
-            }
-        } else if live {
+        if live {
             Text("处理中")
         } else if row.stopped, let start, let end = ServerTime.date(row.endedAt), end > start {
             Text("已停止 · \(conversationElapsed(from: start, to: end))")
@@ -240,7 +236,6 @@ struct ConversationProcessHeader: View {
         }
     }
     private var statusText: String {
-        if live, let start { return String(localized: "处理中 · \(conversationElapsed(from: start, to: Date()))", bundle: .riffet) }
         if live { return String(localized: "处理中", bundle: .riffet) }
         if row.stopped, let start, let end = ServerTime.date(row.endedAt), end > start { return String(localized: "已停止 · \(conversationElapsed(from: start, to: end))", bundle: .riffet) }
         if row.stopped { return String(localized: "已停止", bundle: .riffet) }

@@ -101,7 +101,7 @@
 
 为避免跨通道（`status`、`run`、`rows`）异步到达时出现「Agent 输出已上屏但状态仍为空闲/已处理」或「气泡仍显示发送中而回答已流式输出」的逆序现象，服务端与四端共同遵守三条**因果单调性（Causal Monotonicity）**不变量：
 
-- **C1（投递与处理的阶段交接）**：真正排队等待前序回合的消息只出现在输入框上方的 `ComposerDock`；已进入正文的 `queued / preparing / dispatching / input_sent`（未收件且无输出）消息处于投递阶段，气泡下方显示「发送中」（或「恢复中」）。一旦收件确认（`observed` / `run.state === 'running'`）或本轮产生输出，气泡下方切回时间戳，同帧由底部 `WorkingIndicator`（「正在处理」）与 `TurnProcess`（「处理中 · Xs」）接管。
+- **C1（投递与处理的阶段交接）**：真正排队等待前序回合的消息只出现在输入框上方的 `ComposerDock`；已进入正文的 `queued / preparing / dispatching / input_sent`（未收件且无输出）消息处于投递阶段，气泡下方显示「发送中」（或「恢复中」）。一旦收件确认（`observed` / `run.state === 'running'`）或本轮产生输出，气泡下方切回时间戳，同帧由底部 `WorkingIndicator`（「正在处理」）与 `TurnProcess`（「处理中」）接管。
 - **C2（状态先于或随同转写发出）**：
   - 新建会话在 `setNativeSessionId` 绑定原生会话 ID 时立即挂载驱动的实时控制订阅，不留首连空窗；
   - 各后端运行时（Claude `readTranscript`、Codex `onNotification`、Cursor `refreshParentTranscript` 与 `updateStatus`）在观测到新回合开始或未完结输出时，先推进并广播 `phase: 'busy'`，再唤醒转写拉取；Cursor TUI 尚未绘出底栏（`booting`）但已有流式步骤或未回答提示时，按 `busy` 报告而不被 `starting` 遮蔽。

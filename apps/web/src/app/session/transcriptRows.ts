@@ -199,6 +199,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
   for (let index = 0; index < timeline.length; index += 1) {
     const item = timeline[index]!;
     if (item.kind === 'assistant' && item.phase === 'final_answer') finalAnswerIndexByTurn.set(turnKeys[index]!, index);
+    else if (item.kind !== 'activity' && item.kind !== 'task_notification' && !isUnreceivedSteer(item)) finalAnswerIndexByTurn.delete(turnKeys[index]!);
     if (item.kind === 'status' && item.tone === 'danger') {
       const turn = turnKeys[index]!;
       const indexes = failureIndexesByTurn.get(turn) ?? [];

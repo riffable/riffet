@@ -39,7 +39,8 @@ co-change:
 
 ## 外部行为
 
-- 过程块默认在回合结束收起（用户可在 `viewPrefs.ts#setProcessFoldTiming` 切换为发送下一条时收起）；界面规则见 `docs/design/system/surfaces.md` §1.4 与 `docs/design/DECISIONS.md`。
+- 过程块默认在回合结束收起（用户可在 `viewPrefs.ts#setProcessFoldTiming` 切换为发送下一条时收起）；进行中的过程块标题只显示「处理中」不重复计时，回合计时统一由末尾 `WorkingIndicator` 承担；界面规则见 `docs/design/system/surfaces.md` §1.4 与 `docs/design/DECISIONS.md`。
+- 同一回合内若某条 `final_answer` 之后还有非 `activity` / 非 `task_notification` / 非未收件 steer 的后续工作，`transcriptRows.ts#transcriptTurns` 将回合的 `held`/`shown` 页脚归属移交到后续工作末尾，避免 `WorkingIndicator` 夹在中间回复和尾部过程块之间。
 - 新建会话的 Agent 菜单打开时重新读取目标服务器的 Agent 列表；即使没有候选项或当前模型目录读取失败，仍能打开并重新检测。
 - 真实浏览器回放验证入口为 `scripts/replay-transcript.ts`（页面 `apps/web/src/replay/ReplayView.tsx`），可录制并检测非动画位移。
 
