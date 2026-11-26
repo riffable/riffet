@@ -1,6 +1,6 @@
 # 原生会话绑定方案
 
-状态：方案，待评审（2026-11-26）。
+状态：已确认，P0 已实施（2026-11-26）。
 
 一个 Riffet 会话（`Session`）在任一时刻对应 CLI 里的一个原生会话（`Session.nativeSessionId`：Codex 的 thread、Claude Code 的 session、Cursor 的 chat、Antigravity 的 conversation）。本方案把「这个对应关系何时建立、何时改变、改变时旧的去哪里、无法确认时怎么办」从各驱动收回到核心，并规定与之相关的界面反馈。
 
@@ -145,8 +145,9 @@ P0 可以先单独提交；P1 之后每个阶段都不改变用户能看到的�
 - 实测：隔离服务（4317/4327）上，Claude、Codex、Cursor、Antigravity 各建一个成员，`/new` 后确认无提示、绑定指向新会话、旧历史在前；终端里手动 `/clear` 后跟随并归档；两个同项目 Cursor 会话互不认领。
 - `pnpm verify` 覆盖到的检查照常跑。
 
-## 9 待定
+## 9 已定与待定
 
-1. 终端里切换的策略：本方案建议跟随并归档（4.3），替换 Antigravity 现行的冻结。
-2. Cursor hook 归属：按会话目录加 `--owner`（与 Antigravity 同样的验证路径），还是经 pane 环境变量传给 hook（需先验证 Cursor 是否把环境变量传给 hook 子进程）。建议前者。
-3. Codex 在终端 TUI 里切换 thread 的行为本方案未核实，P1 迁移时补上。
+1. 终端里切换的策略：跟随并归档（4.3），替换 Antigravity 现行的冻结。2026-11-26 确认；P3 时同步改 ANTIGRAVITY.md §6.3 并在 DECISIONS.md 记一条。
+2. Cursor hook 归属：按会话的稳定 hook 目录加 `--owner`（4.5），与 Antigravity 同样的验证路径。2026-11-26 确认。
+3. 待定：Codex 在终端 TUI 里切换 thread 的行为本方案未核实，P1 迁移时补上。
+4. P0 未做的一项：「旧 chat 没有回合时 `/new` 不动作」。实施时 `cursor/backend.ts#newTopic` 正被另一项改动修改，留到 P2 由核心统一处理。
