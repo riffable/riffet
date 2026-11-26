@@ -4,13 +4,15 @@ import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeStopR
 import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
 import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl, type AgentTurnStatus } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter, CURSOR_AGENT_READY_PATTERN, cursorComposerHoldsPrompt, cursorPromptBar, cursorPromptBarEmpty } from '../cli-adapter.js';
-import { approvalArgs, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
+import { approvalArgs, cursorApiUpstream, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import { strictInputHandle } from './strict-input-handle.js';
 import { ChatReader, workspaceChatsDir, writeChatApproval, type ChatMeta } from './chat-store.js';
 import { readJobLog } from './job-log.js';
 import { cursorLoginPrompt, parseScreen, turnControls } from './screen.js';
 import { normalizeNativeModelSelection } from './model-catalog.js';
+import type { CursorParameterizedModel } from './model-parameters.js';
+import { withAvailableModelsTap } from './model-tap.js';
 import { MODEL_ID, parseModelList, describeModelListFailure } from './model-list.js';
 import { Transcript, visible } from './transcript.js';
 import type { CursorLive } from './live.js';
@@ -168,7 +170,7 @@ export class NativeService {
   private readonly pollMs: number;
   private readonly sweepTimer: NodeJS.Timeout;
   private sweeping = false;
-  private modelResources = new Map<string, { models?: Array<{ value: string; name: string }>; error?: string; expiresAt: number; request?: Promise<Array<{ value: string; name: string }>> }>();
+  private modelResources = new Map<string, { models?: Array<{ value: string; name: string }>; parameterized?: CursorParameterizedModel[]; error?: string; expiresAt: number; request?: Promise<Array<{ value: string; name: string }>> }>();
   /** Conversations with a deferred switch already queued for their next idle moment. */
   private readonly pendingConfigApplies = new Set<string>();
   /** Conversations currently mid-restart (`stop` + `launch`), so concurrent poll ticks stand down. */
@@ -766,9 +768,17 @@ export class NativeService {
     const current = resource;
     const request = (async () => {
       const timeoutMs = 20_000;
-      const result = await runCursor(this.options.profile??this.options.cliPath, ['--list-models'], { cwd: project.cwd, timeoutMs, maxOutputBytes: 512 * 1024 }).catch(() => undefined);
+      const cli = this.options.profile ?? this.options.cliPath;
+      const list = (endpoint?: string) => runCursor(cli, ['--list-models'], { cwd: project.cwd, timeoutMs, maxOutputBytes: 512 * 1024, ...(endpoint ? { endpoint } : {}) }).catch(() => undefined);
+      // The parameter definitions (context windows and their exact launch strings) only come with
+      // the CLI's own catalog request; a front that cannot reach the API falls back to a plain run.
+      const upstream = cursorApiUpstream(cli);
+      const tapped = upstream ? await withAvailableModelsTap(upstream, list).catch(() => undefined) : undefined;
+      const result = tapped && !tapped.unreachable ? tapped.result : await list();
       const listed = result?.code === 0 && result.stdout ? parseModelList(result.stdout) : [];
       const models = listed.length ? listed : current.models ?? [];
+      // A run whose catalog request was not seen keeps the definitions read before.
+      if (listed.length && tapped?.models) current.parameterized = tapped.models;
       current.models = models;
       current.error = listed.length ? undefined : describeModelListFailure(result, this.options.profile?.executable ?? this.options.cliPath, timeoutMs);
       current.expiresAt = Date.now() + (listed.length ? 10 * 60_000 : 3000);
@@ -778,10 +788,24 @@ export class NativeService {
     return stale ?? request;
   }
 
+  /** Cursor's parameter definitions read with the latest model list for this project, when the CLI's request was seen. */
+  modelParameters(project: Pick<AgentProjectView, 'cwd'>): CursorParameterizedModel[] {
+    const key = this.modelResourceKey(project);
+    const own = this.modelResources?.get(key)?.parameterized;
+    if (own?.length) return own;
+    // Like `siblingModels`: the same launcher and data directory describe the same models elsewhere.
+    const launcher = this.modelResourceKey({ cwd: '' }).slice(0, -3);
+    for (const [other, resource] of this.modelResources ?? []) {
+      if (other !== key && other.startsWith(launcher) && resource.parameterized?.length) return resource.parameterized;
+    }
+    return [];
+  }
+
   async prepareModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>): Promise<string | undefined> {
     if (!model) return undefined;
     if (!MODEL_ID.test(model)) throw new AppError('INVALID_MODEL', 'Model id is invalid');
-    return normalizeNativeModelSelection(model, await this.models(project));
+    const models = await this.models(project);
+    return normalizeNativeModelSelection(model, models, this.modelParameters(project));
   }
 
   async validateModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>): Promise<void> {

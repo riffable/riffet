@@ -1,5 +1,6 @@
 import type { ModelConfigOption, ModelInfo } from '@contracts';
 import { AppError } from '@riffet/plugin-api/kit';
+import { baseValues, launchableValues, parameterizedModelFor, variantWith, type CursorParameterizedModel } from './model-parameters.js';
 
 export interface NativeModelEntry { value: string; name: string; }
 
@@ -41,34 +42,24 @@ const EFFORT_LABELS: Record<string, string> = {
   xhigh: 'xhigh', 'extra-high': 'xhigh', max: 'Max',
 };
 
-// The CLI's `--list-models` emits a flat list of ids whose suffix encodes effort / thinking /
-// fast only. The `context` dimension is a parameterized bracket argument (see `cursor-agent
-// --help`: `claude-opus-4-8[context=1m,effort=high,fast=false]`) and the TUI footer shows one of
-// `300K` / `1M` / `MAX`. Expose the three documented settings only for families whose backend
-// variants actually accept `[context=…]`; offering it to unsupported families (like `gemini-4-neon`)
-// causes `cursor-agent` to reject `model[context=300k,...]` at launch when parameters are copied
-// across model switches or edited.
-const CONTEXT_VALUES = ['300k', '1m', 'max'] as const;
-const CONTEXT_LABELS: Record<(typeof CONTEXT_VALUES)[number], string> = { '300k': '300K', '1m': '1M', max: 'MAX' };
-const OPAQUE_CONTEXT_FAMILIES = new Set(['auto', 'default', 'premium', 'cheetah']);
-
-function familySupportsContext(id: string, variants: readonly NativeModelEntry[] = []): boolean {
-  const normalized = id.toLowerCase();
-  if (!normalized || normalized.startsWith('auto-') || OPAQUE_CONTEXT_FAMILIES.has(normalized)) return false;
-  if (/^(?:claude|opus|sonnet|haiku|gpt-5)(?:$|[-.])/.test(normalized)) return true;
-  // Fall back to explicit context-window tokens (`300K` / `1M`) in `--list-models` display names
-  // so future long-context families that advertise their window in the CLI list still surface it,
-  // without breaking non-parameterized models like `gemini-4-neon`.
-  return variants.some((entry) => /(?:^|[\s·(])(?:300k|1m)\b/i.test(entry.name));
-}
-function contextOption(): ModelConfigOption {
+/**
+ * The context window is not a suffix of any flat id: Cursor defines it per model, with its own values
+ * (`300k` / `1m` for Gemini, `272k` / `1m` for GPT, `256k` for Grok), and only some models have it.
+ * It is offered only from those definitions; without them (an older CLI, an API the tap could not
+ * read) there is no Context choice rather than a guessed one the CLI would refuse.
+ */
+function contextOption(model: CursorParameterizedModel | undefined, flatDefault: string): ModelConfigOption | undefined {
+  if (!model) return undefined;
+  const values = launchableValues(model, 'context');
+  if (values.length < 2) return undefined;
+  const current = baseValues(model, flatDefault)?.context;
   return {
     id: 'context',
-    name: 'Context',
+    name: model.parameters.find((item) => item.id === 'context')?.name || 'Context',
     category: 'model_config',
     type: 'select',
-    currentValue: '300k',
-    options: CONTEXT_VALUES.map((value) => ({ value, name: CONTEXT_LABELS[value] })),
+    currentValue: current && values.some((item) => item.value === current) ? current : values[0]!.value,
+    options: values.map(({ value, name }) => ({ value, name })),
   };
 }
 
@@ -124,7 +115,7 @@ function option(id: string, name: string, category: string, currentValue: string
  * from an observed suffix, and the exact variant table lets the web picker resolve only
  * combinations the CLI actually listed.
  */
-export function nativeModelCatalogFromVariants(nativeEntries: NativeModelEntry[]): ModelInfo[] {
+export function nativeModelCatalogFromVariants(nativeEntries: NativeModelEntry[], parameterized: readonly CursorParameterizedModel[] = []): ModelInfo[] {
   if (!nativeEntries.length) throw new AppError('MODEL_CATALOG_UNAVAILABLE', 'The CLI model catalog is unavailable; try again shortly', 503);
 
   const families = new Map<string, NativeModelEntry[]>();
@@ -156,7 +147,8 @@ export function nativeModelCatalogFromVariants(nativeEntries: NativeModelEntry[]
     const fastValues = [...new Set(members.map(({ slots }) => String(slots.fast)))].sort();
     if (fastValues.length > 1) configOptions.push(option('fast', 'Fast', 'model_config', String(selected.slots.fast), fastValues));
 
-    if (familySupportsContext(id, variants)) configOptions.push(contextOption());
+    const context = contextOption(parameterizedModelFor(parameterized, id, variants.map((item) => item.value)), selected.entry.value);
+    if (context) configOptions.push(context);
 
     return {
       value: id,
@@ -240,31 +232,40 @@ function findMatchingFlatVariant(rawBase: string, variants: readonly NativeModel
 }
 
 /**
- * Cursor matches parameterized ids against its canonical variant strings, including parameter
- * order. Sort parameters before launch so selections saved by older clients can resume. Families
- * without Fast still need an explicit `fast=false`; exact CLI-listed ids stay untouched.
+ * What `--model` is given for a selection. Cursor accepts a flat id it lists, or exactly the
+ * `variant_string_representation` of one parameterized variant (its parameter ids and order), so a
+ * context choice is resolved to that string from the model's own variants. A context value the model
+ * no longer offers is dropped, so a selection saved before the catalog changed still resumes.
  */
-export function normalizeNativeModelSelection(model: string, nativeEntries: NativeModelEntry[]): string {
+export function normalizeNativeModelSelection(model: string, nativeEntries: NativeModelEntry[], parameterized: readonly CursorParameterizedModel[] = []): string {
   const value = model.trim();
   const match = /^([^\[\]]+)(?:\[([^\]]*)\])?$/.exec(value);
   assertNativeModelSelection(value, nativeEntries);
   if (nativeEntries.some((entry) => entry.value === value)) return model;
+  if (parameterized.some((item) => item.variants.some((variant) => variant.selector === value))) return model;
   if (!match) return model;
 
   const familyId = familyOf(match[1]!).id;
   const family = nativeFamilies(nativeEntries).get(familyId);
   const familyVariants = nativeEntries.filter((entry) => familyOf(entry.value).id === familyId);
   const rawParams = parseBracketParams(match[2]);
-  if (!familySupportsContext(familyId, familyVariants)) {
-    const params = rawParams.filter((param) => param.key !== 'context');
-    const flat = findMatchingFlatVariant(match[1]!, familyVariants, params);
-    if (flat) return flat;
-    if (!params.length) return match[1]!;
-    const serialized = params.map((param) => param.normalized);
-    if (family && !family.hasFast && !params.some((param) => param.key === 'fast')) serialized.push('fast=false');
-    return `${match[1]}[${serialized.sort().join(',')}]`;
+  const context = rawParams.find((param) => param.key === 'context')?.value;
+  const params = rawParams.filter((param) => param.key !== 'context');
+  const flat = findMatchingFlatVariant(match[1]!, familyVariants, params);
+
+  const described = context ? parameterizedModelFor(parameterized, familyId, familyVariants.map((entry) => entry.value)) : undefined;
+  if (described && context && launchableValues(described, 'context').some((item) => item.value === context)) {
+    const values = baseValues(described, flat);
+    const variant = values && variantWith(described, { ...values, context });
+    if (!variant) {
+      throw new AppError('INVALID_NATIVE_MODEL', 'This model does not offer that context window with these settings; choose another context window', 400, undefined, { reason: 'context', model: value });
+    }
+    return variant.selector ?? variant.legacySlug ?? `${described.name}[${Object.entries(variant.values).map(([key, item]) => `${key}=${item}`).join(',')}]`;
   }
-  const serialized = rawParams.map((param) => param.normalized);
-  if (family && !family.hasFast && !rawParams.some((param) => param.key === 'fast')) serialized.push('fast=false');
-  return serialized.length ? `${match[1]}[${serialized.sort().join(',')}]` : match[1]!;
+
+  if (flat) return flat;
+  if (!params.length) return match[1]!;
+  const serialized = params.map((param) => param.normalized);
+  if (family && !family.hasFast && !params.some((param) => param.key === 'fast')) serialized.push('fast=false');
+  return `${match[1]}[${serialized.sort().join(',')}]`;
 }

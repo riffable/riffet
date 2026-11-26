@@ -40,7 +40,7 @@ export interface CursorLaunchProfile {
 const profileSecrets=new WeakMap<CursorLaunchProfile,string>();
 
 export interface CursorCommand {command:string;args:string[];env:NodeJS.ProcessEnv;custom:boolean;tmuxEnv?:Record<string,string>;}
-export interface CursorCommandOptions { includeApiKey?:boolean; terminal?:boolean; }
+export interface CursorCommandOptions { includeApiKey?:boolean; terminal?:boolean; /** Replaces the API endpoint this launch would use; the agent endpoint is unchanged. */ endpoint?:string; }
 
 function checkedString(value:unknown,key:string,max=4096):string|undefined {
   if(value===undefined)return undefined;
@@ -143,9 +143,25 @@ export function cursorApiFrontable(profile:CursorLaunchProfile,relayGateway=fals
   return !new URL(profile.apiEndpoint).hostname.endsWith('.cursor.sh');
 }
 
-function launchArgs(profile:CursorLaunchProfile,relayGateway=false):{args:string[];front?:string} {
+/** Cursor's own API, which the CLI talks to when nothing else is configured (`--endpoint` default). */
+const CURSOR_DEFAULT_API='https://api2.cursor.sh';
+
+/**
+ * The API endpoint a non-interactive run talks to: the startup-query front while one is running, else the
+ * configured endpoint. Undefined for a shell launcher without one, whose function may name its own.
+ */
+export function cursorApiUpstream(input:string|CursorLaunchProfile):string|undefined {
+  const profile=profileOf(input);
+  const front=cursorApiFrontable(profile,true)?apiFronts.get(profile):undefined;
+  if(front)return front;
+  if(profile.apiEndpoint)return profile.apiEndpoint;
+  if(profile.executable.startsWith('shell:'))return undefined;
+  return process.env.CURSOR_API_ENDPOINT?.trim()||CURSOR_DEFAULT_API;
+}
+
+function launchArgs(profile:CursorLaunchProfile,relayGateway=false,endpointOverride?:string):{args:string[];front?:string} {
   const agentEndpoint=relayGateway?profile.apiEndpoint:profile.agentEndpoint;
-  const front=cursorApiFrontable(profile,relayGateway)?apiFronts.get(profile):undefined;
+  const front=endpointOverride??(cursorApiFrontable(profile,relayGateway)?apiFronts.get(profile):undefined);
   const endpoint=front??profile.apiEndpoint;
   return {args:[...(endpoint?['--endpoint',endpoint]:[]),...(agentEndpoint?['--agent-endpoint',agentEndpoint]:[]),...(profile.disableAutoUpdate?['--disable-auto-update']:[])],...(front?{front}:{})};
 }
@@ -202,9 +218,9 @@ export function cursorCommand(input:string|CursorLaunchProfile,args:string[],env
     childEnv.CURSOR_CONFIG_DIR=profile.configDir;
     prepareRelayTransport(profile.configDir);
   }
-  const launch=launchArgs(profile,relayGateway);
+  const launch=launchArgs(profile,relayGateway,options.endpoint);
   // The CLI names its website after the API origin; behind the front that would be the loopback address.
-  const website=launch.front&&!childEnv.CURSOR_WEBSITE_URL?new URL(profile.apiEndpoint!).origin:undefined;
+  const website=launch.front&&profile.apiEndpoint&&!childEnv.CURSOR_WEBSITE_URL?new URL(profile.apiEndpoint).origin:undefined;
   if(website)childEnv.CURSOR_WEBSITE_URL=website;
   let commandArgs=[...launch.args,...args];
   if(functionName){
@@ -262,8 +278,8 @@ export function cursorUsesAccountLogin(profile: CursorLaunchProfile): boolean {
   return !(profileSecrets.has(profile) || process.env.CURSOR_API_KEY || process.env.CURSOR_AUTH_TOKEN || process.env.CURSOR_AUTH_TOKEN_FILE);
 }
 
-export function runCursor(cliPath:string|CursorLaunchProfile,args:string[],options:ProcessOptions&{env?:NodeJS.ProcessEnv;includeApiKey?:boolean;isolatedHome?:string}) {
-  const spec=cursorCommand(cliPath,args,options.env,{includeApiKey:options.includeApiKey});
+export function runCursor(cliPath:string|CursorLaunchProfile,args:string[],options:ProcessOptions&{env?:NodeJS.ProcessEnv;includeApiKey?:boolean;isolatedHome?:string;endpoint?:string}) {
+  const spec=cursorCommand(cliPath,args,options.env,{includeApiKey:options.includeApiKey,...(options.endpoint?{endpoint:options.endpoint}:{})});
   // Resolve a shell launcher's function in the owner's login shell before selecting the
   // private home for its CLI. User extensions live in these standard home/config paths.
   const isolatedHome = options.isolatedHome;

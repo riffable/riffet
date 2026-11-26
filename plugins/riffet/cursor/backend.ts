@@ -605,7 +605,7 @@ export class CursorBackend implements AgentBackend {
       const reason = native.modelListError(context);
       throw new AppError('MODEL_CATALOG_UNAVAILABLE', reason ?? 'The Cursor CLI model catalog is unavailable; try again shortly', 503, reason ? { reason } : undefined);
     }
-    return nativeModelCatalogFromVariants(variants);
+    return nativeModelCatalogFromVariants(variants, native.modelParameters(context));
   }
 
   readHistory(host: AgentHost, context: AgentContext, options?: AgentHistoryOptions) {
