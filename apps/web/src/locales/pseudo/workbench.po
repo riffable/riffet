@@ -1649,6 +1649,10 @@ msgstr ""
 msgid "无法保存侧栏设置"
 msgstr ""
 
+#: src/app/useSidebarPinned.ts
+msgid "无法保存团队顺序"
+msgstr ""
+
 #: src/app/use-session-actions.ts
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr ""
@@ -1805,10 +1809,6 @@ msgstr ""
 
 #: src/app/FolderFavorites.tsx
 msgid "无法收藏该目录"
-msgstr ""
-
-#: src/app/Workbench.tsx
-msgid "无法更新成员"
 msgstr ""
 
 #: src/app/use-session-actions.ts
@@ -2406,6 +2406,10 @@ msgstr ""
 msgid "移出标签栏"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+msgid "移到顶部"
+msgstr ""
+
 #: src/app/plugins/PluginSources.tsx
 #: src/app/team/MemberAvatar.tsx
 msgid "移除"
@@ -2568,10 +2572,6 @@ msgstr ""
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "置顶会话"
-msgstr ""
-
-#: src/app/team/MemberConfigDialog.tsx
-msgid "置顶在团队列表顶部"
 msgstr ""
 
 #: src/app/team/CreateMemberDialog.tsx
