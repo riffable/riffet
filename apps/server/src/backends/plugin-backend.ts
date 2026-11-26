@@ -52,6 +52,7 @@ const sessionView = (session: Session): AgentSessionView => ({
   ...(session.extensionsOff !== undefined ? { extensionsOff: session.extensionsOff } : {}),
   ...(session.terminalHold !== undefined ? { terminalHold: session.terminalHold } : {}),
   ...(session.origin !== undefined ? { origin: session.origin } : {}),
+  ...(session.agentMemberId !== undefined ? { agentMemberId: session.agentMemberId } : {}),
 });
 
 /** A terminal record without the host's private reservation bookkeeping. */
@@ -77,6 +78,7 @@ const projectView = (project: Project) => ({
   ...(project.archivedAt !== undefined ? { archivedAt: project.archivedAt } : {}),
   ...(project.system !== undefined ? { system: project.system } : {}),
   ...(project.mainSessionId !== undefined ? { mainSessionId: project.mainSessionId } : {}),
+  ...(project.agentMemberId !== undefined ? { agentMemberId: project.agentMemberId } : {}),
 });
 
 const runRef = (run: Run): AgentRunRef => ({

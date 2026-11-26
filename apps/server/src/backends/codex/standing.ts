@@ -29,6 +29,7 @@ import { asArray, asRecord, str } from './util.js';
 const INSTRUCTION_FILE_CHARS = 20_000;
 
 export interface CodexStanding {
+  memberDir: string;
   baseInstructions: string;
   developerInstructions: string;
   /** The directory's and the packs' MCP servers (Claude Code's `.mcp.json`), as Codex declares them. */
@@ -53,6 +54,7 @@ export function codexStanding(launch: StandingLaunch | undefined): CodexStanding
     return [`# ${relative(home, file).split(sep).join('/') || basename(file)}\n\n${clipped}`];
   });
   return {
+    memberDir: home,
     baseInstructions: readFileSync(launch.systemPromptFile, 'utf8'),
     developerInstructions: [GLOBAL_NOTE, ...files].join('\n\n'),
     skillRoots: [...launch.pluginDirs, launch.skillsDir],
@@ -132,8 +134,11 @@ export async function standingThreadConfig(transport: CodexAppServerClient, cwd:
   const off = asArray<unknown>(asRecord(listed)?.data).flatMap(group => asArray<unknown>(asRecord(group)?.skills))
     .map(skill => str(asRecord(skill)?.path)).filter((path): path is string => Boolean(path) && !standingSkill(path!, standing));
   const own = Object.keys(standing.mcpServers);
+  const sameDir = real(standing.memberDir) === real(cwd);
   return {
-    project_doc_max_bytes: 0,
+    // Only suppress `<cwd>/AGENTS.md` when cwd IS the member directory (already passed in developerInstructions);
+    // project-scoped members still read the bound code repository's `AGENTS.md` (docs/TEAM.md §3.3).
+    ...(sameDir ? { project_doc_max_bytes: 0 } : {}),
     model_auto_compact_token_limit: standing.compactAtTokens,
     default_permissions: STANDING_PROFILE,
     [`permissions.${STANDING_PROFILE}`]: { extends: ':workspace', filesystem: Object.fromEntries(standing.protectedFiles.map(path => [protectedPath(path), 'read'])) },

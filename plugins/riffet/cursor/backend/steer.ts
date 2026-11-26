@@ -9,8 +9,8 @@ import type { CursorPort } from '../host-port.js';
 import type { NativeService, SettledCursorTurn } from '../native/service.js';
 import { chatStorePath } from '../native/chat-store.js';
 import { resolveShellCall } from './shell-observation.js';
-import { probeCursorHookSteer, writeCursorHookBridgeConfig, writeCursorHookPlugin } from './launch-plugin.js';
-import { cursorProjectConfigDir, evaluateStandingToolUse, isStandingProject } from './standing.js';
+import { probeCursorHookSteer, writeCursorHookPlugin } from './launch-plugin.js';
+import { cursorProjectConfigDir, evaluateStandingToolUse } from './standing.js';
 import { CursorTranscriptSource, type CursorTurnResult } from './transcript-source.js';
 
 /** The tools whose hooks name a file they change: the CLI reports every edit, a replacement included, as `Write`. */
@@ -80,7 +80,6 @@ export class CursorSteerBridge {
   private readonly server = new NativeHookServer((payload, _deliveryId, signal) => this.handle(payload, signal));
   private readonly steerHost: SteerHost;
   private plugin?: Promise<string[]>;
-  private bridgeConfig?: Promise<string>;
   private closed = false;
 
   constructor(
@@ -125,26 +124,11 @@ export class CursorSteerBridge {
     return entry;
   }
 
-  /** Starts the local hook bridge server and writes `bridge.json`, returning its path. */
-  async ensureBridgeConfig(): Promise<string | undefined> {
-    if (this.closed) return undefined;
-    if (!await probeCursorHookSteer(this.profile)) return undefined;
-    if (this.closed) return undefined;
-    this.bridgeConfig ??= this.server.start().then(bridge => writeCursorHookBridgeConfig(this.stateDir, bridge));
-    return this.bridgeConfig;
-  }
-
   async launchArgs(session?: AgentSessionView): Promise<string[]> {
     if (this.closed) return [];
     if (session) this.bind(session.id);
     if (!await probeCursorHookSteer(this.profile)) return [];
     if (this.closed) return [];
-    // Standing sessions load all hooks from `<standingDir>/hooks.json` (`userHooks`) so interactive TUI
-    // fires `beforeSubmitPrompt` without duplicating hooks via `--plugin-dir`.
-    if (session && isStandingProject(this.host.view.project(session.projectId))) {
-      await this.ensureBridgeConfig();
-      return [];
-    }
     this.plugin ??= this.server.start().then(bridge => writeCursorHookPlugin(this.stateDir, bridge)).then(plugin => ['--plugin-dir', plugin]);
     return this.plugin;
   }
@@ -461,7 +445,7 @@ export class CursorSteerBridge {
       const diffs = await changes.end(session.id, hookId);
       if (!diffs?.length || typeof input?.command !== 'string' || typeof payload.conversation_id !== 'string') return;
       const project = this.port.getProject(session.projectId);
-      const store = chatStorePath(cursorProjectConfigDir(this.profile.configDir, this.stateDir, project), project.cwd, payload.conversation_id);
+      const store = chatStorePath(cursorProjectConfigDir(this.profile.configDir, this.stateDir, project, session), project.cwd, payload.conversation_id);
       const callId = await resolveShellCall(store, input.command);
       if (callId) changes.record(session.id, callId, diffs);
     } catch { /* observation is best effort */ }
@@ -555,7 +539,6 @@ export class CursorSteerBridge {
     for (const sessionId of this.entries.keys()) this.reject(sessionId, 'Cursor hook bridge closed');
     this.entries.clear();
     await this.plugin?.catch(() => undefined);
-    await this.bridgeConfig?.catch(() => undefined);
     await this.server.close();
   }
 }

@@ -42,7 +42,7 @@ export class CursorUsageIngest {
     private readonly host: AgentHost,
     private readonly live: Pick<CursorLive, 'readUsage' | 'ackUsage' | 'watchUsage'>,
     private readonly configDir: string,
-    private readonly configDirFor?: (project: AgentProjectView) => string,
+    private readonly configDirFor?: (project: AgentProjectView, session?: AgentSessionView) => string,
   ) {
     this.unwatch = live.watchUsage(() => { void this.drain(); });
     this.timer = setInterval(() => { void this.drain(); }, 2_000);
@@ -100,33 +100,42 @@ export class CursorUsageIngest {
     if (exact.length > 1) return;
 
     const candidates: Owner[] = [];
+    const seenSessions = new Set<string>();
     const projects = new Set(sessions.map(session => session.projectId));
     for (const projectId of projects) {
       const project = this.host.view.project(projectId);
       if (!project) continue;
-      const dir = this.configDirFor?.(project) ?? this.configDir;
-      const visited = new Set<string>([nativeId]);
-      let child = nativeId;
-      let parentNativeSessionId: string | undefined;
-      let subagentType: string | undefined;
-      for (let depth = 0; depth < 8; depth++) {
-        const reader = new ChatReader(chatStorePath(dir, project.cwd, child));
-        const meta = (() => { try { return reader.meta(); } finally { reader.close(); } })();
-        if (meta?.agentId !== child || !meta.subagentInfo) break;
-        const info = meta.subagentInfo;
-        const parent = info.parentAgentId ?? info.rootParentAgentId;
-        if (!parent || !CHAT_ID.test(parent) || visited.has(parent)) break;
-        parentNativeSessionId ??= parent;
-        if (depth === 0 && typeof info.typeName === 'string') subagentType = info.typeName;
-        const matches = sessions.filter(session => session.projectId === projectId && owns(session, parent));
-        const active = matches.filter(session => !session.archivedAt);
-        const session = active.length === 1 ? active[0] : active.length === 0 && matches.length === 1 ? matches[0] : undefined;
-        if (session) {
-          candidates.push({ session, parentNativeSessionId, ...(subagentType ? { subagentType } : {}) });
-          break;
+      const projectSessions = sessions.filter(session => session.projectId === projectId);
+      // A code project can host both ordinary sessions and project-scoped team members in different config dirs.
+      const dirs = new Set<string>([this.configDirFor?.(project) ?? this.configDir]);
+      for (const s of projectSessions) dirs.add(this.configDirFor?.(project, s) ?? this.configDir);
+      for (const dir of dirs) {
+        const visited = new Set<string>([nativeId]);
+        let child = nativeId;
+        let parentNativeSessionId: string | undefined;
+        let subagentType: string | undefined;
+        for (let depth = 0; depth < 8; depth++) {
+          const reader = new ChatReader(chatStorePath(dir, project.cwd, child));
+          const meta = (() => { try { return reader.meta(); } finally { reader.close(); } })();
+          if (meta?.agentId !== child || !meta.subagentInfo) break;
+          const info = meta.subagentInfo;
+          const parent = info.parentAgentId ?? info.rootParentAgentId;
+          if (!parent || !CHAT_ID.test(parent) || visited.has(parent)) break;
+          parentNativeSessionId ??= parent;
+          if (depth === 0 && typeof info.typeName === 'string') subagentType = info.typeName;
+          const matches = projectSessions.filter(session => owns(session, parent));
+          const active = matches.filter(session => !session.archivedAt);
+          const session = active.length === 1 ? active[0] : active.length === 0 && matches.length === 1 ? matches[0] : undefined;
+          if (session) {
+            if (!seenSessions.has(session.id)) {
+              seenSessions.add(session.id);
+              candidates.push({ session, parentNativeSessionId, ...(subagentType ? { subagentType } : {}) });
+            }
+            break;
+          }
+          visited.add(parent);
+          child = parent;
         }
-        visited.add(parent);
-        child = parent;
       }
     }
     return candidates.length === 1 ? candidates[0] : undefined;

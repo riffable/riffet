@@ -118,8 +118,8 @@ function claudeSlashItems(profile: NativeBackendProfileConfig, cwd: string, maxA
 }
 
 /** What a probe adds to list a standing conversation's extensions as its launch loads them; nothing for any other. */
-function standingArgs(host: NativeBackendHost, project: Project): string[] {
-  const standing = host.standing?.launch(project);
+function standingArgs(host: NativeBackendHost, project: Project, session?: Pick<Session, 'origin' | 'agentMemberId'>): string[] {
+  const standing = host.standing?.launch(project, session);
   return standing ? [...STANDING_ISOLATION, ...standing.pluginDirs.flatMap(dir => ['--plugin-dir', dir]), ...(standing.mcpConfigFiles.length ? ['--mcp-config', ...standing.mcpConfigFiles] : [])] : [];
 }
 
@@ -364,7 +364,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       // A new topic is the CLI's `/clear`: the same CLI goes on under a new session id.
       if (host.standing?.newTopic?.(request.session.id, sourceText)) { await runtime.send(request, { deliverText: '/clear', command: true }); return; }
       const items = slashTokens(sourceText).length
-        ? await claudeSlashItems(request.profile, request.project.cwd, SEND_SLASH_CATALOG_MAX_AGE_MS, standingArgs(host, request.project)).catch(() => undefined)
+        ? await claudeSlashItems(request.profile, request.project.cwd, SEND_SLASH_CATALOG_MAX_AGE_MS, standingArgs(host, request.project, session)).catch(() => undefined)
         : undefined;
       const leading = items ? leadWithInlineSkill(sourceText, items) : sourceText;
       const text = leading === sourceText ? request.input.text : `${leading}${request.input.text.slice(sourceText.length)}`;

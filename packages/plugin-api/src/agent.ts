@@ -57,9 +57,9 @@ export type AgentBackendId = NativeBackendId;
 /** A session as the plugin may read it. No store object: a value read at the time of the call. */
 export type AgentSessionView = Pick<Session,
   'id' | 'projectId' | 'title' | 'state' | 'backendProfileId' | 'nativeSessionId' | 'previousNativeSessionIds' | 'terminalId' | 'model' | 'mode' | 'approval'
-  | 'configRevision' | 'configPending' | 'archivedAt' | 'error' | 'terminalAppearance' | 'resumePicker' | 'titleSource' | 'lastActivityAt' | 'toolGroups' | 'extensionsOff' | 'terminalHold' | 'origin'>;
+  | 'configRevision' | 'configPending' | 'archivedAt' | 'error' | 'terminalAppearance' | 'resumePicker' | 'titleSource' | 'lastActivityAt' | 'toolGroups' | 'extensionsOff' | 'terminalHold' | 'origin' | 'agentMemberId'>;
 
-export type AgentProjectView = Pick<Project, 'id' | 'name' | 'cwd' | 'archivedAt' | 'system' | 'mainSessionId'>;
+export type AgentProjectView = Pick<Project, 'id' | 'name' | 'cwd' | 'archivedAt' | 'system' | 'mainSessionId' | 'agentMemberId'>;
 
 /** A profile of this Agent. `config` is the plugin's own JSON; the core strips it from what clients are shown. */
 export interface AgentProfile {
@@ -892,7 +892,7 @@ export interface AgentStandingLaunch {
 export type AgentStandingMoment = 'prompt' | 'start' | 'compact';
 
 export interface AgentStandingHost {
-  launch(project: AgentProjectView, session?: Pick<AgentSessionView, 'origin'>): AgentStandingLaunch | undefined;
+  launch(project: AgentProjectView, session?: Pick<AgentSessionView, 'origin' | 'agentMemberId'>): AgentStandingLaunch | undefined;
   /** @deprecated Per-turn `<riffet-context>` injection was removed; kept optional for older external plugins. */
   context?(sessionId: string, moment: AgentStandingMoment, runId?: string): string | undefined;
   compacting?(sessionId: string): void;

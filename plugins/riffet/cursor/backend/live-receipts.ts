@@ -1,6 +1,7 @@
 import { samePromptText } from '@contracts';
 import type { AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { cursorPromptAlias, type CursorLive, type CursorLiveStep } from '../native/live.js';
+import { withoutStandingMemberContext } from './standing.js';
 
 /** How long a sent prompt waits for its CLI to take it; a CLI without the live tap never reports one. */
 const WAIT_MS = 10 * 60_000;
@@ -41,7 +42,8 @@ export class CursorLiveReceipts {
       step ??= this.live.read(chatId) ?? null;
       const started = step ? Date.parse(step.at) : Number.NaN;
       const earliest = entry.waitFrom === undefined ? entry.sentAt : entry.sentAt - RECOVERED_SKEW_MS;
-      if (!step?.prompt || this.taken.has(step.turn) || !Number.isFinite(started) || started < earliest || !samePromptText(entry.text, step.prompt)) continue;
+      if (!step?.prompt || this.taken.has(step.turn) || !Number.isFinite(started) || started < earliest
+        || !samePromptText(withoutStandingMemberContext(entry.text), withoutStandingMemberContext(step.prompt))) continue;
       const [run] = await entry.host.runs?.find?.(entry.sessionId, { commandId: entry.commandId }).catch(() => []) ?? [];
       if (this.expected.get(runId) !== entry || this.taken.has(step.turn)) continue;
       if (run && run.id === runId && run.queueReleasedAt !== undefined) {

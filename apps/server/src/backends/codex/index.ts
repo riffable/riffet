@@ -400,7 +400,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       const nativeSessionId = await runtime.openOrResume();
       await runtime.terminal.ensureTui();
       const { input, images, renderedText } = await renderInput(host, request.input);
-      const standing = this.standingOf(host, request.project);
+      const standing = this.standingOf(host, request.project, request.session);
       const skills = command ? [] : await this.skills.inputs(runtime.transport, request.project.cwd, request.profile, sourceText, false, standing);
       if (host.isRunCancelled(request.runId)) return;
       const result = await runtime.send({
@@ -422,9 +422,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return { flavor: this.flavor, label: this.label, ensureRuntime: (...args) => this.ensureRuntime(...args) };
   }
 
-  /** The 助理's isolation when [project] is its directory (docs/ASSISTANT.md §4); TRAE CLI's app-server is not isolated. */
-  private standingOf(host: NativeBackendHost, project: Project): CodexStanding | undefined {
-    return this.flavor.id === 'codex' ? codexStanding(host.standing?.launch(project)) : undefined;
+  /** The 助理's isolation when [project]/[session] belongs to a team member (docs/TEAM.md §3.3); TRAE CLI's app-server is not isolated. */
+  private standingOf(host: NativeBackendHost, project: Project, session?: Pick<Session, 'origin' | 'agentMemberId'>): CodexStanding | undefined {
+    return this.flavor.id === 'codex' ? codexStanding(host.standing?.launch(project, session)) : undefined;
   }
 
   /**
@@ -493,7 +493,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       if (!runtime.steerTarget) await runtime.prime();
       await runtime.attachLoadedOwner();
       const { input, images, renderedText } = await renderInput(host, request.input);
-      const skills = await this.skills.inputs(runtime.transport, request.project.cwd, request.profile, request.sourceText ?? request.input.text, true, this.standingOf(host, request.project));
+      const skills = await this.skills.inputs(runtime.transport, request.project.cwd, request.profile, request.sourceText ?? request.input.text, true, this.standingOf(host, request.project, session));
       if (host.isRunCancelled(request.runId)) throw new AppError('RUN_CANCELLED', 'Instruction was cancelled before delivery.', 409);
       await runtime.steer({
         runId: request.runId, commandId: request.commandId, target: request.target,

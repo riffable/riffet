@@ -429,11 +429,12 @@ describe('an Agent backend from a plugin', () => {
 
   it('bridges standing launch/newTopic/compacting and settled deliveries with session ownership checks', async () => {
     const compacted: string[] = [];
+    const seenSessions: Array<{ agentMemberId?: string } | undefined> = [];
     const backend = {
       id: 'test.agent',
       label: 'Memory agent',
-      send: async (host: AgentHost, req: { context: { session: { id: string }; project: { id: string; name: string; cwd: string; system?: 'assistant' } }; runId: string; input: { text: string } }) => {
-        expect(host.standing?.launch(req.context.project)).toMatchObject({ systemPromptFile: '/tmp/sys.md' });
+      send: async (host: AgentHost, req: { context: { session: { id: string; agentMemberId?: string }; project: { id: string; name: string; cwd: string; system?: 'assistant'; agentMemberId?: string } }; runId: string; input: { text: string } }) => {
+        expect(host.standing?.launch(req.context.project, req.context.session)).toMatchObject({ systemPromptFile: '/tmp/sys.md' });
         expect(host.standing?.newTopic?.(req.context.session.id, '/new')).toBe(true);
         host.standing?.compacting?.(req.context.session.id);
         expect(() => host.standing?.compacting?.('other-session')).toThrow(/does not belong/);
@@ -442,9 +443,9 @@ describe('an Agent backend from a plugin', () => {
       },
     } as unknown as AgentBackend;
     const driver = new PluginBackendDriver(backend, 'test.agent');
-    const session = { id: 's', projectId: 'p', kind: 'native', backendId: 'test.agent', mode: 'agent', state: 'idle' };
+    const session = { id: 's', projectId: 'p', kind: 'native', backendId: 'test.agent', mode: 'agent', state: 'idle', agentMemberId: 'member-pm' };
     const foreign = { id: 'other-session', projectId: 'p', kind: 'native', backendId: 'claude', mode: 'agent', state: 'idle' };
-    const project = { id: 'p', name: 'Assistant', cwd: '/tmp', system: 'assistant' as const };
+    const project = { id: 'p', name: 'Repo', cwd: '/tmp' };
     const emitted: unknown[] = [];
     const host = {
       getSession: (id: string) => (id === 's' ? session : foreign),
@@ -453,9 +454,12 @@ describe('an Agent backend from a plugin', () => {
       terminal: {},
       withSessionLock: <T>(_id: string, operation: () => Promise<T>) => operation(),
       standing: {
-        launch: (proj: { system?: string }) => proj.system === 'assistant'
-          ? { systemPromptFile: '/tmp/sys.md', memoryDir: '/tmp/mem', mcpConfigFiles: [], pluginDirs: [], protectedFiles: [], compactAtTokens: 200_000, instructionFiles: [], skillsDir: '/tmp/skills' }
-          : undefined,
+        launch: (proj: { system?: string }, sess?: { agentMemberId?: string }) => {
+          seenSessions.push(sess);
+          return proj.system === 'assistant' || sess?.agentMemberId === 'member-pm'
+            ? { systemPromptFile: '/tmp/sys.md', memoryDir: '/tmp/mem', mcpConfigFiles: [], pluginDirs: [], protectedFiles: [], compactAtTokens: 200_000, instructionFiles: [], skillsDir: '/tmp/skills' }
+            : undefined;
+        },
         compacting: (id: string) => { compacted.push(id); },
         newTopic: (_id: string, text: string) => text === '/new',
       },
@@ -466,6 +470,7 @@ describe('an Agent backend from a plugin', () => {
       commitDispatchFence: () => ({} as Run),
     };
     await expect(driver.send(host, request as never)).resolves.toEqual({ settled: true });
+    expect(seenSessions).toEqual([expect.objectContaining({ agentMemberId: 'member-pm' })]);
     expect(compacted).toEqual(['s']);
     expect(emitted).toEqual([]);
   });

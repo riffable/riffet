@@ -5,6 +5,7 @@ import { DatabaseSync, type StatementSync } from 'node:sqlite';
 import { CURSOR_CHAT_CACHE_BUDGET, type NativeContext } from '@contracts';
 import { isJobLogPath } from './job-log.js';
 import { RIFFET_TOOLS_PLUGIN } from '../backend/riffet-tools.js';
+import { withoutStandingMemberContext } from '../backend/standing.js';
 import { announcedImagePaths, imagePathFields, isImagePath, parseSteerContexts, toolImageContent } from '@riffet/plugin-api/kit';
 
 /**
@@ -736,14 +737,14 @@ export function userQuery(message: ChatMessage): { text: string; at?: string } |
     if (query) {
       const stamp = /<timestamp>([^<]*)<\/timestamp>/.exec(text);
       const at = stamp ? parsePromptTimestamp(stamp[1]!) : undefined;
-      return { text: query[1]!, ...(at ? { at } : {}) };
+      return { text: withoutStandingMemberContext(query[1]!), ...(at ? { at } : {}) };
     }
   }
   // A prompt the CLI took from a person carries its request id. Plain text without one is the agent
   // talking to itself: "Your previous response was interrupted. Continue…" after a broken stream, or a
   // summary restated after compaction. Neither is a message from the user, nor the start of a turn.
   if (!str(message.providerOptions?.cursor?.requestId)) return undefined;
-  const plain = texts.map((text) => text.trim()).filter((text) => text && !text.startsWith('<')).join('\n\n');
+  const plain = texts.map((text) => withoutStandingMemberContext(text).trim()).filter((text) => text && !text.startsWith('<')).join('\n\n');
   return plain ? { text: plain } : undefined;
 }
 

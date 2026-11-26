@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import type { NativeInteraction, NativeStatus, Project, Session, TerminalInfo } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { ensureClaudeWorkspaceTrust } from '../shared/cli-trust.js';
@@ -375,12 +377,40 @@ export class ClaudeTerminalBinding {
   }
 
   /**
-   * A standing conversation (docs/ASSISTANT.md §4) runs on its own directory: its system prompt replaces the CLI's,
-   * and the owner's instructions, skills, plugins and MCP servers are left out. Sign-in is unaffected, since the
-   * profile's config directory is still the one in use.
+   * A standing conversation (docs/ASSISTANT.md §4, docs/TEAM.md §3.3) runs with its member system prompt
+   * replacing the CLI's, and the owner's user settings, skills, plugins and MCP servers left out. For
+   * project-scoped members whose `cwd` is a code repository rather than `<memberDir>`, `--add-dir` grants
+   * access to the member directory and `--append-system-prompt-file` injects the member's `AGENTS.md` and
+   * shared `USER.md` alongside the repo's own `CLAUDE.md`.
    */
   private async standingArgs(standing: StandingLaunch, model: string | undefined): Promise<string[]> {
     const args = ['--system-prompt-file', standing.systemPromptFile, ...STANDING_ISOLATION, ...standing.pluginDirs.flatMap(dir => ['--plugin-dir', dir])];
+    const realPath = (path: string) => { try { return realpathSync(path); } catch { return resolve(path); } };
+    const memberDir = dirname(standing.memoryDir);
+    const projectScoped = realPath(memberDir) !== realPath(this.deps.project.cwd);
+    if (projectScoped && existsSync(memberDir)) {
+      args.push('--add-dir', memberDir);
+      const memoryReal = realPath(standing.memoryDir);
+      const sections: string[] = [];
+      for (const file of standing.instructionFiles) {
+        // Claude Code loads `<memberDir>/memory/MEMORY.md` via `autoMemoryDirectory`; inject member rules and profile.
+        if (realPath(file).startsWith(`${memoryReal}${sep}`)) continue;
+        let text: string;
+        try { text = readFileSync(file, 'utf8').trim(); } catch { continue; }
+        if (!text) continue;
+        const rel = relative(memberDir, file).split(sep).join('/');
+        const heading = rel && !rel.startsWith('..') ? rel : basename(file);
+        sections.push(`# ${heading}\n\n${text}`);
+      }
+      if (sections.length) {
+        const appendFile = join(dirname(standing.systemPromptFile), `member-instructions-${basename(standing.systemPromptFile)}`);
+        const content = `${sections.join('\n\n')}\n`;
+        let existing: string | undefined;
+        try { existing = readFileSync(appendFile, 'utf8'); } catch { /* absent */ }
+        if (existing !== content) writeFileSync(appendFile, content, { mode: 0o600 });
+        args.push('--append-system-prompt-file', appendFile);
+      }
+    }
     // A gateway model with a declared window no larger than the threshold already summarizes before it.
     const declared = Number((await gatewayContextEnv(this.profile, model)).CLAUDE_CODE_MAX_CONTEXT_TOKENS);
     const probe = await runHelp(executableOf(this.profile)).catch(() => undefined);

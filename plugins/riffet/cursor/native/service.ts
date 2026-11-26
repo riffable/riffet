@@ -39,8 +39,8 @@ export interface NativeServiceOptions {
   stats?: StatsSink;
   /** Where the CLIs it restarts write the step they stream (`live.ts`). */
   live?: CursorLive;
-  /** Resolves the chat-store config directory for a project (standing conversations use an isolated dir). */
-  configDirFor?(project: AgentProjectView): string;
+  /** Resolves the chat-store config directory for a project/session (standing conversations use an isolated dir). */
+  configDirFor?(project: AgentProjectView, session?: AgentSessionView): string;
   /** Extra profile, CLI args, and env for restarts (hooks, Riffet tools, standing isolation). */
   restartLaunch?(session: AgentSessionView, project: AgentProjectView): Promise<{ profile?: CursorLaunchProfile; args?: string[]; env?: Record<string, string>; paneEnv?: Record<string, string> } | undefined>;
 }
@@ -259,7 +259,7 @@ export class NativeService {
     if (watch && !watch.closed && watch.chat?.chatId === chatId) {
       try {
         const project = this.port.getProject(session.projectId);
-        this.refreshParentTranscript(watch, session, workspaceChatsDir(this.configDirFor(project), project.cwd));
+        this.refreshParentTranscript(watch, session, workspaceChatsDir(this.configDirFor(project, session), project.cwd));
       } catch { /* best effort when called from hook or test without a full project */ }
       if (expectedStop && expectedStop.nativeSessionId === chatId && expectedStop.turnId
         && watch.chat.status === 'ok' && watch.chat.awaitingReply()) {
@@ -955,7 +955,7 @@ export class NativeService {
       await this.port.terminals.stop(session.terminalId);
       const extras = await this.options.restartLaunch?.(next, project).catch(() => undefined);
       const launchProfile = extras?.profile ?? this.options.profile ?? this.options.cliPath;
-      const effectiveConfigDir = extras?.profile?.configDir ?? this.configDirFor(project);
+      const effectiveConfigDir = extras?.profile?.configDir ?? this.configDirFor(project, next);
       writeChatApproval(effectiveConfigDir, project.cwd, session.nativeSessionId, next.approval);
       // A restart has to say everything again: the mode and the approval mode are launch flags, and
       // dropping them would silently move the conversation back to the plain agent/allowlist default.
@@ -1100,8 +1100,8 @@ export class NativeService {
     }
   }
 
-  private configDirFor(project: AgentProjectView): string {
-    return this.options.configDirFor?.(project) ?? this.options.configDir;
+  private configDirFor(project: AgentProjectView, session?: AgentSessionView): string {
+    return this.options.configDirFor?.(project, session) ?? this.options.configDir;
   }
 
   private async tick(watch: Watch): Promise<void> {
@@ -1112,7 +1112,7 @@ export class NativeService {
       catch { await watch.tickPromise; return; }
       if (watch.chat?.chatId === session.nativeSessionId) {
         const project = this.port.getProject(session.projectId);
-        this.refreshParentTranscript(watch, session, workspaceChatsDir(this.configDirFor(project), project.cwd));
+        this.refreshParentTranscript(watch, session, workspaceChatsDir(this.configDirFor(project, session), project.cwd));
         return;
       }
       // A chat switch still belongs to the in-flight maintenance pass. Coalesce callers on one
@@ -1128,7 +1128,7 @@ export class NativeService {
       try { session = this.port.getSession(watch.sessionId); }
       catch { watch.emit({ type: 'status', status: { phase: 'offline' } }); return; }
       const project = this.port.getProject(session.projectId);
-      const dir = workspaceChatsDir(this.configDirFor(project), project.cwd);
+      const dir = workspaceChatsDir(this.configDirFor(project, session), project.cwd);
       const followChat = async (chatId: string | undefined) => {
         if (watch.closed) return;
         if (chatId === watch.chat?.chatId) return;

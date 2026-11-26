@@ -19,13 +19,13 @@ import { probeCursorHookSteer } from './backend/launch-plugin.js';
 import { CursorLiveReceipts } from './backend/live-receipts.js';
 import { CursorProjectConfigs } from './backend/project-configs.js';
 import { readCursorShare } from './backend/share-read.js';
-import { cursorProjectConfigDir, isStandingProject, prepareStandingLaunch, StandingProbeCache } from './backend/standing.js';
+import { cursorProjectConfigDir, cursorStandingDir, isStandingProject, prepareStandingLaunch, withoutStandingMemberContext, wrapStandingPrompt } from './backend/standing.js';
 import { CursorSteerBridge } from './backend/steer.js';
 import { CursorRiffetTools } from './backend/riffet-tools.js';
 import { CursorApiCache } from './backend/api-cache.js';
 import { CursorTranscriptSource, type CursorTranscriptSignals } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
-import { workspaceChatsDir } from './native/chat-store.js';
+import { ChatReader, chatStorePath, userQuery, workspaceChatsDir } from './native/chat-store.js';
 import { CursorLive, cursorPromptAlias } from './native/live.js';
 import { nativeModelCatalogFromVariants } from './native/model-catalog.js';
 import { emptyRuntimeStats, NativeRuntimeManager } from './native/runtime.js';
@@ -169,7 +169,6 @@ export class CursorBackend implements AgentBackend {
   private readonly usageListeners = new Set<() => void>();
   private readonly liveUsageListeners = new Set<(progress: CursorLiveUsageProgress) => void>();
   private readonly liveUsageEmitted = new Map<string, { outputTokens: number; sealed: boolean }>();
-  private readonly standingProbe = new StandingProbeCache();
   /** Metadata-only settled counters, plus live step progress; no transcript, launch configuration or credentials. */
   readonly usageService = {
     version: '1.1.0',
@@ -204,8 +203,65 @@ export class CursorBackend implements AgentBackend {
   private readonly activities = new Map<string, { tracker: CursorActivities; listeners: Set<AgentReport> }>();
   /** Readers of a conversation's transcript into the journal (`transcriptSource`), told what the hooks report. */
   private readonly transcriptSignals = new Map<string, Set<CursorTranscriptSignals>>();
+  /** Standing chat ids that already received their `<riffet-member>` seed prompt; bounded LRU. */
+  private readonly seededStandingChats = new Set<string>();
+  /** Standing sessions that compacted and should re-seed `<riffet-member>` on their next turn; bounded LRU. */
+  private readonly reseedStandingSessions = new Set<string>();
 
   constructor(private readonly options: CursorBackendOptions) {}
+
+  private rememberSeededStandingChat(chatId: string | undefined): void {
+    if (!chatId) return;
+    this.seededStandingChats.delete(chatId);
+    this.seededStandingChats.add(chatId);
+    while (this.seededStandingChats.size > 256) this.seededStandingChats.delete(this.seededStandingChats.keys().next().value!);
+  }
+
+  private markStandingReseed(sessionId: string): void {
+    this.reseedStandingSessions.delete(sessionId);
+    this.reseedStandingSessions.add(sessionId);
+    while (this.reseedStandingSessions.size > 256) this.reseedStandingSessions.delete(this.reseedStandingSessions.keys().next().value!);
+  }
+
+  private chatHasUserTurns(cwd: string, chatId: string): boolean {
+    const reader = new ChatReader(chatStorePath(cursorStandingDir(this.options.stateDir), cwd, chatId));
+    try {
+      const snap = reader.snapshot();
+      if (!snap) return false;
+      for (const id of snap.messageIds) {
+        const message = reader.message(id);
+        if (message?.role === 'user' && userQuery(message)) return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      reader.close();
+    }
+  }
+
+  /**
+   * Cursor's interactive TUI skips `sessionStart` when launched with `--resume <chatId>` and does not run
+   * `--plugin-dir` hooks on `beforeSubmitPrompt`. For standing members, seed `<riffet-member>` instructions on
+   * the first turn of each fresh chat (and after compaction); `userQuery()` strips the tag from transcripts.
+   */
+  private maybeWrapStandingPrompt(
+    host: AgentHost,
+    session: AgentSessionView,
+    project: AgentProjectView,
+    text: string,
+  ): { text: string; seeded: boolean } {
+    const standing = host.standing?.launch(project, session);
+    if (!standing) return { text, seeded: false };
+    const chatId = session.nativeSessionId;
+    const forceReseed = this.reseedStandingSessions.has(session.id);
+    const alreadySeeded = !forceReseed && Boolean(chatId && (this.seededStandingChats.has(chatId) || this.chatHasUserTurns(project.cwd, chatId)));
+    if (alreadySeeded) {
+      if (chatId) this.rememberSeededStandingChat(chatId);
+      return { text, seeded: false };
+    }
+    return { text: wrapStandingPrompt(project.cwd, standing, text), seeded: true };
+  }
 
   /**
    * The runtime, built from the first launch profile resolved from a profile config (its stored settings, key and
@@ -219,7 +275,7 @@ export class CursorBackend implements AgentBackend {
     const launch = cursorLaunchProfileOf(profile.config);
     const port = cursorPort(host);
     const live = new CursorLive(join(this.options.stateDir, 'cursor-live'));
-    const configDirFor = (project: AgentProjectView) => cursorProjectConfigDir(launch.configDir, this.options.stateDir, project);
+    const configDirFor = (project: AgentProjectView, session?: AgentSessionView) => cursorProjectConfigDir(launch.configDir, this.options.stateDir, project, session);
     const tools = new CursorRiffetTools(host, this.options.stateDir, () => probeCursorHookSteer(launch));
     // A gateway's startup queries are answered locally; the first launch waits for the front, a failed one is skipped.
     const apiCache = cursorApiFrontable(launch, true) ? new CursorApiCache(launch.apiEndpoint!, join(this.options.stateDir, 'cursor-api-front.json')) : undefined;
@@ -231,14 +287,11 @@ export class CursorBackend implements AgentBackend {
       const standing = host.standing?.launch(project, session);
       if (!standing) return undefined;
       await front;
-      const bridgeConfigPath = await steering.ensureBridgeConfig().catch(() => undefined);
       const prepared = prepareStandingLaunch({
         baseProfile: launch,
         stateDir: this.options.stateDir,
         cwd: project.cwd,
         launch: standing,
-        probeCache: this.standingProbe,
-        ...(bridgeConfigPath ? { bridgeConfigPath } : {}),
       });
       return { ...prepared, skipWarm: true as const };
     };
@@ -275,6 +328,7 @@ export class CursorBackend implements AgentBackend {
     });
     const usage = new CursorUsageIngest(host, live, launch.configDir, configDirFor);
     steering.onPreCompact = (sessionId, info) => {
+      this.markStandingReseed(sessionId);
       this.activityEntry(sessionId, native).tracker.compactionStarted(info);
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.preCompact(info);
     };
@@ -428,25 +482,31 @@ export class CursorBackend implements AgentBackend {
     const { session } = context;
     steering.bind(session.id);
     const prompt = options.initialPrompt;
+    const wrapped = prompt ? this.maybeWrapStandingPrompt(host, session, context.project, prompt) : undefined;
+    const deliveredPrompt = wrapped?.text;
     let fencedAt: number | undefined;
     const fence = async () => { await host.beforeSpawn(session.id); fencedAt = Date.now(); };
     const { terminal, promptPending } = await runtime.ensure(session, {
-      ...(prompt ? { initialPrompt: prompt } : {}),
+      ...(deliveredPrompt ? { initialPrompt: deliveredPrompt } : {}),
       beforeSpawn: fence,
     });
-    if (prompt && promptPending) {
+    if (deliveredPrompt && promptPending) {
       // A warm CLI took the conversation: the prompt is submitted to it like any later one.
-      try { await native.deliver(port.getSession(session.id), prompt, fence); }
+      try { await native.deliver(port.getSession(session.id), deliveredPrompt, fence); }
       catch (error) {
         // Nothing was written, so the message can go again; it is pasted into the CLI now running.
         if (fencedAt === undefined) throw new AppError('NATIVE_LAUNCH_ABORTED', error instanceof Error ? error.message : 'The CLI could not take the message yet', 409, { reason: error instanceof AppError ? error.code : undefined });
         throw error;
       }
     }
+    const current = port.getSession(session.id);
+    if (wrapped?.seeded && fencedAt !== undefined) {
+      this.rememberSeededStandingChat(current.nativeSessionId);
+      this.reseedStandingSessions.delete(session.id);
+    }
     // The store echoes a first prompt only when the CLI has written its step; the live tap sees it go out.
     if (prompt && fencedAt !== undefined) await this.expectFirstReceipt(host, receipts, port, session.id, prompt, fencedAt);
     else await this.expectExitedReceipts(host, receipts, port, session.id);
-    const current = port.getSession(session.id);
     if (session.resumePicker && !session.nativeSessionId) titles.watch({ sessionId: session.id, terminalId: terminal.id, projectId: session.projectId });
     return { terminalId: terminal.id, ...(current.nativeSessionId ? { nativeSessionId: current.nativeSessionId } : {}), status: native.status(session.id) };
   }
@@ -482,6 +542,7 @@ export class CursorBackend implements AgentBackend {
     const { text } = await materializeNativeInput(attachments(host), request.input);
     const { native, port, receipts } = this.parts(host, request.context.profile);
     const session = port.getSession(request.context.session.id);
+    const { text: deliveredText, seeded } = this.maybeWrapStandingPrompt(host, session, request.context.project, text);
     let sentAt = Date.now();
     const fence = async ({ terminalId, epoch, chatId }: { terminalId: string; epoch: number; chatId?: string }) => {
       const nativeSessionId = chatId ?? session.nativeSessionId;
@@ -495,22 +556,26 @@ export class CursorBackend implements AgentBackend {
       sentAt = Date.now();
       port.noteInputSent(request.runId, sentAt);
     };
-    await native.deliver(session, text, fence);
+    await native.deliver(session, deliveredText, fence);
     // The echo in the store can be a whole answer away; the CLI taking the prompt is not.
     const chatId = port.getSession(session.id).nativeSessionId;
+    if (seeded) {
+      this.rememberSeededStandingChat(chatId);
+      this.reseedStandingSessions.delete(session.id);
+    }
     if (chatId) await receipts.expect({ host, sessionId: session.id, chatId, runId: request.runId, commandId: request.commandId, text, sentAt });
   }
 
   /**
-   * Starts a fresh topic in the personal assistant's main conversation (docs/ASSISTANT.md §5.5):
-   * archives the current chat id into `previousNativeSessionIds`, stops the old CLI process, and opens
-   * a fresh Cursor chat without carrying over the previous topic's recent turns.
+   * Starts a fresh topic in the standing member's main conversation (docs/ASSISTANT.md §5.5):
+   * archives the current chat id into `previousNativeSessionIds`, stops the old CLI process, and clears
+   * `nativeSessionId` so the next user message opens a fresh Cursor chat with `<riffet-member>` seeded on argv.
    */
   private async newTopic(host: AgentHost, request: AgentSendRequest): Promise<AgentDelivery> {
     if (request.input.attachmentIds.length || request.input.context.length || request.input.references?.length) {
       throw new AppError('NATIVE_COMMAND_ARGUMENTS', 'Remove attachments and context references before running this command.', 400);
     }
-    const { runtime, port, steering } = this.parts(host, request.context.profile);
+    const { port, steering } = this.parts(host, request.context.profile);
     const sessionId = request.context.session.id;
     return await host.withSessionLock(sessionId, async () => {
       const session = port.getSession(sessionId);
@@ -522,13 +587,14 @@ export class CursorBackend implements AgentBackend {
       }
       await host.commitDispatchFence(request.runId, { slashCommand: true, renderedText: request.input.text, nativeSessionId: previous });
       steering.reject(sessionId, 'Starting a new topic');
+      this.seededStandingChats.delete(previous);
+      this.reseedStandingSessions.delete(sessionId);
       if (session.terminalId) {
         await port.terminals.stop(session.terminalId).catch(() => undefined);
       }
       const archived = [...(session.previousNativeSessionIds ?? []).filter(id => id !== previous), previous].slice(-MAX_PREVIOUS_NATIVE_SESSIONS);
       await host.updateSession(sessionId, { previousNativeSessionIds: archived, terminalId: undefined });
       await host.setNativeSessionId(sessionId, undefined);
-      await runtime.ensure(port.getSession(sessionId));
       return { state: 'settled' as const };
     });
   }
@@ -602,7 +668,7 @@ export class CursorBackend implements AgentBackend {
   }
 
   readHistory(host: AgentHost, context: AgentContext, options?: AgentHistoryOptions) {
-    const configDir = cursorProjectConfigDir(this.parts(host, context.profile).profile.configDir, this.options.stateDir, context.project);
+    const configDir = cursorProjectConfigDir(this.parts(host, context.profile).profile.configDir, this.options.stateDir, context.project, context.session);
     return readCursorShare(context, configDir, options);
   }
 
@@ -657,8 +723,9 @@ export class CursorBackend implements AgentBackend {
         if (!liveBefore || !liveBefore.sealed || !liveBefore.prompt || !liveBefore.turn
           || sentAt === undefined || !Number.isFinite(stepAt) || !(stepAt > sentAt)) return false;
         if (liveBefore.turn === run.nativeTurnId || cursorPromptAlias(liveBefore.turn) === run.nativeMessageId) return false;
-        if (prompt && samePromptText(prompt, liveBefore.prompt)) return false;
-        if (run.inputText && run.inputText !== prompt && samePromptText(run.inputText, liveBefore.prompt)) return false;
+        const livePrompt = withoutStandingMemberContext(liveBefore.prompt);
+        if (prompt && samePromptText(prompt, livePrompt)) return false;
+        if (run.inputText && run.inputText !== prompt && samePromptText(run.inputText, livePrompt)) return false;
         later = { chatId, turnId: liveBefore.turn };
       }
       const releasable = await host.transcript.withSource(sessionId, (source, w) =>
@@ -747,8 +814,9 @@ export class CursorBackend implements AgentBackend {
       sessionId,
       live,
       chatsDir: () => {
-        const project = port.getProject(port.getSession(sessionId).projectId);
-        return workspaceChatsDir(cursorProjectConfigDir(launch.configDir, this.options.stateDir, project), project.cwd);
+        const session = port.getSession(sessionId);
+        const project = port.getProject(session.projectId);
+        return workspaceChatsDir(cursorProjectConfigDir(launch.configDir, this.options.stateDir, project, session), project.cwd);
       },
       chatId: () => port.getSession(sessionId).nativeSessionId,
       previousChatIds: () => port.getSession(sessionId).previousNativeSessionIds ?? [],
@@ -810,7 +878,8 @@ export class CursorBackend implements AgentBackend {
       this.usageListeners.clear();
       this.liveUsageListeners.clear();
       this.liveUsageEmitted.clear();
-      this.standingProbe.clear();
+      this.seededStandingChats.clear();
+      this.reseedStandingSessions.clear();
       this.usageHost = undefined;
       const built = this.built;
       if (!built) return;

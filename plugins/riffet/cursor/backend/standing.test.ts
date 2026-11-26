@@ -1,17 +1,23 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AgentStandingLaunch } from '@riffet/plugin-api/experimental/agent';
 import {
+  buildStandingSessionContext,
   cursorDataProjectSlug,
+  cursorProjectConfigDir,
+  cursorStandingDir,
   evaluateStandingToolUse,
+  isStandingSession,
   standingProtectsPath,
   syncStandingTransport,
-  writeStandingAssistantRule,
+  withoutStandingMemberContext,
+  wrapStandingPrompt,
   writeStandingMcpDisabled,
   writeStandingMcpPlugin,
 } from './standing.js';
+import { userQuery } from '../native/chat-store.js';
 
 const temps: string[] = [];
 afterEach(() => {
@@ -63,24 +69,32 @@ describe('cursor standing isolation', () => {
     expect(saved).toEqual(['project_extra', 'user_only']);
   });
 
-  it('packages assistant .mcp.json files into a plugin directory with env expansion', () => {
+  it('packages member .mcp.json files into per-member isolated plugin directories with env expansion', () => {
     const standing = makeTemp('riffet-cursor-standing-');
     const work = makeTemp('riffet-cursor-work-');
-    const mcpFile = join(work, '.mcp.json');
-    writeFileSync(mcpFile, JSON.stringify({
+    const mcpFileA = join(work, 'a.mcp.json');
+    const mcpFileB = join(work, 'b.mcp.json');
+    writeFileSync(mcpFileA, JSON.stringify({
       mcpServers: { calendar: { command: 'node', args: ['${RIFFET_TEST_MISSING:-fallback.js}'] } },
     }));
+    writeFileSync(mcpFileB, JSON.stringify({
+      mcpServers: { finance: { command: 'node', args: ['fin.js'] } },
+    }));
 
-    const packaged = writeStandingMcpPlugin(standing, [mcpFile]);
-    expect(packaged.serverNames).toEqual(['calendar']);
-    expect(packaged.pluginDir).toBeDefined();
-    const written = JSON.parse(readFileSync(join(packaged.pluginDir!, '.mcp.json'), 'utf8')) as {
+    const packagedA = writeStandingMcpPlugin(standing, [mcpFileA], 'member-a');
+    const packagedB = writeStandingMcpPlugin(standing, [mcpFileB], 'member-b');
+    expect(packagedA.serverNames).toEqual(['calendar']);
+    expect(packagedB.serverNames).toEqual(['finance']);
+    expect(packagedA.pluginDir).toBeDefined();
+    expect(packagedB.pluginDir).toBeDefined();
+    expect(packagedA.pluginDir).not.toBe(packagedB.pluginDir);
+    const written = JSON.parse(readFileSync(join(packagedA.pluginDir!, '.mcp.json'), 'utf8')) as {
       mcpServers: { calendar: { args: string[] } };
     };
     expect(written.mcpServers.calendar.args).toEqual(['fallback.js']);
   });
 
-  it('writes always-applied rule with system prompt fallback or omits it when --system-prompt is active', () => {
+  it('builds sessionStart context with system prompt, profile, and memory index while avoiding duplicate cwd AGENTS.md', () => {
     const work = makeTemp('riffet-cursor-work-');
     const sysFile = join(work, 'system-prompt.md');
     mkdirSync(join(work, 'memory'), { recursive: true });
@@ -99,17 +113,11 @@ describe('cursor standing isolation', () => {
       skillsDir: join(work, '.claude', 'skills'),
     };
 
-    const ruleFallback = readFileSync(writeStandingAssistantRule(work, launch, false), 'utf8');
-    expect(ruleFallback).toContain('alwaysApply: true');
-    expect(ruleFallback).toContain('ASSISTANT_SYSTEM_IDENTITY');
-    expect(ruleFallback).toContain('OWNER_PROFILE');
-    expect(ruleFallback).toContain('MEMORY_INDEX');
-    expect(ruleFallback).not.toContain('OWNER_RULES');
-
-    const ruleNative = readFileSync(writeStandingAssistantRule(work, launch, true), 'utf8');
-    expect(ruleNative).not.toContain('ASSISTANT_SYSTEM_IDENTITY');
-    expect(ruleNative).toContain('OWNER_PROFILE');
-    expect(ruleNative).toContain('MEMORY_INDEX');
+    const ctx = buildStandingSessionContext(work, launch);
+    expect(ctx).toContain('ASSISTANT_SYSTEM_IDENTITY');
+    expect(ctx).toContain('OWNER_PROFILE');
+    expect(ctx).toContain('MEMORY_INDEX');
+    expect(ctx).not.toContain('OWNER_RULES');
   });
 
   it('protects owner files and restricts background dontAsk runs to safe tools and MCP', () => {
@@ -139,5 +147,59 @@ describe('cursor standing isolation', () => {
     expect(evaluateStandingToolUse('Delete', { file_path: 'memory/notes.md' }, launch, work, true).allowed).toBe(false);
     expect(evaluateStandingToolUse('Read', { file_path: 'memory/notes.md' }, launch, work, true).allowed).toBe(true);
     expect(evaluateStandingToolUse('MCP:run_report', {}, launch, work, true).allowed).toBe(true);
+  });
+
+  it('includes member AGENTS.md in sessionStart context for project-scoped members without touching the code repo', () => {
+    const repo = makeTemp('riffet-cursor-repo-');
+    const member = makeTemp('riffet-cursor-member-');
+    const team = makeTemp('riffet-cursor-team-');
+    const stateDir = makeTemp('riffet-cursor-state-');
+    mkdirSync(join(member, 'memory'), { recursive: true });
+    writeFileSync(join(repo, 'AGENTS.md'), 'REPO_CODING_RULES');
+    writeFileSync(join(member, 'AGENTS.md'), 'MEMBER_PM_IDENTITY');
+    writeFileSync(join(team, 'USER.md'), 'GLOBAL_USER_PROFILE');
+    writeFileSync(join(member, 'memory', 'MEMORY.md'), 'MEMBER_MEMORY_INDEX');
+    const sysFile = join(team, 'system-prompt-pm.md');
+    writeFileSync(sysFile, 'MEMBER_SYSTEM_PROMPT');
+
+    const launch: AgentStandingLaunch = {
+      systemPromptFile: sysFile,
+      memoryDir: join(member, 'memory'),
+      mcpConfigFiles: [],
+      pluginDirs: [],
+      protectedFiles: [join(member, 'AGENTS.md'), join(team, 'USER.md')],
+      compactAtTokens: 200_000,
+      instructionFiles: [join(member, 'AGENTS.md'), join(team, 'USER.md'), join(member, 'memory', 'MEMORY.md')],
+      skillsDir: join(member, '.claude', 'skills'),
+    };
+
+    const ctx = buildStandingSessionContext(repo, launch);
+    expect(existsSync(join(repo, '.cursor'))).toBe(false);
+    expect(existsSync(join(member, '.cursor'))).toBe(false);
+    expect(ctx).toContain('MEMBER_SYSTEM_PROMPT');
+    expect(ctx).toContain('MEMBER_PM_IDENTITY');
+    expect(ctx).toContain('GLOBAL_USER_PROFILE');
+    expect(ctx).toContain('MEMBER_MEMORY_INDEX');
+    expect(ctx).not.toContain('REPO_CODING_RULES');
+
+    expect(standingProtectsPath(join(member, 'AGENTS.md'), launch, repo)).toBe(true);
+    expect(standingProtectsPath(join(team, 'USER.md'), launch, repo)).toBe(true);
+    expect(standingProtectsPath(join(repo, '.cursor', 'rules', 'repo.mdc'), launch, repo)).toBe(false);
+    expect(standingProtectsPath(join(repo, 'AGENTS.md'), launch, repo)).toBe(false);
+
+    expect(isStandingSession({ system: undefined }, { agentMemberId: 'pm' })).toBe(true);
+    expect(isStandingSession({ system: undefined }, {})).toBe(false);
+    expect(cursorProjectConfigDir('/owner/.cursor', stateDir, { system: undefined }, { agentMemberId: 'pm' })).toBe(cursorStandingDir(stateDir));
+    expect(cursorProjectConfigDir('/owner/.cursor', stateDir, { system: undefined }, {})).toBe('/owner/.cursor');
+
+    const wrapped = wrapStandingPrompt(repo, launch, '你是谁');
+    expect(wrapped).toContain('<riffet-member>');
+    expect(wrapped).toContain('MEMBER_PM_IDENTITY');
+    expect(wrapped).toContain('你是谁');
+    expect(withoutStandingMemberContext(wrapped)).toBe('你是谁');
+    expect(userQuery({
+      role: 'user',
+      content: [{ type: 'text', text: `<timestamp>Thu</timestamp>\n<user_query>\n${wrapped}\n</user_query>` }],
+    })).toEqual({ text: '你是谁' });
   });
 });
