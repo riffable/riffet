@@ -400,7 +400,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   openOrResume(override?: { model?: string; approval?: string }): Promise<string> { return this.thread.openOrResume(override); }
   leaveThread(): Promise<string> { return this.thread.leaveThread(); }
   attachLoadedOwner(): Promise<void> { return this.thread.attachLoadedOwner(); }
-  takeStandingMoments(): Array<'start' | 'compact'> { return this.thread.takeStandingMoments(); }
   /** The blocking request the card shows; public because the status carries it. */
   get interaction(): NativeInteraction | undefined { return this.interactions.blocking; }
   /** What the card shows: a blocking request first, then the oldest unanswered async question. */

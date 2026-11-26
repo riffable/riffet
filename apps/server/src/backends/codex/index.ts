@@ -46,7 +46,7 @@ import { safeProviderError } from './errors.js';
 import { isKnownBlockingTitle } from '../../agent-host/interaction-choice.js';
 import { CodexSessionRuntime, type NativeRuntimeHooks } from './runtime.js';
 import { newTopicBoundary } from './transcript-source.js';
-import { codexStanding, standingContextItem, type CodexStanding } from './standing.js';
+import { codexStanding, type CodexStanding } from './standing.js';
 import { codexObservation, type CodexObservation } from './observation.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 
@@ -403,15 +403,11 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       const standing = this.standingOf(host, request.project);
       const skills = command ? [] : await this.skills.inputs(runtime.transport, request.project.cwd, request.profile, sourceText, false, standing);
       if (host.isRunCancelled(request.runId)) return;
-      // The 助理 is told the time and what it missed with each message, ahead of the owner's text (docs/ASSISTANT.md §5.1),
-      // and first what it lacks: the conversation's last turns in a new thread, that the thread was just summarized.
-      const moments = standing && !command ? [...runtime.takeStandingMoments(), 'prompt' as const] : [];
-      const context = standingContextItem(moments.map(moment => host.standing?.context(request.session.id, moment, request.runId)));
       const result = await runtime.send({
         runId: request.runId,
         commandId: request.commandId,
         renderedText,
-        input: [...context, ...input, ...images, ...skills],
+        input: [...input, ...images, ...skills],
         config: { ...request.config, ...(request.config.model === undefined && typeof request.profile.config.defaultModel === 'string'
           ? { model: request.profile.config.defaultModel } : {}) },
         nativeSessionId,
@@ -474,8 +470,6 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         await runtime.dispose(host, { keepRunning: true });
         const next = await this.ensureRuntime(host, host.getSession(sessionId), request.project, request.profile, true);
         await next.openOrResume();
-        // A new topic starts from nothing: the new thread is not told the last turns.
-        next.takeStandingMoments();
         await next.terminal.ensureTui();
       } finally {
         this.restarting.delete(sessionId);

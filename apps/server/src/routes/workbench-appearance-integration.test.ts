@@ -35,7 +35,6 @@ it('routes assistant appearance changes from an accepted Web turn through MCP to
     store.transitionNativeRun(run.id, ['queued'], { delivery: 'observed', nativeSessionId, nativeTurnId: turnId }, { state: 'running' });
     status.mockReturnValue({ phase: 'busy', activeTurn: { nativeSessionId, turnId, ownerRunId: run.id } });
   };
-  const sourceTurn = (run: Run) => nativeBackends.host.standing?.context(run.sessionId, 'prompt', run.id)?.match(/sourceTurn="([^"]+)"/)?.[1];
   try {
     await app.ready();
     const signIn = await app.inject({ method: 'POST', url: '/api/auth/login', headers: host, payload: { token } });
@@ -68,8 +67,6 @@ it('routes assistant appearance changes from an accepted Web turn through MCP to
     expect(created.statusCode, created.body).toBe(202);
     const first = created.json().run as Run;
     expect(riffetMcp.signature(first.sessionId)).toBe(warm.signature);
-    const proof = sourceTurn(first)!;
-    expect(proof).toBeTruthy();
     const mcp = async (sessionId: string) => {
       const credentialPath = riffetMcp.server(sessionId)!.args.at(-1)!;
       const { credential } = JSON.parse(await readFile(credentialPath, 'utf8')) as { credential: string };
@@ -82,21 +79,19 @@ it('routes assistant appearance changes from an accepted Web turn through MCP to
     const projectSession = store.createSession({ kind: 'native', projectId: store.createProject(temporary, 'Project').id, backendId: 'codex' });
     const projectRpc = await mcp(projectSession.id);
     const unavailable = { isError: true, content: [{ type: 'text', text: expect.stringContaining('WORKBENCH_UNAVAILABLE') }] };
-    expect(await rpc('workbench_appearance_set', { sourceTurn: proof, themeId: 'solarized' })).toMatchObject(unavailable);
+    expect(await rpc('workbench_appearance_set', { themeId: 'solarized' })).toMatchObject(unavailable);
     running(first);
-    expect(await rpc('workbench_appearance_set', { sourceTurn: 'guessed', themeId: 'solarized' })).toMatchObject(unavailable);
-    expect(await projectRpc('workbench_appearance_set', { sourceTurn: proof, themeId: 'solarized' })).toMatchObject({
+    expect(await projectRpc('workbench_appearance_set', { themeId: 'solarized' })).toMatchObject({
       isError: true, content: [{ type: 'text', text: expect.stringContaining('TOOL_NOT_AVAILABLE') }],
     });
     // Discovery does not grant ordinary callers access, and an ID discovered as a read cannot name a mutation.
     expect(await projectRpc('capability_find', {})).toMatchObject({isError:true});
     expect(await projectRpc('capability_read', {id:'workbench.identity'})).toMatchObject({isError:true});
     expect(await rpc('capability_find', {domain:'workbench'})).toMatchObject({structuredContent:{capabilities:expect.arrayContaining([expect.objectContaining({id:'workbench.attention'})])}});
-    expect(await rpc('capability_read', {id:'setting_set',arguments:{sourceTurn:proof}})).toMatchObject({isError:true});
-    expect(await rpc('setting_set', {setting:'composerSendLater',value:true,expectedValue:false,sourceTurn:'forged'})).toMatchObject({isError:true});
-    expect(await rpc('setting_set', {setting:'allowOutsideRead',value:true,expectedValue:false,sourceTurn:proof})).toMatchObject({isError:true});
-    expect(await rpc('setting_set', {setting:'composerSendLater',value:true,expectedValue:false,sourceTurn:proof})).toMatchObject({structuredContent:{scope:'instance',changed:true,value:true}});
-    expect(await rpc('setting_set', {setting:'composerSendLater',value:true,expectedValue:false,sourceTurn:proof})).toMatchObject({structuredContent:{changed:false}});
+    expect(await rpc('capability_read', {id:'setting_set',arguments:{}})).toMatchObject({isError:true});
+    expect(await rpc('setting_set', {setting:'allowOutsideRead',value:true,expectedValue:false})).toMatchObject({isError:true});
+    expect(await rpc('setting_set', {setting:'composerSendLater',value:true,expectedValue:false})).toMatchObject({structuredContent:{scope:'instance',changed:true,value:true}});
+    expect(await rpc('setting_set', {setting:'composerSendLater',value:true,expectedValue:false})).toMatchObject({structuredContent:{changed:false}});
     expect(await rpc('capability_read', {id:'settings.catalog',arguments:{section:'interaction'}})).toMatchObject({structuredContent:{settings:expect.arrayContaining([expect.objectContaining({id:'composerSendLater',value:true})])}});
     expect(await rpc('task_continue', {text:'unrelated'})).toMatchObject({isError:true});
     const provider = nativeBackends.catalog.validateProfile('codex');
@@ -114,29 +109,29 @@ it('routes assistant appearance changes from an accepted Web turn through MCP to
     expect(await rpc('capability_read', { id: 'settings.agent_defaults', arguments: { backendId: 'codex' } })).toMatchObject({
       structuredContent: { models: { items: expect.arrayContaining([{ id: model, name: 'Test model' }]) } },
     });
-    expect(await projectRpc('agent_defaults_set', { action: 'propose', backendId: 'codex', model, sourceTurn: proof })).toMatchObject({ isError: true });
-    const propose = async (sourceTurn: string, selected = model) => {
-      const result = await rpc('agent_defaults_set', { action: 'propose', backendId: 'codex', model: selected, makeDefaultAgent: true, sourceTurn });
+    expect(await projectRpc('agent_defaults_set', { action: 'propose', backendId: 'codex', model })).toMatchObject({ isError: true });
+    const propose = async (selected = model) => {
+      const result = await rpc('agent_defaults_set', { action: 'propose', backendId: 'codex', model: selected, makeDefaultAgent: true });
       expect(result).toMatchObject({ structuredContent: { status: 'confirmation_required', after: { configuredModel: selected, defaultAgentId: 'codex' } } });
       return result.structuredContent.confirmation.text as string;
     };
-    const confirmation = await propose(proof);
+    const confirmation = await propose();
     expect(defaults()?.model).toBeUndefined();
-    expect(await rpc('agent_defaults_set', { action: 'apply', confirm: true, sourceTurn: proof })).toMatchObject({ isError: true });
-    expect(await rpc('agent_defaults_set', { action: 'apply', sourceTurn: proof })).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('SETTING_CONFIRMATION_REQUIRED') }] });
-    const exchange = async (name: string, change: Record<string, unknown>, result: { mode: string; themeId: string; activePaletteId?: string }, turn: string) => {
+    expect(await rpc('agent_defaults_set', { action: 'apply', confirm: true })).toMatchObject({ isError: true });
+    expect(await rpc('agent_defaults_set', { action: 'apply' })).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('SETTING_CONFIRMATION_REQUIRED') }] });
+    const exchange = async (name: string, change: Record<string, unknown>, result: { mode: string; themeId: string; activePaletteId?: string }) => {
       const command = next(socket!);
-      const reply = rpc(name, { sourceTurn: turn, ...change });
+      const reply = rpc(name, { ...change });
       const frame = await Promise.race([command, reply.then(response => { throw new Error(JSON.stringify(response)); })]);
       expect(frame.change).toEqual(change);
       const receipt = { ...result, themes: [{ id: 'solarized', name: 'Solarized' }] };
       socket!.send(JSON.stringify({ callId: frame.callId, result: receipt }));
       expect(await reply).toMatchObject({ structuredContent: receipt });
     };
-    await exchange('workbench_appearance_get', {}, { themeId: 'riffet', mode: 'system', activePaletteId: 'plugin-edb0a342ef980623' }, proof);
-    await exchange('workbench_appearance_set', { themeId: 'solarized' }, { themeId: 'solarized', mode: 'system' }, proof);
+    await exchange('workbench_appearance_get', {}, { themeId: 'riffet', mode: 'system', activePaletteId: 'plugin-edb0a342ef980623' });
+    await exchange('workbench_appearance_set', { themeId: 'solarized' }, { themeId: 'solarized', mode: 'system' });
     store.updateRun(first.id, { state: 'completed' });
-    expect(await rpc('workbench_appearance_set', { sourceTurn: proof, mode: 'dark' })).toMatchObject(unavailable);
+    expect(await rpc('workbench_appearance_set', { mode: 'dark' })).toMatchObject(unavailable);
 
     const send = async (commandId: string, target: typeof headers, text = '把 Riffet 工作台设为深色') => {
       const response = await app.inject({
@@ -150,7 +145,6 @@ it('routes assistant appearance changes from an accepted Web turn through MCP to
     };
     const unbound = await send('second', headers, confirmation);
     expect((await send('second', web, confirmation)).id).toBe(unbound.id);
-    expect(sourceTurn(unbound)).toBeUndefined();
     running(unbound);
     const sharedTheme = { id: 'custom-theme-for-test', name: 'Library palette' };
     const palette = (color: string) => Object.fromEntries(THEME_ROLES.map(role => [role, color])) as ThemePalette;
@@ -184,35 +178,30 @@ it('routes assistant appearance changes from an accepted Web turn through MCP to
       structuredContent: { pluginPalettes: [{ id: pluginPalette.id, name: 'Plugin Ink' }] },
     });
     expect(await projectRpc('capability_read', { id: webThemes })).toMatchObject({ isError: true });
-    expect(await rpc('workbench_appearance_get', { sourceTurn: proof })).toMatchObject(unavailable);
-    expect(await rpc('agent_defaults_set', { action: 'apply', sourceTurn: proof })).toMatchObject(unavailable);
-    expect(await rpc('workbench_appearance_set', { sourceTurn: proof, mode: 'dark' })).toMatchObject(unavailable);
+    expect(await rpc('workbench_appearance_get', {})).toMatchObject(unavailable);
+    expect(await rpc('agent_defaults_set', { action: 'apply' })).toMatchObject(unavailable);
+    expect(await rpc('workbench_appearance_set', { mode: 'dark' })).toMatchObject(unavailable);
 
     const followup = await send('third', web);
-    const followupProof = sourceTurn(followup)!;
-    expect(followupProof).toBeTruthy();
-    expect(followupProof).not.toBe(proof);
-    expect(await rpc('workbench_appearance_set', { sourceTurn: followupProof, mode: 'dark' })).toMatchObject(unavailable);
+    expect(await rpc('workbench_appearance_set', { mode: 'dark' })).toMatchObject(unavailable);
     store.updateRun(unbound.id, { state: 'completed' });
     running(followup);
-    await exchange('workbench_appearance_set', { mode: 'dark' }, { themeId: 'solarized', mode: 'dark' }, followupProof);
+    await exchange('workbench_appearance_set', { mode: 'dark' }, { themeId: 'solarized', mode: 'dark' });
     expect(received).toBe(3);
 
-
-    const confirmed = await send('fourth', web, await propose(followupProof));
-    const confirmProof = sourceTurn(confirmed)!;
+    const confirmed = await send('fourth', web, await propose());
     store.updateRun(followup.id, { state: 'completed' });
     running(confirmed);
-    const apply = () => rpc('agent_defaults_set', { action: 'apply', sourceTurn: confirmProof });
+    const apply = () => rpc('agent_defaults_set', { action: 'apply' });
     expect(await apply()).toMatchObject({ structuredContent: { status: 'applied', changed: true } });
     expect(await apply()).toMatchObject({ structuredContent: { status: 'applied', changed: false } });
     expect(defaults()).toMatchObject({ model, approval: 'read-only' });
     expect(settings.getSettings().defaultBackendId).toBe('codex');
-    const conflicting = await send('fifth', web, await propose(confirmProof, nextModel));
+    const conflicting = await send('fifth', web, await propose(nextModel));
     store.updateRun(confirmed.id, { state: 'completed' });
     running(conflicting);
     settings.setSettings({ nativeBackendDefaults: { codex: { ...defaults(), model: 'owner-concurrent-edit' } } });
-    const stale = () => rpc('agent_defaults_set', { action: 'apply', sourceTurn: sourceTurn(conflicting) });
+    const stale = () => rpc('agent_defaults_set', { action: 'apply' });
     expect(await stale()).toMatchObject({ isError: true, content: [{ text: expect.stringContaining('SETTINGS_CONFLICT') }] });
     const later = Date.now() + ASSISTANT_QUERY_BUDGET.settingConfirmationMs + 1;
     const time = vi.spyOn(Date, 'now').mockReturnValue(later);

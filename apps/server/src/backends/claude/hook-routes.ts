@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { NativeContext, NativeStatus, NativeTurnTarget, Project, Session } from '../../../../../packages/contracts/src/index.js';
 import { DeferredSteerInputs } from '../shared/deferred-steer.js';
-import type { NativeBackendHost, NativeControlMessage, StandingMoment } from '../types.js';
+import type { NativeBackendHost, NativeControlMessage } from '../types.js';
 import { ClaudeTranscript, findClaudeTranscript } from './history.js';
 import { claudeFailureText, stripPastedContent } from './rows.js';
 import { ClaudeTranscriptChanges } from './transcript-source.js';
@@ -136,14 +136,6 @@ export class ClaudeHookRoutes {
     this.deps.emit({ type: 'context', context: next });
   }
 
-  /** What a hook of a standing conversation answers with: context for the model, shown to no one. */
-  private standingReply(event: 'SessionStart' | 'UserPromptSubmit', moment: StandingMoment | undefined, runId?: string): Record<string, unknown> {
-    if (!moment) return {};
-    let context: string | undefined;
-    try { context = this.deps.host.standing?.context(this.deps.session().id, moment, runId); } catch { context = undefined; }
-    return context ? { hookSpecificOutput: { hookEventName: event, additionalContext: context } } : {};
-  }
-
   /**
    * Every hook the CLI posts for this conversation, and its status line frames. What holds for all of them is done here,
    * in this order; the event's own route does the rest. `matchesTurn` is read before the route runs, because a tool
@@ -213,9 +205,7 @@ export class ClaudeHookRoutes {
         await this.deps.watch.refreshScreenState();
       }
     }
-    // A resumed or forked session still holds its history; only a new one, or one just summarized, is told what it lacks.
-    const source = string(payload.source);
-    return this.standingReply('SessionStart', source === 'compact' ? 'compact' : source === 'startup' ? 'start' : undefined);
+    return {};
   }
 
   private async onPreCompact({ payload, deliveryId, mainThread, promptId: hookPromptId }: HookCall): Promise<HookReply> {
@@ -231,11 +221,9 @@ export class ClaudeHookRoutes {
     const promptId = hookPromptId;
     const claimant = this.deps.sends.claimingSend(prompt, promptId, payload);
     const text = prompt === undefined ? '' : shellPrompt(prompt);
-    // A command is not a message to the model, so it carries no context of its own.
-    const told = this.standingReply('UserPromptSubmit', text && !text.startsWith('/') ? 'prompt' : undefined, claimant?.runId);
     // The transcript can announce the turn before its delayed hook names the Riffet input.
     // Ignore duplicate hooks only after giving that input a chance to claim its existing row.
-    if (promptId && this.deps.nativeTurn()?.turnId === promptId && !claimant) return told;
+    if (promptId && this.deps.nativeTurn()?.turnId === promptId && !claimant) return {};
     if (promptId) this.deps.sends.rememberPrompt(promptId);
     this.deps.dispatchSignal({
       type: 'prompt', source: 'hook', ...(promptId ? { promptId } : {}), origin: originOf(payload),
@@ -245,7 +233,7 @@ export class ClaudeHookRoutes {
       this.deps.sends.promptSubmitted(claimant, promptId);
       this.deps.setStatus(this.deps.status());
     }
-    return told;
+    return {};
   }
 
   private async onStop({ event, payload, promptId: hookPromptId, matchesTurn }: HookCall): Promise<HookReply> {

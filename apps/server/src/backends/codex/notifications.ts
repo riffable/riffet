@@ -311,10 +311,8 @@ export class CodexNotifications {
     }
     if (item.type === 'contextCompaction') {
       if (command?.type === 'compact') ctx.confirmNativeCommand(turnId);
-      if (ctx.thread.isStanding()) {
-        // As Claude Code's PreCompact and its SessionStart after one: the 助理 saves what matters, and is then told.
-        if (method === 'item/started') { try { ctx.host.standing?.compacting?.(ctx.sessionId); } catch { /* a standing host's trouble is not the turn's */ } }
-        else ctx.thread.noteCompacted();
+      if (ctx.thread.isStanding() && method === 'item/started') {
+        try { ctx.host.standing?.compacting?.(ctx.sessionId); } catch { /* a standing host's trouble is not the turn's */ }
       }
       if (method === 'item/started') ctx.activities.compactionStarted(item, turnId, Number(params.startedAtMs));
       else ctx.activities.compactionCompleted(item, turnId, typeof params.completedAtMs === 'number' ? params.completedAtMs : undefined);

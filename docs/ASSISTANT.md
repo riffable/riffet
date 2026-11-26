@@ -140,11 +140,10 @@
 | `default_permissions`，`permissions.riffet_assistant` | 在 workspace-write 预设上，把 §2 的用户文件和 `packs/` 设为只读。文件工具和 shell 都写不进去；确认模式下 Codex 为此发起的批准请求由服务端直接拒绝，不交给用户 |
 | `model_auto_compact_token_limit = 200000` | 同 `--autocompact`：上下文到 20 万 token 时压缩 |
 | 权限 `dontAsk` | `approvalPolicy: never` 加 workspace-write 沙箱：需要更多权限的操作直接失败，不停下来问。与 Claude Code 的同名权限同义，后台运行用它（§6） |
-| 消息前的 `<riffet-context>` | §5.1 的时间和离开期间的结果，放在用户这条消息的最前面；时间线、分享和搜索读出时去掉 |
 
 斜杠菜单、扩展管理页和发送时的 `/skill` 也只认上面这些 skill。扩展管理页的项目一栏按 Claude Code 的布局列 `.claude/skills/` 和 `.mcp.json`，不列这个 thread 关掉的 `.agents/skills/`、`.codex/`；能力包在设置里管理，它们的 skill 和 MCP 列在已加载的一栏。
 
-§5.1 的告知没有 hook 可用：Codex 的 hook 要用户逐个确认信任，所以改由服务端看 app-server 的事件，把内容放进下一条消息的 `<riffet-context>`。新 thread（不是 `/new` 换出的）的第一条消息带上换段时的内容；`contextCompaction` 开始时调用 `compacting`，结束后的下一条消息带上压缩后的内容。
+`contextCompaction` 开始时调用 `compacting` 触发压缩前记忆整理；不再往消息前注入 `<riffet-context>`（读取历史转写时仍保留对旧会话 `<riffet-context>` 的剥离兼容）。
 
 - 现状：用户的全局 `~/.codex/AGENTS.md` 仍会加载，Codex 没有关掉它的开关（只能换 `CODEX_HOME`，会连登录一起换掉）；developer 指令说明它是写给编程会话的、不必遵守。用户 `hooks.json` 里的 hook 仍会运行：Riffet 自己的命令观测也是 hook，hook 不能整体关掉。
 - 现状：用户文件只读只在 workspace-write 下成立（默认、`dontAsk`）。完全访问没有沙箱，不保护（Claude Code 的拒绝规则在任何模式下都生效）。回合一旦带了别的沙箱（切到只读或完全访问），它会一直留在已加载的 thread 上，压过权限配置；切回默认后服务端只能给不带只读文件的预设，直到 thread 重新加载（`/new`、服务重启）。按回合选权限配置要 app-server 的实验接口，Riffet 没有开。
@@ -159,7 +158,7 @@
 | `CURSOR_CONFIG_DIR` 与 `CURSOR_DATA_DIR` 指向 `<数据目录>/cursor-standing` | 隔离用户级设置、hook 与会话记录；从用户原 `cli-config.json` 仅复制 `network` 传输项（如 HTTP/1 网关），不继承权限或审批模式 |
 | `--system-prompt` 与 `.cursor/rules/riffet-assistant.mdc`（`alwaysApply: true`）双轨 | 后台探测当前账号是否开放 `--system-prompt` 并按配置指纹缓存结果：支持时原生替换系统提示，规则文件仅放 `USER.md` 与记忆索引；账号拒绝时（如部分 team 账号）零重试延迟直接降级为由 `alwaysApply` 规则承载完整系统提示、`USER.md` 与记忆索引（`AGENTS.md` 由 Cursor 原生读取） |
 | `--plugin-dir` + `--approve-mcps` + `mcp-disabled.json` | 助理目录 `.mcp.json`、Riffet 工具和 `packs/` 能力包以 `--plugin-dir` 挂载并自动批准；用户 `~/.cursor/mcp.json` 与工作区 `.cursor/mcp.json` 中的其余 MCP 写入 `<cursor-standing>/projects/<slug>/mcp-disabled.json` 阻止启动 |
-| `<cursor-standing>/hooks.json` | 以 `userHooks` 挂载 `sessionStart`、`beforeSubmitPrompt`、`preCompact`、`preToolUse` 等全部钩子，保证交互式 TUI 每轮都触发 `beforeSubmitPrompt` 注入时间/待告知事项/压缩后提示，而不污染用户输入或历史 |
+| `<cursor-standing>/hooks.json` | 以 `userHooks` 挂载 `sessionStart`、`beforeSubmitPrompt`、`preCompact`、`preToolUse` 等全部钩子，负责回合同步、写保护与压缩前记忆整理 |
 | `preToolUse` 写保护与 `dontAsk` 白名单 | 拦截文件编辑工具修改 §2 的用户文件、`.cursor/**` 与 `packs/**`；后台运行（`dontAsk`）以 `--force --approve-mcps` 启动并在 `preToolUse` 只放行安全内置工具与隔离后的 MCP 工具，拒绝 `Shell`、`Delete`、`Task` 等 |
 | `/new` 新话题与 `previousNativeSessionIds` | 归档当前 `nativeSessionId`、停止旧终端并开启新会话，时间线与分享按段拼接历史 |
 
@@ -169,17 +168,9 @@
 
 ## 5. 长对话
 
-### 5.1 告知模型的内容
+### 5.1 告知模型的内容（已移除）
 
-Claude Code 的两个 hook 的应答会进入模型上下文，但不产生消息。服务端经已有的 hook 通道（`claude/hook-bridge.ts`）应答，内容由 `AssistantStanding.context` 生成，包在 `<riffet-context>` 里：
-
-| 时机 | hook | 内容 |
-| --- | --- | --- |
-| 每条消息 | `UserPromptSubmit` | 当前时间（用户时区，`AssistantSettings.timeZone`，由客户端上报；没有时用服务器时区）。距这条对话的上一条消息（含唤醒）超过 30 分钟时，附间隔和「之前查到的状态可能已变」 |
-| 压缩后 | `SessionStart`，`source=compact` | 当前时间；历史刚被压缩，丢失的细节用 `history_search` 找 |
-| 新的原生会话 | `SessionStart`，`source=startup` | 当前时间；主对话最近 16 条消息（每条截到 1200 字符，总计不超过 9000 字符），取自消息索引 |
-
-斜杠命令不附内容。恢复（`resume`）的原生会话历史完整，也不附。`/clear` 换出的原生会话不在这条通道上，清空后只有记忆文件。时间线上的用户消息是原文，不含这些内容。
+不再通过 hook 或消息前缀注入 `<riffet-context>`（当前时间、间隔提示、待告知事项、压缩/换段摘要和 `sourceTurn` 均已移除）。成员会话的连续性与配置隔离由各自的 `AGENTS.md`、`memory/` 和 CLI 自身机制承担；工作台和设置类 MCP 工具改为由服务端直接按当前活跃的前台回合与认证工作台/设备绑定校验；后台运行的 `tell` 汇报直接经工作台通知触达用户。
 
 ### 5.2 压缩
 
@@ -424,7 +415,7 @@ skill 只写做法和边界，不替代工具集：对应的工具没有列给�
 ## 9. 数据与协议
 
 - 契约：`Project.mainSessionId`、`AssistantSettings.timeZone`（`packages/contracts/src/session.ts`、`settings.ts`）。旧客户端忽略这两个字段，行为与之前相同（每次发送新建会话）。
-- 驱动接口：`NativeBackendHost.standing`，`StandingLaunch`、`StandingMoment`（`apps/server/src/backends/types.ts`）。
+- 驱动接口：`NativeBackendHost.standing`、`StandingLaunch`（`apps/server/src/backends/types.ts`）。
 - 模块：`apps/server/src/assistant/`（features 层）：`home.ts` 管目录文件与提交，`standing.ts` 管启动设置、告知内容和主对话标记。看板与只读工具在 `work-items/assistant.ts`。
 - 验证：`node --import tsx scripts/probe-assistant-e2e.ts --profile <名称>`。它在临时数据目录上起一个进程内服务端，模型请求经本地代理转发并记录，据此核对系统提示、隔离、时间、压缩后和换段后的告知内容。升级 Claude Code 的受支持版本时重跑。
 

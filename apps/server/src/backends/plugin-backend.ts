@@ -870,7 +870,6 @@ export class PluginBackendDriver implements NativeBackendDriver {
             try { return native.standing!.launch(native.getProject(project.id), session); }
             catch { return undefined; }
           },
-          context: (id, moment, runId) => { own(id); return native.standing!.context(id, moment, runId); },
           ...(native.standing.compacting ? { compacting: (id: string) => { own(id); native.standing!.compacting?.(id); } } : {}),
           ...(native.standing.newTopic ? { newTopic: (id: string, text: string) => { own(id); return native.standing!.newTopic?.(id, text) ?? false; } } : {}),
         },

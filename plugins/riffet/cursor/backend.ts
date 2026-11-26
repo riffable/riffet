@@ -428,11 +428,6 @@ export class CursorBackend implements AgentBackend {
     const { session } = context;
     steering.bind(session.id);
     const prompt = options.initialPrompt;
-    if (prompt) {
-      const runs = await host.runs.find(session.id, { unfinished: true }).catch(() => []);
-      const dispatching = runs.find(item => item.delivery === 'dispatching' && item.intent !== 'steer');
-      if (dispatching) steering.noteRun(session.id, dispatching.id);
-    }
     let fencedAt: number | undefined;
     const fence = async () => { await host.beforeSpawn(session.id); fencedAt = Date.now(); };
     const { terminal, promptPending } = await runtime.ensure(session, {
@@ -485,9 +480,8 @@ export class CursorBackend implements AgentBackend {
     const sourceText = request.sourceText ?? request.input.text;
     if (host.standing?.newTopic?.(request.context.session.id, sourceText)) return await this.newTopic(host, request);
     const { text } = await materializeNativeInput(attachments(host), request.input);
-    const { native, port, receipts, steering } = this.parts(host, request.context.profile);
+    const { native, port, receipts } = this.parts(host, request.context.profile);
     const session = port.getSession(request.context.session.id);
-    steering.noteRun(session.id, request.runId);
     let sentAt = Date.now();
     const fence = async ({ terminalId, epoch, chatId }: { terminalId: string; epoch: number; chatId?: string }) => {
       const nativeSessionId = chatId ?? session.nativeSessionId;
@@ -534,7 +528,6 @@ export class CursorBackend implements AgentBackend {
       const archived = [...(session.previousNativeSessionIds ?? []).filter(id => id !== previous), previous].slice(-MAX_PREVIOUS_NATIVE_SESSIONS);
       await host.updateSession(sessionId, { previousNativeSessionIds: archived, terminalId: undefined });
       await host.setNativeSessionId(sessionId, undefined);
-      steering.skipStartContext(sessionId);
       await runtime.ensure(port.getSession(sessionId));
       return { state: 'settled' as const };
     });

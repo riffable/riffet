@@ -893,7 +893,8 @@ export type AgentStandingMoment = 'prompt' | 'start' | 'compact';
 
 export interface AgentStandingHost {
   launch(project: AgentProjectView, session?: Pick<AgentSessionView, 'origin'>): AgentStandingLaunch | undefined;
-  context(sessionId: string, moment: AgentStandingMoment, runId?: string): string | undefined;
+  /** @deprecated Per-turn `<riffet-context>` injection was removed; kept optional for older external plugins. */
+  context?(sessionId: string, moment: AgentStandingMoment, runId?: string): string | undefined;
   compacting?(sessionId: string): void;
   newTopic?(sessionId: string, text: string): boolean;
 }

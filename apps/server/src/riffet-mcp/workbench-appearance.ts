@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod/v4';
 import { WORKBENCH_APPEARANCE_BUDGET as budget } from '../../../../packages/contracts/src/budgets.js';
@@ -26,10 +26,9 @@ const writableDisplay = displayState.extend({
 const workbenchAppearanceChange = writableDisplay.extend({ themeId: themeId.optional(), mode: mode.optional(), undo: z.literal(true).optional() });
 export type WorkbenchAppearanceChange = z.infer<typeof workbenchAppearanceChange>;
 
-const sourceTurn = z.string().min(1).max(64).describe('The sourceTurn from the Riffet context attached to this owner message.');
-const readArguments = z.strictObject({ sourceTurn });
-const writeArguments = readArguments.extend(workbenchAppearanceChange.shape).refine(args => {
-  const keys = Object.keys(args).filter(key => key !== 'sourceTurn');
+const readArguments = z.strictObject({});
+const writeArguments = workbenchAppearanceChange.refine(args => {
+  const keys = Object.keys(args);
   if (args.undo) return keys.length === 1;
   const hasTheme = args.themeId !== undefined || args.mode !== undefined;
   return keys.length > 0 && (!hasTheme || keys.every(key => key === 'themeId' || key === 'mode'));
@@ -96,12 +95,10 @@ const resultUnknown = () => new AppError('WORKBENCH_RESULT_UNKNOWN', 'The Riffet
 /** Each command goes to the exact authenticated workbench that originated this run. */
 export class WorkbenchAppearance {
   private readonly connections = new Map<string, Connection>();
-  private readonly bindings = new Map<string, { sessionId: string; connectionId: string; proof: string }>();
+  private readonly bindings = new Map<string, { sessionId: string; connectionId: string }>();
 
-  private readonly nativeSources = new Map<string,{ sessionId: string; deviceId: string; proof: string }>();
+  private readonly nativeSources = new Map<string, { sessionId: string; deviceId: string }>();
   constructor(private readonly auth: Pick<Auth, 'authenticate' | 'device'>) {}
-
-  nativeProofFor(runId: string): string | undefined { return this.nativeSources.get(runId)?.proof; }
 
   connect(client: Client): string {
     if (this.connections.size >= budget.connections) throw targetUnavailable();
@@ -118,7 +115,7 @@ export class WorkbenchAppearance {
       let principal;
       try { principal = this.auth.authenticate(request, true); } catch { return; }
       if (principal.kind === 'device' && principal.deviceId) {
-        this.nativeSources.set(run.id, { sessionId: run.sessionId, deviceId: principal.deviceId, proof: randomBytes(24).toString('base64url') });
+        this.nativeSources.set(run.id, { sessionId: run.sessionId, deviceId: principal.deviceId });
       }
       return;
     }
@@ -130,28 +127,25 @@ export class WorkbenchAppearance {
       if (caller.kind !== 'cookie' || caller.cookie !== connection.client.cookie || !connection.client.authorized()) return;
     } catch { return; /* an accepted message still runs if its Web authorization expired while it was being prepared */ }
     connection.runs.add(run.id);
-    this.bindings.set(run.id, { sessionId: run.sessionId, connectionId: id, proof: randomBytes(24).toString('base64url') });
+    this.bindings.set(run.id, { sessionId: run.sessionId, connectionId: id });
   }
 
-  proofFor(runId: string): string | undefined { return this.bindings.get(runId)?.proof; }
-
-  private sourceConnection(sessionId: string, runId: string, proof: unknown) {
+  private sourceConnection(sessionId: string, runId: string) {
     const binding = this.bindings.get(runId);
-    if (!binding || binding.sessionId !== sessionId || typeof proof !== 'string' || proof.length !== binding.proof.length
-      || !/^[A-Za-z0-9_-]+$/.test(proof) || !timingSafeEqual(Buffer.from(proof), Buffer.from(binding.proof))) throw targetUnavailable();
+    if (!binding || binding.sessionId !== sessionId) throw targetUnavailable();
     const connection = this.connections.get(binding.connectionId);
     if (!connection || !connection.client.authorized()) throw targetUnavailable();
     return connection;
   }
 
-  authorizeSetting(sessionId: string, runId: string, proof: string): void {
+  authorizeSetting(sessionId: string, runId: string): void {
     const native = this.nativeSources.get(runId);
-    if (native && native.sessionId === sessionId && native.proof === proof && this.auth.device(native.deviceId)) return;
-    this.sourceConnection(sessionId, runId, proof);
+    if (native && native.sessionId === sessionId && this.auth.device(native.deviceId)) return;
+    this.sourceConnection(sessionId, runId);
   }
 
-  async apply(sessionId: string, runId: string, proof: unknown, change: WorkbenchAppearanceChange, signal?: AbortSignal): Promise<Appearance> {
-    const connection = this.sourceConnection(sessionId, runId, proof);
+  async apply(sessionId: string, runId: string, change: WorkbenchAppearanceChange, signal?: AbortSignal): Promise<Appearance> {
+    const connection = this.sourceConnection(sessionId, runId);
     if (signal?.aborted) throw targetUnavailable();
     if (connection.pending) throw new AppError('WORKBENCH_BUSY', 'The Riffet Web workbench is handling another appearance request', 409);
     return new Promise((resolve, reject) => {

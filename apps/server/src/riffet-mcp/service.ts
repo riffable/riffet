@@ -683,9 +683,9 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       const source = this.deps.workbenchAppearance;
       if (!runId || !source) return errorResult('TOOL_NOT_AVAILABLE', 'This setting requires an active owner request from a verified workbench.');
       try {
-        return textResult(await command.call(args, proof => {
-          if (this.deps.activeWorkbenchRun?.(session.id) !== runId) throw new AppError('WORKBENCH_UNAVAILABLE', 'Send a new message from the Riffet personal assistant workbench.');
-          source.authorizeSetting(session.id, runId, proof);
+        return textResult(await command.call(args, () => {
+          if (this.deps.activeWorkbenchRun?.(session.id) !== runId) throw new AppError('WORKBENCH_UNAVAILABLE', 'Send a new message from the Riffet workbench.');
+          source.authorizeSetting(session.id, runId);
         }, () => {
           const input = this.deps.store.getRun(runId).native?.input;
           const ownerText = input && !input.attachmentIds.length && !input.context.length && !input.references?.length ? input.text : undefined;
@@ -701,7 +701,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       const runId = mainAdmin ? this.deps.activeWorkbenchRun?.(session.id) : undefined;
       if (!source || !runId || !this.devicesOf(session).length) return errorResult('TOOL_NOT_AVAILABLE', 'No authorized Riffet device in this owner turn.');
       try {
-        return textResult(await deviceAppearance(session, args, proof=>source.authorizeSetting(session.id,runId,proof), this.deps.devices, this.deps.auth, signal));
+        return textResult(await deviceAppearance(session, args, () => source.authorizeSetting(session.id, runId), this.deps.devices, this.deps.auth, signal));
       } catch (error) {
         if (error instanceof AppError) return errorResult(error.code, error.message);
         throw error;
@@ -710,14 +710,13 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     const appearanceTool = workbenchAppearanceTools.find(tool => tool.definition.name === raw.name);
     if (appearanceTool) {
       const channel = this.deps.workbenchAppearance;
-      if (!channel || !mainAdmin) return errorResult('TOOL_NOT_AVAILABLE', 'Only the personal assistant main conversation can access the Riffet Web workbench.');
+      if (!channel || !mainAdmin) return errorResult('TOOL_NOT_AVAILABLE', 'Only a workbench-admin conversation can access the Riffet Web workbench.');
       const runId = this.deps.activeWorkbenchRun?.(session.id);
       if (!runId) return errorResult('WORKBENCH_UNAVAILABLE', 'This turn has no verified Riffet Web workbench.');
       const parsed = appearanceTool.args.safeParse(args);
-      if (!parsed.success) return errorResult('INVALID_ARGUMENT', 'Use the sourceTurn from this message and only the appearance fields this tool accepts.');
-      const { sourceTurn, ...change } = parsed.data;
+      if (!parsed.success) return errorResult('INVALID_ARGUMENT', 'Use only the appearance fields this tool accepts.');
       try {
-        const result = await channel.apply(session.id, runId, sourceTurn, change, signal);
+        const result = await channel.apply(session.id, runId, parsed.data, signal);
         return textResult({ ...result });
       } catch (error) {
         if (error instanceof AppError) return errorResult(error.code, error.message);

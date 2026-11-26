@@ -33,7 +33,7 @@ describe('ThemeService', () => {
     const { themes } = service();
     const original = theme();
     const initial = await themes.replaceLibrary({expectedRevision:themes.getLibrary().revision,themes:[original]});
-    const patch = {sourceTurn:'fixture',themeId:original.id,mode:'dark' as const,role:'accent' as const,color:'#348caa',expectedRevision:initial.revision};
+    const patch = {themeId:original.id,mode:'dark' as const,role:'accent' as const,color:'#348caa',expectedRevision:initial.revision};
     await expect(changeSharedTheme(themes, patch, () => { throw new AppError('WORKBENCH_UNAVAILABLE', 'The workbench disconnected'); }))
       .rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
     expect(themes.getLibrary().revision).toBe(initial.revision);

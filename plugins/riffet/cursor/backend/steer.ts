@@ -81,12 +81,6 @@ export class CursorSteerBridge {
   private readonly steerHost: SteerHost;
   private plugin?: Promise<string[]>;
   private bridgeConfig?: Promise<string>;
-  /** Latest runId dispatched to a session, read by `beforeSubmitPrompt` for standing turn proofs. */
-  private readonly pendingRuns = new Map<string, string>();
-  /** Standing sessions that just compacted and should receive a `compact` context note on their next prompt. */
-  private readonly compactedSessions = new Set<string>();
-  /** Standing sessions that started a fresh topic via `/new` and should not carry over earlier turns on `sessionStart`. */
-  private readonly skipStartCarry = new Set<string>();
   private closed = false;
 
   constructor(
@@ -129,17 +123,6 @@ export class CursorSteerBridge {
       }
     }
     return entry;
-  }
-
-  /** Records the run id about to be submitted so `beforeSubmitPrompt` can pass it to `host.standing.context`. */
-  noteRun(sessionId: string, runId: string | undefined): void {
-    if (runId) this.pendingRuns.set(sessionId, runId);
-    else this.pendingRuns.delete(sessionId);
-  }
-
-  /** Marks a session started via `/new` so `sessionStart` does not inject the previous topic's carried turns. */
-  skipStartContext(sessionId: string): void {
-    this.skipStartCarry.add(sessionId);
   }
 
   /** Starts the local hook bridge server and writes `bridge.json`, returning its path. */
@@ -365,12 +348,7 @@ export class CursorSteerBridge {
       }
     }
     if (event === 'sessionStart') {
-      if (!standingLaunch) return {};
-      if (this.skipStartCarry.delete(session.id)) return {};
-      try {
-        const context = this.host.standing?.context(session.id, 'start');
-        return context ? { additional_context: context } : {};
-      } catch { return {}; }
+      return {};
     }
     const entry = this.bind(session.id);
     const target = { nativeSessionId, turnId: turnId! };
@@ -406,30 +384,11 @@ export class CursorSteerBridge {
             }
           }
         }
-        if (standingLaunch) {
-          const prompt = typeof payload.prompt === 'string' ? payload.prompt.trim() : '';
-          if (prompt && !prompt.startsWith('/')) {
-            const pendingRun = this.pendingRuns.get(session.id);
-            if (pendingRun) this.pendingRuns.delete(session.id);
-            const runId = pendingRun ?? this.owner(session.id, target)?.id;
-            const blocks: string[] = [];
-            try {
-              if (this.compactedSessions.delete(session.id)) {
-                const compacted = this.host.standing?.context(session.id, 'compact');
-                if (compacted) blocks.push(compacted);
-              }
-              const promptContext = this.host.standing?.context(session.id, 'prompt', runId);
-              if (promptContext) blocks.push(promptContext);
-            } catch { /* a standing host's trouble is not the turn's */ }
-            if (blocks.length) return { additional_context: [...new Set(blocks)].join('\n\n') };
-          }
-        }
         return {};
       }
       if (event === 'preCompact') {
         const preTokens = typeof payload.context_tokens === 'number' && Number.isFinite(payload.context_tokens) ? payload.context_tokens : undefined;
         if (standingLaunch) {
-          this.compactedSessions.add(session.id);
           try { this.host.standing?.compacting?.(session.id); } catch { /* a standing host's trouble is not the turn's */ }
         }
         this.onPreCompact?.(session.id, {
@@ -589,18 +548,12 @@ export class CursorSteerBridge {
   dispose(sessionId: string): void {
     this.reject(sessionId, 'Conversation closed');
     this.entries.delete(sessionId);
-    this.pendingRuns.delete(sessionId);
-    this.compactedSessions.delete(sessionId);
-    this.skipStartCarry.delete(sessionId);
   }
 
   async close(): Promise<void> {
     this.closed = true;
     for (const sessionId of this.entries.keys()) this.reject(sessionId, 'Cursor hook bridge closed');
     this.entries.clear();
-    this.pendingRuns.clear();
-    this.compactedSessions.clear();
-    this.skipStartCarry.clear();
     await this.plugin?.catch(() => undefined);
     await this.bridgeConfig?.catch(() => undefined);
     await this.server.close();

@@ -30,19 +30,19 @@ export interface SettingCommandTurn {
 }
 
 /** A foreground setting command has its own MCP name and cannot be selected by capability_read. */
-export function defineSettingCommand<T extends z.ZodObject<{ sourceTurn: z.ZodString } & z.ZodRawShape>>(
+export function defineSettingCommand<T extends z.ZodObject>(
   name: string, description: string, args: T,
   change: (args: z.output<T>, turn: () => SettingCommandTurn) => Record<string, unknown> | Promise<Record<string, unknown>>,
 ) {
   return {
     definition: { name, description, inputSchema: z.toJSONSchema(args, {target:'draft-7'}) },
-    call(input: unknown, authorize: (proof: string) => void, turn?: () => Omit<SettingCommandTurn, 'assertCurrent'>) {
+    call(input: unknown, authorize: () => void, turn?: () => Omit<SettingCommandTurn, 'assertCurrent'>) {
       const parsed = args.safeParse(input);
       if (!parsed.success) throw new AppError('INVALID_ARGUMENT', 'Check the tool schema for the accepted setting fields and values.');
-      const assertCurrent = () => authorize(parsed.data.sourceTurn as string);
+      const assertCurrent = () => authorize();
       assertCurrent();
       return change(parsed.data, () => {
-        if (!turn) throw new AppError('WORKBENCH_UNAVAILABLE', 'Send a new message from the Riffet personal assistant workbench.');
+        if (!turn) throw new AppError('WORKBENCH_UNAVAILABLE', 'Send a new message from the Riffet workbench.');
         return { ...turn(), assertCurrent };
       });
     },

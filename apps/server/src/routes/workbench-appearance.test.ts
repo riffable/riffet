@@ -71,17 +71,13 @@ it('binds a Web setting only to the proven workbench of that run and waits for i
       method: 'POST', url: `/bind/${runId}`, headers: { ...inputHeaders, 'x-riffet-workbench': connectionId },
     });
     await bind(other.id, stranger, source.connectionId);
-    expect(channel.proofFor(other.id)).toBeUndefined();
+    await expect(channel.apply(other.sessionId, other.id, {})).rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
     await bind(run.id, headers, source.connectionId);
-    const proof = channel.proofFor(run.id)!;
-    expect(proof).toBeTruthy();
     await bind(run.id, headers, otherTab.connectionId);
-    expect(channel.proofFor(run.id)).toBe(proof);
-    await expect(channel.apply('some-project', run.id, proof, {})).rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
-    await expect(channel.apply(run.sessionId, run.id, 'old-proof', {})).rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
+    await expect(channel.apply('some-project', run.id, {})).rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
 
     const command = next(source.socket);
-    const changed = channel.apply(run.sessionId, run.id, proof, { themeId: 'solarized' });
+    const changed = channel.apply(run.sessionId, run.id, { themeId: 'solarized' });
     const sent = await command;
     expect(sent.change).toEqual({ themeId: 'solarized' });
     const result = { themeId: 'solarized', mode: 'system', themes: [{ id: 'solarized', name: 'Solarized' }] };
@@ -90,18 +86,18 @@ it('binds a Web setting only to the proven workbench of that run and waits for i
     await expect(changed).resolves.toEqual(result);
 
     const nextChange = next(source.socket);
-    const unchanged = channel.apply(run.sessionId, run.id, proof, { mode: 'dark' });
+    const unchanged = channel.apply(run.sessionId, run.id, { mode: 'dark' });
     const unchangedReceipt = expect(unchanged).rejects.toMatchObject({ code: 'WORKBENCH_RESULT_UNKNOWN' });
     source.socket.send(JSON.stringify({ callId: (await nextChange).callId, result }));
     await unchangedReceipt;
 
     const pendingCommand = next(source.socket);
-    const pending = channel.apply(run.sessionId, run.id, proof, { mode: 'dark' });
+    const pending = channel.apply(run.sessionId, run.id, { mode: 'dark' });
     const pendingReceipt = expect(pending).rejects.toMatchObject({ code: 'WORKBENCH_RESULT_UNKNOWN' });
     await pendingCommand;
     await app.inject({ method: 'POST', url: '/logout', headers });
     await pendingReceipt;
-    await expect(channel.apply(run.sessionId, run.id, proof, {})).rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
+    await expect(channel.apply(run.sessionId, run.id, {})).rejects.toMatchObject({ code: 'WORKBENCH_UNAVAILABLE' });
   } finally {
     for (const socket of sockets) socket.terminate();
     await app.close();

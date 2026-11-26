@@ -73,7 +73,6 @@ export class CodexThread {
   private attachAttemptAt = 0;
   /** A sandbox other than the 助理's profile was named on the loaded thread (`standingProfile`). */
   private standingSandboxNamed = false;
-  private readonly standingMoments = new Set<'start' | 'compact'>();
   /** The files each of the 助理's open file changes writes, by item: an approval request names only the item. */
   private readonly standingWrites = new Map<string, string[]>();
 
@@ -215,8 +214,6 @@ export class CodexThread {
       this.threadId = thread.id;
       // A newly created thread has no older transcript to seed before accepting live events.
       if (!existingId) {
-        // A new thread of a conversation that may have had others: the 助理 is told what it lacks (§5.1).
-        if (this.isStanding()) this.standingMoments.add('start');
         this.ctx.startedThread(thread.id);
       }
       this.noteThread(thread, this.ctx.modeObservation() === modeObservation ? settings : undefined);
@@ -303,16 +300,6 @@ export class CodexThread {
     if (permission.sandbox !== 'workspace-write') { this.standingSandboxNamed = true; return false; }
     return !this.standingSandboxNamed;
   }
-
-  /** The moments the 助理 has not been told of yet (`StandingMoment`): a new thread, a summarized one. Taken once. */
-  takeStandingMoments(): Array<'start' | 'compact'> {
-    const moments = [...this.standingMoments];
-    this.standingMoments.clear();
-    return moments;
-  }
-
-  /** The thread was summarized: the 助理 is told after its next prompt. */
-  noteCompacted(): void { this.standingMoments.add('compact'); }
 
   /** A file change of the 助理's started (`paths`) or finished (undefined). */
   noteStandingWrites(itemId: string, paths: string[] | undefined): void {

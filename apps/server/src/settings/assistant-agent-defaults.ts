@@ -27,7 +27,6 @@ const readArgs = z.strictObject({
   afterProfileId: choiceId.optional(), afterModelId: choiceId.optional(), limit: pageLimit,
 });
 const commandArgs = z.strictObject({
-  sourceTurn: z.string().min(1).max(64),
   action: z.enum(['propose', 'apply']),
   backendId: choiceId.optional(), profileId: choiceId.optional(), model: choiceId.optional(),
   makeDefaultAgent: z.boolean().optional().describe('Also make this backend the instance default Agent.'),
@@ -207,11 +206,11 @@ export function agentDefaultsCommand(service: Settings, catalog: Catalog, backen
     return applied(proposal, true);
   };
   return defineSettingCommand('agent_defaults_set',
-    'Change the instance default Agent or a backend’s default provider or model. Read settings.agent_defaults first. Use action propose with the chosen values and show the cross-client and billing effects. When the owner sends the exact confirmation in the next personal assistant message, call action apply with only sourceTurn.',
+    'Change the instance default Agent or a backend’s default provider or model. Read settings.agent_defaults first. Use action propose with the chosen values and show the cross-client and billing effects. When the owner sends the exact confirmation in the next message, call action apply.',
     commandArgs, async ({ action, backendId, profileId, model, makeDefaultAgent }, getTurn) => {
       const turn = getTurn();
       if (action === 'apply') {
-        if ([backendId, profileId, model, makeDefaultAgent].some(value => value !== undefined)) throw new AppError('INVALID_ARGUMENT', 'Apply takes only action and sourceTurn. The proposed values are bound on the server.');
+        if ([backendId, profileId, model, makeDefaultAgent].some(value => value !== undefined)) throw new AppError('INVALID_ARGUMENT', 'Apply takes only action. The proposed values are bound on the server.');
         return apply(turn);
       }
       if (!profileId && !model && !makeDefaultAgent) throw new AppError('INVALID_ARGUMENT', 'Choose a provider or model, or set makeDefaultAgent to true.');

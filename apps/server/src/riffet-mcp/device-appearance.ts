@@ -7,20 +7,20 @@ import type { Auth } from '../auth.js';
 import { deviceGroupIds, type DeviceChannel } from './devices.js';
 
 const id = z.string().trim().min(1).max(140);
-const input = DeviceAppearanceRequestSchema.extend({ device: id, sourceTurn: z.string().min(1).max(64) });
+const input = DeviceAppearanceRequestSchema.extend({ device: id });
 export const deviceAppearanceTool = {
   name: 'device_riffet_appearance',
-  description: 'Read or change Riffet’s own appearance on one explicitly identified, authorized paired client. Call list_devices for its ID. With device and this message’s sourceTurn only, read its supported themes, modes and styles. Send only values that client supports. Ask which Riffet client the owner means when unclear.',
+  description: 'Read or change Riffet’s own appearance on one explicitly identified, authorized paired client. Call list_devices for its ID. With device only, read its supported themes, modes and styles. Send only values that client supports. Ask which Riffet client the owner means when unclear.',
   inputSchema: z.toJSONSchema(input, {target:'draft-7'}),
 };
 export async function deviceAppearance(
-  session: Session, args: unknown, authorize: (proof: string)=>void,
+  session: Session, args: unknown, authorize: () => void,
   channel: DeviceChannel, auth: Auth, signal?: AbortSignal,
 ) {
   const parsed = input.safeParse(args);
   if (!parsed.success) throw new AppError('INVALID_ARGUMENT','Specify the paired Riffet client ID and valid appearance options.');
-  const {device:deviceId, sourceTurn, ...change} = parsed.data;
-  authorize(sourceTurn);
+  const {device:deviceId, ...change} = parsed.data;
+  authorize();
   if (!deviceGroupIds(session).includes(deviceId)) throw new AppError('DEVICE_NOT_ALLOWED','That Riffet client was not granted to this conversation.',403);
   const device = auth.device(deviceId);
   if (!device?.allowControl) throw new AppError('DEVICE_NOT_ALLOWED','The paired client has not enabled control.',403);

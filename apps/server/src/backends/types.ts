@@ -217,14 +217,9 @@ export interface StandingLaunch {
   skillsDir: string;
 }
 
-/** `prompt`: a message is about to be read. `start`: a newly launched CLI session, with no history of its own. `compact`: the history was just summarized. */
-export type StandingMoment = 'prompt' | 'start' | 'compact';
-
 export interface NativeStandingHost {
   /** Undefined for a project whose conversations are not standing ones. [session] is the one launching, when there is one. */
   launch(project: Project, session?: Pick<Session, 'origin' | 'agentMemberId'>): StandingLaunch | undefined;
-  /** Text for the model's context at this moment (the time, what it missed); it is never shown as a message. */
-  context(sessionId: string, moment: StandingMoment, runId?: string): string | undefined;
   /** The conversation's CLI is about to summarize it on its own. */
   compacting?(sessionId: string): void;
   /**

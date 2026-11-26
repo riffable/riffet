@@ -129,12 +129,6 @@ export function memberEnvironmentPart(part: MemberEnvironmentPart, vars?: Record
 /** The workbench queries and settings, for a member with `workbenchAdmin`. */
 export const workbenchAdminPrompt = () => render('workbench-admin');
 
-export type AssistantContextPart = 'now' | 'workbench' | 'paired' | 'gap' | 'pending' | 'compact' | 'carried';
-/** One line of the `<riffet-context>` a 助理 or team member conversation is given with a message. */
-export function assistantContextPart(part: AssistantContextPart, vars?: Record<string, string | number>): string {
-  return section('assistant-context', part, vars);
-}
-
 export type SessionReferencePart = 'head' | 'partial' | 'unfinished';
 /** One fragment of what a referenced session puts before its excerpt. */
 export function sessionReferencePart(part: SessionReferencePart, vars?: Record<string, string | number>): string {

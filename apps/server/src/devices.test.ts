@@ -255,11 +255,8 @@ describe('device channel',()=>{
       const nativeSessionId = 'native-appearance', turnId = 'turn-appearance';
       booted.store.updateRun(run.id, { state: 'running', native: { ...run.native!, nativeSessionId, nativeTurnId: turnId } });
       status.mockReturnValue({ phase: 'busy', activeTurn: { nativeSessionId, turnId, ownerRunId: run.id } });
-      const context = booted.nativeBackends.host.standing?.context(main.id, 'prompt', run.id);
-      const sourceTurn = /sourceTurn="([^"]+)"/.exec(context ?? '')?.[1];
-      expect(sourceTurn).toBeTruthy();
-      const call = (change: Record<string, string> = {}, proof = sourceTurn) => rpc('tools/call', {
-        name, arguments: { device: target.device.id, sourceTurn: proof, ...change },
+      const call = (change: Record<string, string> = {}) => rpc('tools/call', {
+        name, arguments: { device: target.device.id, ...change },
       });
       for (const request of [undefined, { mode: 'dark' }]) {
         expect((await call(request)).content[0].text).toContain('TOOL_NOT_AVAILABLE');
@@ -270,14 +267,12 @@ describe('device channel',()=>{
       const selection = await select([`device:${target.device.id}`]);
       expect(selection.statusCode, selection.body).toBe(200);
       expect((await rpc('tools/list')).tools).toEqual(expect.arrayContaining([expect.objectContaining({ name })]));
-      expect((await call({ mode: 'dark' }, 'another-turn')).content[0].text).toContain('WORKBENCH_UNAVAILABLE');
 
       const change = { mode: 'dark' };
       const pending = call(change);
       await until(() => connection.events.some(item => item.event === 'call'));
       const delivered = connection.events.find(item => item.event === 'call')!.data;
       expect(delivered).toMatchObject({ capability: 'riffet.appearance', sessionId: main.id, args: change });
-      expect(JSON.stringify(delivered)).not.toContain(sourceTurn);
       const current = { themeId: 'paper', mode: 'dark', themes: [{ id: 'paper', name: 'Paper' }] };
       const confirmed = await booted.app.inject({
         method: 'POST', url: `/api/devices/me/calls/${delivered.callId}/result`, headers: booted.headers(target.token),

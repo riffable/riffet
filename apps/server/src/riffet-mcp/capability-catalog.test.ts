@@ -7,10 +7,10 @@ import { CapabilityCatalog, discoveryTools } from './capability-catalog.js';
 it('keeps discovery stable as domains grow and never dispatches settings through read', async () => {
   const read = defineRead('plugins.list', 'Find plugins', ['插件'], z.strictObject({}), sessionId => ({ sessionId }));
   const handler = vi.fn(() => ({ persisted:true }));
-  const command = defineSettingCommand('setting_set','Write a preference',z.strictObject({ sourceTurn:z.string() }),handler);
+  const command = defineSettingCommand('setting_set','Write a preference',z.strictObject({}),handler);
   const initial = new CapabilityCatalog([read],[command]);
   expect(() => new CapabilityCatalog([read,read])).toThrow(/Duplicate/);
-  expect(() => initial.call('capability_read',{id:'setting_set',arguments:{sourceTurn:'forged'}},'main')).toThrow(/No such/);
+  expect(() => initial.call('capability_read',{id:'setting_set',arguments:{}},'main')).toThrow(/No such/);
   expect(handler).not.toHaveBeenCalled();
   expect(() => initial.call('capability_read',{id:'plugins.list',arguments:{user:'other'}},'main')).toThrow();
   const extra = defineRead('plugins.inspect','Read activation', ['插件'],z.strictObject({}), () => ({}));

@@ -38,7 +38,6 @@ const writable = {
 const writableId = z.string().min(1).max(100).describe('A writable setting ID from settings.catalog.');
 const primitive = z.union([z.string().max(100), z.boolean()]);
 export const instanceSettingArgs = z.strictObject({
-  sourceTurn: z.string().min(1).max(64),
   setting: writableId, value: primitive, expectedValue: primitive.describe('Current effective value from settings.catalog, to avoid overwriting a concurrent edit.'),
 });
 type Writable = keyof typeof writable;

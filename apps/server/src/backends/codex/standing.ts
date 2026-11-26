@@ -148,12 +148,6 @@ export async function standingThreadConfig(transport: CodexAppServerClient, cwd:
   };
 }
 
-/** What a message to the 助理 carries before the owner's text; the timeline and every reader leave it out. */
-export function standingContextItem(contexts: Array<string | undefined>): Array<{ type: 'text'; text: string; text_elements: [] }> {
-  const text = [...new Set(contexts.filter((context): context is string => Boolean(context)))].join('\n\n');
-  return text ? [{ type: 'text', text: `${text}\n\n`, text_elements: [] }] : [];
-}
-
 const CONTEXT = /^\s*(?:<riffet-context>[\s\S]*?<\/riffet-context>\s*)+/;
-/** A user message's text without the context Riffet put in front of it. */
+/** Strips legacy `<riffet-context>` blocks from older Codex transcripts so history stays clean. */
 export function withoutStandingContext(text: string): string { return CONTEXT.test(text) ? text.replace(CONTEXT, '') : text; }

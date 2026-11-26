@@ -281,7 +281,7 @@ export class AssistantRuns {
       if (outcome === 'silent' || !clean) return;
       if (outcome === 'ask' && run.job === 'supervise' && run.subject) { this.deps.markStuck(run.subject, clean); return; }
       this.addPending(run.id, clean, owner);
-      if (outcome === 'ask' && targetMain) this.deps.notice(targetMain, clean);
+      if ((outcome === 'ask' || outcome === 'tell') && targetMain) this.deps.notice(targetMain, clean);
     });
     if (outcome === 'ask') void this.deliverPush(reported, targetMain);
     return reported;

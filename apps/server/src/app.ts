@@ -361,10 +361,7 @@ export async function createApp(options: AppOptions = {}) {
     renderAvatar:(request,name)=>owner.renderGeneratedAvatar(request,name),
   });
   teamRef=team;
-  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),team:()=>team,timeZone:()=>settings.getSettings().assistant?.timeZone,
-    workbenchProof:runId=>workbenchAppearance.proofFor(runId),
-    nativeSettingProof:runId=>workbenchAppearance.nativeProofFor(runId),
-    pending:{offer:memberId=>assistantRuns?.offerPending(memberId)??[],settle:(delivered,memberId)=>assistantRuns?.settlePending(delivered,memberId)},
+  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),team:()=>team,
     compacting:sessionId=>consolidation?.compacting(sessionId)});
   const nativeBackends:NativeBackendService=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,

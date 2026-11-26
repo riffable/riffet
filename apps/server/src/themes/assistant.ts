@@ -9,7 +9,6 @@ import type { ThemeService } from './index.js';
 
 const themeId = z.string().regex(/^custom-[a-z0-9-]{8,64}$/);
 export const sharedThemeArgs = z.strictObject({
-  sourceTurn: z.string().min(1).max(64),
   themeId,
   expectedRevision: z.string().min(1).max(128),
   mode: z.enum(['light','dark']), role: z.enum(THEME_ROLES), color: z.string().regex(/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/),
