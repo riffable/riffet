@@ -211,6 +211,8 @@ class FakeRuntime {
   readonly argvSpawns: string[] = [];
   /** Holds the worker after the CLI has spawned, before `ensure` returns: a crash window. */
   afterSpawn?: Promise<void>;
+  /** Thrown after the fence went down, as the terminal service refusing the launch before any process exists. */
+  spawnError?: Error;
 
   async ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<void> {
     this.ensureCalls.push(session.id);
@@ -220,6 +222,7 @@ class FakeRuntime {
     // Mirrors `NativeRuntimeManager.ensureLocked`: the fence hook runs right before the spawn.
     if (options?.initialPrompt !== undefined) {
       await runBeforeSpawn(options.beforeSpawn);
+      if (this.spawnError) throw this.spawnError;
       this.argvSpawns.push(options.initialPrompt);
     }
     this.attachTerminal?.(session);
@@ -959,6 +962,25 @@ describe('NativeDispatcher durable delivery', () => {
     expect(runtime.ensureOptions).toEqual([{ initialPrompt: 'inspect the project' }]);
     // The run owns a baseline fence rooted at the attached terminal so a later echo can bind.
     expect(store.getRun(run.id).native?.terminalId).toBe(`terminal-${session.id}`);
+  });
+
+  it('fails a first message, restorably, when the launch is refused before any process exists', async () => {
+    // The fence goes down before the spawn; an argv over the terminal service's limit is then refused
+    // without a process. Nothing reached a CLI, so the message is a failure to send again, not unconfirmed.
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = createSession(), run = accept(session.id, 'refused-launch', 'who are you');
+    const native = new FakeNative(store), runtime = makeRuntime();
+    runtime.attachTerminal = undefined;
+    runtime.spawnError = new AppError('NATIVE_LAUNCH_INVALID', 'Native terminal launch command is invalid', 400);
+    const send = dispatcher(store, native, runtime, workspace);
+    cleanups.push(() => store.close(), () => send.close());
+
+    send.kick();
+    await until(() => store.getRun(run.id).native?.delivery === 'failed', 'refused launch to fail the run');
+    expect(store.getRun(run.id)).toMatchObject({ state: 'failed', native: { delivery: 'failed', stage: 'prepare', diagnostic: { code: 'NATIVE_LAUNCH_INVALID' } } });
+    expect(store.getRun(run.id).native?.timings?.dispatchAt).toBeUndefined();
+    expect(runtime.argvSpawns).toEqual([]);
+    expect(native.writes).toEqual([]);
   });
 
   it('fails fast when the CLI exits immediately after an argv-path spawn', async () => {

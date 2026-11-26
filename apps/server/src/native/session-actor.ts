@@ -28,6 +28,8 @@ const now = () => Date.now();
  * silently for ever. Longer than a cold Claude Code start with MCP servers and a large resume.
  */
 export const CLI_BUSY_LIMIT_MS = 3 * 60_000;
+/** The terminal service refuses these launches before any process exists (`terminal/service.ts#assertLaunchSpec`). */
+const LAUNCH_REFUSED = new Set(['NATIVE_LAUNCH_REQUIRED', 'NATIVE_LAUNCH_INVALID', 'NATIVE_LAUNCH_CWD_INVALID', 'NATIVE_LAUNCH_ENV_INVALID']);
 
 export interface SessionDispatchOptions {
   intervalMs?: number;
@@ -517,14 +519,23 @@ export class SessionActor {
     const delivery = run.native?.delivery;
     if (delivery === 'cancelled' || delivery === 'observed') return;
     const message = error instanceof Error ? error.message : '无法执行消息';
-    if (delivery === 'dispatching' || delivery === 'input_sent') {
+    const code = error instanceof AppError ? error.code : '';
+    if (delivery === 'dispatching' && LAUNCH_REFUSED.has(code)) {
+      // The fence went down before the spawn, but the terminal service refused the launch before any process
+      // existed: nothing was written, so this is a plain failure the message can be restored from, not an
+      // unconfirmed send. Dropping `dispatchAt` is what lets `control.ts#canRestore` offer it back.
+      const { dispatchAt: _dispatchAt, ...timings } = run.native?.timings ?? {};
+      this.store.transitionNativeRun(runId, ['dispatching'], {
+        delivery: 'failed', stage: 'prepare', timings,
+        diagnostic: { code, message: redactSensitiveText(message).slice(0, 1000), stage: run.native?.stage, at: new Date().toISOString() },
+      }, { state: 'failed', error: 'CLI 无法启动，消息未发送' });
+    } else if (delivery === 'dispatching' || delivery === 'input_sent') {
       this.store.transitionNativeRun(runId, [delivery], {
         delivery: 'uncertain', stage: 'confirmation',
         diagnostic: { ...(error instanceof AppError ? { code: error.code } : {}),
           message: redactSensitiveText(message).slice(0, 1000), stage: run.native?.stage, at: new Date().toISOString() },
       }, { state: 'interrupted', error: '暂时无法确认是否已发送' });
     } else if (delivery === 'preparing') {
-      const code = error instanceof AppError ? error.code : '';
       if (code === 'NATIVE_STOP_TARGET_CHANGED' && options.now && options.expectedStop) {
         const { promotedAt: _promoted, ...timings } = run.native?.timings ?? {};
         this.store.transitionNativeRun(runId, ['preparing'], { delivery: 'queued', stage: undefined, timings }, { state: 'queued', error: undefined });

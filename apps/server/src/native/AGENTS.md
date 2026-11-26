@@ -49,6 +49,7 @@ verify:
 - 普通的 `uncertain` 消息（回执超时、CLI 退出或重启恢复）在之后已有更晚回合正常完成且 CLI 回到空闲时，不会再永久阻塞队列：调度器通过后端的 `canReleaseAfterLaterTurn`（如 Cursor 校验存在严格晚于该发送时刻的独立已完成回合、store root 一致、提示符空闲且无浏览器草稿/未决排队）自动写入 `queueReleasedAt` 释放队列，同时浏览器释放终端控制权或终端重连时也会唤醒派发器；已释放记录的迟到带标回执仍经全局事件通道纠正历史，但不再参与无标签文本回显匹配。
 - 原子替换回合（`replaceTurn` / 立即发送）必须观察到新回合回执与新 `nativeTurnId` 才可结算旧回合，否则抛 `NATIVE_STOP_UNCONFIRMED` 保持失败封闭，不会在未确认替换时把仍在运行的旧回合误标为已中断。
 - 没恢复的会话里发消息，先进内容区、跳到排队栏、恢复后又回内容区：快照的 `placement` 曾直接取 `admission` 的 `held`，worker 接手到 arm 之间的 `sending`、`CLI_BUSY` 后的 `retrying`、CLI 冷启动的 `turn_running` 都会把它算成排队。现在按 `control.ts#ownProgress` 区分；仍跳时看快照里 `held.reason` 与 `dispatch.ts#NativeDispatcher` 的 `taken`。
+- 新会话的第一条消息显示「暂时无法确认是否已发送」，CLI 却从没起来过：argv 路径的 fence 在拉起进程之前提交，终端服务校验启动参数时就拒绝（例如单个参数超过 8 KiB）也曾被记成 `uncertain`。现在这几种拒绝（`session-actor.ts#LAUNCH_REFUSED`）记为可恢复的失败；仍出现时看 `riffet logs --scope dispatch` 里那条 run 的 `code`。
 - 重启被拒或一直等待：`GET /api/service/restartable`，对应 `dispatch.ts#restartability`；暂停派发是 30 s 租约（`dispatch.ts#DRAIN_LEASE_MS`），等待方不续期会自行失效。
 - 空闲 CLI 不被回收或被误回收：监控接口 `agentProcesses` 给出每个 CLI 的 `AgentRetention` 与预计停止时间；回收日志无 scope，按消息文本过滤 `riffet logs`，如 `reclaimed idle agent CLIs`、`agent reclaim pass failed`。生命周期见 docs/guide/performance.md §3.10。
 - 终端持有的会话无法发送：日志 `releasing a terminal hold failed`、`following a terminal-held conversation failed`；持有的 token 存在会话旁的 `terminal-hold:` 密钥里（`terminal-hold.ts#SECRET_PREFIX`）。
