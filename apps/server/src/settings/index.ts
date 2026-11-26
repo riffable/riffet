@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type RemoteSpeechSettings, type VoiceInputSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource, type TerminalProfile, type TerminalServerSettings } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, TEAM_MEMBER_ORDER_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type RemoteSpeechSettings, type VoiceInputSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource, type TerminalProfile, type TerminalServerSettings } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { isContributionOf, PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 import { AppError } from '../errors.js';
@@ -336,7 +336,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'allowInsecureChat', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'voiceInput', 'titleRules', 'terminal']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'allowInsecureChat', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'workItems', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned', 'teamMemberOrder', 'voiceInput', 'titleRules', 'terminal']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -405,6 +405,14 @@ export class SettingsService {
       };
       if (!Array.isArray(pinned) || pinned.length > SIDEBAR_PINNED_MAX || !pinned.every(validDestination)) throw new AppError('INVALID_SETTINGS', 'sidebarPinned must be a list of destination ids');
       result.sidebarPinned = [...new Set(pinned as string[])];
+    }
+    if (values.teamMemberOrder !== undefined) {
+      const order = values.teamMemberOrder;
+      const validMemberId = (id: unknown): id is string => typeof id === 'string' && id.trim().length > 0 && id.length <= 100 && !/[\0\r\n]/.test(id);
+      if (!Array.isArray(order) || order.length > TEAM_MEMBER_ORDER_MAX || !order.every(validMemberId)) {
+        throw new AppError('INVALID_SETTINGS', 'teamMemberOrder must be a list of member ids');
+      }
+      result.teamMemberOrder = [...new Set(order)];
     }
     if (values.composerSendLater !== undefined) {
       if (typeof values.composerSendLater !== 'boolean') throw new AppError('INVALID_SETTINGS', 'composerSendLater must be a boolean');

@@ -117,4 +117,23 @@ describe('settings store write queue', () => {
     store.absorb(external, store.bootstrapRevision());
     expect(store.current()).toEqual(external);
   });
+
+  it('coalesces team member reorder writes and ignores stale bootstrap reads', async () => {
+    const initial = { teamMemberOrder: ['a', 'b', 'c'] };
+    const { bodies, current } = fakeServer(initial);
+    const store = createSettingsStore(initial);
+    const beforeWrites = store.bootstrapRevision();
+
+    const first = store.updateTeamMemberOrder(() => ['b', 'a', 'c']);
+    const second = store.updateTeamMemberOrder(() => ['c', 'b', 'a']);
+    expect(store.get().teamMemberOrderDraft).toEqual(['c', 'b', 'a']);
+    store.absorb(initial, beforeWrites);
+    expect(store.current().teamMemberOrder).toEqual(['a', 'b', 'c']);
+    expect(store.get().teamMemberOrderDraft).toEqual(['c', 'b', 'a']);
+
+    expect(await Promise.all([first, second])).toEqual([false, true]);
+    expect(bodies).toEqual([{ teamMemberOrder: ['c', 'b', 'a'] }]);
+    expect(store.current()).toEqual(current());
+    expect(store.get().teamMemberOrderDraft).toBeUndefined();
+  });
 });

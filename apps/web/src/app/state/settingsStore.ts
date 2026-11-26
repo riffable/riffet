@@ -6,7 +6,7 @@ import { createStore } from '@/lib/store';
 
 /** The fields this store writes: the per-backend defaults and the two settings that mirror them. */
 type DefaultsPatch = Partial<Pick<AppSettings, 'nativeBackendDefaults' | 'defaultBackendId' | 'defaultModel'>>;
-type BootstrapSettingsRevision = { defaults: number; sidebar: number };
+type BootstrapSettingsRevision = { defaults: number; sidebar: number; teamOrder: number };
 const DEFAULT_KEYS = ['defaultModel', 'defaultBackendId', 'nativeBackendDefaults'] as const;
 const touchesDefaults = (patch: Partial<AppSettings>) => DEFAULT_KEYS.some((key) => Object.prototype.hasOwnProperty.call(patch, key));
 
@@ -24,10 +24,16 @@ export interface SettingsHooks {
  * write back). Writes from other browser tabs are not coordinated.
  */
 export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks = {}) {
-  const store = createStore<{ settings: AppSettings; loaded: boolean; sidebarPinnedDraft: string[] | undefined }>({ settings: initial, loaded: false, sidebarPinnedDraft: undefined });
+  const store = createStore<{ settings: AppSettings; loaded: boolean; sidebarPinnedDraft: string[] | undefined; teamMemberOrderDraft: string[] | undefined }>({
+    settings: initial,
+    loaded: false,
+    sidebarPinnedDraft: undefined,
+    teamMemberOrderDraft: undefined,
+  });
   /** Bumped whenever a default is changed or applied, so an older read or write can tell it lost. */
   let revision = 0;
   let sidebarRevision = 0;
+  let teamOrderRevision = 0;
   let tail: Promise<unknown> = Promise.resolve();
   const get = () => store.get().settings;
   const put = (settings: AppSettings) => store.set({ settings });
@@ -56,13 +62,19 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
     ...store,
     current: get,
     revision: () => revision,
-    bootstrapRevision: (): BootstrapSettingsRevision => ({ defaults: revision, sidebar: sidebarRevision }),
+    bootstrapRevision: (): BootstrapSettingsRevision => ({ defaults: revision, sidebar: sidebarRevision, teamOrder: teamOrderRevision }),
     /** A bootstrap read preserves defaults and sidebar settings changed while it was in flight. */
     absorb(incoming: AppSettings, requested: BootstrapSettingsRevision): AppSettings {
       const current = get();
       const next = preserveNewerDefaultModel(incoming, current, requested.defaults, revision);
-      const freshSidebar = store.get().sidebarPinnedDraft === undefined && requested.sidebar === sidebarRevision;
-      const settings = freshSidebar ? next : { ...next, sidebarPinned: current.sidebarPinned };
+      const state = store.get();
+      const freshSidebar = state.sidebarPinnedDraft === undefined && requested.sidebar === sidebarRevision;
+      const freshTeamOrder = state.teamMemberOrderDraft === undefined && requested.teamOrder === teamOrderRevision;
+      const settings = {
+        ...next,
+        ...(freshSidebar ? {} : { sidebarPinned: current.sidebarPinned }),
+        ...(freshTeamOrder ? {} : { teamMemberOrder: current.teamMemberOrder }),
+      };
       store.set({ settings, loaded: true });
       return settings;
     },
@@ -91,6 +103,32 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
             // Reads started during a write can also carry its previous order.
             sidebarRevision += 1;
             store.set({ sidebarPinnedDraft: undefined });
+          }
+        }
+      });
+    },
+    /** Reorders sidebar team members immediately and persists `teamMemberOrder` on the server. */
+    async updateTeamMemberOrder(change: (current: readonly string[]) => readonly string[]): Promise<boolean> {
+      const state = store.get();
+      const current = state.teamMemberOrderDraft ?? state.settings.teamMemberOrder ?? [];
+      const updated = change(current);
+      if (updated.length === current.length && updated.every((id, index) => id === current[index])) return false;
+      const teamMemberOrder = [...updated];
+      const write = ++teamOrderRevision;
+      store.set({ teamMemberOrderDraft: teamMemberOrder });
+      return enqueue(async () => {
+        if (teamOrderRevision !== write) return false;
+        try {
+          const patch = { teamMemberOrder };
+          applySaved(await api.updateSettings(patch), patch);
+          return true;
+        } catch (error) {
+          if (teamOrderRevision === write) throw error;
+          return false;
+        } finally {
+          if (teamOrderRevision === write) {
+            teamOrderRevision += 1;
+            store.set({ teamMemberOrderDraft: undefined });
           }
         }
       });

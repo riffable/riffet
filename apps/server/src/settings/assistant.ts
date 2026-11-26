@@ -11,7 +11,7 @@ const locations = {
   nativeBackendDefaults: 'backends', composerEnterBehavior: 'interaction', composerRunningBehavior: 'interaction',
   composerSendLater: 'interaction', auxiliaryModels: 'auxiliary', pluginModels: 'auxiliary', idleReclaimMinutes: 'service',
   maxAgentMemoryMb: 'service', quickChat: 'quickchat', assistant: 'assistant', workItems: 'workitems',
-  sidebarPinned: 'sidebar', voiceInput: 'interaction', titleRules: 'titles', terminal: 'terminal',
+  sidebarPinned: 'sidebar', teamMemberOrder: 'sidebar', voiceInput: 'interaction', titleRules: 'titles', terminal: 'terminal',
 } satisfies Record<keyof AppSettings, string>;
 
 function settingSummary(id: keyof AppSettings, saved: AppSettings): Record<string,unknown> {

@@ -1649,6 +1649,10 @@ msgstr "Couldn't save"
 msgid "无法保存侧栏设置"
 msgstr "Could not save sidebar settings"
 
+#: src/app/useSidebarPinned.ts
+msgid "无法保存团队顺序"
+msgstr "Could not save team order"
+
 #: src/app/use-session-actions.ts
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr "Couldn't save the outgoing message. Check the browser's storage space."
@@ -1806,10 +1810,6 @@ msgstr "Couldn't add to favorites"
 #: src/app/FolderFavorites.tsx
 msgid "无法收藏该目录"
 msgstr "Couldn't add this folder to favorites"
-
-#: src/app/Workbench.tsx
-msgid "无法更新成员"
-msgstr "Unable to update member"
 
 #: src/app/use-session-actions.ts
 msgid "无法检查状态，请稍后重试"
@@ -2406,6 +2406,10 @@ msgstr "Offline · Showing the list saved just now"
 msgid "移出标签栏"
 msgstr "Remove from tab bar"
 
+#: src/app/Sidebar.tsx
+msgid "移到顶部"
+msgstr "Move to top"
+
 #: src/app/plugins/PluginSources.tsx
 #: src/app/team/MemberAvatar.tsx
 msgid "移除"
@@ -2569,10 +2573,6 @@ msgstr "Pinned"
 #: src/app/tabs/TabBar.tsx
 msgid "置顶会话"
 msgstr "Pin session"
-
-#: src/app/team/MemberConfigDialog.tsx
-msgid "置顶在团队列表顶部"
-msgstr "Pin to top of team list"
 
 #: src/app/team/CreateMemberDialog.tsx
 msgid "职责、常用步骤、输出规范或边界…"

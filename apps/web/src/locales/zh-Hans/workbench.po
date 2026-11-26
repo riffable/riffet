@@ -1649,6 +1649,10 @@ msgstr "无法保存"
 msgid "无法保存侧栏设置"
 msgstr "无法保存侧栏设置"
 
+#: src/app/useSidebarPinned.ts
+msgid "无法保存团队顺序"
+msgstr "无法保存团队顺序"
+
 #: src/app/use-session-actions.ts
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr "无法保存待发送消息，请检查浏览器存储空间"
@@ -1806,10 +1810,6 @@ msgstr "无法收藏"
 #: src/app/FolderFavorites.tsx
 msgid "无法收藏该目录"
 msgstr "无法收藏该目录"
-
-#: src/app/Workbench.tsx
-msgid "无法更新成员"
-msgstr "无法更新成员"
 
 #: src/app/use-session-actions.ts
 msgid "无法检查状态，请稍后重试"
@@ -2406,6 +2406,10 @@ msgstr "离线 · 显示刚刚保存的列表"
 msgid "移出标签栏"
 msgstr "移出标签栏"
 
+#: src/app/Sidebar.tsx
+msgid "移到顶部"
+msgstr "移到顶部"
+
 #: src/app/plugins/PluginSources.tsx
 #: src/app/team/MemberAvatar.tsx
 msgid "移除"
@@ -2569,10 +2573,6 @@ msgstr "置顶"
 #: src/app/tabs/TabBar.tsx
 msgid "置顶会话"
 msgstr "置顶会话"
-
-#: src/app/team/MemberConfigDialog.tsx
-msgid "置顶在团队列表顶部"
-msgstr "置顶在团队列表顶部"
 
 #: src/app/team/CreateMemberDialog.tsx
 msgid "职责、常用步骤、输出规范或边界…"

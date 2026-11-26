@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconArrowUp, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconLink, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, WORK_ITEM_STATUSES, type AgentMember, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -12,6 +12,7 @@ import { BrandMark } from '@/components/BrandMark';
 import { AgentLogo } from '@/components/AgentLogo';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
+import { SortableList } from '@/components/ui/sortable-list';
 import type { CouncilAttention } from './state/councilStore';
 import { Tip } from '@/components/ui/tooltip';
 import { api, apiFor, type ProjectRecord } from '@/lib/api';
@@ -32,7 +33,7 @@ import { useHeld } from './session/sessionLayout';
 import { useLists, useStores, useWorkItems } from './state/stores';
 import { SIDEBAR_DESTINATION_META, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
 import { SidebarDestinationRows, sidebarNavRow } from './SidebarDestinationRows';
-import { useSidebarPinned } from './useSidebarPinned';
+import { useSidebarPinned, useTeamMemberOrder } from './useSidebarPinned';
 import type { ViewEntry } from '@/plugins/catalog';
 import { viewIcon } from '@/plugins/viewIcons';
 import { useTabs } from './tabs/useTabs';
@@ -40,7 +41,7 @@ import type { SettingsSection } from './settings/settingsSections';
 import { SidebarUpdateButton } from './SidebarUpdateButton';
 import { SidebarSettingsButton, SidebarUserMenu } from './SidebarUserMenu';
 import { StatusIcon, useStatusLabel } from './work-items/parts';
-import { isDefaultMember, sortTeamMembers } from './work-items/assistant';
+import { isDefaultMember, moveTeamMemberToTop, reorderTeamMembers, sortTeamMembers } from './work-items/assistant';
 import { MemberAvatar } from './team/MemberAvatar';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
@@ -85,7 +86,6 @@ interface Props {
   onNewMemberSession?: (member: AgentMember) => void;
   onCreateMember?: () => void;
   onEditMember?: (member: AgentMember) => void;
-  onTogglePinMember?: (member: AgentMember) => void;
   onDeleteMember?: (member: AgentMember) => void;
   onOpenAutomations: () => void;
   onOpenCouncil?: () => void;
@@ -375,7 +375,12 @@ export function Sidebar(props: Props) {
     return next;
   });
 
-  const orderedTeam = useMemo(() => sortTeamMembers(props.teamMembers ?? []), [props.teamMembers]);
+  const finePointer = useMediaQuery('(any-pointer: fine)');
+  const { saved: teamOrder, save: saveTeamOrder, canEdit: canEditTeamOrder } = useTeamMemberOrder();
+  const orderedTeam = useMemo(() => sortTeamMembers(props.teamMembers ?? [], teamOrder), [props.teamMembers, teamOrder]);
+  const orderedTeamIds = useMemo(() => orderedTeam.map((member) => member.id), [orderedTeam]);
+  const teamById = useMemo(() => new Map(orderedTeam.map((member) => [member.id, member])), [orderedTeam]);
+  const canReorderTeam = !mobile && finePointer && canEditTeamOrder && orderedTeam.length > 1;
   const memberSessionById = useMemo(() => {
     const map = new Map<string, Session>();
     for (const member of orderedTeam) {
@@ -705,46 +710,56 @@ export function Sidebar(props: Props) {
             </div>
             <Collapse open={!teamCollapsed}>
               <div className="flex flex-col gap-px">
-                {orderedTeam.map((member) => {
-                  const selected = props.activeMemberId === member.id;
-                  const memberSession = memberSessionById.get(member.id);
-                  return (
-                    <ListRow
-                      key={member.id}
-                      selected={selected}
-                      aria-current={selected ? 'page' : undefined}
-                      onClick={() => props.onSelectMember?.(member)}
-                      leading={<MemberAvatar member={member} size={18} className={cn('-translate-x-0.5', selected && 'text-fg')} />}
-                      className={cn('cursor-default', mobile ? 'text-fg hover:text-fg' : 'px-2')}
-                      trailing={memberSession ? <span className="inline-flex shrink-0"><SessionIndicator session={memberSession} mobile={mobile} selected={selected} /></span> : undefined}
-                      actions={
-                        <span className={cn('flex shrink-0', rowReveal)}>
-                          <RowMenu label={t`成员操作`}>
-                            {props.onNewMemberSession && (
-                              <DropdownMenuItem onSelect={() => props.onNewMemberSession?.(member)}><IconSquarePen /><Trans>新对话</Trans></DropdownMenuItem>
-                            )}
-                            {props.onEditMember && (
-                              <DropdownMenuItem onSelect={() => props.onEditMember?.(member)}><IconSettings2 /><Trans>配置…</Trans></DropdownMenuItem>
-                            )}
-                            {props.onTogglePinMember && (
-                              <DropdownMenuItem onSelect={() => props.onTogglePinMember?.(member)}>
-                                {member.pinned ? <><IconPinOff /><Trans>取消置顶</Trans></> : <><IconPin /><Trans>置顶</Trans></>}
-                              </DropdownMenuItem>
-                            )}
-                            {!isDefaultMember(member) && props.onDeleteMember && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem variant="danger" onSelect={() => props.onDeleteMember?.(member)}><IconTrash2 /><Trans>删除…</Trans></DropdownMenuItem>
-                              </>
-                            )}
-                          </RowMenu>
-                        </span>
-                      }
-                    >
-                      {member.name}
-                    </ListRow>
-                  );
-                })}
+                <SortableList
+                  ids={orderedTeamIds}
+                  drag="row"
+                  variant="inset"
+                  disabled={!canReorderTeam}
+                  label={(id) => teamById.get(id)?.name ?? id}
+                  onReorder={(nextIds) => saveTeamOrder((current) => reorderTeamMembers(current, nextIds))}
+                >
+                  {(id) => {
+                    const member = teamById.get(id)!;
+                    const selected = props.activeMemberId === member.id;
+                    const memberSession = memberSessionById.get(member.id);
+                    const isFirst = orderedTeamIds[0] === member.id;
+                    return (
+                      <ListRow
+                        selected={selected}
+                        aria-current={selected ? 'page' : undefined}
+                        onClick={() => props.onSelectMember?.(member)}
+                        leading={<MemberAvatar member={member} size={18} className={cn('-translate-x-0.5', selected && 'text-fg')} />}
+                        className={cn('cursor-default select-none', mobile ? 'text-fg hover:text-fg' : 'px-2')}
+                        trailing={memberSession ? <span className="inline-flex shrink-0"><SessionIndicator session={memberSession} mobile={mobile} selected={selected} /></span> : undefined}
+                        actions={
+                          <span data-sort-ignore className={cn('flex shrink-0', rowReveal)}>
+                            <RowMenu label={t`成员操作`}>
+                              {props.onNewMemberSession && (
+                                <DropdownMenuItem onSelect={() => props.onNewMemberSession?.(member)}><IconSquarePen /><Trans>新对话</Trans></DropdownMenuItem>
+                              )}
+                              {props.onEditMember && (
+                                <DropdownMenuItem onSelect={() => props.onEditMember?.(member)}><IconSettings2 /><Trans>配置…</Trans></DropdownMenuItem>
+                              )}
+                              {canEditTeamOrder && !isFirst && (
+                                <DropdownMenuItem onSelect={() => saveTeamOrder((current) => moveTeamMemberToTop(current, orderedTeamIds, member.id))}>
+                                  <IconArrowUp /><Trans>移到顶部</Trans>
+                                </DropdownMenuItem>
+                              )}
+                              {!isDefaultMember(member) && props.onDeleteMember && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem variant="danger" onSelect={() => props.onDeleteMember?.(member)}><IconTrash2 /><Trans>删除…</Trans></DropdownMenuItem>
+                                </>
+                              )}
+                            </RowMenu>
+                          </span>
+                        }
+                      >
+                        {member.name}
+                      </ListRow>
+                    );
+                  }}
+                </SortableList>
               </div>
             </Collapse>
           </div>

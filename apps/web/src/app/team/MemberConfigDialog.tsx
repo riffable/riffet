@@ -58,7 +58,6 @@ export function MemberConfigDialog({ open, member, projects, onClose, onUpdated,
   const [projectId, setProjectId] = useState('');
   const [sessionMode, setSessionMode] = useState<AgentMemberSessionMode>('continuous');
   const [dailyRuns, setDailyRuns] = useState('30');
-  const [pinned, setPinned] = useState(false);
   const [capabilities, setCapabilities] = useState<AgentMemberCapabilities>({
     workspace: true, taskBoard: true, delegations: true, memberCalls: true, externalTools: true, workbenchAdmin: false,
   });
@@ -85,7 +84,6 @@ export function MemberConfigDialog({ open, member, projects, onClose, onUpdated,
     setProjectId(member.scope.kind === 'project' ? (member.scope.projectIds?.[0] ?? member.projectId) : (codeProjects[0]?.id ?? ''));
     setSessionMode(member.sessionMode);
     setDailyRuns(String(member.budget.dailyRuns));
-    setPinned(Boolean(member.pinned));
     setCapabilities(member.capabilities);
 
     let live = true;
@@ -135,7 +133,6 @@ export function MemberConfigDialog({ open, member, projects, onClose, onUpdated,
     || (scopeKind === 'project' && member.scope.kind === 'project' && projectId !== (member.scope.projectIds?.[0] ?? member.projectId))
     || sessionMode !== member.sessionMode
     || (Number.isFinite(parsedRuns) && Math.round(parsedRuns) !== member.budget.dailyRuns)
-    || pinned !== Boolean(member.pinned)
     || JSON.stringify(capabilities) !== JSON.stringify(member.capabilities)
   ));
   const instructionsDirty = instructionsText !== instructionsBaseline;
@@ -204,7 +201,6 @@ export function MemberConfigDialog({ open, member, projects, onClose, onUpdated,
           ...(!isDefault ? { scope } : {}),
           sessionMode,
           capabilities,
-          pinned,
           ...(Number.isFinite(parsedRuns) ? { budget: { dailyRuns: Math.round(parsedRuns) } } : {}),
         });
         latest = updated;
@@ -336,9 +332,6 @@ export function MemberConfigDialog({ open, member, projects, onClose, onUpdated,
                         onChange={(event) => setName(event.target.value)}
                         className="w-64 max-md:w-full"
                       />
-                    </SettingsRow>
-                    <SettingsRow title={t`置顶在团队列表顶部`}>
-                      <Switch checked={pinned} onCheckedChange={setPinned} aria-label={t`置顶在团队列表顶部`} />
                     </SettingsRow>
                   </SettingsGroup>
 

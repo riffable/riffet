@@ -451,13 +451,6 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     });
   }, [nav, ui]);
 
-  const togglePinMember = useCallback((member: AgentMember) => {
-    void api.updateTeamMember(member.id, { pinned: !member.pinned }).then(
-      (updated) => lists.upsertTeamMember(updated),
-      (error: unknown) => toast.error(errorMessage(error, t`无法更新成员`)),
-    );
-  }, [lists, t]);
-
   const deleteMember = useCallback((member: AgentMember) => {
     if (member.id === DEFAULT_AGENT_MEMBER_ID) return;
     void (async () => {
@@ -687,7 +680,6 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onNewMemberSession={openNewMemberSession}
       onCreateMember={() => { setCreateMemberOpen(true); ui.setMobileSidebar(false); }}
       onEditMember={(member) => { setEditingMemberId(member.id); ui.setMobileSidebar(false); }}
-      onTogglePinMember={togglePinMember}
       onDeleteMember={deleteMember}
       {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: inboxCount } : {})}
       onOpenAutomations={() => openPage('automations')}

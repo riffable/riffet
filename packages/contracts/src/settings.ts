@@ -95,6 +95,11 @@ export interface AppSettings {
    * 更多 menu. Unset means `DEFAULT_SIDEBAR_PINNED`. Ids a client does not offer are kept and skipped.
    */
   sidebarPinned?: string[];
+  /**
+   * The team members' sidebar order, by member id, on every device. Unset falls back to the default
+   * order; ids not listed follow at the end in that order, and unknown or archived ids are skipped.
+   */
+  teamMemberOrder?: string[];
   /** 语音输入 (docs/VOICE.md §6), on every device. Unset, or no `recognizer`, means off. */
   voiceInput?: VoiceInputSettings;
   /** 会话标题规则 (docs/SESSION-TITLES.md), in order; the first that matches a conversation names it. */
@@ -130,6 +135,8 @@ export type SidebarDestination = typeof SIDEBAR_DESTINATIONS[number];
 export const DEFAULT_SIDEBAR_PINNED: readonly SidebarDestination[] = ['assistant', 'tasks', 'plugins'];
 /** The most ids `sidebarPinned` holds; past it the server refuses the list. */
 export const SIDEBAR_PINNED_MAX = 32;
+/** The most ids `teamMemberOrder` holds; past it the server refuses the list. */
+export const TEAM_MEMBER_ORDER_MAX = 128;
 /**
  * The agent and model a client's 助理 composer starts with (docs/ASSISTANT.md §2), on every device.
  * Unset, it follows the composer's own choice. The 助理's instructions are the `AGENTS.md` of its
