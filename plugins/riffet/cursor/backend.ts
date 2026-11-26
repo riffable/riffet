@@ -77,6 +77,9 @@ const CURSOR_COMMANDS = [
   { name: 'about', description: '版本、系统与账号信息' },
   { name: 'help', description: '帮助', hint: '[command]' },
 ];
+/** Mirrors `apps/server/src/terminal/launch-args.ts#LAUNCH_ARG_MAX_BYTES`; longer prompts go through `native.deliver` (tmux paste-buffer). */
+const LAUNCH_ARG_MAX_BYTES = 8 * 1024;
+const fitsLaunchArg = (text: string): boolean => !text.includes('\0') && Buffer.byteLength(text, 'utf8') <= LAUNCH_ARG_MAX_BYTES;
 
 export interface CursorBackendOptions {
   /** Where the hook bridge's plugin (`cursor-hook`) and the project-config backups (`config-backups`) are kept: Riffet's state directory, as they were before this was a plugin (see `legacyStateRoot`). */
@@ -484,14 +487,16 @@ export class CursorBackend implements AgentBackend {
     const prompt = options.initialPrompt;
     const wrapped = prompt ? this.maybeWrapStandingPrompt(host, session, context.project, prompt) : undefined;
     const deliveredPrompt = wrapped?.text;
+    const passPromptViaArgv = Boolean(deliveredPrompt && fitsLaunchArg(deliveredPrompt));
     let fencedAt: number | undefined;
     const fence = async () => { await host.beforeSpawn(session.id); fencedAt = Date.now(); };
     const { terminal, promptPending } = await runtime.ensure(session, {
-      ...(deliveredPrompt ? { initialPrompt: deliveredPrompt } : {}),
+      ...(deliveredPrompt && passPromptViaArgv ? { initialPrompt: deliveredPrompt } : {}),
       beforeSpawn: fence,
     });
-    if (deliveredPrompt && promptPending) {
-      // A warm CLI took the conversation: the prompt is submitted to it like any later one.
+    if (deliveredPrompt && (promptPending || !passPromptViaArgv)) {
+      // Either a warm CLI took the conversation or the wrapped standing prompt exceeds the 8 KiB launch-arg cap:
+      // start the CLI cleanly without positional argv and submit through `native.deliver` (tmux paste-buffer).
       try { await native.deliver(port.getSession(session.id), deliveredPrompt, fence); }
       catch (error) {
         // Nothing was written, so the message can go again; it is pasted into the CLI now running.

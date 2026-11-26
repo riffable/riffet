@@ -61,6 +61,7 @@ export const CURSOR_AGENT_READY_PATTERN = /→\s+(?:Add a follow-up|Plan, search
 // separate rows below it without making the composer non-empty.
 const CURSOR_PROMPT_EMPTY_LINE = /^\s*→\s+(?:Add a follow-up(?:\s+—\s+\/plan to review and build)?|Plan, search, build anything)(?:\s+ctrl\+c to stop)?\s*$/;
 const CURSOR_IMAGE_PLACEHOLDER_PATTERN = /\[Image #\d+\]/;
+const CURSOR_PASTED_TEXT_PLACEHOLDER_PATTERN = /\[Pasted text #\d+(?:\s+\+\d+\s+lines?)?\]/i;
 const ATTACHMENT_PATH_LINE = /^\s*\/[^\s/]+\/\S+\s*$/;
 // The footer prints the active model and a running percentage while a turn is in flight. The
 // `ctrl+c to stop` hint is appended on busy frames and is a stable marker across versions.
@@ -146,6 +147,9 @@ export function cursorComposerHoldsPrompt(screen: string, text: string): boolean
     const compact = line.replace(/\s+/g, '');
     return compact.length >= PROMPT_BAR_PROMPT_CHARS && prompt.includes(compact);
   })) return true;
+  if (CURSOR_PASTED_TEXT_PLACEHOLDER_PATTERN.test(barLines.join('\n')) && (text.includes('\n') || text.length > 200)) {
+    return true;
+  }
   if (CURSOR_IMAGE_PLACEHOLDER_PATTERN.test(barLines.join('\n'))) {
     const lines = text.split(/\r?\n/);
     if (lines.some(line => ATTACHMENT_PATH_LINE.test(line))) {

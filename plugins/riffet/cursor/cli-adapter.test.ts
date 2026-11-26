@@ -101,4 +101,10 @@ describe('reading whether the cursor prompt bar still holds a written prompt', (
     expect(cursorComposerHoldsPrompt(pane(bar), draft)).toBe(true);
     expect(cursorComposerHoldsPrompt(pane('  → Add a follow-up'), draft)).toBe(false);
   });
+
+  it('recognizes cursor-agent collapsed multi-line paste placeholders in the prompt bar', () => {
+    const multiLine = '<riffet-member>\nrules\n</riffet-member>\n\n你是谁';
+    expect(cursorComposerHoldsPrompt(pane('  → [Pasted text #1 +145 lines]'), multiLine)).toBe(true);
+    expect(cursorComposerHoldsPrompt(pane('  → [Pasted text #1 +145 lines]'), '短单行')).toBe(false);
+  });
 });
