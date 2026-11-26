@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- When the CLI fails to start for a message, the failure shows only under that message, without a second English notice above the composer; a conversation that cannot start on opening now says "<Agent> couldn't start" with the reason in the details (Web, Mac).
 - Added a standalone Inbox page (`/inbox`) accessible from the bottom-left avatar menu with an unread numeric badge on the avatar, focusing exclusively on pending plugin write approvals and explicit messages sent by team members or reminders (`notify_user`), with mark-read, mark-all-read, delete, and browser/toast alerts. The task board's top attention section and overview stat are renamed from "Inbox" to "Pending" and no longer mix with plugin approvals.
 - IM channel accounts now support an account-level default project (editable in Settings › Bots without reconnecting), automatic chat-name syncing, self-authenticated connections without required secrets, optional suppression of other-client turn mirroring, and plain-text fallback for channels without interactive buttons; in-process plugins also gain `host.agents` to invoke Agents or Team Members and retrieve final answers, and non-model-source plugin settings changes no longer invalidate the server's model catalogs.
 - When a new conversation's CLI is refused at launch because of invalid arguments, the first message now shows as failed and can be restored to the composer, instead of "can't confirm whether it was sent".

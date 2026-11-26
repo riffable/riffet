@@ -4324,6 +4324,16 @@
         }
       }
     },
+    "%@ 无法启动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ couldn't start"
+          }
+        }
+      }
+    },
     "%@ 卡顿 %.1fms/s p99 %.0fms": {
       "localizations": {
         "en": {

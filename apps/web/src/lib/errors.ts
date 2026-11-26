@@ -27,7 +27,8 @@ export function textOf(ref: TextRef, message = ''): string | undefined {
   return Object.hasOwn(i18n.messages, id) ? i18n._(id, { ...ref.params, message }) : undefined;
 }
 
-const HAN = /\p{Script=Han}/u;
+/** Text with Chinese in it was written for a person (copy from before the catalogs); other server text is a diagnostic. */
+export const HAN = /\p{Script=Han}/u;
 
 /**
  * What to tell the user about [error]. A server error shows the text its code names. A code not yet

@@ -26,6 +26,10 @@ msgid "{backendLabel} 当前未运行。"
 msgstr "{backendLabel} is not running."
 
 #: src/app/terminal/NativeSession.tsx
+msgid "{backendLabel} 无法启动"
+msgstr "{backendLabel} couldn't start"
+
+#: src/app/terminal/NativeSession.tsx
 msgid "{backendLabel} 正在等待操作。"
 msgstr "{backendLabel} is waiting for input."
 

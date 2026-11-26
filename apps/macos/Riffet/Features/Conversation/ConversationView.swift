@@ -360,7 +360,7 @@ struct ConversationView: View {
         if !state.archived, state.connectionNotice == .failed || state.connectionNotice == .conflict {
             return .connection(conflict: state.connectionNotice == .conflict, detail: workbench.status?.connection?.message)
         }
-        if !quickChat, !state.archived, !state.live, !state.starting, let error = session.error {
+        if !quickChat, !state.archived, !state.live, !state.starting, !state.sendOwnsLaunch, let error = session.error {
             return .sessionError(error)
         }
         return nil
@@ -384,7 +384,9 @@ struct ConversationView: View {
                 }
                 .transition(ComposerMotion.insert)
             case let .sessionError(error):
-                NoticeBar(tone: live ? .danger : .neutral, symbol: "exclamationmark.circle", text: error, textLineLimit: 3, onTextDetails: { nativeNoticeDetail = error }) {
+                // A reason in English is the CLI's or the server's diagnostic: the bar says what happened, the reason is in the details.
+                let written = error.range(of: "\\p{Han}", options: .regularExpression) != nil
+                NoticeBar(tone: live ? .danger : .neutral, symbol: "exclamationmark.circle", text: written ? error : String(localized: "\(state.label) 无法启动"), textLineLimit: 3, onTextDetails: { nativeNoticeDetail = error }) {
                     if live {
                         Button {
                             guard self.banner(self.state) == held else { return }
@@ -664,6 +666,9 @@ struct ConversationState {
     let notice: String?
     let noticeLevel: String?
     let historyWarning: String?
+    /// A send owns what its launch did: its row shows the failure, so the page does not say it again
+    /// (`NativeSession.tsx`'s `sendOwnsLaunch`; one place per failure, DECISIONS 2026-11-12).
+    let sendOwnsLaunch: Bool
 
     var live: Bool { status.live }
     var statusKnown: Bool { status.statusKnown }
@@ -690,6 +695,8 @@ struct ConversationState {
             requiresLiveTerminal: capabilities?.requiresLiveTerminal?.boolValue == true
         )
         self.status = status
+        let sendOwnsLaunch = workbench.control?.inbox.contains { $0.kind == "message" } == true
+        self.sendOwnsLaunch = sendOwnsLaunch
         if let control = workbench.control {
             canStop = !status.archived && status.live && control.activeTurn?.canStop == true
         } else {
@@ -707,7 +714,7 @@ struct ConversationState {
         if showsConnection, historyWarning == native?.connection?.message { historyWarning = nil }
         self.historyWarning = historyWarning
         // Only suppress a reason when the current page actually shows it in full elsewhere.
-        let showsFailure = !status.archived && !status.live && !status.starting && status.connectionNotice != .failed && status.connectionNotice != .conflict
+        let showsFailure = !status.archived && !status.live && !status.starting && !sendOwnsLaunch && status.connectionNotice != .failed && status.connectionNotice != .conflict
         if let notice = native?.notice, !notice.isEmpty,
            (!showsFailure || notice != session.error),
            (!showsConnection || notice != native?.connection?.message),

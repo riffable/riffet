@@ -17,6 +17,7 @@ import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
 import { catalogParams, catalogSelection, parseSelection, pickedSelection } from '@/lib/models';
 import { cn, cleanLabel, errorMessage, newId } from '@/lib/utils';
+import { HAN } from '@/lib/errors';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useOverlayState } from '@/lib/overlay-navigation';
 import { backendSelection, hasNativeTerminal, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
@@ -795,7 +796,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ? <Suspense fallback={<div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-fg-3"><Spinner /><Trans>正在加载终端…</Trans></div>}><TerminalView key={terminal.id} terminal={terminal} active showTitle={false} autoFocus={!mobileViewport} onChanged={onTerminalChanged} onError={onError} className={className} actions={actions} leading={leading} /></Suspense>
     : null;
 
-  const failureNotice = !live ? session.error : undefined;
+  // A send owns what its launch did: its row shows the failure and the way back, so the conversation does not
+  // say it again (one place per failure, DECISIONS 2026-11-12). The row is there before the launch, so nothing flashes.
+  const sendOwnsLaunch = Boolean(native.control?.inbox.some(entry => entry.kind === 'message'));
+  const failureNotice = !live && !sendOwnsLaunch ? session.error : undefined;
+  // A reason in English is the CLI's or the server's diagnostic: the row says what happened, the reason sits behind 详情.
+  const failureMessage = failureNotice === undefined ? undefined
+    : HAN.test(failureNotice) ? { text: failureNotice } : { text: t`${backendLabel} 无法启动`, detail: failureNotice };
   const degraded = !native.status.history && native.status.transcript === 'unparsed'
     ? t`无法解析 ${backendLabel} 的会话存储，请查看后端版本与诊断信息。`
     : undefined;
@@ -817,7 +824,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       }
     } else if (!starting && !sendingInitial && !connectionNotice && (failureNotice || mobileViewport && terminalBound && !live)) {
       const text = failureNotice ?? t`${backendLabel} 当前未运行。`;
-      banners.push({ id: `session:${text}`, tone: failureNotice ? 'danger' : 'warning', text });
+      banners.push({ id: `session:${text}`, tone: failureNotice ? 'danger' : 'warning', text, ...failureMessage });
       if (failureNotice) displayedNotices.add(failureNotice);
     }
   }
@@ -838,7 +845,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ...banners,
     // The banner above and this row are one failure: one id, so a hand-over between them is not a second
     // notice. Only the banner offers 恢复会话; while a start or a first send is under way the row does not.
-    ...sessionNotices.filter(notice => notice.text === failureNotice).map(notice => ({ ...notice, id: `session:${notice.text}` })),
+    ...sessionNotices.filter(notice => notice.text === failureNotice).map(notice => ({ ...notice, ...failureMessage, id: `session:${notice.text}` })),
   ];
   const transientNotices: FeedbackMessage[] = sessionNotices.filter(notice => notice.text !== failureNotice)
     .map(notice => ({ ...notice, id: `native:${notice.text}` }));
