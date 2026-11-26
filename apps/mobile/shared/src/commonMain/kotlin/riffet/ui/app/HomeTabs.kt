@@ -119,6 +119,7 @@ import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
 import riffet_mobile.shared.generated.resources.Res
 import riffet_mobile.shared.generated.resources.assistant_tab
+import riffet_mobile.shared.generated.resources.team_tab
 import riffet_mobile.shared.generated.resources.session_settings
 import riffet_mobile.shared.generated.resources.session_tab_new
 import riffet_mobile.shared.generated.resources.session_tab_tasks
@@ -126,6 +127,13 @@ import riffet_mobile.shared.generated.resources.session_tab_tasks
 /** The workbench's destinations, in the bar's order. [key] is the form the launch preference stores. */
 enum class HomeTab(val key: String) {
     NEW_SESSION("new"), ASSISTANT("assistant"), TASKS("tasks"), SETTINGS("settings")
+}
+
+/** A tab's badge: the waiting conversations it lists. */
+private fun badge(entry: HomeTab, waiting: Int, teamWaiting: Int): Int = when (entry) {
+    HomeTab.TASKS -> waiting
+    HomeTab.ASSISTANT -> teamWaiting
+    else -> 0
 }
 
 /** The tab a launch opens: the stored [HomeTab.key]; anything unrecognized (and a first launch) is 新会话. */
@@ -356,13 +364,15 @@ internal class TabSwipe(
 /**
  * The tab chrome around [content]: the app's [RiffetTabBar] on a phone (centred icons, one
  * sliding pill), a navigation rail when [rail]. The keyboard covers the bar, and a page pushed
- * inside a tab slides it away. 任务 carries the number of conversations waiting on the reader.
+ * inside a tab slides it away. 任务 and 团队 each carry the number of their conversations waiting on the reader.
  */
 @Composable
 internal fun HomeShell(
     tab: HomeTab,
     onTab: (HomeTab) -> Unit,
     waiting: Int,
+    /** 团队's count: members' conversations waiting on the reader, which 任务 does not list. */
+    teamWaiting: Int = 0,
     rail: Boolean,
     /** The tab whose page ends in a docked composer ([TabComposerDock]): there the bar folds beside it. */
     dockTab: HomeTab? = null,
@@ -400,7 +410,7 @@ internal fun HomeShell(
                             NavigationRailItem(
                                 selected = selected,
                                 onClick = select,
-                                icon = { TabIcon(if (selected) face.selected else face.icon, face.label, if (entry == HomeTab.TASKS) waiting else 0) },
+                                icon = { TabIcon(if (selected) face.selected else face.icon, face.label, badge(entry, waiting, teamWaiting)) },
                                 alwaysShowLabel = false,
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = surfaces.selectedContent,
@@ -420,7 +430,7 @@ internal fun HomeShell(
                                 contentAlignment = Alignment.Center,
                             ) {
                                 CompositionLocalProvider(LocalContentColor provides if (selected) colors.accent else colors.fg3) {
-                                    TabIcon(if (selected) face.selected else face.icon, face.label, if (entry == HomeTab.TASKS) waiting else 0)
+                                    TabIcon(if (selected) face.selected else face.icon, face.label, badge(entry, waiting, teamWaiting))
                                 }
                             }
                         }
@@ -507,7 +517,7 @@ internal fun HomeShell(
                     val faces = HomeTab.entries.map { tabFace(it) }
                     RiffetTabBar(
                         items = HomeTab.entries.mapIndexed { index, entry ->
-                            TabBarItem(faces[index].icon, faces[index].selected, faces[index].label, if (entry == HomeTab.TASKS) waiting else 0)
+                            TabBarItem(faces[index].icon, faces[index].selected, faces[index].label, badge(entry, waiting, teamWaiting))
                         },
                         selected = HomeTab.entries.indexOf(shown),
                         onSelect = { onTab(HomeTab.entries[it]) },
@@ -544,10 +554,16 @@ private fun Modifier.leaving(): Modifier = clearAndSetSemantics { }.swallowTouch
 /** A destination's outline glyph, its filled form while selected (Material's bar convention), and its label. */
 private class TabFace(val icon: ImageVector, val selected: ImageVector, val label: String)
 
+/**
+ * Whether the connected server has team members (docs/TEAM.md): the second tab is then 团队, else the single 个人助理
+ * of an older server, or of no server yet.
+ */
+internal val LocalHasTeam = compositionLocalOf { false }
+
 /** A tab's name, for the bar and for the launch choice in 设置. */
-internal fun HomeTab.title(): StringResource = when (this) {
+internal fun HomeTab.title(team: Boolean): StringResource = when (this) {
     HomeTab.NEW_SESSION -> Res.string.session_tab_new
-    HomeTab.ASSISTANT -> Res.string.assistant_tab
+    HomeTab.ASSISTANT -> if (team) Res.string.team_tab else Res.string.assistant_tab
     HomeTab.TASKS -> Res.string.session_tab_tasks
     HomeTab.SETTINGS -> Res.string.session_settings
 }
@@ -555,7 +571,8 @@ internal fun HomeTab.title(): StringResource = when (this) {
 @Composable
 private fun tabFace(tab: HomeTab): TabFace = when (tab) {
     HomeTab.NEW_SESSION -> TabFace(RiffetIcons.MessageSquarePlus, RiffetIcons.MessageSquarePlusFilled, stringResource(Res.string.session_tab_new))
-    HomeTab.ASSISTANT -> TabFace(RiffetIcons.Bot, RiffetIcons.Bot, stringResource(Res.string.assistant_tab))
+    HomeTab.ASSISTANT -> if (LocalHasTeam.current) TabFace(RiffetIcons.Users, RiffetIcons.Users, stringResource(Res.string.team_tab))
+        else TabFace(RiffetIcons.Bot, RiffetIcons.Bot, stringResource(Res.string.assistant_tab))
     // A checklist has no filled form; the indicator pill carries the selection.
     HomeTab.TASKS -> TabFace(RiffetIcons.ListTodo, RiffetIcons.ListTodo, stringResource(Res.string.session_tab_tasks))
     HomeTab.SETTINGS -> TabFace(RiffetIcons.Settings, RiffetIcons.SettingsFilled, stringResource(Res.string.session_settings))

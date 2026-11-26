@@ -98,7 +98,7 @@ internal fun SectionList(
                     SettingsSection.ICONS -> iconPacks.choices.firstOrNull { it.id == iconPacks.selected }?.title
                         ?.let { riffet.ui.theme.localizedAppearanceTitle(it) }.orEmpty()
                     SettingsSection.MOTION -> pageAnimationLabel(display.pageAnimation)
-                    SettingsSection.LAUNCH_TAB -> riffet.ui.app.HomeTab.entries.firstOrNull { it.key == riffet.ui.app.homeTabKey(display.launchTab) }?.let { stringResource(it.title()) }.orEmpty()
+                    SettingsSection.LAUNCH_TAB -> riffet.ui.app.HomeTab.entries.firstOrNull { it.key == riffet.ui.app.homeTabKey(display.launchTab) }?.let { stringResource(it.title(riffet.ui.app.LocalHasTeam.current)) }.orEmpty()
                     SettingsSection.CONNECTION -> server
                     SettingsSection.DEVICES -> if (DeviceControl.platform != null && deviceAllowed) stringResource(Res.string.settings_allowed) else ""
                     else -> ""

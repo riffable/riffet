@@ -281,6 +281,8 @@ fun SessionScreen(
     onOpenMenu: (() -> Unit)? = null,
     /** The assistant's capability packs, as chips above its composer. */
     assistantPacks: List<riffet.contracts.AssistantPack> = emptyList(),
+    /** The team member this conversation belongs to (docs/TEAM.md): its avatar and name stand in the bar's title. */
+    member: riffet.contracts.AgentMember? = null,
 ) {
     val designMetrics = LocalInterfaceStyle.current.metrics
     val pageMotion = LocalRiffetPageMotion.current
@@ -692,6 +694,7 @@ fun SessionScreen(
                             cachedAt = cachedAt,
                             onBack = onBack,
                             onOpenMenu = onOpenMenu,
+                            member = member,
                             onOpenDetails = onOpenDetails,
                             onRetry = { store.retry() },
                             onResume = resume,
@@ -772,6 +775,7 @@ fun SessionScreen(
                             session = current,
                             writeScope = writeScope,
                             packs = assistantPacks,
+                            mentions = riffet.ui.composer.rememberMentionTargets(api, store, current),
                             supportsSteer = detail?.capabilities?.supportsSteer == true,
                             supportsSessionReferences = detail?.capabilities?.supportsSessionReferences == true,
                             supportsTargetedStop = detail?.capabilities?.supportsTargetedStop == true,
@@ -1159,6 +1163,7 @@ private fun SessionTopBar(
     cachedAt: Long?,
     onBack: () -> Unit,
     onOpenMenu: (() -> Unit)?,
+    member: riffet.contracts.AgentMember?,
     onOpenDetails: () -> Unit,
     onRetry: () -> Unit,
     /** Present while the CLI is not running and can be reopened (or is being reopened). */
@@ -1182,7 +1187,17 @@ private fun SessionTopBar(
                 .padding(start = 4.dp, end = 4.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            Text(
+            if (member != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                riffet.ui.team.MemberAvatar(member, 28.dp)
+                Text(
+                    text = member.name,
+                    style = LocalRiffetTypography.current.headline,
+                    color = colors.fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+            } else Text(
                 text = if (onOpenMenu != null) stringResource(Res.string.assistant_title) else session.shownTitle,
                 // A title someone else wrote, often long: a row title's size, not a page heading's.
                 style = LocalRiffetTypography.current.headline,

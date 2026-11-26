@@ -6,6 +6,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeout
 import riffet.cache.SyncWindow
+import riffet.contracts.AgentMention
 import riffet.contracts.SyncFrame
 import riffet.shared.syncStream
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -161,6 +162,24 @@ internal class SessionComposer(
         return submit(text, attachments, context, interrupt, null, expectedSessionId = sessionId, selectDefaultTarget = !interrupt, onStored = onStored)
     }
 
+    /**
+     * [send], or [enqueue] with [enqueue] set, carrying the Agents and team members the message `@`-mentions: a queued
+     * or interrupting message calls them as a plain one does, as on the web.
+     */
+    suspend fun sendMentioning(
+        text: String,
+        attachments: List<Attachment>,
+        context: List<PromptContextReference>,
+        agents: List<AgentMention>,
+        interrupt: Boolean = false,
+        enqueue: Boolean = false,
+        onStored: (() -> Unit)? = null,
+    ): Boolean {
+        val sessionId = core.value.selected?.id ?: return false
+        if (enqueue) return submit(text, attachments, context, false, null, expectedSessionId = sessionId, onStored = onStored, agents = agents)
+        return submit(text, attachments, context, interrupt, null, expectedSessionId = sessionId, selectDefaultTarget = !interrupt, onStored = onStored, agents = agents)
+    }
+
     suspend fun enqueue(text: String, attachments: List<Attachment>, context: List<PromptContextReference>, onStored: (() -> Unit)? = null): Boolean =
         submit(text, attachments, context, false, null, expectedSessionId = core.value.selected?.id, onStored = onStored)
 
@@ -184,6 +203,7 @@ internal class SessionComposer(
         expectedSessionId: String? = null,
         selectDefaultTarget: Boolean = false,
         onStored: (() -> Unit)? = null,
+        agents: List<AgentMention>? = null,
     ): Boolean = scope.async {
         val opened = core.value
         val session = opened.selected ?: return@async false
@@ -213,6 +233,7 @@ internal class SessionComposer(
                 attachments = sourceRun?.native?.input?.attachmentIds?.map { AttachmentRef(it) } ?: attachments.takeIf { it.isNotEmpty() }?.map { AttachmentRef(it.id) },
                 context = sourceRun?.native?.input?.context?.map { PromptContextReference(it.path, it.line) } ?: context.fileReferences(),
                 references = sourceRun?.native?.input?.references ?: context.sessionReferences(),
+                agents = sourceRun?.native?.input?.agents ?: agents?.takeIf { it.isNotEmpty() },
                 expectedConfigRevision = if (target == null) session.configRevision ?: 0 else null,
                 stop = if (interrupt) stopTarget(opened) ?: error(L10n.uiText("composer.error.stopTargetMissing")) else null,
             )

@@ -39,6 +39,7 @@ struct RiffetList: View {
     /// In a panel sheet: no page colour, the sheet's glass shows between the groups (iOS 26).
     private let inSheet: Bool
     @Environment(\.palette) private var palette
+    @Environment(\.riffetPanelSheet) private var panelSheet
     init<Content: View>(rowHeight: CGFloat = RiffetMetrics.settingsRowHeight, inSheet: Bool = false, @ViewBuilder content: () -> Content) {
         self.rowHeight = rowHeight; self.inSheet = inSheet; self.content = AnyView(content())
     }
@@ -48,10 +49,20 @@ struct RiffetList: View {
             .listSectionSpacing(.compact)
             .contentMargins(.top, 4, for: .scrollContent)
             .scrollContentBackground(.hidden)
-            .background { if !inSheet || !glassSheets { palette.bg } }
+            .background { if !(inSheet || panelSheet) || !glassSheets { palette.bg } }
             .environment(\.defaultMinListRowHeight, rowHeight)
     }
     private var glassSheets: Bool { if #available(iOS 26.0, *) { true } else { false } }
+}
+
+private struct RiffetPanelSheetKey: EnvironmentKey { static let defaultValue = false }
+extension EnvironmentValues {
+    /// Set on a panel sheet's stack: every `RiffetList` in it, the pages pushed inside included, leaves the page
+    /// colour off so the sheet's glass runs from the title bar down, with no band where the bar ends.
+    var riffetPanelSheet: Bool {
+        get { self[RiffetPanelSheetKey.self] }
+        set { self[RiffetPanelSheetKey.self] = newValue }
+    }
 }
 
 // MARK: - Settings parts
@@ -85,11 +96,13 @@ struct SettingsRowLabel: View {
     let title: String
     var symbol: String?
     var value: String?
+    /// The title's colour where it is not the text colour: `palette.danger` for a destructive row.
+    var tint: Color?
     @Environment(\.palette) private var palette
     var body: some View {
         HStack(spacing: 12) {
             if let symbol { SettingsIcon(symbol: symbol) }
-            Text(title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+            Text(title).riffetFont(.body).foregroundStyle(tint ?? palette.fg).lineLimit(1)
             Spacer(minLength: 8)
             if let value { Text(value).riffetFont(.body).foregroundStyle(palette.fg3).lineLimit(1) }
         }

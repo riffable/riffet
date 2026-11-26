@@ -78,7 +78,8 @@ fun visibleGroups(
     val projectMap = sidebarProjectMap(projects, showArchived)
     val byProject = sessions
         .filter { showArchived || it.archivedAt == null }
-        .filter { it.projectId in projectMap }
+        // A team member's conversations are in the 团队 tab (docs/TEAM.md), as on the web.
+        .filter { it.projectId in projectMap && it.agentMemberId == null }
         .groupBy { projectMap.getValue(it.projectId).id }
     val groups = projectMap.values.distinctBy { it.id }
         .mapNotNull { project ->
@@ -155,6 +156,7 @@ fun timeBuckets(
     val matches = sessions
         .filter { session ->
             val project = visible[session.projectId] ?: return@filter false
+            if (session.agentMemberId != null) return@filter false
             if (!showArchived && session.archivedAt != null) return@filter false
             needle.isEmpty() ||
                 "${session.shownTitle} ${session.tags.joinToString(" ")} ${project.name}".lowercase().contains(needle)

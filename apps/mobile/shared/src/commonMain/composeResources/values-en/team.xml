@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="team_tab">Team</string>
+    <string name="team_new_member">New member</string>
+    <string name="team_waiting">Needs you</string>
+    <string name="team_pin">Pin</string>
+    <string name="team_unpin">Unpin</string>
+    <string name="team_archive">Archive</string>
+    <string name="team_delete">Delete</string>
+    <string name="team_delete_title">Delete “%1$s”?</string>
+    <string name="team_delete_message">Past conversations are kept; the member will be removed from the team list.</string>
+    <string name="team_sessions">Conversations</string>
+    <string name="team_sessions_count">%1$d running · %2$d total</string>
+    <string name="team_sessions_total">%1$d total</string>
+    <string name="team_session_current">Current</string>
+    <string name="team_sessions_all">All %1$d</string>
+    <string name="team_called_by">Called by %1$s</string>
+    <string name="team_initiator_you">You</string>
+    <string name="team_initiator_auto">Automatic</string>
+    <string name="team_fact_agent">Agent</string>
+    <string name="team_fact_scope">Scope</string>
+    <string name="team_scope_global">Global</string>
+    <string name="team_scope_personal">Personal</string>
+    <string name="team_scope_project">Project</string>
+    <string name="team_session_mode">Conversations</string>
+    <string name="team_mode_continuous">One continuous</string>
+    <string name="team_mode_fresh">New each time</string>
+    <string name="team_name">Name</string>
+    <string name="team_role">Role</string>
+    <string name="team_role_footer">Written into its AGENTS.md</string>
+    <string name="team_avatar">Avatar</string>
+    <string name="team_project">Project</string>
+    <string name="team_agent_model">Agent and model</string>
+    <string name="team_create">Create</string>
+    <string name="team_footer_web">Capabilities and the daily run limit are changed on the web</string>
+    <string name="team_mention_members">Members</string>
+    <string name="team_mention_agents">Agents</string>
+</resources>

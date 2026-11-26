@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 手机团队（原型）</title>
+<style>
+/*
+ * Prototype for the phone's 团队 tab (docs/TEAM.md §5, §8.4). iPhone, Riffet theme: role colours from
+ * packages/contracts/src/theme-builtins.generated.ts, type and metrics from iosApp/Riffet/Design/RiffetDesign.swift
+ * (body/headline 16, barTitle 17, label 15, caption 13; page inset 16, hit target 44, avatar 44, composer radius 24).
+ * Icons are lucide paths; agent marks are scripts/agent-marks/*.svg.
+ */
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --bg-sidebar: #f7f8fa; --bg-subtle: #f5f6f8; --bg-muted: #eef0f3; --bg-elevated: #ffffff; --bg-popover: #ffffff;
+  --bg-hover: #232d460e; --bg-active: #232d4617; --bg-bubble: #eef3fd;
+  --fg: #2a2c2e; --fg-2: #50555d; --fg-3: #60666e; --fg-4: #adb2ba;
+  --line: #0f172a14; --line-soft: #0f172a0e; --line-strong: #0f172a21;
+  --primary: #15171a; --primary-fg: #ffffff; --accent: #3867f0; --accent-soft: #3867f01a;
+  --success: #1f9d55; --warning: #c77f06; --warning-soft: #f59e0b21; --danger: #e0454b; --danger-soft: #e0454b14;
+  --agent-claude: #d97757; --agent-codex: #10a37f; --agent-cursor: #3d4451;
+  --scrim: rgb(0 0 0 / .22);
+  --shadow-float: 0 0 0 .5px rgb(24 24 26 / .08), 0 4px 14px -4px rgb(24 24 26 / .12);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, monospace;
+  --stage: #e9ebef;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #141416; --bg-sidebar: #1a1a1d; --bg-subtle: #1d1d20; --bg-muted: #27272b; --bg-elevated: #1f1f22; --bg-popover: #252528;
+  --bg-hover: #ffffff0f; --bg-active: #ffffff1a; --bg-bubble: #27282c;
+  --fg: #d2d4d7; --fg-2: #b6bac1; --fg-3: #9da2aa; --fg-4: #62666e;
+  --line: #ffffff13; --line-soft: #ffffff0d; --line-strong: #ffffff1f;
+  --primary: #eceef1; --primary-fg: #141416; --accent: #5b8cff; --accent-soft: #5b8cff26;
+  --success: #3fb96f; --warning: #e5a13a; --warning-soft: #e5a13a26; --danger: #f0676c; --danger-soft: #f0676c21;
+  --agent-claude: #e8916f; --agent-codex: #2fc79b; --agent-cursor: #c9ced6;
+  --scrim: rgb(0 0 0 / .5);
+  --shadow-float: 0 0 0 .5px rgb(255 255 255 / .08), 0 6px 18px -6px rgb(0 0 0 / .6);
+  --stage: #0b0b0c;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body { font-family: var(--font-sans); color: var(--fg); background: var(--stage); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+svg.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+/* ---------- stage ---------- */
+.top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; height: 52px; padding: 0 24px;
+  background: color-mix(in srgb, var(--stage) 86%, transparent); backdrop-filter: blur(12px); }
+.top h1 { font-size: 14px; font-weight: 600; }
+.top .sp { flex: 1; }
+.seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--bg-active); }
+.seg button { height: 26px; padding: 0 12px; border-radius: 7px; font-size: 13px; color: var(--fg-3); }
+.seg button[aria-pressed="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+.stage { display: flex; gap: 48px; padding: 32px 48px 56px; overflow-x: auto; align-items: flex-start; }
+.shot { display: flex; flex-direction: column; gap: 14px; flex: none; width: 375px; }
+.cap { font-size: 13px; line-height: 19px; color: var(--fg-2); }
+.cap b { display: block; font-size: 14px; font-weight: 600; color: var(--fg); margin-bottom: 2px; }
+.cap .n { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 6px; border-radius: 9px; background: var(--fg); color: var(--bg); font-size: 11px; font-weight: 600; vertical-align: 1px; }
+
+/* ---------- phone ---------- */
+.phone { position: relative; width: 375px; height: 790px; display: flex; flex-direction: column; overflow: hidden; border-radius: 50px; background: var(--bg);
+  box-shadow: 0 0 0 10px #0d0d0f, 0 0 0 11px #2c2c30, 0 30px 60px -24px rgb(0 0 0 / .45); }
+.phone.flash { animation: flash 900ms ease; }
+@keyframes flash { 0%, 100% { box-shadow: 0 0 0 10px #0d0d0f, 0 0 0 11px #2c2c30, 0 30px 60px -24px rgb(0 0 0 / .45); } 30% { box-shadow: 0 0 0 10px #0d0d0f, 0 0 0 14px var(--accent), 0 30px 60px -24px rgb(0 0 0 / .45); } }
+.st { height: 50px; flex: none; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 30px 6px 38px; font-size: 15px; font-weight: 600; }
+.st .sig { display: flex; gap: 5px; align-items: center; }
+.st .sig i { display: block; width: 3px; border-radius: 1px; background: currentColor; }
+.st .bat { width: 24px; height: 12px; border-radius: 4px; border: 1.2px solid currentColor; opacity: .9; position: relative; }
+.st .bat::after { content: ""; position: absolute; inset: 1.5px 5px 1.5px 1.5px; border-radius: 2px; background: currentColor; }
+.home { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: var(--fg); opacity: .85; z-index: 9; }
+
+/* nav bar: back · title · up to two actions */
+.nav { height: 44px; flex: none; display: flex; align-items: center; padding: 0 4px; position: relative; }
+.nav .t { position: absolute; left: 64px; right: 64px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 17px; line-height: 22px; font-weight: 600; pointer-events: none; }
+.nav .t .sub { font-size: 13px; font-weight: 400; color: var(--fg-3); }
+.nav .sp { flex: 1; }
+.ib { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 22px; color: var(--fg); }
+.ib svg.i { width: 22px; height: 22px; }
+.ib.dim { color: var(--fg-4); }
+.txtbtn { height: 44px; padding: 0 12px; font-size: 17px; color: var(--fg); }
+.txtbtn.strong { font-weight: 600; }
+.txtbtn[disabled] { color: var(--fg-4); cursor: default; }
+
+/* avatars: circle, emoji on bg-active, default member is the bot mark (web MemberAvatar) */
+.av { flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--bg-active); overflow: hidden; line-height: 1; color: var(--fg-2); }
+.av svg.i { stroke-width: 1.5; }
+
+/* ---------- 团队 list ---------- */
+.body { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+.body::-webkit-scrollbar { display: none; }
+.mrow { display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 0 16px; width: 100%; text-align: left; position: relative; }
+.mrow:active { background: var(--bg-hover); }
+.mrow + .mrow::before { content: ""; position: absolute; top: 0; left: 72px; right: 0; height: 1px; background: var(--line); }
+.mrow .b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mrow .l1, .mrow .l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mrow .name { font-size: 16px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrow.unread .name { font-weight: 500; }
+.mrow .scope { font-size: 13px; line-height: 18px; color: var(--fg-3); white-space: nowrap; flex: none; }
+.mrow .time { margin-left: auto; font-size: 13px; color: var(--fg-4); white-space: nowrap; flex: none; }
+.mrow .pre { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrow.unread .pre { color: var(--fg-2); }
+.mrow .slot { flex: none; width: 18px; height: 18px; display: grid; place-items: center; }
+.dot { width: 8px; height: 8px; border-radius: 4px; background: var(--fg); }
+.tag-wait { flex: none; height: 20px; padding: 0 6px; border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--warning); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 55%, transparent); }
+.spin { width: 14px; height: 14px; border-radius: 50%; border: 1.6px solid var(--line-strong); border-top-color: var(--fg-2); animation: spin 900ms linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+.pin { width: 12px; height: 12px; color: var(--fg-4); }
+
+/* floating tab bar (iOS 26: icons only, glass capsule) */
+.tabbar { position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; gap: 4px; padding: 4px; border-radius: 32px; z-index: 6;
+  background: color-mix(in srgb, var(--bg-elevated) 72%, transparent); backdrop-filter: blur(20px) saturate(1.6); -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow: inset 0 0 0 1px var(--line-strong), var(--shadow-float); }
+.tabbar span { width: 64px; height: 52px; display: grid; place-items: center; border-radius: 26px; color: var(--fg-3); }
+.tabbar span.on { color: var(--fg); background: var(--bg-active); }
+.tabbar svg.i { width: 24px; height: 24px; }
+.tabbar .badge { position: relative; }
+.tabbar .badge::after { content: "2"; position: absolute; top: 8px; right: 12px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--danger); color: #fff; font-size: 11px; line-height: 16px; font-weight: 600; text-align: center; }
+
+/* ---------- conversation ---------- */
+.conv { padding: 8px 16px 140px; }
+.turn + .turn { margin-top: 28px; }
+.umsg { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.bubble { max-width: 86%; font-size: 16px; line-height: 23px; border-radius: 20px; padding: 9px 14px; background: var(--bg-bubble); }
+.bubble.peer { background: var(--bg-muted); }
+.meta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); padding-right: 4px; }
+.mention { font-weight: 500; }
+.md { font-size: 16px; line-height: 26px; }
+.md p + p, .md p + ul, .md ul + p { margin-top: 10px; }
+.md ul { padding-left: 20px; }
+.md code { font-family: var(--font-mono); font-size: .86em; color: var(--fg-2); }
+.tool { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 15px; color: var(--fg-2); margin: 6px 0; }
+.tool .tt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tool svg.i { width: 16px; height: 16px; color: var(--fg-3); }
+.tool .chev { color: var(--fg-4); }
+.check { color: var(--success) !important; }
+
+/* composer island */
+.composer { position: absolute; left: 10px; right: 10px; bottom: 26px; border-radius: 24px; padding: 6px 6px 6px 6px; z-index: 6;
+  background: color-mix(in srgb, var(--bg-elevated) 74%, transparent); backdrop-filter: blur(20px) saturate(1.5); -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: inset 0 0 0 1px var(--line-strong), var(--shadow-float); }
+.composer .txt { min-height: 40px; padding: 9px 10px 3px; font-size: 16px; line-height: 23px; color: var(--fg-4); }
+.composer .txt.typed { color: var(--fg); }
+.composer .caret { display: inline-block; width: 2px; height: 20px; margin-left: 1px; vertical-align: -4px; background: var(--accent); animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.composer .row { display: flex; align-items: center; gap: 4px; }
+.composer .row .sp { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 34px; padding: 0 10px; border-radius: 17px; font-size: 15px; color: var(--fg-2); }
+.chip svg.i { width: 14px; height: 14px; color: var(--fg-3); }
+.round { width: 36px; height: 36px; border-radius: 18px; display: grid; place-items: center; color: var(--fg-2); }
+.send { width: 36px; height: 36px; border-radius: 18px; display: grid; place-items: center; background: var(--primary); color: var(--primary-fg); }
+.send.off { background: var(--bg-active); color: var(--fg-4); }
+.send svg.i { width: 18px; height: 18px; stroke-width: 2; }
+.mark { width: 14px; height: 14px; flex: none; }
+
+/* ---------- fresh member page ---------- */
+.prof { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 32px 20px; text-align: center; }
+.prof .nm { font-size: 20px; line-height: 26px; font-weight: 600; }
+.prof .ds { font-size: 14px; line-height: 20px; color: var(--fg-3); }
+.sec { padding: 16px 16px 6px; font-size: 13px; line-height: 18px; color: var(--fg-3); }
+.srow { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 16px; position: relative; }
+.srow + .srow::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+.srow .b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.srow .tt { font-size: 16px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .x { display: flex; align-items: center; gap: 6px; font-size: 13px; line-height: 18px; color: var(--fg-3); white-space: nowrap; overflow: hidden; }
+.srow .end { flex: none; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-4); }
+
+/* ---------- pane (bottom sheet) ---------- */
+.dim { position: absolute; inset: 0; background: var(--scrim); z-index: 7; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; top: 64px; z-index: 8; background: var(--bg-sidebar); border-radius: 24px 24px 0 0; display: flex; flex-direction: column; overflow: hidden; }
+.grab { width: 36px; height: 5px; border-radius: 3px; background: var(--fg-4); opacity: .6; margin: 6px auto 0; flex: none; }
+.ph { display: flex; align-items: flex-start; gap: 12px; padding: 10px 8px 12px 16px; flex: none; }
+.ph .b { flex: 1; min-width: 0; padding-top: 2px; }
+.ph .nm { font-size: 17px; line-height: 22px; font-weight: 600; }
+.ph .ds { font-size: 13px; line-height: 18px; color: var(--fg-3); margin-top: 2px; }
+.pbody { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 40px; display: flex; flex-direction: column; gap: 16px; }
+.pbody::-webkit-scrollbar { display: none; }
+.card { background: var(--bg-elevated); border-radius: 16px; overflow: hidden; }
+.abar { display: grid; grid-template-columns: repeat(4, 1fr); padding: 6px; }
+.abar span { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 0 8px; border-radius: 12px; font-size: 13px; color: var(--fg-2); }
+.abar svg.i { width: 22px; height: 22px; color: var(--fg); }
+.ptitle { display: flex; align-items: baseline; justify-content: space-between; padding: 0 4px 6px; font-size: 13px; color: var(--fg-3); }
+.prow { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 16px; position: relative; font-size: 16px; }
+.prow + .prow::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+.prow .b { flex: 1; min-width: 0; }
+.prow .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 22px; }
+.prow .x { font-size: 13px; line-height: 18px; color: var(--fg-3); display: flex; align-items: center; gap: 5px; }
+.prow .v { color: var(--fg-3); font-size: 16px; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.prow .chev { width: 14px; height: 14px; color: var(--fg-4); }
+.prow .stop { font-size: 15px; color: var(--danger); }
+.prow.more { color: var(--fg-2); }
+.cur { font-size: 12px; color: var(--fg-3); padding: 1px 6px; border-radius: 6px; background: var(--bg-active); }
+
+/* ---------- @ menu ---------- */
+.menu { position: absolute; left: 10px; right: 10px; bottom: 404px; z-index: 6; border-radius: 16px; background: var(--bg-popover); box-shadow: var(--shadow-float), 0 0 0 1px var(--line); padding: 6px; }
+.menu .h { padding: 6px 10px 2px; font-size: 13px; color: var(--fg-3); }
+.menu .it { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: 10px; font-size: 16px; }
+.menu .it.on { background: var(--bg-active); }
+.menu .it .x { margin-left: auto; font-size: 13px; color: var(--fg-3); }
+.menu .sep { height: 1px; background: var(--line); margin: 4px 10px; }
+.kbd { position: absolute; left: 0; right: 0; bottom: 0; height: 290px; z-index: 5; background: color-mix(in srgb, var(--bg-muted) 92%, var(--fg) 4%); padding: 10px 4px 0; display: flex; flex-direction: column; gap: 11px; }
+.kbd .kr { display: flex; justify-content: center; gap: 6px; }
+.kbd i { display: block; width: 31px; height: 42px; border-radius: 6px; background: var(--bg-elevated); box-shadow: 0 1px 0 rgb(0 0 0 / .18); }
+.kbd i.w { width: 180px; }
+.kbd i.m { width: 46px; background: var(--bg-active); }
+.phone.typing .composer { bottom: 298px; }
+
+/* ---------- edit page (新建成员) ---------- */
+.grouped { background: var(--bg-sidebar); }
+.form { padding: 0 16px 40px; display: flex; flex-direction: column; gap: 22px; }
+.avpick { display: flex; justify-content: center; padding: 12px 0 0; position: relative; }
+.avpick .edit { position: absolute; left: calc(50% + 22px); bottom: -2px; width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; background: var(--bg-elevated); box-shadow: 0 0 0 1px var(--line-strong); color: var(--fg-2); }
+.avpick .edit svg.i { width: 15px; height: 15px; }
+.field { display: flex; align-items: center; min-height: 52px; padding: 0 16px; font-size: 16px; position: relative; gap: 12px; }
+.field + .field::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+.field .lab { flex: none; width: 72px; }
+.field .in { flex: 1; color: var(--fg); }
+.field .in.ph { color: var(--fg-4); }
+.field .val { margin-left: auto; color: var(--fg-3); display: flex; align-items: center; gap: 6px; }
+.field .chev { width: 14px; height: 14px; color: var(--fg-4); }
+.area { min-height: 132px; padding: 14px 16px; font-size: 16px; line-height: 23px; color: var(--fg); }
+.foot { padding: 6px 16px 0; font-size: 13px; line-height: 18px; color: var(--fg-3); }
+.gtitle { padding: 0 16px 6px; font-size: 13px; color: var(--fg-3); }
+
+/* small helper */
+.row { display: flex; align-items: center; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>手机 · 团队</h1>
+  <span class="sp"></span>
+  <div class="seg" role="group" aria-label="外观">
+    <button aria-pressed="true" data-mode="light">浅色</button>
+    <button aria-pressed="false" data-mode="dark">深色</button>
+  </div>
+</div>
+
+<div class="stage" id="stage"></div>
+
+<script>
+/* ---------- icons ---------- */
+const P = {
+  back: '<path d="m15 18-6-6 6-6"/>',
+  plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+  chevR: '<path d="m9 18 6-6-6-6"/>',
+  chevD: '<path d="m6 9 6 6 6-6"/>',
+  up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+  x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  bubblePlus: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6"/><path d="M9 10h6"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  checklist: '<path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+  gear: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  panel: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
+  bot: '<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
+  brain: '<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/>',
+  doc: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>',
+  puzzle: '<path d="M19.439 7.85c-.049.322.059.648.289.878l1.568 1.568c.47.47.706 1.087.706 1.704s-.235 1.233-.706 1.704l-1.611 1.611a.98.98 0 0 1-.837.276c-.47-.07-.802-.48-.968-.925a2.501 2.501 0 1 0-3.214 3.214c.446.166.855.497.925.968a.979.979 0 0 1-.276.837l-1.61 1.61a2.404 2.404 0 0 1-1.705.707 2.402 2.402 0 0 1-1.704-.706l-1.568-1.568a1.026 1.026 0 0 0-.877-.29c-.493.074-.84.504-1.02.968a2.5 2.5 0 1 1-3.237-3.237c.464-.18.894-.527.967-1.02a1.026 1.026 0 0 0-.289-.877l-1.568-1.568A2.402 2.402 0 0 1 1.998 12c0-.617.236-1.234.706-1.704L4.23 8.77c.24-.24.581-.353.917-.303.515.077.877.528 1.073 1.01a2.5 2.5 0 1 0 3.259-3.259c-.482-.196-.933-.558-1.01-1.073-.05-.336.062-.676.303-.917l1.525-1.525A2.402 2.402 0 0 1 12 1.998c.617 0 1.234.236 1.704.706l1.568 1.568c.23.23.556.338.877.29.493-.074.84-.504 1.02-.968a2.5 2.5 0 1 1 3.237 3.237c-.464.18-.894.527-.967 1.02Z"/>',
+  folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
+  archive: '<rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>',
+  pen: '<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>',
+  call: '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  terminal: '<path d="m4 17 6-6-6-6"/><path d="M12 19h8"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  hand: '<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+};
+const I = (k, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[k]}</svg>`;
+
+/* agent marks: scripts/agent-marks/*.svg, coloured with the theme's agent roles */
+const MARK = {
+  claude: '<svg class="mark" viewBox="0 0 100 100" style="fill:var(--agent-claude)"><path d="m19.6 66.5 19.7-11 .3-1-.3-.5h-1l-3.3-.2-11.2-.3L14 53l-9.5-.5-2.4-.5L0 49l.2-1.5 2-1.3 2.9.2 6.3.5 9.5.6 6.9.4L38 49.1h1.6l.2-.7-.5-.4-.4-.4L29 41l-10.6-7-5.6-4.1-3-2-1.5-2-.6-4.2 2.7-3 3.7.3.9.2 3.7 2.9 8 6.1L37 36l1.5 1.2.6-.4.1-.3-.7-1.1L33 25l-6-10.4-2.7-4.3-.7-2.6c-.3-1-.4-2-.4-3l3-4.2L28 0l4.2.6L33.8 2l2.6 6 4.1 9.3L47 29.9l2 3.8 1 3.4.3 1h.7v-.5l.5-7.2 1-8.7 1-11.2.3-3.2 1.6-3.8 3-2L61 2.6l2 2.9-.3 1.8-1.1 7.7L59 27.1l-1.5 8.2h.9l1-1.1 4.1-5.4 6.9-8.6 3-3.5L77 13l2.3-1.8h4.3l3.1 4.7-1.4 4.9-4.4 5.6-3.7 4.7-5.3 7.1-3.2 5.7.3.4h.7l12-2.6 6.4-1.1 7.6-1.3 3.5 1.6.4 1.6-1.4 3.4-8.2 2-9.6 2-14.3 3.3-.2.1.2.3 6.4.6 2.8.2h6.8l12.6 1 3.3 2 1.9 2.7-.3 2-5.1 2.6-6.8-1.6-16-3.8-5.4-1.3h-.8v.4l4.6 4.5 8.3 7.5L89 80.1l.5 2.4-1.3 2-1.4-.2-9.2-7-3.6-3-8-6.8h-.5v.7l1.8 2.7 9.8 14.7.5 4.5-.7 1.4-2.6 1-2.7-.6-5.8-8-6-9-4.7-8.2-.5.4-2.9 30.2-1.3 1.5-3 1.2-2.5-2-1.4-3 1.4-6.2 1.6-8 1.3-6.4 1.2-7.9.7-2.6v-.2H49L43 72l-9 12.3-7.2 7.6-1.7.7-3-1.5.3-2.8L24 86l10-12.8 6-7.9 4-4.6-.1-.5h-.3L17.2 77.4l-4.7.6-2-2 .2-3 1-1 8-5.5Z"/></svg>',
+  codex: '<svg class="mark" viewBox="0 0 24 24" style="fill:var(--agent-codex)"><path d="M16.0005 13.5992C16.4972 13.5995 16.9007 14.0029 16.9009 14.4996C16.9009 14.9965 16.4974 15.3997 16.0005 15.4H13.0005C12.5035 15.4 12.1002 14.9967 12.1002 14.4996C12.1004 14.0027 12.5036 13.5992 13.0005 13.5992H16.0005Z"/><path d="M8.03765 8.72811C8.46377 8.47284 9.01638 8.61074 9.27203 9.03671L10.6177 11.2789C10.8836 11.7221 10.8834 12.277 10.6177 12.7203L9.27203 14.9625C9.01633 15.3887 8.46385 15.5267 8.03765 15.2711C7.61143 15.0153 7.47333 14.4629 7.72906 14.0367L8.95074 11.9996L7.72906 9.96249C7.47341 9.53628 7.61146 8.98382 8.03765 8.72811Z"/><path fill-rule="evenodd" d="M9.3316 2.03768C11.1644 1.54688 13.0268 2.04668 14.356 3.20174C16.0859 2.86512 17.9511 3.36418 19.2935 4.70663C20.6356 6.04882 21.1326 7.91288 20.7964 9.64217C21.9527 10.9716 22.4534 12.8349 21.9625 14.6685C21.4711 16.5025 20.1051 17.8657 18.439 18.439C17.8658 20.1047 16.503 21.47 14.6695 21.9615C12.8356 22.4528 10.9727 21.9519 9.64312 20.7955C7.91371 21.1319 6.04993 20.635 4.70757 19.2926C3.36558 17.9505 2.86659 16.0866 3.20269 14.357C2.04693 13.0273 1.54757 11.1638 2.03863 9.33065C2.52997 7.49759 3.89436 6.13282 5.56011 5.55917C6.13382 3.8935 7.49837 2.52891 9.3316 2.03768ZM13.2623 4.63534C12.3606 3.80149 11.067 3.4361 9.79742 3.77596C8.52745 4.11626 7.58924 5.0796 7.22515 6.25253C7.08145 6.71575 6.71753 7.07928 6.25445 7.22323C5.08133 7.58702 4.11844 8.52622 3.77789 9.79647C3.43759 11.0667 3.80148 12.3606 4.63531 13.2623C4.96467 13.6184 5.09776 14.1154 4.99078 14.5885C4.71939 15.7864 5.05109 17.0891 5.98101 18.0191C6.91085 18.949 8.21345 19.2801 9.41168 19.0084L9.58941 18.9791C9.94695 18.9432 10.3065 19.0397 10.5982 19.2496L10.7378 19.3639L10.9117 19.5142C11.8015 20.2407 13.0127 20.5413 14.2037 20.2223C15.4733 19.8818 16.4111 18.9191 16.775 17.7457C16.9189 17.2824 17.2832 16.9186 17.7466 16.775L17.9634 16.6998C19.0376 16.2923 19.9051 15.3936 20.2242 14.2027C20.5641 12.9328 20.1989 11.6385 19.3648 10.7369C19.0353 10.3806 18.9021 9.88399 19.0093 9.41073L19.0533 9.18514C19.2372 8.0514 18.8917 6.85176 18.0201 5.98006C17.0901 5.05003 15.7865 4.71826 14.5884 4.98983C14.1153 5.09712 13.6186 4.96467 13.2623 4.63534Z"/></svg>',
+  cursor: '<svg class="mark" viewBox="0 0 680 720" style="fill:var(--agent-cursor)"><g transform="translate(106.635, 93.955)"><path d="M457.43,125.94L244.42,2.96c-6.84-3.95-15.28-3.95-22.12,0L9.3,125.94c-5.75,3.32-9.3,9.46-9.3,16.11v247.99c0,6.65,3.55,12.79,9.3,16.11l213.01,122.98c6.84,3.95,15.28,3.95,22.12,0l213.01-122.98c5.75-3.32,9.3-9.46,9.3-16.11v-247.99c0-6.65-3.55-12.79-9.3-16.11h-.01ZM444.05,151.99l-205.63,356.16c-1.39,2.4-5.06,1.42-5.06-1.36v-233.21c0-4.66-2.49-8.97-6.53-11.31L24.87,145.67c-2.4-1.39-1.42-5.06,1.36-5.06h411.26c5.84,0,9.49,6.33,6.57,11.39h-.01Z"/></g></svg>',
+};
+
+/* ---------- data ---------- */
+const M = {
+  default: { name: '个人助理', emoji: null, mode: 'continuous', scope: null, desc: '跨项目统筹、日程提醒', agent: 'claude', model: 'Opus 5.5' },
+  invest: { name: '投资理财', emoji: '📈', mode: 'continuous', scope: null, desc: '持仓复盘与风控纪律，盯财报和异动', agent: 'claude', model: 'Opus 5.5' },
+  qa: { name: 'Riffet QA', emoji: '🧪', mode: 'fresh', scope: 'riffet', desc: '每次合入 main 后核对回归，有实锤才建单', agent: 'codex', model: 'gpt-5.5' },
+  scm: { name: 'SCM 打包', emoji: '📦', mode: 'fresh', scope: 'arch_agent', desc: '跨环境构建、上传与回读验收', agent: 'claude', model: 'Sonnet 5.5' },
+  read: { name: '读书笔记', emoji: '📚', mode: 'continuous', scope: null, desc: '', agent: 'cursor', model: 'Auto' },
+};
+const av = (id, size) => {
+  const m = M[id];
+  if (!m.emoji) return `<span class="av" style="width:${size}px;height:${size}px"><svg class="i" viewBox="0 0 24 24" style="width:${Math.round(size * .5)}px;height:${Math.round(size * .5)}px">${P.bot}</svg></span>`;
+  return `<span class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .56)}px">${m.emoji}</span>`;
+};
+const ownerAv = (size) => `<span class="av" style="width:${size}px;height:${size}px;font-size:${Math.round(size * .5)}px;background:var(--fg-2);color:var(--bg);font-weight:600">F</span>`;
+
+/* ---------- chrome ---------- */
+const status = () => `<div class="st"><span>9:41</span><span class="row" style="gap:6px"><span class="sig"><i style="height:4px"></i><i style="height:6px"></i><i style="height:8px"></i><i style="height:10px"></i></span><span class="bat"></span></span></div>`;
+const tabbar = (on) => `<div class="tabbar">${[['new', 'bubblePlus'], ['team', 'users'], ['tasks', 'checklist'], ['settings', 'gear']].map(([k, ic]) => `<span class="${k === on ? 'on' : ''} ${k === 'tasks' ? 'badge' : ''}">${I(ic)}</span>`).join('')}</div>`;
+const composer = (ph, { typed, agent = 'claude', model = 'Opus 5.5' } = {}) => `
+  <div class="composer">
+    <div class="txt ${typed ? 'typed' : ''}">${typed ? typed + '<span class="caret"></span>' : ph}</div>
+    <div class="row">
+      <span class="round">${I('plus')}</span>
+      <span class="chip">${I('hand')}默认<svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px">${P.chevD}</svg></span>
+      <span class="sp"></span>
+      <span class="chip">${MARK[agent]}${model}<svg class="i" viewBox="0 0 24 24" style="width:12px;height:12px">${P.chevD}</svg></span>
+      <span class="send ${typed ? '' : 'off'}">${I('up')}</span>
+    </div>
+  </div>`;
+const memberTitle = (id) => `<span class="t">${av(id, 24)}<span>${M[id].name}</span>${M[id].scope ? `<span class="sub">${M[id].scope}</span>` : ''}</span>`;
+
+/* ---------- 1 · 团队 ---------- */
+function teamList(rows) {
+  return `<div class="phone" data-screen="team">${status()}
+    <div class="nav"><span class="t">团队</span><span class="sp"></span><button class="ib" data-go="create" aria-label="新建成员">${I('plus')}</button></div>
+    <div class="body" style="padding-bottom:110px">${rows.map(r => {
+      const m = M[r.id];
+      const slot = r.state === 'running' ? '<span class="spin"></span>' : r.state === 'unread' ? '<span class="dot"></span>' : '';
+      return `<button class="mrow ${r.state === 'unread' ? 'unread' : ''}" data-go="${r.go || ''}">
+        ${av(r.id, 44)}
+        <span class="b">
+          <span class="l1"><span class="name">${m.name}</span>${m.scope ? `<span class="scope">${m.scope}</span>` : ''}${r.pinned ? `<svg class="i pin" viewBox="0 0 24 24">${P.pin}</svg>` : ''}<span class="time">${r.time}</span></span>
+          <span class="l2"><span class="pre">${r.pre}</span>${r.state === 'waiting' ? '<span class="tag-wait">待确认</span>' : slot ? `<span class="slot">${slot}</span>` : ''}</span>
+        </span>
+      </button>`;
+    }).join('')}</div>
+    ${tabbar('team')}<div class="home"></div></div>`;
+}
+
+/* ---------- 2 · 个人助理 (continuous) ---------- */
+function continuousConv({ typing } = {}) {
+  return `<div class="phone ${typing ? 'typing' : ''}" data-screen="${typing ? 'mention' : 'chat'}">${status()}
+    <div class="nav"><button class="ib" aria-label="返回">${I('back')}</button>${memberTitle('default')}<span class="sp"></span><button class="ib" data-go="pane" aria-label="会话详情">${I('panel')}</button></div>
+    <div class="body conv">
+      <div class="turn">
+        <div class="umsg"><div class="bubble"><span class="mention">@Riffet QA</span> 看下昨晚合进 main 的 #812 有没有回归</div></div>
+      </div>
+      <div class="turn md">
+        <div class="tool">${av('qa', 18)}<span class="tt">调用 Riffet QA · 核对 #812 的回归</span>${I('check', 'check')}</div>
+        <p>已交给 Riffet QA 核对，结果回来后我整理给你。</p>
+      </div>
+      <div class="turn">
+        <div class="umsg">
+          <div class="bubble peer"><p>#812 核对完成：<code>pnpm verify</code> 全绿，iPhone 与 Android 的折叠规则一致。</p><p style="margin-top:6px">发现一处旧断言过时，已在看板建单 #815。</p></div>
+          <div class="meta">${av('qa', 16)}Riffet QA · 10:38</div>
+        </div>
+      </div>
+      <div class="turn md">
+        <p>没有回归。只有一件要你知道：</p>
+        <ul><li><code>fold.test.ts</code> 的断言还按旧规则写，QA 建了 #815，不影响发版。</li></ul>
+        <p>明早 9 点再提醒你看 #815 的进展。</p>
+      </div>
+    </div>
+    ${typing ? `
+      <div class="menu">
+        <div class="h">成员</div>
+        <div class="it on">${av('qa', 26)}Riffet QA<span class="x">riffet</span></div>
+        <div class="it">${av('scm', 26)}SCM 打包<span class="x">arch_agent</span></div>
+        <div class="it">${av('invest', 26)}投资理财</div>
+        <div class="sep"></div>
+        <div class="h">Agent</div>
+        <div class="it"><span class="av" style="width:26px;height:26px;background:none">${MARK.claude}</span>Claude Code</div>
+        <div class="it"><span class="av" style="width:26px;height:26px;background:none">${MARK.codex}</span>Codex</div>
+      </div>
+      ${composer('', { typed: '<span class="mention">@</span>' })}
+      <div class="kbd">
+        <div class="kr">${'<i></i>'.repeat(10)}</div>
+        <div class="kr">${'<i></i>'.repeat(9)}</div>
+        <div class="kr"><i class="m"></i>${'<i></i>'.repeat(7)}<i class="m"></i></div>
+        <div class="kr"><i class="m"></i><i class="m"></i><i class="w"></i><i class="m" style="width:88px"></i></div>
+      </div>` : composer('给 个人助理 发送消息')}
+    <div class="home"></div></div>`;
+}
+
+/* ---------- 3 · Riffet QA (fresh) ---------- */
+function freshHome() {
+  const runs = [
+    { sec: '今天' },
+    { t: '核对 a3f9e21：主分支增量回归', x: `${av('qa', 14)}自动 · 2 分钟`, end: '<span class="spin"></span>' },
+    { t: '核对 #812 的回归', x: `${av('default', 14)}个人助理 调用 · 10:31`, end: '10:38' },
+    { t: 'Android 折叠规则跨端核对', x: `${ownerAv(14)}你 · 09:12`, end: '<span class="tag-wait">待确认</span>' },
+    { sec: '昨天' },
+    { t: '核对 v0.7.1 发版候选', x: `${ownerAv(14)}你 · 21:40`, end: '21:58' },
+    { t: '浏览器 E2E：会话页长列表', x: `${av('scm', 14)}SCM 打包 调用 · 15:03`, end: '15:20' },
+  ];
+  return `<div class="phone" data-screen="fresh">${status()}
+    <div class="nav"><button class="ib" aria-label="返回">${I('back')}</button>${memberTitle('qa')}<span class="sp"></span><button class="ib" aria-label="成员详情">${I('panel')}</button></div>
+    <div class="body" style="padding-bottom:140px">
+      <div class="prof">${av('qa', 64)}<span class="ds">${M.qa.desc}</span></div>
+      ${runs.map(r => r.sec ? `<div class="sec">${r.sec}</div>` : `
+        <div class="srow"><span class="b"><span class="tt">${r.t}</span><span class="x">${r.x}</span></span><span class="end">${r.end}</span></div>`).join('')}
+    </div>
+    ${composer('给 Riffet QA 发送消息', { agent: 'codex', model: 'gpt-5.5' })}
+    <div class="home"></div></div>`;
+}
+
+/* ---------- 4 · 会话详情面板（成员） ---------- */
+function pane() {
+  return `<div class="phone" data-screen="pane">${status()}
+    <div class="nav"><button class="ib">${I('back')}</button>${memberTitle('default')}<span class="sp"></span><button class="ib">${I('panel')}</button></div>
+    <div class="body conv"><div class="turn md"><p>没有回归。只有一件要你知道：</p></div></div>
+    <div class="dim"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="ph">${av('default', 44)}<span class="b"><div class="nm">个人助理</div><div class="ds">${M.default.desc}</div></span><button class="ib" aria-label="关闭">${I('x')}</button></div>
+      <div class="pbody">
+        <div class="card abar">
+          <span>${I('brain')}记忆</span><span>${I('doc')}规则</span><span>${I('puzzle')}能力</span><span>${I('folder')}文件</span>
+        </div>
+        <div>
+          <div class="ptitle"><span>会话</span><span>1 个运行中 · 共 7</span></div>
+          <div class="card">
+            <div class="prow">${ownerAv(22)}<span class="b"><div class="tt">主对话</div></span><span class="cur">当前</span></div>
+            <div class="prow">${av('invest', 22)}<span class="b"><div class="tt">下周有哪些会和财报日撞了</div><div class="x">投资理财 调用 · 3 分钟</div></span><span class="spin"></span></div>
+            <div class="prow">${av('scm', 22)}<span class="b"><div class="tt">确认 v2.14 发版窗口</div><div class="x">SCM 打包 调用 · 昨天</div></span></div>
+            <div class="prow more"><span class="b">全部 7 个</span><svg class="i chev" viewBox="0 0 24 24">${P.chevR}</svg></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="prow"><span class="b">Agent</span><span class="v">${MARK.claude}Claude Code · Opus 5.5</span></div>
+          <div class="prow"><span class="b">范围</span><span class="v">全局</span></div>
+          <div class="prow"><span class="b">委托</span><span class="v">3<svg class="i chev" viewBox="0 0 24 24">${P.chevR}</svg></span></div>
+        </div>
+        <div class="card abar" style="grid-template-columns:repeat(3,1fr)">
+          <span>${I('pen')}新话题</span><span>${I('pin')}置顶</span><span>${I('terminal')}终端</span>
+        </div>
+      </div>
+    </div>
+    <div class="home"></div></div>`;
+}
+
+/* ---------- 5 · 新建成员 ---------- */
+function create() {
+  return `<div class="phone grouped" data-screen="create">${status()}
+    <div class="nav"><button class="txtbtn">取消</button><span class="t">新建成员</span><span class="sp"></span><button class="txtbtn strong">创建</button></div>
+    <div class="body">
+      <div class="form">
+        <div class="avpick">${av('scm', 80)}<span class="edit">${I('camera')}</span></div>
+        <div class="card"><div class="field"><span class="in">SCM 打包</span></div></div>
+        <div>
+          <div class="gtitle">职责</div>
+          <div class="card"><div class="area">负责 arch_agent 的跨环境打包：构建、上传制品、回读验收。遇到过时的测试断言顺手在看板建单，发布前的确认交给我。</div></div>
+          <div class="foot">写进它的 AGENTS.md</div>
+        </div>
+        <div class="card">
+          <div class="field"><span class="b">范围</span><span class="val">项目<svg class="i chev" viewBox="0 0 24 24">${P.chevD}</svg></span></div>
+          <div class="field"><span class="b">项目</span><span class="val">arch_agent<svg class="i chev" viewBox="0 0 24 24">${P.chevR}</svg></span></div>
+          <div class="field"><span class="b">会话</span><span class="val">每次新建<svg class="i chev" viewBox="0 0 24 24">${P.chevD}</svg></span></div>
+          <div class="field"><span class="b">Agent</span><span class="val">${MARK.claude}Claude Code · Sonnet 5.5<svg class="i chev" viewBox="0 0 24 24">${P.chevR}</svg></span></div>
+        </div>
+        <div class="foot" style="margin-top:-14px">能力和每日运行上限在 Web 上改</div>
+      </div>
+    </div>
+    <div class="home"></div></div>`;
+}
+
+/* ---------- 6 · 只有默认成员 ---------- */
+const single = () => teamList([{ id: 'default', time: '10:42', pre: '明早 9 点提醒你看 #815 的进展', go: 'chat' }]);
+
+/* ---------- stage ---------- */
+const SHOTS = [
+  ['team', '团队', '标签根页是成员列表，像聊天软件的会话列表。顺序与 Web 侧栏一致（置顶 → 默认成员 → 创建时间），不随活动重排。行尾一个标记：运行中转圈、待确认、未读圆点。', teamList([
+    { id: 'default', time: '10:42', pre: '明早 9 点提醒你看 #815 的进展', state: 'unread', go: 'chat' },
+    { id: 'invest', time: '10:05', pre: '财报前把仓位降到三成？', state: 'waiting', pinned: false },
+    { id: 'qa', time: '2 分钟', pre: '核对 a3f9e21：主分支增量回归', state: 'running', go: 'fresh' },
+    { id: 'scm', time: '周一', pre: 'v2.14.0 构建与上传完成' },
+    { id: 'read', time: '11月20日', pre: '《系统之美》第 4 章的笔记已整理' },
+  ])],
+  ['chat', '连续对话的成员', '点进去直接是主对话（沿用现在的个人助理页）。页头是头像和名字，右侧打开详情面板。别的成员回来的结果按来信显示：灰底气泡，下方是发送者头像和名字。', continuousConv()],
+  ['fresh', '每次新建的成员', '页面是它的历次会话，按日期分组；底部输入框每发一条开一条新会话。副标题写是谁发起的：你、自动、或哪个成员调用。', freshHome()],
+  ['pane', '会话详情面板', '成员的东西都在这里：记忆、规则、能力、文件；它的其他会话（含别的成员调用它的）；Agent、范围、委托；低频操作。不放配置表单。', pane()],
+  ['mention', '@ 成员', '输入框的 @ 菜单里成员排在 Agent 前面，绑定项目的标出项目名。发出去是一次调用，结果回到当前对话。', continuousConv({ typing: true })],
+  ['create', '新建成员', '只填五项：头像、名称、职责、范围（个人 / 项目 / 全局）、会话方式和 Agent。能力开关与每日上限按范围取默认值，要改去 Web。', create()],
+  ['single', '只有一个成员时', '仍然是列表，不直接跳进对话：加第二个成员时页面不换类型，「＋」始终在同一处。切走再回来，标签停在上次打开的对话里。', single()],
+];
+const only = new URLSearchParams(location.search).get('shot');
+document.getElementById('stage').innerHTML = SHOTS.map((s, i) => [...s, i]).filter(([id]) => !only || only.split(',').includes(id)).map(([id, title, cap, html, i]) =>
+  `<div class="shot" id="shot-${id}">${html}<div class="cap"><b><span class="n">${i + 1}</span>${title}</b>${cap}</div></div>`).join('');
+
+document.addEventListener('click', (e) => {
+  const go = e.target.closest('[data-go]')?.dataset.go;
+  if (!go) return;
+  const shot = document.getElementById('shot-' + go);
+  if (!shot) return;
+  shot.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  const phone = shot.querySelector('.phone');
+  phone.classList.remove('flash'); void phone.offsetWidth; phone.classList.add('flash');
+});
+document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+  document.documentElement.classList.toggle('dark', b.dataset.mode === 'dark');
+  document.querySelectorAll('[data-mode]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+if (location.hash === '#dark') document.querySelector('[data-mode="dark"]').click();
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
+import riffet.contracts.AgentMember
 import riffet.contracts.AppSettings
 import riffet.contracts.Project
 import riffet.contracts.Session
@@ -22,6 +23,8 @@ data class CachedList(
     val sessions: List<Session>,
     val settings: AppSettings? = null,
     val savedAt: Long,
+    /** Null from a server without team members, or a copy saved before they existed. */
+    val teamMembers: List<AgentMember>? = null,
 )
 
 /**
@@ -42,8 +45,8 @@ class ListCache(
         files.read(path)?.let { text -> runCatching { RiffetJson.instance.decodeFromString<CachedList>(text) }.getOrNull() }
     }
 
-    suspend fun saveList(projects: List<Project>, sessions: List<Session>, settings: AppSettings?) = locked {
-        files.write(path, RiffetJson.instance.encodeToString(CachedList(projects, sessions, settings, now())))
+    suspend fun saveList(projects: List<Project>, sessions: List<Session>, settings: AppSettings?, teamMembers: List<AgentMember>? = null) = locked {
+        files.write(path, RiffetJson.instance.encodeToString(CachedList(projects, sessions, settings, now(), teamMembers)))
     }
 
     suspend fun clear() = locked { files.delete(path) }

@@ -15,13 +15,14 @@ struct ComposerMenuToken: Equatable {
     var key: Key { Key(kind: kind, anchor: anchor) }
 
     static func detect(in text: String) -> ComposerMenuToken? {
-        guard let range = text.range(of: #"(?:^|\s)[/@][^\s]*$"#, options: .regularExpression) else { return nil }
+        // The full-width ＠ too: a Chinese keyboard types it in place of @.
+        guard let range = text.range(of: #"(?:^|\s)[/@＠][^\s]*$"#, options: .regularExpression) else { return nil }
         let token = text[range]
-        guard let sigil = token.firstIndex(where: { $0 == "/" || $0 == "@" }) else { return nil }
+        guard let sigil = token.firstIndex(where: { $0 == "/" || $0 == "@" || $0 == "＠" }) else { return nil }
         let kind: Kind = token[sigil] == "/" ? .slash : .mention
         let query = String(token[token.index(after: sigil)...])
         // A second `@` inside the word is not a mention; a path after a slash is part of the query.
-        if kind == .mention, query.contains("@") { return nil }
+        if kind == .mention, query.contains("@") || query.contains("＠") { return nil }
         return ComposerMenuToken(kind: kind, query: query, anchor: text.distance(from: text.startIndex, to: sigil))
     }
 
@@ -58,6 +59,8 @@ struct ComposerMenuDock: View {
     let allowsFiles: Bool
     let allowsSessions: Bool
     let picked: () -> Void
+    /// The members and Agents `@` can name; nil where the server has no team members.
+    var mentions: MentionOptions? = nil
     @State private var slash: [NativeSlashItem]?
     @State private var files: [FileEntry] = []
     @State private var loading = true
@@ -67,8 +70,12 @@ struct ComposerMenuDock: View {
 
     private enum Row: Identifiable {
         case command(NativeSlashItem), file(FileEntry), session(Session)
+        case header(String), member(AgentMember), agent(NativeBackendCatalogEntry)
         var id: String {
             switch self {
+            case let .header(title): "h:" + title
+            case let .member(member): "m:" + member.id
+            case let .agent(entry): "a:" + entry.backendId.name
             case let .command(item): "c:" + item.name
             case let .file(file): "f:" + file.path
             case let .session(session): "s:" + session.id
@@ -81,6 +88,13 @@ struct ComposerMenuDock: View {
             return rankSlashItems(items: slash ?? [], query: token.query, limit: 200).map(Row.command)
         case .mention:
             var result: [Row] = []
+            if let mentions {
+                let query = token.query.lowercased()
+                let members = mentions.members.filter { query.isEmpty || $0.name.lowercased().contains(query) }
+                let agents = mentions.agents.filter { query.isEmpty || $0.label.lowercased().contains(query) }
+                if !members.isEmpty { result.append(.header(String(localized: "成员", bundle: .riffet))); result += members.map(Row.member) }
+                if !agents.isEmpty { result.append(.header("Agent")); result += agents.map(Row.agent) }
+            }
             if allowsSessions {
                 result += rankedSessionReferences(sessions: workbench.list.sessions, projects: workbench.list.projects, query: token.query,
                                                   currentSessionId: source.sessionID, projectId: source.projectID).prefix(3).map(Row.session)
@@ -140,14 +154,31 @@ struct ComposerMenuDock: View {
     private func list(_ rows: [Row]) -> some View {
         VStack(spacing: 0) {
             ForEach(rows) { row in
+                if case let .header(title) = row {
+                    Text(title).riffetFont(.caption).foregroundStyle(palette.fg3).padding(.horizontal, RiffetMetrics.groupInset)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .bottomLeading)
+                } else {
                 Button { pick(row) } label: { label(row).padding(.horizontal, RiffetMetrics.groupInset).frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle()) }
                     .buttonStyle(RiffetDimPressStyle())
+                }
             }
         }
     }
 
     @ViewBuilder private func label(_ row: Row) -> some View {
         switch row {
+        case .header: EmptyView()
+        case let .member(member):
+            HStack(spacing: 10) {
+                MemberAvatarView(workbench: workbench, member: member, size: 26)
+                Text(member.name).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg).lineLimit(1)
+                if let project = workbench.boundProjectName(member) { Text(project).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1) }
+            }
+        case let .agent(entry):
+            HStack(spacing: 10) {
+                AgentMarkView(backend: entry.backendId.name.lowercased(), size: 18, color: agentMarkColor(entry.backendId.name.lowercased(), palette)).frame(width: 26, height: 26)
+                Text(entry.label).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg).lineLimit(1)
+            }
         case let .command(item):
             VStack(alignment: .leading, spacing: 2) {
                 Text("/" + item.name).riffetFont(.mono).foregroundStyle(palette.fg).lineLimit(1)
@@ -168,6 +199,13 @@ struct ComposerMenuDock: View {
     private func pick(_ row: Row) {
         let before = token.remaining(from: draft.text)
         switch row {
+        case .header: return
+        case let .member(member):
+            guard let mentions else { return }
+            insertMention(mentions.mention(member), before: before)
+        case let .agent(entry):
+            guard let mentions else { return }
+            insertMention(mentions.mention(entry), before: before)
         case let .command(item):
             if before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft.text = "/" + item.name + " " }
             else if item.isSkill { draft.text = before + "/" + item.name + " " }
@@ -184,6 +222,15 @@ struct ComposerMenuDock: View {
             draft.text = before.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : before
             if !draft.references.contains(where: { $0.sessionId == selected.id }) { draft.references.append(sessionReference(session: selected)) }
         }
+        picked()
+    }
+
+    /// `@name ` takes the token's place, and the mention is kept to be sent with the message.
+    private func insertMention(_ mention: AgentMention, before: String) {
+        guard let label = mention.label else { return }
+        draft.text = before + "@" + label + " "
+        draft.mentions.removeAll { $0.label == label }
+        draft.mentions.append(mention)
         picked()
     }
 }

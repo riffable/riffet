@@ -91,7 +91,3 @@ fun sessionListContent(
         }
     }
 }
-
-/** The 会话 tab's badge: conversations blocked on the reader, as on the iPhone. */
-fun waitingCount(sessions: List<Session>): Int =
-    sessions.count { it.state == SessionState.WAITING && it.archivedAt == null }

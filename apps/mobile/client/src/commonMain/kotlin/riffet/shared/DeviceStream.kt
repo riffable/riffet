@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.KSerializer
+import riffet.contracts.AgentMember
+import riffet.contracts.AgentMemberList
 import riffet.contracts.DeviceCall
 import riffet.contracts.DeviceCallCancel
 import riffet.contracts.DeviceLease
@@ -81,6 +83,8 @@ class DeviceStreamSource(
 sealed interface ListsStreamEvent {
     data class Changed(val data: String) : ListsStreamEvent
     data class Notice(val notice: RiffetNotice) : ListsStreamEvent
+    /** Every team member, sent whole on any change (created, edited, pinned, archived, a new main conversation). */
+    data class Team(val members: List<AgentMember>) : ListsStreamEvent
 }
 
 /** The lists stream plus its connection. Collecting [events] dials; [kick] cuts a backoff short. */
@@ -103,6 +107,7 @@ class ListsStreamSource(
             when (event.event) {
                 "notice" -> decode(RiffetNotice.serializer(), event.data)?.let(ListsStreamEvent::Notice)
                 "changed" -> ListsStreamEvent.Changed(event.data.orEmpty())
+                "team" -> decode(AgentMemberList.serializer(), event.data)?.let { ListsStreamEvent.Team(it.members) }
                 else -> null
             }
         }

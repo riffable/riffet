@@ -94,6 +94,8 @@ final class MessageDraft {
     var pendingCreationID: String? { didSet { save() } }
     var uploading = false
     var error: String?
+    /// The Agents and members `@`-named in the text; kept for this run of the app, not saved.
+    var mentions: [AgentMention] = []
     private let key: String
     @ObservationIgnored private var scheduledSave: Task<Void, Never>?
     // @Observable optional properties already have an implicit nil backing value, so
@@ -201,6 +203,7 @@ final class MessageDraft {
         let ids = Set(sentAttachments.map(\.id))
         attachments.removeAll { ids.contains($0.id) }
         references.removeAll { sentReferences.contains($0) }
+        if text.isEmpty { mentions = [] }
         save()
     }
     func add(files: [ImportedAttachment], workbench: Workbench, projectID: String) async {

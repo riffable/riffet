@@ -270,6 +270,9 @@ object RiffetIcons {
 
     /** A person: the owner's avatar before a name or picture is set. */
     val User: ImageVector get() = LucideIcons.User
+
+    /** People: the 团队 tab (docs/TEAM.md). */
+    val Users: ImageVector get() = LucideIcons.Users
 }
 
 enum class PermissionIconStyle(val id: String) {

@@ -8,6 +8,8 @@ struct ConversationView: View {
     var focusSequence: Int64? = nil
     /// Set for the assistant's main conversation (docs/ASSISTANT.md §3.1): a fixed title, and its setup in the session info.
     var assistant: AssistantSetup? = nil
+    /// Set for a team member's main conversation: its avatar and name stand in the title.
+    var member: AgentMember? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.palette) private var palette
     @Environment(ThemeStore.self) private var themeStore
@@ -405,7 +407,7 @@ struct ConversationView: View {
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $terminal) { TerminalPage(workbench: workbench, projectID: session.projectId, terminalID: session.terminalId) }
         .sheet(isPresented: $information, onDismiss: { afterDetails?(); afterDetails = nil }) {
-            ConversationDetails(workbench: workbench, session: session, catalog: catalog, connectionStatus: connectionStatus, supportsTerminal: supportsTerminal, assistant: assistant,
+            ConversationDetails(workbench: workbench, session: session, catalog: catalog, connectionStatus: connectionStatus, supportsTerminal: supportsTerminal, assistant: assistant, member: member ?? workbench.member(of: session),
                                 find: { workbench.store.find.open(readingPos: nil) }, openTerminal: { terminal = true }, rename: { renameTitle = session.title; renaming = true },
                                 afterClose: { afterDetails = $0 })
         }
@@ -769,10 +771,13 @@ struct ConversationView: View {
                 // A generated sentence, not a page name: list-title size, so it reads as content and truncates later.
                 // The line under it is the phone's connection to the server; a healthy one says nothing.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
-                    RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle, status: resumingHere ? nil : connectionCaption(at: context.date))
-                        .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
+                    Group {
+                        if let member { MemberBarTitle(workbench: workbench, member: member, status: resumingHere ? nil : connectionCaption(at: context.date)) }
+                        else { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle, status: resumingHere ? nil : connectionCaption(at: context.date)) }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
                 }
-            }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle)", bundle: .riffet))
+            }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(member?.name ?? (assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle))", bundle: .riffet))
                 .accessibilityValue(connectionStatus?.badge?.text ?? (needsResume ? String(localized: "此会话当前未运行", bundle: .riffet) : ""))
                 .accessibilityIdentifier("conversationInformation")
         }
@@ -782,6 +787,11 @@ struct ConversationView: View {
                 Button { Task { await resume() } } label: {
                     ZStack { Text("恢复").opacity(resumingHere ? 0 : 1); if resumingHere { ProgressView().controlSize(.mini) } }
                 }.tint(palette.accent).disabled(resuming).accessibilityIdentifier("conversationResume")
+            }
+        }
+        if member != nil {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { information = true } label: { Image(systemName: "person.crop.circle") }.accessibilityLabel(String(localized: "成员信息", bundle: .riffet))
             }
         }
         ToolbarItem(placement: .topBarTrailing) {

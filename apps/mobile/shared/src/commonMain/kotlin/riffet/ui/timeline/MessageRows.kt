@@ -99,6 +99,13 @@ private fun userMessageText(
 /** The prompt: right-aligned bubble, attachments, delivery state and time. */
 @Composable
 internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true, hasTurnOutput: Boolean = false) {
+    // An answer another member handed back reads as theirs; a called conversation's first message shows the request, not the brief.
+    val callDelivery = remember(item.text) { riffet.shared.parseCallDelivery(item.text) }
+    if (callDelivery != null) {
+        CallDeliveryRow(item, callDelivery)
+        return
+    }
+    val shownText = remember(item.text) { riffet.shared.stripCallBrief(item.text) }
     rememberResourceEnvironment()
     val designMetrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -145,11 +152,11 @@ internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true, hasTurn
                     if (annotation is LinkAnnotation.Url) runCatching { uriHandler.openUri(annotation.url) }
                 }
             }
-            val text = remember(item.text, find, findMark, linkColor, linkListener) {
-                userMessageText(item.text, find, findMark, linkColor, linkListener)
+            val text = remember(shownText, find, findMark, linkColor, linkListener) {
+                userMessageText(shownText, find, findMark, linkColor, linkListener)
             }
             // The marked line, for find to bring it into view in a prompt taller than the screen.
-            val markedAt = remember(item.text, find) { findOccurrenceOffset(item.text, find).takeIf { it >= 0 } }
+            val markedAt = remember(shownText, find) { findOccurrenceOffset(shownText, find).takeIf { it >= 0 } }
             val markLine = remember { FloatArray(2) }
             val anchor = LocalFindAnchor.current
             SelectableText {
@@ -181,9 +188,9 @@ internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true, hasTurn
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         ) {
             if (recoverableRun != null && restore != null) {
-                MessageMenuButton(item.text, onRestore = { restore(recoverableRun) })
+                MessageMenuButton(shownText, onRestore = { restore(recoverableRun) })
             } else {
-                CopyTextButton(item.text, stringResource(Res.string.timeline_copy_message))
+                CopyTextButton(shownText, stringResource(Res.string.timeline_copy_message))
             }
             if (delivery != null || time != null || item.from != null) {
                 Spacer(Modifier.width(4.dp))

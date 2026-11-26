@@ -20,6 +20,7 @@ import riffet.ui.assistant.AssistantEntries
 import riffet.ui.assistant.AssistantSheet
 import riffet.shared.ASSISTANT_BACKENDS
 import riffet.shared.assistantSettings
+import riffet.shared.withAssistantChoice
 import riffet_mobile.shared.generated.resources.assistant_title
 import riffet_mobile.shared.generated.resources.assistant_memory
 import riffet_mobile.shared.generated.resources.assistant_rules
@@ -560,8 +561,9 @@ private fun HomeContent(
     val list by store.list.collectAsState()
     val scope = rememberCoroutineScope()
     val pageActive = LocalPageActive.current
+    val docked = assistant?.docked
 
-    val draftId = if (assistant != null) ASSISTANT_DRAFT_ID else HOME_DRAFT_ID
+    val draftId = assistant?.member?.let { "member:${it.id}" } ?: if (assistant != null) ASSISTANT_DRAFT_ID else HOME_DRAFT_ID
     val drafts = LocalComposerDrafts.current
     val draft = remember(drafts) { drafts?.draftFor(draftId) ?: ComposerDraft() }
     var text by draft.text
@@ -662,7 +664,22 @@ private fun HomeContent(
         prewarm.sent()
         scope.launch {
             try {
-                val session = store.createSession(
+                val member = assistant?.member
+                val session = if (member != null) store.createMemberSession(
+                    agentMemberId = member.id,
+                    projectId = target.id,
+                    prompt = prompt,
+                    attachments = attachments,
+                    backendId = config.backendId,
+                    backendProfileId = config.profileId,
+                    model = config.model,
+                    mode = config.mode,
+                    approval = config.approval,
+                    context = references,
+                    agentId = null,
+                    toolGroups = if (phonesShown) pickedTools else null,
+                    extensionsOff = extensionsOff.takeIf { extensions != null && it.isNotEmpty() },
+                ) else store.createSession(
                     projectId = target.id,
                     prompt = prompt,
                     attachments = attachments,
@@ -729,20 +746,7 @@ private fun HomeContent(
     val viewport = remember { mutableIntStateOf(0) }
     val topPadding = contentPadding.calculateTopPadding()
     val bottomPadding = contentPadding.calculateBottomPadding() + LocalTabContentBottomPadding.current
-    Box(
-        Modifier.fillMaxSize().layout { measurable, constraints ->
-            viewport.intValue = constraints.maxHeight
-            val placeable = measurable.measure(constraints)
-            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
-        }.verticalScroll(rememberScrollState())
-            .padding(start = metrics.pageInset, end = metrics.pageInset)
-            .padding(top = topPadding, bottom = bottomPadding),
-    ) {
-        HomeBands(
-            viewport = viewport,
-            verticalPadding = topPadding + bottomPadding,
-            mark = { LiveBrandMark(modifier = Modifier.fillMaxSize(), fg = colors.fg, accent = colors.accent) },
-            tools = {
+    val toolsSlot: @Composable () -> Unit = {
                 Column {
                     Spacer(Modifier.height(10.dp))
                     // Keep the last message during its exit animation.
@@ -764,8 +768,8 @@ private fun HomeContent(
                         }
                     }
                 }
-            },
-            form = {
+    }
+    val formSlot: @Composable () -> Unit = {
                 Column {
                     slot()
                     Spacer(Modifier.height(metrics.controlInset / 2))
@@ -795,7 +799,7 @@ private fun HomeContent(
                         onSend = ::create,
                         dictation = dictation,
                         hero = true,
-                        heroMinLines = 4,
+                        heroMinLines = if (docked != null) 1 else 4,
                         slash = config.slash,
                         sessionCandidates = if (config.capabilities?.supportsSessionReferences == true) list.sessions else emptyList(),
                         sessionProjects = list.projects,
@@ -813,7 +817,35 @@ private fun HomeContent(
                         focusRequester = composerFocus,
                     )
                 }
-            },
+    }
+    if (docked != null) {
+        // A member's own page: its conversations above, the composer docked below them.
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) { docked(PaddingValues(top = topPadding)) }
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = metrics.pageInset)
+                    .padding(top = metrics.controlInset / 2, bottom = contentPadding.calculateBottomPadding() + metrics.controlInset / 2),
+            ) {
+                if (error != null) Text(text = error.orEmpty(), style = typography.caption, color = colors.danger,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+                formSlot()
+            }
+        }
+    } else Box(
+        Modifier.fillMaxSize().layout { measurable, constraints ->
+            viewport.intValue = constraints.maxHeight
+            val placeable = measurable.measure(constraints)
+            layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+        }.verticalScroll(rememberScrollState())
+            .padding(start = metrics.pageInset, end = metrics.pageInset)
+            .padding(top = topPadding, bottom = bottomPadding),
+    ) {
+        HomeBands(
+            viewport = viewport,
+            verticalPadding = topPadding + bottomPadding,
+            mark = { LiveBrandMark(modifier = Modifier.fillMaxSize(), fg = colors.fg, accent = colors.accent) },
+            tools = toolsSlot,
+            form = formSlot,
         )
     }
 
@@ -898,6 +930,10 @@ internal class AssistantHomeParts(
     val cards: @Composable RowScope.() -> Unit,
     val onStarted: ((NativeBackendId, String?, String) -> Unit)?,
     val packs: List<riffet.contracts.AssistantPack> = emptyList(),
+    /** A team member's page: its conversations start as this member's. */
+    val member: riffet.contracts.AgentMember? = null,
+    /** The member's own conversations above the composer, which docks below them instead of scrolling with the hero. */
+    val docked: (@Composable (PaddingValues) -> Unit)? = null,
 )
 
 /**
@@ -940,6 +976,85 @@ internal fun AssistantHome(
                 ),
             )
         }
+    }
+}
+
+/** A run configuration for one member's page: the Agents the assistant runs on, with picks that stay on this page. */
+@Composable
+internal fun rememberMemberConfig(api: RiffetApi?, key: Any?): HomeConfig {
+    val scope = rememberCoroutineScope()
+    val catalogReadFailed = stringResource(Res.string.session_catalog_read_failed)
+    val providerNotRead = stringResource(Res.string.session_provider_not_read)
+    return remember(api, key, catalogReadFailed, providerNotRead) {
+        HomeConfig(api, scope, catalogReadFailed, providerNotRead, offers = { it in ASSISTANT_BACKENDS })
+    }
+}
+
+/** The settings a member's composer opens from: its own Agent, provider and model where it names an offered one, else the assistant's. */
+internal fun memberSettings(settings: riffet.contracts.AppSettings?, member: riffet.contracts.AgentMember, backends: List<riffet.contracts.NativeBackendCatalogEntry>): riffet.contracts.AppSettings? {
+    val base = assistantSettings(settings, backends) ?: return null
+    val target = member.target ?: return base
+    val backend = target.backendId?.let { riffet.contracts.AgentIds.builtin(it) }?.takeIf { it in ASSISTANT_BACKENDS } ?: return base
+    return base.withAssistantChoice(riffet.shared.AssistantChoice(backend, target.profileId, target.model))
+}
+
+/** A member's composer: the home composer started in the member's project, its conversations kept to that member. */
+@Composable
+internal fun MemberComposer(
+    store: SessionStore,
+    api: RiffetApi?,
+    project: Project,
+    config: HomeConfig,
+    parts: AssistantHomeParts,
+    onOpenSession: (Session) -> Unit,
+    contentPadding: PaddingValues,
+) {
+    HomeContent(
+        store = store, api = api, target = project, config = config, slot = {},
+        onOpenSession = onOpenSession, onImport = null, onOpenTerminal = { _, _ -> },
+        contentPadding = contentPadding, assistant = parts,
+    )
+}
+
+/** The model row's value: the model's name, else the default. */
+@Composable
+internal fun homeConfigSummary(config: HomeConfig): String =
+    modelSelectionSummary(config.catalog, config.model).ifEmpty { config.model.ifEmpty { stringResource(Res.string.session_default_model) } }
+
+/** The Agent and model panel for [config] alone, without the settings behind 更多设置: what a page that only picks them opens. */
+@Composable
+internal fun HomeConfigModelSheet(config: HomeConfig, projectId: String, settings: riffet.contracts.AppSettings?, onDismiss: () -> Unit) {
+    val colors = LocalRiffetColors.current
+    val agents = ModelPanelAgents(
+        items = config.backends.map { entry ->
+            val mark = entry.backendId.name.lowercase()
+            ChipItem(entry.backendId.name, entry.label.ifBlank { backendName(entry.backendId) }, icon = AgentMarks.vector(mark),
+                iconTint = colors.agentMarkTint(mark), enabled = entry.available)
+        },
+        selected = config.backendId.name,
+        onSelect = { name ->
+            config.backends.firstOrNull { it.backendId.name == name && it.available }?.let { config.selectBackend(it.backendId, projectId, settings) }
+        },
+    )
+    PickerSheet(page = HomeSheet.Model, onDismiss = onDismiss, depth = { it.ordinal }) {
+        ModelPickerPages(
+            catalog = config.catalog,
+            catalogLoading = config.catalogLoading,
+            catalogError = config.catalogError,
+            selection = config.model,
+            disabledReason = null,
+            onSelect = { config.model = it },
+            onParamChange = { config.model = it },
+            onRetryCatalog = { config.load(projectId, settings, force = true) },
+            loadUsage = config.usageLoader(projectId),
+            remembered = config.rememberedModels,
+            groups = config.providerGroups(),
+            activeProfileId = config.profileId,
+            usageScopeKey = "${config.backendId}|$projectId|${config.profileId ?: ""}",
+            onSelectChoice = { profileId, selection -> config.selectProviderModel(profileId, selection) },
+            onRetryGroup = { profileId -> config.retryProviderCatalog(projectId, profileId) },
+            agents = agents,
+        )
     }
 }
 

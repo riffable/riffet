@@ -11,6 +11,8 @@ struct ConversationDetails: View {
     let supportsTerminal: Bool
     /// Set for the assistant's main conversation: its setup rows, a fixed title, no code or list actions.
     var assistant: AssistantSetup? = nil
+    /// The team member the conversation belongs to: its head, setup rows, conversations and facts lead the panel.
+    var member: AgentMember? = nil
     let find: () -> Void
     let openTerminal: () -> Void
     let rename: () -> Void
@@ -21,6 +23,9 @@ struct ConversationDetails: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var destination: Destination?
     @State private var stopping: Item?
+    @State private var memberRoute: MemberRoute?
+    @State private var ownSetup = AssistantSetup()
+    @Environment(\.teamNavigator) private var navigator
 
     private enum Destination: Hashable { case files, changes, all }
 
@@ -40,6 +45,8 @@ struct ConversationDetails: View {
     private var project: Project? { workbench.project(current.projectId) }
     /// Anything in the assistant's directory is not code work.
     private var inAssistant: Bool { assistant != nil || project?.isAssistant == true }
+    /// The member's setup: the page's own when it passed one, else read for this panel.
+    private var memberSetup: AssistantSetup { assistant ?? ownSetup }
     private var items: [Item] {
         let subagents = workbench.subagentEntries
         let owned = Set(subagents.map(\.toolCallId))
@@ -68,8 +75,11 @@ struct ConversationDetails: View {
         let items = items
         NavigationStack {
             RiffetList {
-                Section { RiffetPaneActionBar(actions: destinations) }
-                if let assistant { Section { AssistantSetupRows(workbench: workbench, setup: assistant) } }
+                // A member's conversation: the title already names the member, so its own actions lead. 查找 alone
+                // would be a card of one cell; it joins the low-frequency bar at the end instead.
+                if let member { MemberActionBarSection(setup: memberSetup) { memberRoute = $0 } }
+                if !findJoinsActions { Section { RiffetPaneActionBar(actions: destinations) } }
+                if member == nil, let assistant { Section { AssistantSetupRows(workbench: workbench, setup: assistant) } }
                 // The one fact about this conversation a reader cannot see elsewhere: a profile change
                 // waiting for the agent to restart, else the server's informational notice.
                 if workbench.status?.profilePending?.boolValue == true {
@@ -78,13 +88,21 @@ struct ConversationDetails: View {
                     RiffetNotice.section(.info, workbench.status?.notice)
                 }
                 if !items.isEmpty { progress(items) }
+                if let member {
+                    MemberSessionsSection(workbench: workbench, member: member, currentID: current.id, go: { memberRoute = $0 }, open: { id in
+                        if id == current.id { dismiss() } else { close { navigator.open(id) } }
+                    })
+                }
                 Section { facts(current) }
-                Section { RiffetPaneActionBar(actions: smallActions(current)) }
-                if workbench.list.canDeleteSessions {
+                if let member { MemberFactRows(workbench: workbench, member: member, setup: memberSetup, showsAgent: false) { memberRoute = $0 } }
+                Section { RiffetPaneActionBar(actions: smallActions(current) + (member.map { [memberPinAction(workbench, $0)] } ?? []) + (findJoinsActions ? destinations : [])) }
+                if let member {
+                    MemberFooterSections(workbench: workbench, member: member, showsPin: false) { close { navigator.popToRoot() } }
+                } else if workbench.list.canDeleteSessions {
                     Section {
                         // The server's preview of what goes with it is the confirmation, on the conversation.
                         Button(role: .destructive) { let target = current; close { Task { await workbench.requestDeletion(target) } } } label: {
-                            SettingsRowLabel(title: String(localized: "删除…", bundle: .riffet)).foregroundStyle(palette.danger).contentShape(Rectangle())
+                            SettingsRowLabel(title: String(localized: "删除…", bundle: .riffet), tint: palette.danger).contentShape(Rectangle())
                         }
                         .buttonStyle(RiffetRowPressStyle()).disabled(workbench.deletionLoading != nil)
                     }
@@ -93,9 +111,18 @@ struct ConversationDetails: View {
             .accessibilityIdentifier("conversationInformationList")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : current.shownTitle, status: stateLine) }
+                ToolbarItem(placement: .principal) {
+                    if let member { MemberBarTitle(workbench: workbench, member: member, status: stateLine) }
+                    else { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : current.shownTitle, status: stateLine) }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel(String(localized: "关闭", bundle: .riffet))
+                }
+            }
+            .navigationDestination(item: $memberRoute) { route in
+                if let member {
+                    MemberRouteDestination(workbench: workbench, member: member, setup: memberSetup, route: route, currentID: current.id,
+                                           open: { id in if id == current.id { dismiss() } else { close { navigator.open(id) } } })
                 }
             }
             .navigationDestination(item: $destination) { target in
@@ -109,8 +136,14 @@ struct ConversationDetails: View {
                 Button(String(localized: "停止", bundle: .riffet), role: .destructive) { stop(item) }
             } message: { Text($0.warning ?? "") }
         }
+        .environment(\.riffetPanelSheet, true)
         // Pages opened in here (变更, 文件) raise toasts the conversation's host would show under the sheet.
         .riffetToastHost()
+        .task(id: member?.id) {
+            guard let member, assistant == nil else { return }
+            ownSetup.memberID = member.id; ownSetup.projectID = member.projectId
+            await ownSetup.refresh(workbench.api)
+        }
         .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]).presentationDragIndicator(.visible)
     }
 
@@ -126,6 +159,9 @@ struct ConversationDetails: View {
         result.append(.init(symbol: "magnifyingglass", title: String(localized: "查找", bundle: .riffet)) { close(find) })
         return result
     }
+
+    /// In a member's conversation the tools bar can be 查找 alone; then it goes with 归档 and 置顶.
+    private var findJoinsActions: Bool { member != nil && destinations.count == 1 }
 
     private func smallActions(_ current: Session) -> [RiffetPaneAction] {
         let pinned = current.pinnedAt != nil, archived = current.archivedAt != nil

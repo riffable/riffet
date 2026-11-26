@@ -319,6 +319,10 @@
     "user",
     "person"
   ],
+  "Users": [
+    "users",
+    "group"
+  ],
   "Warning": [
     "alert-triangle",
     "warning"

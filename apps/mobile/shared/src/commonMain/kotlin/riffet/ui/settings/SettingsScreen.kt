@@ -624,7 +624,7 @@ internal fun LaunchTabSection() {
             riffet.ui.app.HomeTab.entries.forEach { tab ->
                 val selected = tab.key == riffet.ui.app.homeTabKey(display.launchTab)
                 GroupRow(
-                    title = stringResource(tab.title()),
+                    title = stringResource(tab.title(riffet.ui.app.LocalHasTeam.current)),
                     trailing = { SelectionMark(selected) },
                     modifier = Modifier.selectable(selected, role = Role.RadioButton) { display.changeLaunchTab(tab.key) },
                 )

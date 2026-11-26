@@ -183,7 +183,7 @@ struct SettingsView: View {
                 }),
                 SettingsEntry(title: String(localized: "启动时打开", bundle: .riffet), icon: "rectangle.on.rectangle", kind: .choice {
                     choiceRow(String(localized: "启动时打开", bundle: .riffet), "rectangle.on.rectangle", selection: $launchRaw,
-                              options: RootTab.allCases.map { ($0.rawValue, $0.title) })
+                              options: RootTab.allCases.map { ($0.rawValue, $0.title(team: workbench?.teamMembers != nil)) })
                 }),
                 server(String(localized: "扩展管理", bundle: .riffet), "puzzlepiece.extension") { AnyView(NativeExtensionsView(workbench: $0)) },
             ]),

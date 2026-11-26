@@ -137,6 +137,21 @@ suspend fun RiffetApi.downloadAttachment(
     DownloadedFile(name, mimeType, response.copyBody(open(name, mimeType), onProgress))
 }
 
+/** A file a team member left in its `files/` folder (docs/TEAM.md), with the same bounded streaming download. */
+@Throws(Exception::class)
+suspend fun RiffetApi.downloadMemberFile(
+    memberId: String,
+    path: String,
+    onProgress: ((received: Long, total: Long?) -> Unit)? = null,
+    open: suspend (name: String, mimeType: String?) -> DownloadWriter,
+): DownloadedFile = streamGet("/api/team/members/${memberId.enc()}/file", listOf("path" to path)) { response ->
+    val name = response.headers[HttpHeaders.ContentDisposition]?.let(::dispositionFileName)
+        ?: path.substringAfterLast('/').ifEmpty { "download" }
+    val mimeType = response.headers[HttpHeaders.ContentType]?.substringBefore(';')?.trim()
+        ?.takeUnless { it == "application/octet-stream" }
+    DownloadedFile(name, mimeType, response.copyBody(open(name, mimeType), onProgress))
+}
+
 /** Copies the body into [writer] one read at a time, reporting as it goes; returns the byte count. */
 private suspend fun HttpResponse.copyBody(writer: DownloadWriter, onProgress: ((Long, Long?) -> Unit)?): Long {
     val total = contentLength()

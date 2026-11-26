@@ -100,7 +100,7 @@ struct ConversationComposer: View {
                     }
             }.presentationDetents([.large])
         }
-        .onChange(of: draft.text) { _, value in updateMenu(value) }
+        .onChange(of: draft.text) { old, value in draft.trimMention(from: old, to: value); updateMenu(value) }
         .onChange(of: focused) { _, now in if !now { draft.dropBlankText() } }
         .onAppear { draft.dropBlankText() }
         .onChange(of: focused) { _, now in if now, voice.mode { voice.setMode(false) }
@@ -297,14 +297,20 @@ struct ConversationComposer: View {
         guard acceptsMessages else { return }
         let text = draft.text, attachments = draft.attachments, references = draft.references, revision = draft.textRevision
         draft.save()
+        let mentioned = draft.liveMentions()
+        let stored: () -> Void = {
+            draft.clear(sentText: text, sentAttachments: attachments, sentReferences: references, sentRevision: revision)
+            if draft.text.isEmpty && draft.attachments.isEmpty && draft.references.isEmpty && draft.pendingFiles.isEmpty {
+                focused = false; expandedEditor = false
+            }
+            onSent()
+        }
         Task {
-            _ = await workbench.send(text, attachments: attachments, interrupt: interrupt, context: references, enqueue: enqueue, onStored: {
-                draft.clear(sentText: text, sentAttachments: attachments, sentReferences: references, sentRevision: revision)
-                if draft.text.isEmpty && draft.attachments.isEmpty && draft.references.isEmpty && draft.pendingFiles.isEmpty {
-                    focused = false; expandedEditor = false
-                }
-                onSent()
-            })
+            if mentioned.isEmpty {
+                _ = await workbench.send(text, attachments: attachments, interrupt: interrupt, context: references, enqueue: enqueue, onStored: stored)
+            } else {
+                _ = await workbench.sendMentioning(text, attachments: attachments, context: references, agents: mentioned, interrupt: interrupt, enqueue: enqueue, onStored: stored)
+            }
         }
     }
 }

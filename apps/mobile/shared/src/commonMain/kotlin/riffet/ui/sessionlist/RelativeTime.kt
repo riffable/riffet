@@ -3,6 +3,7 @@ package riffet.ui.sessionlist
 import androidx.compose.runtime.Composable
 import org.jetbrains.compose.resources.stringResource
 import riffet.ui.timeline.instantMillis
+import riffet.ui.timeline.platformUtcOffsetMillis
 import riffet_mobile.shared.generated.resources.Res
 import riffet_mobile.shared.generated.resources.session_activity_ago
 import riffet_mobile.shared.generated.resources.session_activity_just_now
@@ -39,6 +40,17 @@ internal fun relativeTimeLabel(at: Long, now: Long): String {
         else -> stringResource(Res.string.session_relative_years, minutes / 525_600L)
     }
 }
+
+/** Local wall-clock `HH:mm` of an epoch instant. */
+internal fun clockLabel(epochMillis: Long): String {
+    val minutes = ((epochMillis + platformUtcOffsetMillis(epochMillis)) / 60_000).mod(24 * 60L)
+    return "${(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}"
+}
+
+/** The clock for a stamp of today, else [relativeTimeLabel]: for rows already grouped by day. */
+@Composable
+internal fun dayTimeLabel(value: String?, now: Long, dayStart: Long): String? =
+    instantMillis(value)?.let { if (it >= dayStart) clockLabel(it) else relativeTimeLabel(it, now) }
 
 /** [relativeTimeLabel] for a stored timestamp; null when the stamp cannot be parsed. */
 @Composable

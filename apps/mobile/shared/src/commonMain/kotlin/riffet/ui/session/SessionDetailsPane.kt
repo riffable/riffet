@@ -116,6 +116,8 @@ internal fun SessionDetailsPane(
     modifier: Modifier = Modifier,
     /** The assistant's main conversation (docs/ASSISTANT.md §3.1): no code, directory or list actions; its setup rows instead. */
     assistant: riffet.ui.assistant.AssistantEntries? = null,
+    /** A team member's conversation (docs/TEAM.md): the member heads the panel and its own rows follow the session's actions. */
+    member: riffet.ui.team.MemberPaneEntries? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     // A live `session` frame updates the session in place; fall back to the host's copy until then.
@@ -141,7 +143,7 @@ internal fun SessionDetailsPane(
     val shownAll = showAll?.takeIf { (it == WorkKind.SUBAGENTS && subTasks.subagents.isNotEmpty()) || (it == WorkKind.TASKS && subTasks.tasks.isNotEmpty()) }
     PageBackHandler(enabled = shownAll != null) { showAll = null }
     // Anything in the assistant's directory is not code work: no changes, files or listing actions.
-    val inAssistant = assistant != null || project?.isAssistant == true
+    val inAssistant = assistant != null || project?.isAssistant == true || (member != null && member.member.scope.kind != "project")
     val subtitle = listOfNotNull(state.first, backendName(current.backendId).takeIf { assistant == null }).joinToString(" · ")
 
     Column(modifier = modifier.fillMaxHeight().background(
@@ -151,12 +153,13 @@ internal fun SessionDetailsPane(
             title = when (shownAll) {
                 WorkKind.SUBAGENTS -> stringResource(Res.string.details_subagents)
                 WorkKind.TASKS -> stringResource(Res.string.details_tasks)
-                null -> if (assistant != null) stringResource(Res.string.assistant_title) else current.shownTitle
+                null -> if (assistant != null) stringResource(Res.string.assistant_title) else member?.member?.name ?: current.shownTitle
             },
-            subtitle = if (shownAll != null) current.shownTitle else subtitle,
+            subtitle = if (shownAll != null) current.shownTitle else member?.member?.description?.takeIf { it.isNotBlank() } ?: subtitle,
+            leading = if (member != null && shownAll == null) ({ riffet.ui.team.MemberAvatar(member.member, riffet.ui.team.MemberPaneAvatarSize) }) else null,
             onClose = onClose,
             onBack = if (shownAll != null) ({ showAll = null }) else null,
-            contentTitle = shownAll == null,
+            contentTitle = shownAll == null && member == null,
         )
         Column(
             modifier = Modifier
@@ -185,7 +188,7 @@ internal fun SessionDetailsPane(
                     }
 
                     val terminalId = current.terminalId
-                    PaneActionBar(buildList {
+                    val tools = buildList {
                         if (!quickChat && !inAssistant) {
                             onOpenGit?.let { add(PaneAction(RiffetIcons.Branch, stringResource(Res.string.session_changes), onClick = it)) }
                             onOpenFiles?.let { add(PaneAction(RiffetIcons.Folder, stringResource(Res.string.session_files), onClick = it)) }
@@ -196,11 +199,19 @@ internal fun SessionDetailsPane(
                         }
                         // Find reads the conversation itself, so it is here for a quick chat too, and open while archived.
                         onFind?.let { add(PaneAction(RiffetIcons.Search, stringResource(Res.string.session_find), onClick = it)) }
-                    })
+                    }
+                    // In a member's conversation the header names the member and its own actions lead. 查找 alone would be
+                    // a card of one cell; it joins the low-frequency bar at the end instead.
+                    val toolsAtEnd = member != null && tools.size == 1
+                    if (!toolsAtEnd) PaneActionBar(tools)
 
                     if (assistant != null) {
                         PaneGap()
                         riffet.ui.assistant.AssistantPaneRows(assistant)
+                    }
+                    if (member != null) {
+                        if (!toolsAtEnd) PaneGap()
+                        riffet.ui.team.MemberPaneRows(member, store, showsPin = false)
                     }
                     if (subTasks.subagents.isNotEmpty()) SubagentSection(subTasks, store, onOpenSubagent, limit = InlineWork) { showAll = WorkKind.SUBAGENTS }
                     if (subTasks.tasks.isNotEmpty()) TaskSection(subTasks.tasks, store, limit = InlineWork) { showAll = WorkKind.TASKS }
@@ -259,6 +270,8 @@ internal fun SessionDetailsPane(
                             enabled = editable || current.archivedAt != null,
                         ) { controller?.update(SessionUpdate(archived = current.archivedAt == null)) })
                         if (canResume) add(PaneAction(RiffetIcons.Terminal, stringResource(Res.string.details_resume)) { resumeOpen = true })
+                        if (member != null) add(riffet.ui.team.memberPinAction(member))
+                        if (toolsAtEnd) addAll(tools)
                     })
 
                     if (onDelete != null) {
@@ -269,6 +282,7 @@ internal fun SessionDetailsPane(
                                 tone = danger, enabled = !deleteBusy, onClick = onDelete)
                         }
                     }
+                    if (member != null) riffet.ui.team.MemberPaneDelete(member)
                 }
             }
             PaneEnd()

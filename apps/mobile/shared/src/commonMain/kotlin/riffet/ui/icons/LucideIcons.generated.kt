@@ -41,7 +41,7 @@ private fun lucide(name: String, pathData: String, strokeWidth: Float = 1.25f, f
         )
         .build()
 
-/** Created on first use: a screen touches a handful of these, not all 82. */
+/** Created on first use: a screen touches a handful of these, not all 83. */
 internal object LucideIcons {
     /** lucide `archive`. */
     val Archive: ImageVector by lazy {
@@ -676,6 +676,14 @@ internal object LucideIcons {
         lucide(
             "User",
             "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M8 7A4 4 0 1 0 16 7A4 4 0 1 0 8 7Z",
+        )
+    }
+
+    /** lucide `users`. */
+    val Users: ImageVector by lazy {
+        lucide(
+            "Users",
+            "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3.128a4 4 0 0 1 0 7.744M22 21v-2a4 4 0 0 0-3-3.87M5 7A4 4 0 1 0 13 7A4 4 0 1 0 5 7Z",
         )
     }
 

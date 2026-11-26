@@ -149,6 +149,8 @@ data class Project(
     val system: String? = null,
     /** The 助理 project's one long conversation; it may name a session since archived or deleted. */
     val mainSessionId: String? = null,
+    /** The team member owning this standing project (`system: 'assistant'`), docs/TEAM.md. */
+    val agentMemberId: String? = null,
 )
 
 @Serializable
@@ -277,6 +279,8 @@ data class Session(
     val updatedAt: String,
     /** The raw id of a plugin Agent, which [backendId] cannot hold; see [AgentIds]. */
     val agentId: String? = null,
+    /** The team member that owns or was called into this conversation (docs/TEAM.md). */
+    val agentMemberId: String? = null,
 ) {
     /** The Agent's wire id, built-in or a plugin's. */
     val agent: String? get() = agentId ?: backendId?.let(AgentIds::wire)

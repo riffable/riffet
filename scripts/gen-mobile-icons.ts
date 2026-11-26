@@ -127,6 +127,7 @@ const ICONS: Record<string, string | Spec> = {
   Terminal: 'terminal',
   Trash: 'trash-2',
   User: 'user',
+  Users: 'users',
   Warning: 'triangle-alert',
   Wrench: 'wrench',
   Zap: 'zap',

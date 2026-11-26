@@ -56,12 +56,18 @@ internal fun OwnerAvatar(owner: OwnerInfo?, imageUrl: String?, size: Dp, modifie
 /** Drawn over the fallback, so a slow or failed load leaves the monogram showing. */
 @Composable
 private fun OwnerAvatarImage(url: String, size: Dp) {
+    val painter = rememberAvatarPainter(url, size)
+    val state by painter.state.collectAsState()
+    if (state is AsyncImagePainter.State.Success) Image(painter, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+}
+
+/** A round avatar's picture at [size], through the shared loader that sends the device credentials. */
+@Composable
+internal fun rememberAvatarPainter(url: String, size: Dp): AsyncImagePainter {
     val context = LocalPlatformContext.current
     val pixels = with(LocalDensity.current) { size.roundToPx() }.coerceAtLeast(1)
     val request = remember(url, pixels, context) {
         ImageRequest.Builder(context).data(url).size(pixels, pixels).scale(Scale.FILL).build()
     }
-    val painter = rememberAsyncImagePainter(model = request, imageLoader = rememberRiffetImageLoader(), contentScale = ContentScale.Crop)
-    val state by painter.state.collectAsState()
-    if (state is AsyncImagePainter.State.Success) Image(painter, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+    return rememberAsyncImagePainter(model = request, imageLoader = rememberRiffetImageLoader(), contentScale = ContentScale.Crop)
 }

@@ -120,6 +120,8 @@ data class DownloadItem(
     @Transient val run: Long = 0,
     /** Uploaded attachments have their own route and can be retried without a project path. */
     val attachmentId: String? = null,
+    /** A team member's `files/` entry: [path] is inside that folder, and [projectId] is empty. */
+    val memberId: String? = null,
 )
 
 /** What the in-app notice says when a download starts or ends. */
@@ -153,11 +155,15 @@ class DownloadCenter internal constructor(
 
     fun startAttachment(api: RiffetApi, attachmentId: String, name: String) = start(api, "", "", attachmentId, name)
 
+    /** Downloads [path] of a team member's `files/` folder. */
+    fun startMemberFile(api: RiffetApi, memberId: String, path: String) = start(api, "", path, null, null, memberId)
+
     private fun start(
-        api: RiffetApi, projectId: String, path: String, attachmentId: String?, name: String?,
+        api: RiffetApi, projectId: String, path: String, attachmentId: String?, name: String?, memberId: String? = null,
     ) {
         val id = when {
             attachmentId != null -> "attachment\u0000$attachmentId"
+            memberId != null -> "member\u0000$memberId\u0000$path"
             else -> "$projectId\u0000$path"
         }
         lateinit var item: DownloadItem
@@ -173,6 +179,7 @@ class DownloadCenter internal constructor(
             startedAt = platformNowMillis(),
             run = run,
             attachmentId = attachmentId,
+            memberId = memberId,
         )
         _items.update { list ->
             listOf(item) + list.mapNotNull {
@@ -205,7 +212,7 @@ class DownloadCenter internal constructor(
     }
 
     /** Starts [item] again, from the beginning. */
-    fun retry(api: RiffetApi, item: DownloadItem) = start(api, item.projectId, item.path, item.attachmentId, item.name)
+    fun retry(api: RiffetApi, item: DownloadItem) = start(api, item.projectId, item.path, item.attachmentId, item.name, item.memberId)
 
     fun cancel(id: String) {
         jobs.value.byId[id]?.job?.cancel()
@@ -262,10 +269,10 @@ class DownloadCenter internal constructor(
                 // Not cancellable: a sink opened by a cancelled call would never reach [sink] to be discarded.
                 withContext(NonCancellable) { openSink(name, mimeType).also { sink = it } }
             }
-            val file = if (item.attachmentId != null) {
-                api.downloadAttachment(item.attachmentId, item.name, onProgress, open)
-            } else {
-                api.downloadFile(item.projectId, item.path, onProgress, open)
+            val file = when {
+                item.attachmentId != null -> api.downloadAttachment(item.attachmentId, item.name, onProgress, open)
+                item.memberId != null -> api.downloadMemberFile(item.memberId, item.path, onProgress, open)
+                else -> api.downloadFile(item.projectId, item.path, onProgress, open)
             }
             val saved = checkNotNull(sink).commit()
             sink = null

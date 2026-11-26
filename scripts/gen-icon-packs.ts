@@ -23,7 +23,7 @@ const mapping: Record<string, string> = {
   Pointer: 'Cursor', Puzzle: 'PuzzlePiece', Refresh: 'ArrowClockwise', Repeat: 'Repeat', Reply: 'ArrowBendUpLeft',
   Search: 'MagnifyingGlass', Send: 'PaperPlaneRight', Settings: 'GearSix', SettingsFilled: 'GearSix', Shield: 'Shield',
   ShieldHalf: 'ShieldCheckered', Sliders: 'SlidersHorizontal', SquareTerminal: 'TerminalWindow', Star: 'Star', StarFilled: 'Star',
-  Steer: 'ArrowBendUpRight', Stop: 'Square', Sun: 'Sun', Tag: 'Tag', Target: 'Target', Terminal: 'Terminal', Trash: 'Trash', User: 'User',
+  Steer: 'ArrowBendUpRight', Stop: 'Square', Sun: 'Sun', Tag: 'Tag', Target: 'Target', Terminal: 'Terminal', Trash: 'Trash', User: 'User', Users: 'Users',
   Warning: 'Warning', Wrench: 'Wrench', Zap: 'Lightning',
 };
 /** SVG coordinates are kept at upstream precision, translated to a zero-origin viewport. */

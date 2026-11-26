@@ -116,6 +116,8 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.rememberResourceEnvironment
 import riffet_mobile.shared.generated.resources.*
+import riffet.ui.design.agentMarkTint
+import androidx.compose.ui.graphics.isSpecified
 import riffet.contracts.Attachment
 import riffet.contracts.NativeDeliveryState
 import riffet.contracts.NativeSlashCatalog
@@ -202,7 +204,8 @@ class ComposerSettings(
 /** A message to quote into the draft; [token] lets the same text be quoted twice. */
 data class ComposerQuote(val text: String, val token: Long)
 
-private val mentionPattern = Regex("(?:^|\\s)@([^\\s@]*)$")
+// The full-width ＠ too: a Chinese keyboard types it in place of @.
+private val mentionPattern = Regex("(?:^|\\s)[@＠]([^\\s@＠]*)$")
 
 @Composable
 fun Composer(
@@ -228,6 +231,8 @@ fun Composer(
     writeScope: CoroutineScope? = null,
     /** The assistant's capability packs; an installed one with an entry shows as a chip above the card. */
     packs: List<riffet.contracts.AssistantPack> = emptyList(),
+    /** The members and Agents `@` can call; null where it calls no one. */
+    mentions: MentionTargets? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
@@ -260,6 +265,7 @@ fun Composer(
     // Keep renderable copy rather than freezing the language when a validation or upload fails.
     var localError by remember(session.id) { mutableStateOf<(@Composable () -> String)?>(null) }
     var slash by remember(session.id) { mutableStateOf<NativeSlashCatalog?>(null) }
+    // The `@` picks of this draft; the ones whose `@name` is still in the text go with the message.
 
     // Discovery can spawn the backend's CLI; the menu simply stays closed until it answers.
     LaunchedEffect(session.id, session.backendId, session.backendProfileId) {
@@ -346,7 +352,11 @@ fun Composer(
         store.clearComposerMessages()
         onSubmit()
         val completion = draft.submit(writeScope ?: scope, { drafts?.save(session.id, draft) }) { submitted, sent, sentContext, onStored ->
-            if (enqueue) store.enqueue(submitted, sent, sentContext, onStored) else store.send(submitted, sent, sentContext, false, onStored)
+            val called = mentions?.named(submitted).orEmpty()
+            // A queued message calls who it mentions as well, as on the web.
+            if (called.isNotEmpty()) store.sendMentioning(submitted, sent, sentContext, called, enqueue = enqueue, onStored = onStored)
+            else if (enqueue) store.enqueue(submitted, sent, sentContext, onStored)
+            else store.send(submitted, sent, sentContext, false, onStored)
         }
         scope.launch {
             if (completion.await()) {
@@ -455,6 +465,8 @@ fun Composer(
             } },
             onRemoveSessionReference = { reference -> references = references - reference },
             dictation = dictation,
+            mentions = mentions,
+            mentionTokens = mentions?.tokens.orEmpty(),
         )
 
         // One block, so the column's gap below the card is paid once, and only while it is open.
@@ -559,6 +571,10 @@ internal fun ComposerCard(
     onRemoveSessionReference: ((PromptContextReference) -> Unit)? = null,
     /** Voice input; null leaves the mic out (voice input is off, or this host cannot record). */
     dictation: DictationController? = null,
+    /** The members and Agents `@` offers above the sessions; null offers none. */
+    mentions: MentionTargets? = null,
+    /** The `@name` texts already inserted: a backspace into one takes it whole. */
+    mentionTokens: List<String> = emptyList(),
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -654,13 +670,25 @@ internal fun ComposerCard(
     val slashGroups = if (slash != null && trigger != null) slash.groupsFor(trigger) else emptyList()
     var referenceHighlight by remember { mutableStateOf(0) }
     var dismissedMention by remember { mutableStateOf<Pair<String, Int>?>(null) }
-    val mention = if (onReferenceSession != null && focused && value.selection.collapsed && dismissedMention != (value.text to value.selection.start))
+    val mention = if ((onReferenceSession != null || mentions != null) && focused && value.selection.collapsed && dismissedMention != (value.text to value.selection.start))
         mentionPattern.find(value.text.take(value.selection.start)) else null
     val mentionQuery = mention?.groupValues?.get(1)
     val mentionStart = mentionQuery?.let { value.selection.start - it.length - 1 }
     // Ranks every session: only while an @ mention is open, and once per query, not per keystroke.
     val referenceItems = remember(sessionCandidates, sessionProjects, mentionQuery, referenceSessionId, referenceProjectId) {
         if (mentionQuery == null) emptyList() else rankedSessionReferences(sessionCandidates, sessionProjects, mentionQuery, referenceSessionId, referenceProjectId)
+    }
+
+    val mentionNeedle = mentionQuery.orEmpty()
+    val mentionMembers = remember(mentions, mentionNeedle) { mentions?.members.orEmpty().filter { it.member.name.contains(mentionNeedle, ignoreCase = true) } }
+    val mentionAgents = remember(mentions, mentionNeedle) { mentions?.agents.orEmpty().filter { it.label.contains(mentionNeedle, ignoreCase = true) } }
+    // Writes `@name ` where the `@` was typed.
+    val insertMention: (String) -> Unit = { label ->
+        val start = mentionStart ?: value.selection.start
+        val inserted = "@$label "
+        val next = value.text.replaceRange(start, value.selection.start, inserted)
+        field = TextFieldValue(next, TextRange(start + inserted.length))
+        onTextChange(next)
     }
 
     LaunchedEffect(text) {
@@ -748,7 +776,33 @@ internal fun ComposerCard(
         }
         if (mention != null) {
             Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState()).padding(horizontal = metrics.controlInset / 2)) {
-                Text(stringResource(Res.string.session_reference_group), style = typography.caption, color = colors.fg4, modifier = Modifier.padding(8.dp))
+                if (mentionMembers.isNotEmpty()) {
+                    Text(stringResource(Res.string.team_mention_members), style = typography.caption, color = colors.fg4, modifier = Modifier.padding(8.dp))
+                    mentionMembers.forEach { target ->
+                        riffet.ui.design.RiffetTextButton(onClick = { insertMention(target.member.name) }, modifier = Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.controlInset)) {
+                                riffet.ui.team.MemberAvatar(target.member, 24.dp)
+                                Text(target.member.name, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                                target.projectName?.let { Text(it, style = typography.caption, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            }
+                        }
+                    }
+                }
+                if (mentionAgents.isNotEmpty()) {
+                    Text(stringResource(Res.string.team_mention_agents), style = typography.caption, color = colors.fg4, modifier = Modifier.padding(8.dp))
+                    mentionAgents.forEach { target ->
+                        riffet.ui.design.RiffetTextButton(onClick = { insertMention(target.label) }, modifier = Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(metrics.controlInset)) {
+                                Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                    val mark = target.backendId.name.lowercase()
+                                    riffet.ui.icons.AgentMark(mark, size = 20.dp, tint = colors.agentMarkTint(mark)?.takeIf { it.isSpecified } ?: colors.fg2)
+                                }
+                                Text(target.label, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+                if (referenceItems.isNotEmpty() || mentions == null) Text(stringResource(Res.string.session_reference_group), style = typography.caption, color = colors.fg4, modifier = Modifier.padding(8.dp))
                 referenceItems.forEach { candidate ->
                     riffet.ui.design.RiffetTextButton(onClick = {
                         onReferenceSession?.invoke(candidate)
@@ -764,7 +818,7 @@ internal fun ComposerCard(
                         }
                     }
                 }
-                if (referenceItems.isEmpty()) Text(stringResource(Res.string.session_reference_no_match), style = typography.caption, color = colors.fg3, modifier = Modifier.padding(8.dp))
+                if (referenceItems.isEmpty() && mentionMembers.isEmpty() && mentionAgents.isEmpty()) Text(stringResource(Res.string.session_reference_no_match), style = typography.caption, color = colors.fg3, modifier = Modifier.padding(8.dp))
             }
             SlashMenuDivider()
         }
@@ -803,7 +857,8 @@ internal fun ComposerCard(
                 // In voice mode the text is read; touching it goes back to the keyboard.
                 readOnly = dictating || voice,
                 minLines = if (hero) heroMinLines else 1,
-                onValueChange = { next ->
+                onValueChange = { incoming ->
+                    val next = withMentionDeleted(value, incoming, mentionTokens)
                     field = next
                     if (next.text != text) onTextChange(next.text)
                 },

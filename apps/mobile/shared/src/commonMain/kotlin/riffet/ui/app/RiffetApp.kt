@@ -71,6 +71,24 @@ import riffet.ui.assistant.AssistantSheets
 import riffet.shared.assistantMain
 import riffet.shared.assistantProject
 import riffet.ui.home.AssistantHome
+import riffet.contracts.AgentIds
+import riffet.contracts.AgentMember
+import riffet.shared.archiveTeamMember
+import riffet.shared.waitingCounts
+import riffet.shared.deleteTeamMember
+import riffet.shared.deliveryMember
+import riffet.shared.memberAvatarUrl
+import riffet.shared.memberMain
+import riffet.shared.memberOf
+import riffet.shared.rememberMemberTarget
+import riffet.shared.setTeamMemberPinned
+import riffet.ui.team.LocalMemberAvatarUrl
+import riffet.ui.team.MemberEditPage
+import riffet.ui.team.MemberPage
+import riffet.ui.team.MemberPaneEntries
+import riffet.ui.team.MemberPaneStandalone
+import riffet.ui.team.TeamTab
+import riffet.ui.timeline.LocalDeliveryMember
 import riffet.ui.settings.ExtensionsPage
 import riffet_mobile.shared.generated.resources.assistant_abilities
 import riffet.shared.LocalNativeFeatures
@@ -112,7 +130,6 @@ import riffet.ui.session.SubagentTarget
 import riffet.ui.sessionlist.ExternalSessionPickerSheet
 import riffet.ui.sessionlist.SessionAction
 import riffet.ui.sessionlist.SessionList
-import riffet.ui.sessionlist.waitingCount
 import riffet.ui.sessionlist.visibleGroups
 import riffet.ui.settings.OwnerController
 import riffet.ui.settings.SettingsScreen
@@ -179,6 +196,10 @@ class RiffetNavigation {
     var abilitiesOpen: Boolean
         get() = pages.contains { it == RiffetPage.Abilities }
         internal set(value) = setPage(RiffetPage.Abilities, value)
+    /** The project the 能力 page is scoped to; null is the assistant's. */
+    internal var abilitiesProject: String? by mutableStateOf(null)
+    /** The 团队 tab's page over the tabs: one member's own page, or the new-member form. */
+    internal var teamPage: TeamPage? by mutableStateOf(null)
     var pairingRequested: Boolean
         get() = pages.contains { it == RiffetPage.Pairing }
         internal set(value) = setPage(RiffetPage.Pairing, value)
@@ -209,6 +230,7 @@ class RiffetNavigation {
 
     fun resetForServer(skipRestore: Boolean = false) {
         close()
+        teamPage = null
         pages.reset()
         ownerPageRequested = false
         projectId = null
@@ -233,7 +255,7 @@ class RiffetNavigation {
         private set
     private var fallbackBack: (() -> Unit)? = null
 
-    val canGoBack: Boolean get() = backDispatcher.canGoBack || pages.canPop || detailsOpen || drawerOpen || session != null
+    val canGoBack: Boolean get() = backDispatcher.canGoBack || pages.canPop || detailsOpen || drawerOpen || session != null || teamPage != null
 
     /** Opens the pairing page, with [address] filled in or straight on the scanner. */
     internal fun requestPairing(address: String? = null, scan: Boolean = false) {
@@ -631,7 +653,7 @@ fun RiffetApp(
                                     RiffetPage.Stats -> if (api != null) StatsScreen(api = api, onBack = back)
                                     RiffetPage.Abilities -> if (api != null) ExtensionsPage(
                                         api = api,
-                                        projectId = assistantProject(store.list.collectAsState().value.projects)?.id,
+                                        projectId = navigation.abilitiesProject ?: assistantProject(store.list.collectAsState().value.projects)?.id,
                                         title = stringResource(Res.string.assistant_abilities),
                                         onBack = back,
                                         backend = NativeBackendId.CLAUDE,
@@ -767,8 +789,22 @@ internal fun Workbench(
         if (navigation.restored) preferences.setString(PreferenceKeys.SESSION, session?.id)
     }
 
+    // A server with team members (docs/TEAM.md) shows 团队 as a list of them; without any, the tab is the one assistant.
+    val team = list.teamMembers
+    val teamPage = navigation.teamPage
+    val pageMember = (teamPage as? TeamPage.Member)?.let { page -> team?.firstOrNull { it.id == page.id } }
+    val sessionMember = remember(session?.id, session?.agentMemberId, list.projects, team) {
+        if (session != null && team != null) memberOf(session, list.projects, team) else null
+    }
+    // The member the panel on the right speaks for: the open conversation's, else the open page's.
+    val detailsMember = if (session != null) sessionMember else pageMember
+    val legacyAssistant = rememberUpdatedState(team == null)
+    LaunchedEffect(teamPage, pageMember, list.loaded) {
+        if (teamPage is TeamPage.Member && pageMember == null && list.loaded) navigation.teamPage = null
+    }
+
     // The assistant's one long conversation, shown by its tab once it exists (docs/ASSISTANT.md §3).
-    val assistantSetup = remember(api, scope) { AssistantSetup(api, scope) }
+    val assistantSetup = remember(api, scope, detailsMember?.id) { AssistantSetup(api, scope, detailsMember?.id) }
     val assistantProject = remember(list.projects) { assistantProject(list.projects) }
     var assistantStarted by remember { mutableStateOf<Session?>(null) }
     val assistantMain = remember(assistantProject, list.sessions, assistantStarted) {
@@ -779,7 +815,7 @@ internal fun Workbench(
     }
     // Derived reads of the tab here and below: a swipe between tabs recomposes this workbench only
     // when one of these answers changes, not on every tab.
-    val onAssistantPage by remember(navigation) { derivedStateOf { navigation.tab == HomeTab.ASSISTANT && navigation.session == null } }
+    val onAssistantPage by remember(navigation) { derivedStateOf { legacyAssistant.value && navigation.tab == HomeTab.ASSISTANT && navigation.session == null } }
     // What the session info and the composer's pickers act on: the visit, or the assistant's page.
     val active = session ?: assistantMain.takeIf { onAssistantPage }
     var assistantSheet by remember { mutableStateOf<AssistantSheet?>(null) }
@@ -788,6 +824,7 @@ internal fun Workbench(
     val assistantEntries = remember(assistantSetup) {
         AssistantEntries(assistantSetup, onSheet = { assistantSheet = it }, onAbilities = {
             navigation.detailsOpen = false
+            navigation.abilitiesProject = null
             navigation.abilitiesOpen = true
         })
     }
@@ -801,13 +838,75 @@ internal fun Workbench(
         }
     }
 
+    // The member panel's rows: what they open, and the member's own writes.
+    val memberEntries = detailsMember?.let { member ->
+        MemberPaneEntries(
+            member = member,
+            setup = assistantSetup,
+            onSheet = { assistantSheet = it },
+            onAbilities = {
+                navigation.detailsOpen = false
+                navigation.abilitiesProject = member.projectId
+                navigation.abilitiesOpen = true
+            },
+            currentSessionId = session?.id,
+            onOpenSession = { target ->
+                navigation.detailsOpen = false
+                if (target.id != session?.id) openSession(target)
+            },
+            onPin = { pinned ->
+                scope.launch {
+                    try {
+                        api?.setTeamMemberPinned(member.id, pinned)?.let(store::applyTeamMember)
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (failure: Throwable) {
+                        store.reportListError(failure.message?.takeIf { it.isNotBlank() } ?: getString(Res.string.app_operation_failed))
+                    }
+                }
+            },
+            onArchive = {
+                scope.launch {
+                    try {
+                        api?.archiveTeamMember(member.id)?.let(store::applyTeamMember)
+                        navigation.detailsOpen = false
+                        navigation.teamPage = null
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (failure: Throwable) {
+                        store.reportListError(failure.message?.takeIf { it.isNotBlank() } ?: getString(Res.string.app_operation_failed))
+                    }
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    try {
+                        api?.deleteTeamMember(member.id)
+                        store.removeTeamMember(member.id)
+                        navigation.close()
+                        navigation.teamPage = null
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (failure: Throwable) {
+                        store.reportListError(failure.message?.takeIf { it.isNotBlank() } ?: getString(Res.string.app_operation_failed))
+                    }
+                }
+            },
+        )
+    }
+    // 团队's rows: a continuous member with a main conversation opens it, any other member opens its own page.
+    val openMember: (AgentMember) -> Unit = { member ->
+        val main = memberMain(member, list.projects, list.sessions)
+        if (main != null) openSession(main) else navigation.teamPage = TeamPage.Member(member.id)
+    }
+
     val requested = navigation.requested
     LaunchedEffect(requested, list.sessions) {
         val request = requested ?: return@LaunchedEffect
         val target = list.sessions.firstOrNull { it.id == request.sessionId } ?: return@LaunchedEffect
         navigation.requested = null
         // The assistant's conversation is its tab, not a page over the others.
-        if (target.id == assistantMain?.id) {
+        if (team == null && target.id == assistantMain?.id) {
             navigation.restored = true
             navigation.statsOpen = false
             navigation.downloadsOpen = false
@@ -822,7 +921,7 @@ internal fun Workbench(
         navigation.statsOpen = false
         navigation.downloadsOpen = false
         navigation.pairingRequested = false
-        navigation.tab = HomeTab.TASKS
+        navigation.tab = if (team != null && memberOf(target, list.projects, team) != null) HomeTab.ASSISTANT else HomeTab.TASKS
         openSession(target)
         navigation.focus = request.sequence?.let { TimelineFocus(target.id, it, platformNowMillis()) }
     }
@@ -900,7 +999,7 @@ internal fun Workbench(
     val offTasks by remember(navigation) { derivedStateOf { navigation.tab != HomeTab.TASKS } }
     RegisterPageBackTarget(tabBackTarget, enabled = offTasks)
 
-    val waiting = remember(list.sessions) { waitingCount(list.sessions) }
+    val waiting = remember(list.sessions, list.projects, list.teamMembers != null) { waitingCounts(list.sessions, list.projects, list.teamMembers != null) }
     // 新建任务's project, as the web's `lastTaskProject`.
     val homeProject = rememberHomeProject(store, navigation, preferences)
     val homeConfigs = rememberHomeConfigs(api, preferences)
@@ -979,6 +1078,11 @@ internal fun Workbench(
                         ?.let { TimelineFocusTarget(it.sequence, it.token) },
                     presenter = presenter,
                     marks = marks,
+                    // Only a continuous member's main conversation is the member itself; its other conversations, and a
+                    // fresh member's, keep their own titles, as on the iPhone.
+                    member = remember(open.id, team, list.projects, list.sessions) {
+                        team?.let { memberOf(open, list.projects, it) }?.takeIf { memberMain(it, list.projects, list.sessions)?.id == open.id }
+                    },
                 )
             }
         }
@@ -1019,6 +1123,11 @@ internal fun Workbench(
         tabSwipe.minFlingVelocity = tabFlingVelocity
     }
 
+    val avatarUrl: (AgentMember) -> String? = remember(api) { { member -> api?.memberAvatarUrl(member) } }
+    val deliveryResolver = remember(team, list.sessions, list.projects) {
+        team?.let { members -> { delivery: riffet.shared.CallDelivery -> deliveryMember(delivery, list.sessions, list.projects, members) } }
+    }
+    CompositionLocalProvider(LocalMemberAvatarUrl provides avatarUrl, LocalDeliveryMember provides deliveryResolver, LocalHasTeam provides (team != null)) {
     AdaptiveWorkbench(tasks = { navigation.tab == HomeTab.TASKS }) { layout ->
         // Where the pages are heading: a right swipe while sliding back to 新会话 already opens the drawer.
         val onFirstTab by remember(tabSwipe) { derivedStateOf { tabSwipe.heading == HomeTab.NEW_SESSION.ordinal } }
@@ -1026,11 +1135,15 @@ internal fun Workbench(
         val paned = layout.twoPane
         // On a phone the session is a page over the tabs: the bar goes with them.
         val covering = session != null && !paned
+        // A member's page or the new-member form is a page over the tabs too, under any conversation opened from it.
+        val teamCovering = teamPage != null && team != null && !paned
+        val overTabs = covering || teamCovering
         // With the bottom bar, a horizontal drag moves between tabs and only 新会话 opens the drawer
         // with it (it has no tab before it); the rail keeps the drawer swipe on every tab.
-        SideEffect { tabSwipe.enabled = !rail && !covering }
+        SideEffect { tabSwipe.enabled = !rail && !overTabs }
         // Hoisted so the tabs under a phone's session can follow its slide (see [coveredBy]).
         val sessionPage = session?.let { open -> key(open.id, paned) { rememberPageBackState(animateEntrance = !paned) } }
+        val teamPageState = teamPage?.takeIf { team != null && !paned }?.let { page -> key(page) { rememberPageBackState(animateEntrance = true) } }
         SideDrawers(
             startOpen = navigation.drawerOpen,
             onStartOpenChange = { open ->
@@ -1042,8 +1155,8 @@ internal fun Workbench(
                 if (open) navigation.drawerOpen = false
                 navigation.detailsOpen = open
             },
-            endEnabled = active != null,
-            startEnabled = !covering && (rail || onFirstTab),
+            endEnabled = active != null || memberEntries != null && teamPage is TeamPage.Member,
+            startEnabled = !overTabs && (rail || onFirstTab),
             backSwipe = { navigation.backSwipeFor(drawerBackTarget) },
             startDrawer = {
                 WorkbenchDrawer(
@@ -1111,25 +1224,28 @@ internal fun Workbench(
                             navigation.detailsOpen = false
                             store.find.open(null)
                         },
-                        onDelete = if (list.canDeleteSessions) ({ deletion.request(open) }) else null,
+                        onDelete = if (list.canDeleteSessions && memberEntries == null) ({ deletion.request(open) }) else null,
                         deleteBusy = deletion.preparing != null,
                         onOpenSubagent = { entry ->
                             navigation.subagent = SubagentTarget(toolCallId = entry.toolCallId, name = entry.name)
                         },
-                        assistant = assistantEntries.takeIf { open.id == assistantMain?.id },
+                        assistant = assistantEntries.takeIf { team == null && open.id == assistantMain?.id },
+                        member = memberEntries,
                     )
+                } else if (memberEntries != null && teamPage is TeamPage.Member) {
+                    MemberPaneStandalone(memberEntries, store, onClose = { navigation.detailsOpen = false })
                 }
             },
         ) {
             Box(Modifier.fillMaxSize()) {
                 // Retain the tabs under a session; covered controls leave the accessibility tree.
-                CompositionLocalProvider(LocalPageActive provides (LocalPageActive.current && !covering)) {
-                    Box(Modifier.fillMaxSize().then(if (covering) Modifier.clearAndSetSemantics { } else Modifier).coveredBy(sessionPage.takeIf { covering })
+                CompositionLocalProvider(LocalPageActive provides (LocalPageActive.current && !overTabs)) {
+                    Box(Modifier.fillMaxSize().then(if (overTabs) Modifier.clearAndSetSemantics { } else Modifier).coveredBy((sessionPage.takeIf { covering } ?: teamPageState).takeIf { overTabs })
                         // The tabs' swipes, over the pages and the bar alike; the drawers are the surface outside.
                         .swipeSurface(tabSwipe)) {
                         val tabs = rememberSaveableStateHolder()
-                        HomeShell(tab = navigation.tab, onTab = { tabSwipe.select(it.ordinal); navigation.tab = it }, waiting = waiting, rail = rail,
-                            dockTab = HomeTab.ASSISTANT.takeIf { !rail && assistantMain != null },
+                        HomeShell(tab = navigation.tab, onTab = { tabSwipe.select(it.ordinal); navigation.tab = it }, waiting = waiting.tasks, teamWaiting = waiting.team, rail = rail,
+                            dockTab = HomeTab.ASSISTANT.takeIf { !rail && assistantMain != null && team == null },
                             position = { tabPager.currentPage + tabPager.currentPageOffsetFraction },
                             heading = { HomeTab.entries[tabSwipe.heading] }) {
                             // The leaving tab stays composed while it is in view but no longer owns back or input.
@@ -1175,7 +1291,14 @@ internal fun Workbench(
                                                     onImportSession = { importScope = ImportScope(homeProject?.id) },
                                                     onOpenTerminal = { id, title -> navigation.terminal = TerminalTarget(id, title) },
                                                 )
-                                                HomeTab.ASSISTANT -> when {
+                                                HomeTab.ASSISTANT -> if (team != null) TeamTab(
+                                                    store = store,
+                                                    api = api,
+                                                    members = team,
+                                                    onOpenMenu = openMenu,
+                                                    onOpenMember = openMember,
+                                                    onNewMember = { navigation.teamPage = TeamPage.New },
+                                                ) else when {
                                                     // A conversation opened over the tabs owns the transcript, so this page waits behind it.
                                                     assistantMain != null -> if (session == null) key(assistantMain.id) {
                                                         TabComposerDock(enabled = !rail) { SessionScreen(
@@ -1242,9 +1365,49 @@ internal fun Workbench(
                         }
                     }
                 }
+                if (teamCovering && teamPage != null) CompositionLocalProvider(LocalPageActive provides (LocalPageActive.current && !covering)) {
+                    Box(Modifier.fillMaxSize().keyboardPadding()) {
+                        SwipeBackPage(
+                            canGoBack = !covering && !navigation.detailsOpen,
+                            onBack = { navigation.teamPage = null },
+                            state = teamPageState ?: rememberPageBackState(animateEntrance = true),
+                            cover = sessionPage.takeIf { covering },
+                            passLeftward = teamPage is TeamPage.Member,
+                        ) { back ->
+                            when (teamPage) {
+                                is TeamPage.Member -> if (pageMember != null) MemberPage(
+                                    store = store,
+                                    api = api,
+                                    member = pageMember,
+                                    project = list.projects.firstOrNull { it.id == pageMember.projectId },
+                                    onBack = back,
+                                    onOpenPanel = { navigation.detailsOpen = true },
+                                    onOpenSession = { made ->
+                                        store.refresh()
+                                        if (pageMember.continuous) navigation.teamPage = null
+                                        openSession(made)
+                                    },
+                                    onStarted = { backend, profile, model ->
+                                        scope.launch {
+                                            val saved = runCatching { api?.rememberMemberTarget(pageMember.id, AgentIds.wire(backend), profile, model) }.getOrNull()
+                                            if (saved != null) store.applyTeamMember(saved)
+                                        }
+                                    },
+                                )
+                                TeamPage.New -> MemberEditPage(
+                                    store = store,
+                                    api = api,
+                                    onBack = back,
+                                    onCreated = { made -> navigation.teamPage = TeamPage.Member(made.id) },
+                                )
+                            }
+                        }
+                    }
+                }
                 if (covering) Box(Modifier.fillMaxSize().keyboardPadding()) { sessionPane(session, false, sessionPage) }
             }
         }
+    }
     }
 
     if (LocalPageActive.current && renaming && session != null) {
@@ -1319,6 +1482,12 @@ internal sealed interface RiffetPage {
     data class Panel(val panel: ProjectPanel, val file: FileTarget? = null) : RiffetPage
     data class Subagent(val target: SubagentTarget) : RiffetPage
     data class Terminal(val target: TerminalTarget) : RiffetPage
+}
+
+/** What the 团队 tab shows over the tabs. */
+internal sealed interface TeamPage {
+    data class Member(val id: String) : TeamPage
+    data object New : TeamPage
 }
 
 /** Navigation and unsent content belong to the server; appearance remains device-wide. */

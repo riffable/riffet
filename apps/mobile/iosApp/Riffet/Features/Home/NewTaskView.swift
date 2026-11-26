@@ -8,6 +8,10 @@ struct NewTaskView: View {
     var onOpenSession: (String) -> Void = { _ in }
     /// Set for the assistant's page: its project, its own draft and choice of agent, and its setup cards in place of the terminal tools.
     var assistant: AssistantSetup? = nil
+    /// Set with `assistant` for a team member's page: its project, Agents, remembered choice and draft.
+    var member: AgentMember? = nil
+    /// A fresh member's conversations above the composer, which then sits at the bottom of the page.
+    var pageContent: AnyView? = nil
     @State private var assistantPage: AssistantPage?
     @State private var projects = false
     @State private var browsing = false
@@ -40,21 +44,26 @@ struct NewTaskView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSize
     private var compact: Bool { verticalSize == .compact }
+    /// A short landscape window, or the composer at the bottom of a member's page: the input starts at two lines.
+    private var tight: Bool { compact || pageContent != nil }
     private var markHidden: Bool { writing || compact }
     /// The quick-chat project, whose sessions are not tasks: a pending creation in it is not this page's.
     /// The assistant keeps its own draft, apart from the task's.
-    private var draft: MessageDraft { workbench.drafts.draft(assistant != nil ? "assistant" : "new") }
+    private var draft: MessageDraft { workbench.drafts.draft(member.map { "member." + $0.id } ?? (assistant != nil ? "assistant" : "new")) }
     /// The settings the composer's defaults come from: the assistant's own choice stands in for the agent's.
     private var settings: AppSettings? {
-        assistant != nil ? AssistantKt.assistantSettings(settings: workbench.settings, backends: workbench.backends) : workbench.settings
+        if let member { return workbench.memberSettings(member) }
+        return assistant != nil ? AssistantKt.assistantSettings(settings: workbench.settings, backends: workbench.backends) : workbench.settings
     }
     private var catalog: NativeBackendCatalogEntry? { loadedCatalog.flatMap { $0.backendId == backend ? $0 : nil } }
     private var backend: NativeBackendId {
         // The assistant runs only on the agents that isolate it; a draft's other agent gives way to its own.
-        return workbench.backends.first { $0.backendId.name == draft.backendName && (assistant == nil || AssistantKt.isAssistantBackend(id: $0.backendId)) }?.backendId ?? settings?.defaultBackendId ?? workbench.backends.first(where: { $0.available })?.backendId ?? .claude
+        let restricted = assistant != nil
+        return workbench.backends.first { $0.backendId.name == draft.backendName && (!restricted || AssistantKt.isAssistantBackend(id: $0.backendId)) }?.backendId ?? settings?.defaultBackendId ?? workbench.backends.first(where: { $0.available })?.backendId ?? .claude
     }
     private var project: Project? {
-        assistant != nil ? workbench.assistantProject : workbench.projects.first { $0.id == draft.projectID }
+        if let member { return workbench.project(member.projectId) }
+        return assistant != nil ? workbench.assistantProject : workbench.projects.first { $0.id == draft.projectID }
     }
     /// What a warm CLI is held for: only an Agent that keeps one (Cursor) asks for it.
     private var prewarmBody: PrewarmBody? {
@@ -83,36 +92,8 @@ struct NewTaskView: View {
     private var contextKey: String { "\(backend.name)|\(draft.profileID ?? "")|\(draft.projectID ?? "")|\(workbench.list.backendRevision)" }
     var body: some View {
         @Bindable var draft = draft
-        ZStack {
-            palette.bg.ignoresSafeArea().onTapGesture { writing = false }
-            GeometryReader { viewport in
-                ScrollView {
-                    // The composer block sits at the page's vertical centre; the room above it holds the mark.
-                    NewTaskLayout(minHeight: viewport.size.height, markShown: !markHidden) {
-                        // Folded away while the keyboard is up or the screen is short, where the form needs the room.
-                        LiveBrandMark(front: palette.fg, back: palette.accent)
-                            .opacity(markHidden ? 0 : 1)
-                            .allowsHitTesting(!markHidden)
-                        VStack(alignment: .leading, spacing: 0) {
-                            slot.riffetTypeBoundary()
-                            menuDock.riffetTypeBoundary()
-                            cardSlot.riffetTypeBoundary()
-                        }
-                        .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)
-                        VStack(alignment: .leading, spacing: 0) {
-                            notes.riffetTypeBoundary()
-                            (assistant != nil ? AnyView(assistantCards) : AnyView(toolCards)).padding(.top, 12).riffetTypeBoundary()
-                        }
-                        .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, 24)
-                    }
-                    .riffetAnimation(RiffetMotion.spatial, value: markHidden)
-                    .frame(maxWidth: .infinity)
-                    .background { Color.clear.contentShape(Rectangle()).onTapGesture { writing = false } }
-                }
-                .scrollDismissesKeyboard(.interactively)
-            }
-        }
-        .navigationTitle(assistant != nil ? String(localized: "个人助理", bundle: .riffet) : String(localized: "新会话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        pageBody.riffetTypeBoundary()
+        .navigationTitle(member != nil ? "" : assistant != nil ? String(localized: "个人助理", bundle: .riffet) : String(localized: "新会话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if assistant == nil, let project {
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -181,6 +162,51 @@ struct NewTaskView: View {
         .onChange(of: extensionsKey) { _, _ in extensionsOff = [] }
         .readsToolDevices(toolDevices, workbench: workbench, enabled: catalog?.capabilities.supportsRiffetTools == true)
     }
+    /// The page's content: the centred composer under the brand mark, or a fresh member's conversations above a bottom composer.
+    @ViewBuilder private var pageBody: some View {
+        if let pageContent {
+            pageContent
+                .onTapGesture { writing = false }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        menuDock.riffetTypeBoundary()
+                        cardSlot.riffetTypeBoundary()
+                        notes.riffetTypeBoundary()
+                    }
+                    .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, RiffetMetrics.floatingGap)
+                }
+        } else {
+            ZStack {
+                palette.bg.ignoresSafeArea().onTapGesture { writing = false }
+                GeometryReader { viewport in
+                ScrollView {
+                    // The composer block sits at the page's vertical centre; the room above it holds the mark.
+                    NewTaskLayout(minHeight: viewport.size.height, markShown: !markHidden) {
+                        // Folded away while the keyboard is up or the screen is short, where the form needs the room.
+                        LiveBrandMark(front: palette.fg, back: palette.accent)
+                            .opacity(markHidden ? 0 : 1)
+                            .allowsHitTesting(!markHidden)
+                        VStack(alignment: .leading, spacing: 0) {
+                            slot.riffetTypeBoundary()
+                            menuDock.riffetTypeBoundary()
+                            cardSlot.riffetTypeBoundary()
+                        }
+                        .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)
+                        VStack(alignment: .leading, spacing: 0) {
+                            notes.riffetTypeBoundary()
+                            (assistant != nil ? AnyView(assistantCards) : AnyView(toolCards)).padding(.top, 12).riffetTypeBoundary()
+                        }
+                        .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, 24)
+                    }
+                    .riffetAnimation(RiffetMotion.spatial, value: markHidden)
+                    .frame(maxWidth: .infinity)
+                    .background { Color.clear.contentShape(Rectangle()).onTapGesture { writing = false } }
+                }
+                .scrollDismissesKeyboard(.interactively)
+                }
+            }
+        }
+    }
     private var voiceInput: Bool { workbench.settings?.voiceInput?.recognizer != nil }
     private var voiceActive: Bool { voice.mode && voiceInput }
     private var holdInFooter: Bool { voiceActive && !voice.textEmpty(draft) }
@@ -224,9 +250,9 @@ struct NewTaskView: View {
             } else {
             ComposerFieldLayout(key: writing ? nil : [AnyHashable(draft.text), AnyHashable(textSize), AnyHashable(compact)]) {
                 TextField(assistant != nil ? LocalizedStringKey("发送消息…") : LocalizedStringKey("描述任务"), text: $draft.text, selection: voice.selectionBinding(draft), axis: .vertical)
-                    .riffetFont(.body).lineLimit(compact ? 2...6 : 4...14).focused($writing)
+                    .riffetFont(.body).lineLimit(tight ? 2...6 : 4...14).focused($writing)
             }
-                .frame(minHeight: compact ? 44 : 112, alignment: .topLeading)
+                .frame(minHeight: tight ? 44 : 112, alignment: .topLeading)
                 .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 6)
                 .accessibilityLabel("任务内容").accessibilityIdentifier("newTaskText").disabled(locked || voice.dictating)
                 .onChange(of: draft.text) { _, value in updateMenu(value) }
@@ -264,7 +290,7 @@ struct NewTaskView: View {
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { voice.hold.composerFrame = $0 }
     }
     /// The text field's room (`minHeight` plus its 16 above and 6 below) less the bar's insets.
-    private var holdBarHeight: CGFloat { (compact ? 44 : 112) + 22 - Self.holdTop - (Self.holdTop - Self.sendInset) }
+    private var holdBarHeight: CGFloat { (tight ? 44 : 112) + 22 - Self.holdTop - (Self.holdTop - Self.sendInset) }
     /// The footer starts so the plus glyph (17pt, centred in its 40pt slot) sits on the text's left edge; the send
     /// button's circle sits `sendInset` inside its 44pt slot, and the row ends `toolsTrailing` in.
     private static let toolWidth: CGFloat = 40
@@ -486,7 +512,7 @@ struct NewTaskView: View {
             } else {
                 guard let project, draft.canSend, let catalog, catalog.available else { return }
                 let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: settings)
-                request = try workbench.store.prepareCreation(projectId: project.id, prompt: draft.text, attachments: draft.attachments,
+                request = try workbench.store.prepareMemberCreation(agentMemberId: member?.id, projectId: project.id, prompt: draft.text, attachments: draft.attachments,
                     backendId: backend, backendProfileId: draft.profileID, model: draft.model,
                     mode: choice.mode, approval: choice.approval, context: draft.references, agentId: nil,
                     toolGroups: phonesShown ? pickedTools : nil,
@@ -505,7 +531,11 @@ struct NewTaskView: View {
             draft.pendingCreationID = nil
             writing = false
             // Every device opens the assistant's composer on what this one started with.
-            if assistant != nil, let api = workbench.api {
+            if let member, let api = workbench.api {
+                if let saved = try? await api.rememberMemberTarget(id: member.id, backendId: backend.name.lowercased(), profileId: draft.profileID, model: draft.model) {
+                    workbench.store.applyTeamMember(member: saved)
+                }
+            } else if assistant != nil, let api = workbench.api {
                 if let saved = try? await api.rememberAssistant(backendId: backend, profileId: draft.profileID, model: draft.model) {
                     workbench.store.applySavedSettings(settings: saved)
                 }

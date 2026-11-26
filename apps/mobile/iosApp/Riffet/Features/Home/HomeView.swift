@@ -1,11 +1,13 @@
 import SwiftUI
 import RiffetKit
 
-enum MobileRoute: Hashable { case session(String, Bool) }
+enum MobileRoute: Hashable { case session(String, Bool), member(String) }
 
 /// The tabs, in the bar's order. A launch opens the one chosen in 设置 → 交互与输入; 新会话 until then.
 enum RootTab: String, CaseIterable {
     case newTask, assistant, tasks, settings
+    /// The title with the server's team in mind: the second tab is 团队 once the server has members, else 助理.
+    func title(team: Bool) -> String { self == .assistant && team ? String(localized: "团队", bundle: .riffet) : title }
     static let launchKey = "riffet.ios.launch-tab"
     static var launch: RootTab { RootTab(rawValue: UserDefaults.standard.string(forKey: launchKey) ?? "") ?? .newTask }
     var title: String {
@@ -34,6 +36,7 @@ struct RiffetRootView: View {
     @State private var assistantPath: [MobileRoute] = []
     @State private var taskPath: [MobileRoute] = []
     @State private var openFromList = RouteAction()
+    @State private var teamNavigator = TeamNavigator()
     /// Bumped when the current Tasks tab is tapped again; the list scrolls to its top.
     @State private var tasksScrollTop = 0
     @State private var deletionShown = false
@@ -45,7 +48,19 @@ struct RiffetRootView: View {
             tabRaw = value.rawValue
         })
     }
-    private var waitingCount: Int { workbench?.list.sessions.count { $0.state == .waiting } ?? 0 }
+    /// The server has team members: the 助理 tab is 团队.
+    private var teamTab: Bool { workbench?.teamMembers != nil }
+    /// What the pages of the 团队 stack open, bound to this stack's path on each pass.
+    private var refreshedTeamNavigator: TeamNavigator {
+        teamNavigator.open = { assistantPath.append(.session($0, false)) }
+        teamNavigator.popToRoot = { assistantPath = [] }
+        return teamNavigator
+    }
+    /// Each tab's badge counts the waiting conversations it lists: 团队 the members', 任务 the rest.
+    private var waiting: WaitingCounts? {
+        guard let list = workbench?.list else { return nil }
+        return waitingCounts(sessions: list.sessions, projects: list.projects, team: list.teamMembers != nil)
+    }
     /// A window wide and tall enough for 任务 to keep its list beside the conversation: iPad, an
     /// unfolded iPhone Duo. The window decides, not the device, so Split View and Stage Manager
     /// windows follow the iPhone rules once they are narrow, and a phone in landscape stays one column.
@@ -75,14 +90,19 @@ struct RiffetRootView: View {
             .tag(RootTab.newTask)
             NavigationStack(path: $assistantPath) {
                 Group {
-                    if let workbench { AssistantRootView(workbench: workbench, onOpenSession: { assistantPath.append(.session($0, false)) }) }
-                    else { NeedsServerView().navigationTitle(RootTab.assistant.title).navigationBarTitleDisplayMode(.inline).background(TabBarVisibility(hidden: false)) }
+                    if let workbench {
+                        if workbench.teamMembers != nil { TeamRootView(workbench: workbench, onOpen: { assistantPath.append(.member($0)) }) }
+                        else { AssistantRootView(workbench: workbench, onOpenSession: { assistantPath.append(.session($0, false)) }) }
+                    }
+                    else { NeedsServerView().navigationTitle(RootTab.assistant.title(team: teamTab)).navigationBarTitleDisplayMode(.inline).background(TabBarVisibility(hidden: false)) }
                 }
                     .navigationDestination(for: MobileRoute.self) { destination($0) }
             }
+            .environment(\.teamNavigator, refreshedTeamNavigator)
             .riffetToastHost()
-            .tabItem { Image(systemName: "sparkles").environment(\.symbolVariants, .none).accessibilityLabel("助理") }
+            .tabItem { Image(systemName: teamTab ? "person.2" : "sparkles").environment(\.symbolVariants, .none).accessibilityLabel(RootTab.assistant.title(team: teamTab)) }
             .tag(RootTab.assistant)
+            .badge(Int(waiting?.team ?? 0))
             // One stack in both widths: on a wide window the list moves out beside it and the stack's
             // root becomes the empty detail, while its path, and the conversation on it, stay mounted
             // through a fold, an unfold or a resize.
@@ -101,7 +121,7 @@ struct RiffetRootView: View {
             .riffetToastHost()
             .tabItem { Image(systemName: "checklist").environment(\.symbolVariants, .none).accessibilityLabel("任务") }
             .tag(RootTab.tasks)
-            .badge(waitingCount)
+            .badge(Int(waiting?.tasks ?? 0))
             NavigationStack {
                 SettingsView(workbench: workbench)
             }
@@ -185,6 +205,8 @@ struct RiffetRootView: View {
                 .navigationBarBackButtonHidden(splitRoot)
                 // The tab bar leaves a phone's conversation; a wide window keeps its tabs in reach.
                 .background(TabBarVisibility(hidden: !wide)) }
+        case let .member(id):
+            if let workbench { TeamMemberPage(workbench: workbench, memberID: id).id(id).background(TabBarVisibility(hidden: !wide)) }
         }
     }
     private var stackTop: MobileRoute? {
@@ -210,7 +232,9 @@ struct RiffetRootView: View {
         if model.pendingHome { tabRaw = RootTab.tasks.rawValue; taskPath = []; model.pendingHome = false }
         if let id = model.pendingSessionID {
             // The assistant's conversation is its tab, not a page of 任务.
-            if id == workbench.assistantMain?.id { tabRaw = RootTab.assistant.rawValue; assistantPath = [] }
+            if workbench.teamMembers != nil, let session = workbench.listedSession(id), workbench.member(of: session) != nil {
+                tabRaw = RootTab.assistant.rawValue; assistantPath = [.session(id, true)]
+            } else if id == workbench.assistantMain?.id { tabRaw = RootTab.assistant.rawValue; assistantPath = [] }
             else { tabRaw = RootTab.tasks.rawValue; taskPath = [.session(id, true)] }
             model.pendingSessionID = nil
         }
@@ -287,11 +311,13 @@ struct SessionHomeView: View {
     private var sessions: [Session] {
         let names = Dictionary(uniqueKeysWithValues: workbench.list.projects.map { ($0.id, $0.name) })
         let archivedProjects = Set(workbench.list.projects.filter { $0.archivedAt != nil }.map(\.id))
+        let memberProjects = self.memberProjects
         // Quick chats have no project to scope by: 快速对话 lists the live ones, and 已归档 without a
         // project scope adds the archived ones; every other filter leaves them out.
         let chats = chatProject?.id
         let withChats = filter == .quickChat || (filter == .archived && scope == nil)
         return order.sorted(workbench.list).filter {
+            !isTeamSession($0, memberProjects) &&
             ($0.projectId == chats ? withChats : filter != .quickChat) &&
             (($0.archivedAt != nil || archivedProjects.contains($0.projectId)) == (filter == .archived)) &&
             (scope == nil || $0.projectId == scope || ($0.projectId == chats && filter == .quickChat)) &&
@@ -300,6 +326,14 @@ struct SessionHomeView: View {
             (tag == nil || $0.tags.contains(tag!)) &&
             (query.isEmpty || "\($0.title) \(names[$0.projectId] ?? "") \($0.tags.joined(separator: " "))".localizedCaseInsensitiveContains(query))
         }
+    }
+    /// A team member's conversations are in 团队, as in the web sidebar: those it opened, and the older ones in its
+    /// own project that carry no member yet.
+    private var memberProjects: Set<String> {
+        workbench.teamMembers == nil ? [] : Set(workbench.list.projects.filter(\.isAssistant).map(\.id))
+    }
+    private func isTeamSession(_ session: Session, _ memberProjects: Set<String>) -> Bool {
+        session.agentMemberId != nil || memberProjects.contains(session.projectId)
     }
     private var chatProject: Project? { workbench.list.projects.first { $0.isQuickChat && $0.archivedAt == nil } }
     /// 快速对话 only when the server keeps quick chats.
@@ -368,7 +402,8 @@ struct SessionHomeView: View {
     }
     /// A filter's title with how many sessions need the reader or are working, when that is a count to act on.
     private func filterTitle(_ filter: HomeFilter) -> String {
-        let live = workbench.list.sessions.filter { $0.archivedAt == nil }
+        let memberProjects = self.memberProjects
+        let live = workbench.list.sessions.filter { $0.archivedAt == nil && !isTeamSession($0, memberProjects) }
         let count: Int
         switch filter {
         case .waiting: count = live.count { $0.state == .waiting }
@@ -712,15 +747,7 @@ private struct SessionRowLabel: View {
         return parts.joined(separator: " · ")
     }
     /// Today the clock, yesterday its name, within a week the weekday, else month/day.
-    func timeText(_ session: Session) -> String {
-        guard let date = ServerTime.date(SidebarModelKt.activityAt(session: session)) else { return "" }
-        let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)) }
-        if calendar.isDateInYesterday(date) { return String(localized: "昨天", bundle: .riffet) }
-        if date >= calendar.date(byAdding: .day, value: -6, to: calendar.startOfDay(for: .now))! { return date.formatted(.dateTime.weekday(.abbreviated).locale(AppLocalization.shared.locale)) }
-        let parts = calendar.dateComponents([.month, .day], from: date)
-        return "\(parts.month ?? 0)/\(parts.day ?? 0)"
-    }
+    func timeText(_ session: Session) -> String { sessionRowTime(SidebarModelKt.activityAt(session: session)) }
     /// A failure is called out until it is seen; after that the conversation tells it, and the row
     /// reads like any other (docs/design/DECISIONS.md 2026-11-17).
     func failedUnseen(_ session: Session) -> Bool {

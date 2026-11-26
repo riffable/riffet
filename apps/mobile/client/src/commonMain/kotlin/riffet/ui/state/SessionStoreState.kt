@@ -1,5 +1,6 @@
 package riffet.ui.state
 
+import riffet.contracts.AgentMember
 import riffet.contracts.AppSettings
 import riffet.contracts.Attachment
 import riffet.contracts.InboxEntry
@@ -32,6 +33,8 @@ data class SessionListState(
     val canDeleteSessions: Boolean = false,
     /** Task summaries, matched to conversations by `Session.workItemId`; null when unknown or the server has no task board. */
     val workItems: List<WorkItemSummary>? = null,
+    /** Standing team members, archived ones left out (docs/TEAM.md); null until a server with team members answers. */
+    val teamMembers: List<AgentMember>? = null,
 )
 
 /** The lifecycle of the one native stream this store holds open. */

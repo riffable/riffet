@@ -40,7 +40,6 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.timeline.CopyTextButton
 import riffet.ui.timeline.Spinner
 import riffet.ui.timeline.platformNowMillis
-import riffet.ui.timeline.platformUtcOffsetMillis
 import riffet_mobile.shared.generated.resources.*
 
 /** The server's own TTL; a client clock that runs ahead of the server's must not stretch it. */
@@ -115,7 +114,7 @@ internal fun PairDeviceSection(api: RiffetApi) {
         Row(Modifier.fillMaxWidth().padding(horizontal = metrics.pageInset, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 if (expired) stringResource(Res.string.settings_pair_device_expired)
-                else stringResource(Res.string.settings_pair_device_until, formatClock(deadline)),
+                else stringResource(Res.string.settings_pair_device_until, riffet.ui.sessionlist.clockLabel(deadline)),
                 style = typography.caption, color = if (expired) colors.danger else colors.fg3,
             )
             SettingsButton(stringResource(Res.string.settings_pair_device_regenerate), onClick = { attempt++ })
@@ -132,10 +131,4 @@ internal fun PairDeviceSection(api: RiffetApi) {
         }
         if (response.localOnly) PageBanner(stringResource(Res.string.settings_pair_device_local_only), SettingsNoticeKind.WARNING)
     }
-}
-
-/** Local wall-clock `HH:mm` of an epoch instant. */
-private fun formatClock(epochMillis: Long): String {
-    val minutes = ((epochMillis + platformUtcOffsetMillis(epochMillis)) / 60_000).mod(24 * 60L)
-    return "${(minutes / 60).toString().padStart(2, '0')}:${(minutes % 60).toString().padStart(2, '0')}"
 }

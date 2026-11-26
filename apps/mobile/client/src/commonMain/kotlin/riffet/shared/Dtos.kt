@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import riffet.contracts.AgentMention
 import riffet.contracts.DevicePushRoute
 import riffet.contracts.Run
 import riffet.contracts.NativeTurnTarget
@@ -62,6 +63,8 @@ data class NativeMessageInput(
     val expectedConfigRevision: Long? = null,
     val stop: NativeStopRequest? = null,
     val references: List<riffet.contracts.SessionReferenceInput>? = null,
+    /** The Agents and team members the message `@`-mentions (docs/AGENT-CALLS.md §3, docs/TEAM.md §4.3). */
+    val agents: List<AgentMention>? = null,
 )
 
 @Serializable
@@ -113,6 +116,8 @@ data class NativeSessionCreateInput(
     val agentId: String? = null,
     /** `mcp:<name>` / `skill:<name>` switched off for the new conversation. */
     val extensionsOff: List<String>? = null,
+    /** The team member the conversation belongs to (docs/TEAM.md); the server checks its scope and session mode. */
+    val agentMemberId: String? = null,
 )
 
 @Serializable

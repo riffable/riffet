@@ -1,6 +1,96 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "团队" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Team" } }
+      }
+    },
+    "新建成员" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New Member" } }
+      }
+    },
+    "成员信息" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Member Info" } }
+      }
+    },
+    "成员" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Members" } }
+      }
+    },
+    "职责" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Role" } }
+      }
+    },
+    "个人" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Personal" } }
+      }
+    },
+    "全局" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Global" } }
+      }
+    },
+    "连续对话" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continuous" } }
+      }
+    },
+    "每次新建" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New Each Time" } }
+      }
+    },
+    "头像" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Avatar" } }
+      }
+    },
+    "写进它的 AGENTS.md" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Written to its AGENTS.md" } }
+      }
+    },
+    "能力和每日运行上限在 Web 上改" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Capabilities and the daily run limit are changed on the web" } }
+      }
+    },
+    "你" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You" } }
+      }
+    },
+    "%@ 调用" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Called by %@" } }
+      }
+    },
+    "%d 个运行中 · 共 %d" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d running · %d total" } }
+      }
+    },
+    "共 %d" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d total" } }
+      }
+    },
+    "删除成员「%@」？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete member “%@”?" } }
+      }
+    },
+    "保留历史会话记录，不再出现在团队列表中。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Past conversations are kept; the member will be removed from the team list." } }
+      }
+    },
     "编辑" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Edit" } }

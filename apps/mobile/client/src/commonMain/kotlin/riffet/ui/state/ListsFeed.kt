@@ -43,6 +43,7 @@ class ListsFeed(
             stream.events.collect { event ->
                 when (event) {
                     is ListsStreamEvent.Changed -> changed(event.data)
+                    is ListsStreamEvent.Team -> store.replaceTeamMembers(event.members)
                     is ListsStreamEvent.Notice -> try {
                         onNotice(event.notice)
                     } catch (cancellation: CancellationException) {

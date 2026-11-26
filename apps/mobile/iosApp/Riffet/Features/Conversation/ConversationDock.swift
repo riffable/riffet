@@ -41,7 +41,8 @@ struct ConversationDock: View {
         VStack(spacing: 8) {
             if let menu {
                 ComposerMenuDock(workbench: workbench, source: .session(session, workbench: workbench), draft: draft, token: menu,
-                                 allowsFiles: session.backendId != .chat, allowsSessions: supportsSessionReferences, picked: onMenuPicked)
+                                 allowsFiles: session.backendId != .chat, allowsSessions: supportsSessionReferences, picked: onMenuPicked,
+                                 mentions: MentionOptions.make(workbench: workbench, session: session))
                     .transition(.opacity)
             }
             ForEach(shown, id: \.self) { card in

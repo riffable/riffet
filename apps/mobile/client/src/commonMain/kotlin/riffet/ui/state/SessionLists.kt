@@ -17,6 +17,8 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.CoroutineContext
 import riffet.cache.ListCache
 import riffet.contracts.AgentIds
+import riffet.contracts.AgentMember
+import riffet.contracts.TEAM_MEMBERS_FEATURE
 import riffet.contracts.AppSettings
 import riffet.contracts.Attachment
 import riffet.contracts.NativeBackendId
@@ -253,6 +255,8 @@ internal class SessionLists(
                         loaded = true,
                         canDeleteSessions = bootstrap.protocol?.features?.contains(DELETE_FEATURE) == true,
                         workItems = if (freshWorkItems) bootstrap.workItemSummaries else state.workItems,
+                        teamMembers = bootstrap.teamMembers?.filter { it.archivedAt == null }
+                            ?: state.teamMembers.takeIf { bootstrap.protocol?.features?.contains(TEAM_MEMBERS_FEATURE) == true },
                     )
                 }
                 scheduleListSave()
@@ -421,6 +425,7 @@ internal class SessionLists(
             settings = stored.settings,
             loaded = true,
             cachedAt = stored.savedAt,
+            teamMembers = stored.teamMembers,
         )
     }
 
@@ -431,7 +436,7 @@ internal class SessionLists(
         listSaveJob = null
         val state = list.value
         if (state.cachedAt != null || (!state.loaded && state.projects.isEmpty() && state.sessions.isEmpty())) return {}
-        return { runCatching { cache.saveList(state.projects, state.sessions, state.settings) }; Unit }
+        return { runCatching { cache.saveList(state.projects, state.sessions, state.settings, state.teamMembers) }; Unit }
     }
 
     private fun scheduleListSave() {
@@ -441,7 +446,7 @@ internal class SessionLists(
             delay(SAVE_DELAY_MILLIS)
             val state = list.value
             if (state.cachedAt != null) return@launch
-            runCatching { cache.saveList(state.projects, state.sessions, state.settings) }
+            runCatching { cache.saveList(state.projects, state.sessions, state.settings, state.teamMembers) }
         }
     }
 
@@ -639,6 +644,7 @@ internal class SessionLists(
         agentId: String? = null,
         toolGroups: List<String>? = null,
         extensionsOff: List<String>? = null,
+        agentMemberId: String? = null,
     ): Session {
         val text = prompt.trim()
         // The server names a conversation after its first human message (see `session-title.ts`), so
@@ -657,6 +663,7 @@ internal class SessionLists(
                 approval = approval?.takeIf { it.isNotBlank() },
                 toolGroups = toolGroups,
                 extensionsOff = extensionsOff,
+                agentMemberId = agentMemberId,
                 initialMessage = NativeMessageInput(
                     commandId = newClientId(),
                     text = text,
@@ -674,6 +681,25 @@ internal class SessionLists(
         applySession(result.session)
         core.addCreated(result.run)
         return result.session
+    }
+
+    /** Folds a member the server answered with (created, pinned, archived) into the list; an archived one leaves it. */
+    fun applyTeamMember(member: AgentMember) {
+        _list.update { state ->
+            val held = state.teamMembers.orEmpty().filterNot { it.id == member.id }
+            state.copy(teamMembers = if (member.archivedAt == null) held + member else held)
+        }
+        scheduleListSave()
+    }
+
+    fun replaceTeamMembers(members: List<AgentMember>) {
+        _list.update { state -> state.copy(teamMembers = members.filter { it.archivedAt == null }) }
+        scheduleListSave()
+    }
+
+    fun removeTeamMember(id: String) {
+        _list.update { state -> state.copy(teamMembers = state.teamMembers?.filterNot { it.id == id }) }
+        scheduleListSave()
     }
 
     /** Imports a provider conversation and folds the session, and the project it may have created, into the list. */

@@ -175,6 +175,8 @@ data class Bootstrap(
     val revisions: ListRevisions? = null,
     /** Task summaries; absent from a server without the task board. */
     val workItemSummaries: List<WorkItemSummary>? = null,
+    /** Standing team members (docs/TEAM.md); absent from an older server. */
+    val teamMembers: List<AgentMember>? = null,
 )
 
 /** A task as the conversation list shows it; [status] stays a string so a new status does not break decoding. */

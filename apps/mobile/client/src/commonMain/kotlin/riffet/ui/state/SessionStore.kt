@@ -35,6 +35,8 @@ import kotlin.coroutines.CoroutineContext
 import riffet.contracts.AppSettings
 import riffet.contracts.Attachment
 import riffet.contracts.AgentIds
+import riffet.contracts.AgentMember
+import riffet.contracts.AgentMention
 import riffet.contracts.NativeBackendId
 import riffet.contracts.NativeDeliveryState
 import riffet.i18n.L10n
@@ -606,6 +608,33 @@ class SessionStore(
         extensionsOff: List<String>? = null,
     ): Session = lists.createSession(projectId, prompt, attachments, backendId, backendProfileId, model, mode, approval, context, agentId, toolGroups, extensionsOff)
 
+    /** [createSession] for a team member's conversation (docs/TEAM.md): the server checks its scope and session mode. */
+    @Throws(Exception::class)
+    suspend fun createMemberSession(
+        agentMemberId: String,
+        projectId: String,
+        prompt: String,
+        attachments: List<Attachment>,
+        backendId: NativeBackendId?,
+        backendProfileId: String?,
+        model: String?,
+        mode: String?,
+        approval: String?,
+        context: List<PromptContextReference>,
+        agentId: String?,
+        toolGroups: List<String>?,
+        extensionsOff: List<String>?,
+    ): Session = lists.createSession(projectId, prompt, attachments, backendId, backendProfileId, model, mode, approval, context, agentId, toolGroups, extensionsOff, agentMemberId)
+
+    /** Folds a member the server answered with into the list; an archived one leaves it. */
+    fun applyTeamMember(member: AgentMember) = lists.applyTeamMember(member)
+
+    /** The whole team as the lists stream sends it on any change, made on this device or another. */
+    fun replaceTeamMembers(members: List<AgentMember>) = lists.replaceTeamMembers(members)
+
+    /** Drops a deleted member from the list. */
+    fun removeTeamMember(id: String) = lists.removeTeamMember(id)
+
     /** Binds a provider conversation found on the server's machine; an already bound one comes back with `created` false. */
     @Throws(Exception::class)
     suspend fun importExternalSession(backendId: String, backendProfileId: String, nativeSessionId: String): ExternalSessionImport =
@@ -664,6 +693,24 @@ class SessionStore(
         agentId: String?,
         toolGroups: List<String>?,
         extensionsOff: List<String>?,
+    ): PendingSessionCreation = prepareMemberCreation(null, projectId, prompt, attachments, backendId, backendProfileId, model, mode, approval, context, agentId, toolGroups, extensionsOff)
+
+    /** [prepareCreation] for a team member's conversation when [agentMemberId] is set (docs/TEAM.md). */
+    @Throws(Exception::class)
+    fun prepareMemberCreation(
+        agentMemberId: String?,
+        projectId: String?,
+        prompt: String,
+        attachments: List<Attachment>,
+        backendId: NativeBackendId?,
+        backendProfileId: String?,
+        model: String?,
+        mode: String?,
+        approval: String?,
+        context: List<PromptContextReference>,
+        agentId: String?,
+        toolGroups: List<String>?,
+        extensionsOff: List<String>?,
     ): PendingSessionCreation {
         require(projectId == null || projectId.isNotBlank()) { "请选择项目" }
         require(projectId != null || backendId != NativeBackendId.CHAT) { "快速对话需要专属项目" }
@@ -674,7 +721,7 @@ class SessionStore(
             backendId = backendId?.takeIf { agentId == null } ?: agentId?.let(AgentIds::builtin), agentId = agentId?.takeIf { AgentIds.builtin(it) == null },
             backendProfileId = backendProfileId, model = model?.takeIf { it.isNotBlank() },
             mode = mode?.takeIf { it.isNotBlank() }, approval = approval?.takeIf { it.isNotBlank() },
-            toolGroups = toolGroups, extensionsOff = extensionsOff,
+            toolGroups = toolGroups, extensionsOff = extensionsOff, agentMemberId = agentMemberId,
             initialMessage = NativeMessageInput(commandId = newClientId(), text = prompt,
                 attachments = attachments.takeIf { it.isNotEmpty() }?.map { AttachmentRef(it.id) },
                 context = context.fileReferences(),
@@ -900,6 +947,18 @@ class SessionStore(
         interrupt: Boolean = false,
         onStored: (() -> Unit)? = null,
     ): Boolean = composer.send(text, attachments, context, interrupt, onStored)
+
+    /** [send] or [enqueue] with the Agents and team members the message `@`-mentions; an empty list mentions none. */
+    @Throws(Exception::class)
+    suspend fun sendMentioning(
+        text: String,
+        attachments: List<Attachment>,
+        context: List<PromptContextReference>,
+        agents: List<AgentMention>,
+        interrupt: Boolean = false,
+        enqueue: Boolean = false,
+        onStored: (() -> Unit)? = null,
+    ): Boolean = composer.sendMentioning(text, attachments, context, agents, interrupt, enqueue, onStored)
 
     /** The selected intent remains visible even when the task temporarily cannot accept it. */
     fun prefersSteerWhileRunning(): Boolean =

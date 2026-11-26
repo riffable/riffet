@@ -18,6 +18,12 @@ final class AssistantSetup {
     var memory: AssistantMemory?
     var memoryFailed = false
     var delegations: [AssistantDelegation]?
+    /// Set for a team member's pages: its own memory, rules and delegations (`/api/team/members/:id/…`) instead of the assistant's.
+    var memberID: String?
+    /// The project 能力 lists the extensions of; the assistant's own when unset.
+    var projectID: String?
+    /// What the member left in its `files/`; 文件 shows only when there is some.
+    var files: [AgentMemberFile] = []
     /// The capability packs (docs/ASSISTANT.md §8.2); the installed ones with an entry show above the composer.
     var packs: [AssistantPack] = []
 
@@ -28,6 +34,17 @@ final class AssistantSetup {
 
     func refresh(_ api: RiffetApi?) async {
         guard let api else { return }
+        if let id = memberID {
+            async let rules = try? api.memberInstructions(id: id)
+            async let notes = try? api.memberMemory(id: id)
+            async let follows = try? api.memberDelegations(id: id)
+            async let held = try? api.memberFiles(id: id)
+            if let value = await rules { instructions = value }
+            if let value = await notes { memory = value; memoryFailed = false } else if memory == nil { memoryFailed = true }
+            if let value = await follows { delegations = value }
+            if let value = await held { files = value }
+            return
+        }
         async let rules = try? api.assistantInstructions()
         async let notes = try? api.assistantMemory()
         async let follows = try? api.assistantDelegations()
@@ -92,12 +109,12 @@ enum AssistantPage: String, Identifiable {
         switch self {
         case .memory: AssistantMemoryView(setup: setup)
         case .rules: AssistantRulesView(workbench: workbench, setup: setup)
-        case .abilities: NativeExtensionsView(workbench: workbench, assistantProjectID: workbench.assistantProject?.id)
+        case .abilities: NativeExtensionsView(workbench: workbench, assistantProjectID: setup.projectID ?? workbench.assistantProject?.id)
         }
     }
 }
 
-@MainActor private func relativeText(_ value: String?) -> String? {
+@MainActor func relativeText(_ value: String?) -> String? {
     guard let value, let date = ServerTime.date(value) else { return nil }
     let locale = AppLocalization.shared.locale
     if RelativeTime.formatter.locale != locale { RelativeTime.formatter.locale = locale }
@@ -306,7 +323,8 @@ struct AssistantRulesView: View {
         busy = true; error = nil
         defer { busy = false }
         do {
-            setup.instructions = try await api.saveAssistantInstructions(text: value)
+            if let id = setup.memberID { setup.instructions = try await api.saveMemberInstructions(id: id, text: value) }
+            else { setup.instructions = try await api.saveAssistantInstructions(text: value) }
             dismiss()
         } catch { self.error = error.riffetMessage }
     }
