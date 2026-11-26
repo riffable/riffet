@@ -31,6 +31,9 @@ const SEND_OUTCOME_FRESH_MS = 30_000;
 /** How long a prompt that started after a stop is given to show it runs before that stop is reported as not done. */
 const LATE_STOP_WAIT_MS = 15_000;
 
+/** The published turn a stop took down, and the tool calls guidance was waiting on. */
+export interface WithdrawnTurn { target: NativeTurnTarget & { ownerRunId?: string }; tools: string[] }
+
 /** What the group takes from `ClaudeSessionRuntime`: values read on demand and callbacks, never the runtime itself. */
 export interface ClaudeStopsDeps {
   composer: ComposerDriver;
@@ -56,11 +59,11 @@ export interface ClaudeStopsDeps {
   publishActivity(activity: NativeActivity, options?: { restored?: boolean }): void;
   refreshTerminalStatus(force?: boolean): Promise<void>;
   refreshTranscript(follow?: boolean): Promise<void>;
-  restorePublishedTurn(target: NativeTurnTarget & { ownerRunId?: string }): void;
+  restorePublishedTurn(withdrawn: WithdrawnTurn): void;
   setStatus(requested: Omit<NativeStatus, 'phase'>): void;
   untestedVersion(): Promise<string | undefined>;
   waitUntil(done: () => boolean, timeoutMs: number, probe?: () => Promise<boolean>): Promise<boolean>;
-  withdrawPublishedTurn(): (NativeTurnTarget & { ownerRunId?: string }) | undefined;
+  withdrawPublishedTurn(): WithdrawnTurn | undefined;
 }
 
 /** Stopping what the CLI is doing: the main turn, background work, one activity, and a turn that started after its stop was asked for. */
@@ -189,7 +192,8 @@ export class ClaudeStops {
     if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId);
     this.deps.interactions.cancelPending('Claude was interrupted before the web interaction completed.', 'deny');
     this.interrupting = true;
-    const target = this.deps.withdrawPublishedTurn();
+    const withdrawn = this.deps.withdrawPublishedTurn();
+    const target = withdrawn?.target;
     this.deps.steering.reject('Claude was interrupted before receiving further guidance.');
     this.deps.setStatus(this.deps.status());
     let failure: unknown;
@@ -265,8 +269,8 @@ export class ClaudeStops {
       succeeded = true;
     } finally {
       this.interrupting = false;
-      if (!succeeded && target && !this.deps.terminalExited() && activeTurnOf(this.deps.state().mainTurn)?.promptId === target.turnId) {
-        this.deps.restorePublishedTurn(target);
+      if (!succeeded && withdrawn && !this.deps.terminalExited() && activeTurnOf(this.deps.state().mainTurn)?.promptId === withdrawn.target.turnId) {
+        this.deps.restorePublishedTurn(withdrawn);
         this.deps.setStatus(this.deps.status());
       }
     }

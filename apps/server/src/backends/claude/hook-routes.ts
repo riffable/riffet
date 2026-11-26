@@ -80,6 +80,7 @@ export interface ClaudeHookRoutesDeps {
   emit(message: NativeControlMessage): void;
   finishSteering(type: 'run_completed' | 'run_failed' | 'run_cancelled', reason?: string): void;
   markTurnOutput(promptId: string | undefined): void;
+  adoptPublishedTurn(promptId: string): void;
   noteActivity(): void;
   setSession(session: Session): void;
   setStatus(requested: Omit<NativeStatus, 'phase'>): void;
@@ -273,14 +274,20 @@ export class ClaudeHookRoutes {
 
   /**
    * A tool hook of a prompt nobody announced proves a turn this process missed the start of. A prompt
-   * that already ended is remembered, so a late hook of it opens nothing.
+   * that already ended is remembered, so a late hook of it opens nothing. A tool hook of the running
+   * prompt publishes it as the guidance target if nothing is published; a `PreToolUse` that does so
+   * is already one guidance waits on (`onPreToolUse` reads the target after this).
    */
   private noteToolHook({ event, mainThread, promptId: hookPromptId }: HookCall): void {
     if (mainThread && hookPromptId && !activeTurnOf(this.deps.state().mainTurn) && ['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure'].includes(event)) {
       this.deps.dispatchSignal({ type: 'prompt', source: 'hook', promptId: hookPromptId, origin: 'other' });
     }
-    if (mainThread && hookPromptId === activeTurnOf(this.deps.state().mainTurn)?.promptId
-      && ['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure'].includes(event)) this.deps.markTurnOutput(hookPromptId);
+    if (mainThread && hookPromptId && hookPromptId === activeTurnOf(this.deps.state().mainTurn)?.promptId
+      && ['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure'].includes(event)) {
+      this.deps.markTurnOutput(hookPromptId);
+      // A turn opened by a cold replay or a re-read has no published target; this hook proves one can be reached.
+      this.deps.adoptPublishedTurn(hookPromptId);
+    }
   }
 
   private async onToolSettled(hook: HookCall): Promise<HookReply> {

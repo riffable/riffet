@@ -960,7 +960,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ? native.control.capabilities.canSteer && Boolean(native.control.activeTurn?.canSteer)
     : Boolean(backendCapabilities?.supportsSteer && native.status.activeTurn);
   const canSendQueuedNow = native.control
-    ? native.control.capabilities.canSendNow && Boolean(native.control.activeTurn?.canStop)
+    ? native.control.capabilities.canSendNow
     : Boolean(backendCapabilities?.supportsTargetedStop);
   const heldQueue = native.control ? native.control.held : native.status.queue?.held;
   const queueUnconfirmed = heldQueue?.reason === 'unconfirmed';

@@ -59,6 +59,7 @@ export interface SessionControlSnapshot {
   capabilities: {
     canStop: boolean;
     canSteer: boolean;
+    /** A queued message may stop the live turn and go now; true before any queued entry exists. */
     canSendNow: boolean;
   };
   interaction: NativeInteraction | null;

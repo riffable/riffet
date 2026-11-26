@@ -128,6 +128,14 @@ function placementOf(run: Run, active: ActiveTurnState | null, input: ControlSna
   return !queue.held || ownProgress(run, input) ? 'sending' : 'queued';
 }
 
+/**
+ * A queued message may stop the live turn and go now: the turn can be stopped and no delivery waits to be confirmed. Said
+ * of the session, not of the inbox, so a message whose POST has not returned yet is offered it as well.
+ */
+function canSendNow(active: ActiveTurnState | null, queue: NativeQueue): boolean {
+  return active?.canStop === true && queue.held?.reason !== 'unconfirmed';
+}
+
 function actionsOf(run: Run, placement: InboxEntry['placement'], status: InboxEntry['status'], active: ActiveTurnState | null, session: Session, queue: NativeQueue): InboxAction[] {
   const archived = Boolean(session.archivedAt);
   const native = run.native!;
@@ -146,7 +154,7 @@ function actionsOf(run: Run, placement: InboxEntry['placement'], status: InboxEn
     return !archived && (native.delivery === 'queued' || native.delivery === 'preparing') ? ['cancel'] : [];
   }
   const actions: InboxAction[] = [];
-  if (!archived && active?.canStop === true && queue.held?.reason !== 'unconfirmed') actions.push('send_now');
+  if (!archived && canSendNow(active, queue)) actions.push('send_now');
   if (!archived && active?.canSteer === true) actions.push('steer');
   if (!archived && native.delivery === 'queued') actions.push('edit', 'cancel');
   return actions;
@@ -200,7 +208,7 @@ export function buildSessionControlSnapshot(input: ControlSnapshotInput): Sessio
     capabilities: {
       canStop: activeTurn?.canStop ?? false,
       canSteer: activeTurn?.canSteer ?? false,
-      canSendNow: inbox.some(entry => entry.actions.includes('send_now')),
+      canSendNow: canSendNow(activeTurn, queue),
     },
     interaction: status.interaction ?? null,
     activity: status.activity ?? { compacting: false, background: 0 },

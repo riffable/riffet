@@ -21,7 +21,7 @@ import { LaunchCrashGuard } from './launch-guard.js';
 import { ReadyGate } from './ready-gate.js';
 import type { WorkspaceObserver } from '../shared/workspace-observer.js';
 import { ClaudeSends, rewriteKey } from './sends.js';
-import { ClaudeStops } from './stops.js';
+import { ClaudeStops, type WithdrawnTurn } from './stops.js';
 import { ClaudeTerminalBinding } from './binding.js';
 import { ClaudeTranscriptReads } from './transcript-reads.js';
 import { ClaudeScreenWatch } from './screen-watch.js';
@@ -206,7 +206,7 @@ export class ClaudeSessionRuntime {
       publishActivity: (...args) => this.reads.publishActivity(...args),
       refreshTerminalStatus: (...args) => this.binding.refreshTerminalStatus(...args),
       refreshTranscript: (...args) => this.reads.refreshTranscript(...args),
-      restorePublishedTurn: target => this.restorePublishedTurn(target),
+      restorePublishedTurn: withdrawn => this.restorePublishedTurn(withdrawn),
       setStatus: (...args) => this.setStatus(...args),
       untestedVersion: (...args) => this.untestedVersion(...args),
       waitUntil: (...args) => this.waitUntil(...args),
@@ -305,6 +305,7 @@ export class ClaudeSessionRuntime {
       emit: (...args) => this.emit(...args),
       finishSteering: (...args) => this.finishSteering(...args),
       markTurnOutput: (...args) => this.markTurnOutput(...args),
+      adoptPublishedTurn: (...args) => this.adoptPublishedTurn(...args),
       noteActivity: (...args) => this.noteActivity(...args),
       setSession: (...args) => this.setSession(...args),
       setStatus: (...args) => this.setStatus(...args),
@@ -421,9 +422,16 @@ export class ClaudeSessionRuntime {
     if (phase !== 'busy' && phase !== 'attention') return undefined;
     const promptId = activeTurnOf(this.state.mainTurn)?.promptId;
     if (!promptId) return undefined;
-    if (this.reads.journalTurn?.promptId === promptId && this.reads.journalTurn.turnId !== promptId) return this.reads.journalTurn.turnId;
+    const journalOwner = this.journalOwnerOf(promptId);
+    if (journalOwner) return journalOwner;
     if (this.nativeTurn?.turnId === promptId && this.nativeTurn.ownerRunId) return this.nativeTurn.ownerRunId;
     return this.transcript.rowTurnOf(promptId) ?? promptId;
+  }
+
+  /** The Run the journal filed prompt `promptId` under, when it is not the prompt's own turn. */
+  private journalOwnerOf(promptId: string): string | undefined {
+    const journal = this.reads.journalTurn;
+    return journal?.promptId === promptId && journal.turnId !== promptId ? journal.turnId : undefined;
   }
 
   /** Publish everything but the phase, which always comes from the state. */
@@ -520,17 +528,38 @@ export class ClaudeSessionRuntime {
   /** A tool hook of the running prompt arrived: the turn is executing, whatever the rows show yet. */
   private markTurnOutput(promptId: string | undefined): void { this.outputPromptId = promptId; }
 
-  /** Takes the published turn down, with the tools a steer was waiting on, and returns what it was. */
-  private withdrawPublishedTurn(): (NativeTurnTarget & { ownerRunId?: string }) | undefined {
+  /** Takes the published turn down, with the tools a steer was waiting on, and returns both. */
+  private withdrawPublishedTurn(): WithdrawnTurn | undefined {
     const target = this.nativeTurn;
+    const tools = [...this.steerTools];
     this.nativeTurn = undefined;
     this.steerTools.clear();
-    return target;
+    return target ? { target, tools } : undefined;
   }
 
-  /** Restores a withdrawn turn target when a stop fails while that exact turn is still running. */
-  private restorePublishedTurn(target: NativeTurnTarget & { ownerRunId?: string }): void {
-    if (!this.nativeTurn) this.nativeTurn = target;
+  /**
+   * Restores a withdrawn turn target when a stop fails while that exact turn is still running, with the tools that were
+   * running: a long call that ends after the failed stop is still where guidance lands.
+   */
+  private restorePublishedTurn({ target, tools }: WithdrawnTurn): void {
+    if (this.nativeTurn) return;
+    this.nativeTurn = target;
+    for (const tool of tools) this.steerTools.add(tool);
+  }
+
+  /**
+   * A main-thread tool hook of the running prompt reached this service while nothing is published: the turn was opened by
+   * a cold replay (a restart mid-turn), by a re-read of the file, or by a hook without a prompt id. The hook proves the
+   * CLI's hooks reach this service, so the turn is published from here on and guidance can land at its next tool boundary.
+   * A busy terminal no hook has reached is still not published.
+   */
+  private adoptPublishedTurn(promptId: string): void {
+    if (this.nativeTurn || this.stops.interrupting || this.state.process === 'exited' || activeTurnOf(this.state.mainTurn)?.promptId !== promptId) return;
+    const web = this.sends.activeWebTurn;
+    const ownerRunId = this.journalOwnerOf(promptId) ?? (web && (!web.promptId || web.promptId === promptId) ? web.runId : undefined);
+    this.nativeTurn = { nativeSessionId: this.nativeSessionId, turnId: promptId, ...(ownerRunId ? { ownerRunId } : {}) };
+    this.replayedTurn = false;
+    this.setStatus(this.status);
   }
 
   /** Names the run the published turn belongs to, when it is the turn `promptId` names (or no prompt is named). */

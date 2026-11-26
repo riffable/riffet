@@ -34,7 +34,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 流式草稿只是转写的占位：`live/drafts.ts` 宁可判为「已写入」而少一会儿流式，也不能让答案出现两份；重启之后不为已开始的回合起草。唯一的例外是以 failed 结束的回合：草稿按原 id 转正为这一回合的正文（`live/drafts.ts#plan`），之后转写里又写出同一段时收回转正的那份。转正的正文只在 journal 里，车道按转写重建后就没有了。
 - 自动压缩的 PreCompact hook 可能先于该 prompt 的转写行到达，要按 hook 的 `prompt_id` 压住，等 prompt 行读到后并入同一回合，否则会写成上一回合的尾巴并开出第二个压缩。
 - 新启动的 CLI 在 SessionStart 之后还要看到输入框才算就绪（`ready-gate.ts#ReadyGate`）；超时只接受 hook，所以不会比只看 hook 更慢。
-- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。实时在本进程开启的回合绝不因屏幕看似空闲（`alreadyIdle`）而跳过发送 `C-c`，只有冷重启回放且屏幕确认非忙碌（`claudeScreenBusy` 为假）的回合才跳过 `C-c`；停止未确认失败且原回合仍在跑时必须恢复已撤下的 `activeTurn` 以便重试。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并校验实际发出了 `C-c`。
+- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。实时在本进程开启的回合绝不因屏幕看似空闲（`alreadyIdle`）而跳过发送 `C-c`，只有冷重启回放且屏幕确认非忙碌（`claudeScreenBusy` 为假）的回合才跳过 `C-c`；停止未确认失败且原回合仍在跑时必须恢复已撤下的 `activeTurn` 和正在等的工具调用（`steerTools`），以便重试，进行中的长工具结束时也还能接住引导。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并校验实际发出了 `C-c`。
 - 30 秒内连续退出两次，下一次启动去掉 `--resume` 新开会话（`launch-guard.ts#QUICK_EXIT_LIMIT`）；计数存在会话上，重启服务不清零。
 - 发布新的会话 id（`setNativeSessionId`）会同步重绑服务端已有的监听，所以 `index.ts#ClaudeBackendAdapter` 先登记本次启动的运行时再发布 id，否则监听会另起一个 CLI；启动失败且终端没换时撤回这个 id，重试才不会去 `--resume` 一个从未写下的对话。
 - 恢复会话会启动新的 CLI，此时旧终端的退出观察或在途的状态轮询可能晚到，不能把新进程记成已退出（`binding.ts#refreshTerminalStatus` 用启动计数 `launches` 丢弃启动之前开始的检查，修复 1a06647）。
@@ -68,6 +68,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 流式草稿与最终答案不一致或出现两份：日志 `live draft differs from its transcript text` 是版面漂移信号，按 `live/screen.ts` 顶部的步骤补录新版本屏幕。
 - 发送长期显示等待确认：`riffet logs --scope claude` 中的 `paste not shown within the window` 与 `first prompt after dispatch does not read as the message sent`，对应 `composer.ts`、`sends.ts#awaitReceipt` 的粘贴回执等待。
 - hook 全部没有反应：`riffet logs --scope claude` 中的 `hook descriptor could not be written` 或 `hook bridge could not start`。
+- 回合进行中重启服务后看不到引导按钮：冷回放打开的回合不发布 `activeTurn`（没收到 hook 的忙碌终端不能当引导目标），要等这一回合的主线程工具 hook 到达，由 `runtime.ts#adoptPublishedTurn` 补发；补发它的 `PreToolUse` 本身就是引导的落点。之后仍没有，查这一回合的 hook 是否带 `prompt_id`、是否到了本服务。
 - 服务重启后引导一直补充不进当前回合、每次都变成下一条消息：引导只看 `runtime.ts#steerTarget`，没有 `started`（本服务没启动这个 CLI）时要求这一回合的工具 hook 已到达本服务（`outputPromptId`）；状态里有 `activeTurn` 而这里不认，就会在 `enqueue` 抛 `STEER_TARGET_CHANGED` 并由 `requeueSteer` 转成排队消息。
 - 屏幕解析在新版 CLI 上失效：`npx vitest run apps/server/src/backends/claude/screen-fixtures.test.ts`，再用 `scripts/probe-claude-e2e.ts --capture` 录制现场。
 - 点停止后界面显示「已停止」但 Claude 仍在跑：查 `journal.db` 是否未发 `C-c` 就写入合成 `turn_ended(cancelled)`，并跑 `screen-fixtures.test.ts` 与 `recordings.test.ts` 核对当前 CLI 版本的忙碌屏识别与 `C-c` 发送。

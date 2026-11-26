@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- After a service restart in the middle of a Claude Code turn, the guidance button returns at the turn's next tool call; after a stop that does not go through, the running tool can still take guidance when it ends. A queued message still being sent also offers "stop and send".
 - The iPhone and Android apps now talk to the server over TLS on the same port, checking the server's own certificate. Apps already paired switch over on their own; a pairing code scanned from an updated server uses TLS from the start. Both apps also prove themselves with a key kept in the phone's secure hardware, so a copied device token no longer works on its own.
 - Long-running commands show progress: `riffet update` shows each restart step and names the conversations it waits for; `riffet plugin install` / `update`, `riffet link join` / `ssh` and `riffet restore` show what they are doing while they wait; `riffet service install` waits until the server is up and then prints its address.
 - Settings › Devices has a security log: pairings and removals, failed sign-ins and pairing codes, link changes, refused requests, terminals opened from other machines and remote commands. When a device is paired or a server linked, paired iPhones get a notification and open web pages show a notice.

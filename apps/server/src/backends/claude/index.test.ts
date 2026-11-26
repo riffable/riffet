@@ -2657,6 +2657,31 @@ describe('Claude hook guidance', () => {
       terminalId: terminal.id, terminalEpoch: terminal.epoch } })).resolves.toBeUndefined();
   });
 
+  it('publishes a cold-replayed turn once one of its tool hooks reaches this service', async () => {
+    // A restart mid-turn whose transcript already shows the prompt: the replay opens the turn without a hook.
+    const { h, request, hook, fence } = await prepare();
+    await h.adapter.dispose(h.host, h.getSession().id);
+    await appendRows(h, humanRow(request.target.turnId));
+    await h.attachColdRuntime('busy');
+    expect(h.adapter.status(h.host, h.getSession()).activeTurn).toBeUndefined();
+    await hook('PreToolUse', { tool_use_id: 'tool-1', tool_name: 'Bash' });
+    expect(h.adapter.status(h.host, h.getSession())).toMatchObject({ phase: 'busy', activeTurn: request.target });
+    expect(await h.adapter.steer(h.host, request)).toEqual({ deferred: true });
+    expect(await hook('PostToolUse', { tool_use_id: 'tool-1' })).toMatchObject({ hookSpecificOutput: { additionalContext: expect.stringContaining(request.input.text) } });
+    expect(fence).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the running tool as a guidance boundary after a stop that fails', async () => {
+    const { h, request, hook, fence, target } = await prepare();
+    await hook('PreToolUse', { tool_use_id: 'tool-1', tool_name: 'Bash' });
+    h.host.terminal.sendKeys = async () => { throw new Error('tmux went away'); };
+    await expect(h.adapter.interrupt(h.host, h.getSession(), h.profile)).rejects.toThrow();
+    expect(h.adapter.status(h.host, h.getSession())).toMatchObject({ phase: 'busy', activeTurn: target });
+    expect(await h.adapter.steer(h.host, request)).toEqual({ deferred: true });
+    expect(await hook('PostToolUse', { tool_use_id: 'tool-1' })).toMatchObject({ hookSpecificOutput: { additionalContext: expect.stringContaining(request.input.text) } });
+    expect(fence).toHaveBeenCalledOnce();
+  });
+
   it('takes guidance in a turn whose hooks reach a service that did not launch the CLI', async () => {
     // A service restart mid-turn: the CLI keeps running and its next tool hook wakes a cold runtime.
     const { h, request, hook, fence } = await prepare();

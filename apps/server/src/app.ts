@@ -586,7 +586,8 @@ export async function createApp(options: AppOptions = {}) {
     const cached=controlCapabilityCache.get(key);
     if(!cached&&!controlCapabilityPending.has(key)){
       controlCapabilityPending.add(key);
-      void nativeBackends.catalog.capabilitiesFor(backendId,session.backendProfileId).then(caps=>{
+      // A profile that no longer resolves (deleted, renamed) falls back to the backend's default one, so steering is not lost with it.
+      void nativeBackends.catalog.capabilitiesFor(backendId,session.backendProfileId).catch(()=>nativeBackends.catalog.capabilitiesFor(backendId)).then(caps=>{
         controlCapabilityCache.set(key,{supportsInterrupt:caps.supportsInterrupt,supportsTargetedStop:caps.supportsTargetedStop!==false,supportsSteer:caps.supportsSteer===true});
         notifyControlRefresh();
       }).catch(()=>undefined).finally(()=>{controlCapabilityPending.delete(key);});
