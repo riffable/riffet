@@ -7,7 +7,7 @@ import { agentMarkStyle, useBackendLabel } from '@/lib/backends';
 import { cleanLabel } from '@/lib/utils';
 import { useAgentModels } from './agentModels';
 import type { ModelProviderChoices } from './ModelPicker';
-import type { Choice } from './model';
+import { modelUsageAliases, type Choice } from './model';
 
 /** An agent, its provider and a model: what a model menu picks. `model` carries the composer's parameters (`model[effort=high]`). */
 export interface AgentModelValue { backendId: NativeBackendId; profileId?: string; model?: string }
@@ -59,7 +59,7 @@ export function useAgentModelChoice({ projectId, backends, choice, agents = fals
 
   const sourceId = (id: NativeBackendId, profileId?: string) => agents ? sourceOf(id, profileId) : profileId ?? '';
   const choiceId = (id: NativeBackendId, profileId: string | undefined, model: string) => agents ? choiceOf(id, profileId, model) : compose(profileId, model);
-  const listed = (id: NativeBackendId, profileId?: string): Choice[] => (agentModels.read(id, profileId) ?? []).map((item) => ({ id: choiceId(id, profileId, item.value), label: cleanLabel(item.name) }));
+  const listed = (id: NativeBackendId, profileId?: string): Choice[] => (agentModels.read(id, profileId) ?? []).map((item) => ({ id: choiceId(id, profileId, item.value), label: cleanLabel(item.name), aliases: modelUsageAliases(item) }));
   const providersOf = (entry: NativeBackendCatalogEntry): ModelProviderChoices[] => {
     const agent = { id: entry.backendId, label: label(entry.backendId), icon: agentIcon(entry.backendId) };
     const saved = entry.profiles.find((profile) => profile.isDefault)?.id;

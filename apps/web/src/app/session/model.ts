@@ -1,4 +1,4 @@
-import type { NativeContext, Run } from '@contracts';
+import type { ModelInfo, NativeContext, Run } from '@contracts';
 
 /*
  * The session view's shared vocabulary: the row and picker types every surface agrees on, and the
@@ -10,7 +10,20 @@ export type { ReasoningChannel, TaskNotificationResult, TaskNotificationStatus, 
 export { chunkText, nativeEventIds, nativeSourceIds, timelineItemTime, type TimelineItem } from '../../../../../packages/timeline/src/model';
 
 /** `group` heads a run of adjacent choices, e.g. the provider a batch of models came from. */
-export interface Choice { id: string; label: string; description?: string; group?: string; }
+export interface Choice { id: string; label: string; description?: string; group?: string; aliases?: readonly string[]; }
+
+export function modelUsageAliases(item: Pick<ModelInfo, 'value' | 'aliases' | 'nativeVariants' | 'configOptions'>): string[] | undefined {
+  const candidates = new Set<string>();
+  for (const alias of item.aliases ?? []) if (alias && alias !== item.value) candidates.add(alias);
+  for (const variant of item.nativeVariants ?? []) if (variant.value && variant.value !== item.value) candidates.add(variant.value);
+  for (const option of item.configOptions ?? []) {
+    if (option.id !== 'effort') continue;
+    for (const choice of option.options) {
+      if (choice.value && choice.value !== 'default') candidates.add(`${item.value}-${choice.value}`);
+    }
+  }
+  return candidates.size > 0 ? [...candidates] : undefined;
+}
 /** A `/` menu entry. `kind` absent means a command, which only works as the message's first token. */
 export interface SlashCommand { name: string; description?: string; hint?: string; kind?: 'command' | 'skill'; path?: string; }
 

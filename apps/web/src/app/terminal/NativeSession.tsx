@@ -33,7 +33,7 @@ import { PlanDock } from '../work-items/PlanDock';
 import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../automations/SendLater';
 import { pickerBlockReason } from '../session/pickers';
 import { useSessionTranscript } from '../session/useSessionTranscript';
-import { timelineItemTime, type Choice, type SlashCommand } from '../session/model';
+import { modelUsageAliases, timelineItemTime, type Choice, type SlashCommand } from '../session/model';
 import { ModelPicker, type ModelProviderChoices } from '../session/ModelPicker';
 import { SessionAside } from '../session/SessionAside';
 import { ASSEMBLY_MS, ContentColumn, useLingering, useSessionLayout } from '../session/sessionLayout';
@@ -168,12 +168,12 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
 
   const profileId = session.backendProfileId;
   const grouped = Boolean(profileId && continuations?.length);
-  const currentModels: Choice[] = useMemo(() => catalog.map((item) => ({ id: grouped ? composeChoice(profileId!, item.value) : item.value, label: cleanLabel(item.name), ...(grouped && providerLabel ? { group: providerLabel } : {}) })), [catalog, grouped, profileId, providerLabel]);
+  const currentModels: Choice[] = useMemo(() => catalog.map((item) => ({ id: grouped ? composeChoice(profileId!, item.value) : item.value, label: cleanLabel(item.name), aliases: modelUsageAliases(item), ...(grouped && providerLabel ? { group: providerLabel } : {}) })), [catalog, grouped, profileId, providerLabel]);
   // The current provider first in the settings' order with the others, each with its own models.
   const providers = useMemo<ModelProviderChoices[] | undefined>(() => {
     if (!grouped) return undefined;
     const entries: ModelProviderChoices[] = [{ id: profileId!, label: providerLabel ?? profileId!, models: currentModels }];
-    for (const item of continuations!) entries.push({ id: item.profile.id, label: item.profile.name, models: item.models.map((model) => ({ id: composeChoice(item.profile.id, model.value), label: cleanLabel(model.name), group: item.profile.name })) });
+    for (const item of continuations!) entries.push({ id: item.profile.id, label: item.profile.name, models: item.models.map((model) => ({ id: composeChoice(item.profile.id, model.value), label: cleanLabel(model.name), aliases: modelUsageAliases(model), group: item.profile.name })) });
     const order = new Map(profiles.map((profile, index) => [profile.id, index]));
     return entries.sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
   }, [grouped, profileId, providerLabel, currentModels, continuations, profiles]);

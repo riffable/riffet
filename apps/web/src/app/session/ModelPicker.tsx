@@ -139,13 +139,42 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
   );
 }
 
-function modelUsageStatus(usage: NativeBackendUsage | undefined, modelId: string, activeProviderId?: string): ModelStatus | undefined {
-  if (!usage) return undefined;
-  const direct = usage.models[modelId];
-  if (direct) return direct;
+function bareModelId(modelId: string, activeProviderId?: string): string | undefined {
   const sep = modelId.indexOf('\u0000');
-  if (sep < 0) return undefined;
-  return activeProviderId && modelId.slice(0, sep) === activeProviderId ? usage.models[modelId.slice(sep + 1)] : undefined;
+  if (sep < 0) return modelId;
+  return activeProviderId && modelId.slice(0, sep) === activeProviderId ? modelId.slice(sep + 1) : undefined;
+}
+
+export function modelUsageStatus(
+  usage: NativeBackendUsage | undefined,
+  model: Pick<Choice, 'id' | 'aliases'>,
+  activeProviderId?: string,
+  selectedEffort?: string,
+  isSelected?: boolean,
+): ModelStatus | undefined {
+  if (!usage) return undefined;
+  const bare = bareModelId(model.id, activeProviderId);
+  if (bare === undefined) return undefined;
+  const direct = usage.models[bare];
+  if (direct) return direct;
+  const aliases = model.aliases;
+  if (!aliases?.length) return undefined;
+  if (isSelected && selectedEffort && selectedEffort !== 'default') {
+    const effortId = `${bare}-${selectedEffort}`;
+    if (aliases.includes(effortId) && usage.models[effortId]) return usage.models[effortId];
+  }
+  let picked: ModelStatus | undefined;
+  let pickedPercent = -1;
+  for (const alias of aliases) {
+    const candidate = usage.models[alias];
+    if (!candidate) continue;
+    const used = candidate.quota?.depleted ? 100 : (candidate.quota?.usedPercent ?? -1);
+    if (!picked || used > pickedPercent) {
+      picked = candidate;
+      pickedPercent = used;
+    }
+  }
+  return picked;
 }
 
 const loadToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-4' } as const;
@@ -492,6 +521,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const waited = useLingering(loading, WAIT_GRACE_MS);
   const retryTitle = retryOnly && !loading ? failure ?? 'No models available' : undefined;
   const tags = selectionTags(params);
+  const selectedEffort = params.find((param) => paramKind(param) === 'effort')?.value;
   const sorted = useMemo(() => [...params].sort((a, b) => kindOrder[paramKind(a)] - kindOrder[paramKind(b)]), [params]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -624,7 +654,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
                 className={cn('flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors disabled:opacity-50 md:h-8 md:min-h-0', index === active && 'bg-hover', model.id === value ? 'text-fg' : 'text-fg-2')}
               >
                 <span className="min-w-0 flex-1 truncate">{model.label}</span>
-                {previewIsActive && <ModelStatusTags status={modelUsageStatus(usage, model.id, activeProviderId)} />}
+                {previewIsActive && <ModelStatusTags status={modelUsageStatus(usage, model, activeProviderId, selectedEffort, model.id === value)} />}
                 {model.id === value && <IconCheck className="size-3.5 shrink-0 text-fg-2" />}
               </button>
             );

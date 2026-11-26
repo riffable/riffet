@@ -28,7 +28,7 @@ import { DirectoryMenu } from './session/DirectoryMenu';
 import { AttemptsDialog, AttemptsHistory } from './session/Attempts';
 import { Composer, type ComposerProps } from './session/Composer';
 import type { ModelProviderChoices } from './session/ModelPicker';
-import type { Choice } from './session/model';
+import { modelUsageAliases, type Choice } from './session/model';
 import { useSlashCatalog } from './session/useSlashCatalog';
 import { useLingering, WAIT_GRACE_MS } from './session/sessionLayout';
 import { useGitStatus } from './state/gitStatusStore';
@@ -232,8 +232,8 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
   // models, while the single-profile catalog is still a request behind.
   const activeCatalog = grouped?.find((entry) => entry.profile.id === activeProfileId)?.models ?? catalog;
   const models: Choice[] = useMemo(() => grouped
-    ? grouped.flatMap(({ profile, models: list }) => list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name), group: profile.name })))
-    : catalog.map((item) => ({ id: item.value, label: cleanLabel(item.name) })), [grouped, catalog]);
+    ? grouped.flatMap(({ profile, models: list }) => list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name), group: profile.name, aliases: modelUsageAliases(item) })))
+    : catalog.map((item) => ({ id: item.value, label: cleanLabel(item.name), aliases: modelUsageAliases(item) })), [grouped, catalog]);
   const rememberedModelName = (targetBackend: NativeBackendId, targetProfile: string | undefined, targetCatalog: ModelInfo[]): string => {
     const scope = `${activeServerId ? `${activeServerId}${CHOICE_SEPARATOR}` : ''}${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${targetBackend}${CHOICE_SEPARATOR}${targetProfile ?? ''}`;
     const previous = choices.current.get(scope);
@@ -266,7 +266,7 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
         label: profile.name,
         models: entry?.available && !list.length
           ? [{ id: composeChoice(profile.id, ''), label: t`默认模型` }]
-          : list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name) })),
+          : list.map((item) => ({ id: composeChoice(profile.id, item.value), label: cleanLabel(item.name), aliases: modelUsageAliases(item) })),
         loading: !entry,
         ...(entry?.available === false ? { issue: entry.reason?.trim() || t`${label(backendId)} 不可用` } : {}),
         preferred: profile.id === saved,
@@ -335,7 +335,7 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
         ...(remembered ? { rememberedModelId: otherChoice(entry.backendId, profile?.id, remembered) } : {}),
         models: fallback
           ? [{ id: otherChoice(entry.backendId, profile?.id, ''), label: t`默认模型` }]
-          : (list ?? []).map((item) => ({ id: otherChoice(entry.backendId, profile?.id, item.value), label: cleanLabel(item.name) })),
+          : (list ?? []).map((item) => ({ id: otherChoice(entry.backendId, profile?.id, item.value), label: cleanLabel(item.name), aliases: modelUsageAliases(item) })),
         loading,
         ...(issue ? { issue } : {}),
       };
