@@ -21,9 +21,10 @@ interface Props {
   backend?: NativeBackendCatalogEntry;
   stale?: { mode: 'syncing' | 'offline' };
   mobile?: boolean;
-  /** Unread / pending items in the standalone Inbox, shown as a numeric badge on the avatar and inside the menu. */
+  /** Unread / pending items in the standalone Inbox: shown as a compact dot on the avatar and count inside the menu. */
   inboxCount?: number;
   onOpenInbox?: () => void;
+  onOpenChange?: (open: boolean) => void;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
   onOpenTheme?: () => void;
@@ -63,7 +64,7 @@ export function SidebarSettingsButton({ backend, onOpen }: { backend?: NativeBac
 }
 
 /** The sidebar footer's account menu: profile, inbox, theme, and connection info. */
-export function SidebarUserMenu({ owner, backend, stale, mobile, inboxCount = 0, onOpenInbox, onOpenProfile, onOpenSettings, onOpenTheme }: Props) {
+export function SidebarUserMenu({ owner, backend, stale, mobile, inboxCount = 0, onOpenInbox, onOpenChange, onOpenProfile, onOpenSettings, onOpenTheme }: Props) {
   const { t } = useLingui();
   const { local, address } = hostInfo();
   const offline = stale?.mode === 'offline';
@@ -78,20 +79,15 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, inboxCount = 0,
   const avatar = <>
     <OwnerAvatar owner={owner} size={24} />
     {inboxCount > 0 && (
-      <span
-        aria-hidden="true"
-        className={cn(
-          'pointer-events-none absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-2xs font-medium leading-none tabular-nums text-danger-fg ring-2',
-          mobile ? 'ring-sidebar' : 'ring-canvas',
-        )}
-      >
-        {badgeText}
-      </span>
+      <StatusDot
+        tone="danger"
+        className={cn('pointer-events-none absolute top-0.5 right-0.5 size-2 ring-2', mobile ? 'ring-sidebar' : 'ring-canvas')}
+      />
     )}
     {warning && <StatusDot tone="warning" className={cn('absolute right-0 bottom-0 ring-2', mobile ? 'ring-sidebar' : 'ring-canvas')} />}
   </>;
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={onOpenChange}>
       <Tip label={tooltip} side="top">
         <DropdownMenuTrigger asChild>
           <Button size="icon-sm" variant="quiet" aria-label={tooltip} onPointerEnter={preloadSettings} onFocus={preloadSettings} className="relative rounded-full">

@@ -264,6 +264,7 @@ export async function createApp(options: AppOptions = {}) {
   // Made below the routes' dependencies, which reach them through these.
   let reclaimerRef:AgentReclaimer|undefined;
   let assistantMainRef:(()=>string|undefined)|undefined;
+  let memberMainRef:((memberId:string)=>string|undefined)|undefined;
   const workbenchAppearance=new WorkbenchAppearance(auth);
   const documentProofs=new WorkbenchDocumentProofs(store);
   const stopWatchingAppearance=store.onRunChanged(run=>{
@@ -328,6 +329,7 @@ export async function createApp(options: AppOptions = {}) {
       notify:(id,notice)=>{notices.add({sessionId:id,...(notice.title?{title:notice.title}:{}),body:notice.body,source:'agent'});},
       saveImage:async(id,image)=>{const attachment=await workspace.upload(store.getProject(store.getSession(id).projectId),{name:image.name,mimeType:image.mimeType,dataBase64:image.data.toString('base64')});return {id:attachment.id,path:attachment.path};},
       assistantMainSessionId:()=>assistantMainRef?.(),
+      memberMainSessionId:memberId=>memberMainRef?.(memberId),
     }});
   // A plugin turned off or uninstalled takes its approvals with it.
   const stopApprovalSweep=plugins.onChange(()=>{const ids=pluginApprovals.pluginIds();if(ids.length)void plugins.offPlugins(ids).then(off=>{for(const id of off)pluginApprovals.withdrawAll(id);}).catch(()=>undefined);});
@@ -573,7 +575,10 @@ export async function createApp(options: AppOptions = {}) {
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
   pluginAgentsRef=pluginId=>({
     listBackends:async()=>(await nativeBackends.catalog.listBackends()).map(entry=>({id:entry.backendId,label:entry.label,available:entry.available,...(entry.defaultModel?{defaultModel:entry.defaultModel}:{})})),
-    listMembers:()=>team.list().map(member=>({id:member.id,name:member.name,...(member.description?{description:member.description}:{}),scope:member.scope.kind,...(member.scope.projectIds?.length?{projectIds:member.scope.projectIds}:{}),...(member.target?.backendId?{backendId:member.target.backendId}:{}),...(member.target?.model?{model:member.target.model}:{})})),
+    listMembers:()=>team.list().map(member=>{
+      const mainSessionId=memberMainRef?.(member.id);
+      return {id:member.id,name:member.name,...(member.description?{description:member.description}:{}),scope:member.scope.kind,...(member.scope.projectIds?.length?{projectIds:member.scope.projectIds}:{}),...(mainSessionId?{mainSessionId}:{}),...(member.target?.backendId?{backendId:member.target.backendId}:{}),...(member.target?.model?{model:member.target.model}:{})};
+    }),
     listProjects:()=>store.listProjects().filter(project=>!project.archivedAt&&!project.system).map(project=>({id:project.id,name:project.name,cwd:project.cwd})),
     run:async request=>{
       const prompt=typeof request.prompt==='string'?request.prompt.trim():'';
@@ -936,6 +941,7 @@ export async function createApp(options: AppOptions = {}) {
     }});
   runs.mainSession=assistantMain;
   assistantMainRef=assistantMain;
+  memberMainRef=memberMain;
   for(const member of team.list()){
     const mainId=memberMain(member.id);
     if(mainId&&riffetMcp.mainNeedsToolRefresh(mainId,member.id))reclaimer.restartWhenRested(mainId);

@@ -70,6 +70,7 @@ interface Props {
   onOpenProfile: () => void;
   /** Standalone Inbox page (`/inbox`) and its unread/pending count shown on the footer avatar. */
   onOpenInbox?: () => void;
+  onUserMenuOpenChange?: (open: boolean) => void;
   inboxCount?: number;
   onOpenStats: () => void;
   /** 任务 (docs/TASK-BOARD.md); absent on a server without work items. */
@@ -855,6 +856,7 @@ export function Sidebar(props: Props) {
           mobile={mobile}
           inboxCount={props.inboxCount}
           onOpenInbox={props.onOpenInbox}
+          onOpenChange={props.onUserMenuOpenChange}
           onOpenProfile={props.onOpenProfile}
           onOpenSettings={() => props.onOpenSettings()}
           onOpenTheme={() => props.onOpenSettings('appearance')}

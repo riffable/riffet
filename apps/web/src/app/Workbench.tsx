@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { SETTING_DEFAULTS, type AgentMember, type NativeBackendId, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
+import { SETTING_DEFAULTS, type AgentMember, type NativeBackendId, type RiffetNotice, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
 import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -15,6 +15,7 @@ import { RunnerGame } from '@/components/runner/RunnerGame';
 import { runnerFits } from '@/components/runner/RunnerDock';
 import { openRunner } from '@/components/runner/store';
 import { api, type PromptContextReference } from '@/lib/api';
+import { plainMarkdownText } from '@/lib/markdown-preview';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, writeStored } from '@/lib/utils';
 import { isShellTerminal, sessionBackend } from '@/lib/backends';
@@ -73,6 +74,7 @@ import { isAssistantProject, isQuickChatProject, mainSessionIdOf, regularProject
 import { assistantChoice, DEFAULT_AGENT_MEMBER_ID, isStandingMemberBackend, memberChoice, withAssistantDefaults } from './work-items/assistant';
 import { CreateMemberDialog } from './team/CreateMemberDialog';
 import { MemberConfigDialog } from './team/MemberConfigDialog';
+import { InboxAlertDock, type InboxAlertItem } from './work-items/InboxAlertDock';
 import { MemberSessionSheet, MemberSessionSidebar } from './team/MemberSessionSidebar';
 import { confirmDialog } from '@/lib/dialogs';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
@@ -93,6 +95,24 @@ const pushError = (message: string) => toast.error(message);
 const NO_REFERENCES: PromptContextReference[] = [];
 const noReferences = () => undefined;
 
+function resolveNoticeMember(notice: RiffetNotice, sessions: readonly Session[], members: readonly AgentMember[]): AgentMember | undefined {
+  const active = members.filter((item) => !item.archivedAt);
+  const source = notice.sessionId ? sessions.find((item) => item.id === notice.sessionId) : undefined;
+  if (source?.agentMemberId) {
+    const byId = active.find((item) => item.id === source.agentMemberId);
+    if (byId) return byId;
+  }
+  if (source) {
+    const byProject = active.find((item) => item.scope.kind !== 'project' && item.projectId === source.projectId);
+    if (byProject) return byProject;
+  }
+  if (notice.senderName) {
+    const byName = active.find((item) => item.name === notice.senderName);
+    if (byName) return byName;
+  }
+  return undefined;
+}
+
 /**
  * The workbench's state lives in external stores (`./state`), created once per mount. This
  * component wires them to the server and to the pages; panels, dock and dialogs read their own
@@ -108,7 +128,7 @@ export function Workbench({ onLogout }: { onLogout?: () => void }) {
 
 function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const { t } = useLingui();
-  const { lists, nav, ui, tabs, catalog, settings: settingsStore, handlers, workItems } = useStores();
+  const { lists, nav, ui, tabs, catalog, settings: settingsStore, handlers, workItems, approvals: approvalsStore } = useStores();
   const loaded = useLists((state) => state.loaded);
   const projectlessTasks = useLists((state) => state.projectlessTasks);
   const sessionReferences = useLists(state => state.sessionReferences);
@@ -213,7 +233,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const quickChatProject = useMemo(() => projects.find((item) => isQuickChatProject(item)), [projects]);
   // Stable between list updates, so the sidebar's grouping does not rerun on every render of the page.
   const sidebarProjects = useMemo(() => projects.filter((item) => !isQuickChatProject(item)), [projects]);
-  const assistantProject = useMemo(() => projects.find((item) => isAssistantProject(item) && !item.archivedAt), [projects]);
+  const assistantProject = useMemo(
+    () => projects.find((item) => isAssistantProject(item) && !item.archivedAt && (!item.agentMemberId || item.agentMemberId === DEFAULT_AGENT_MEMBER_ID))
+      ?? projects.find((item) => isAssistantProject(item) && !item.archivedAt),
+    [projects],
+  );
   // Dedicated member directories have extensions of their own, reached from their page.
   const extensionProjects = useMemo(() => {
     const memberProjects: typeof regular = [];
@@ -254,7 +278,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       const owned = active.find((item) => item.id === project.agentMemberId);
       if (owned) return owned;
     }
-    if (isAssistantProject(project)) return active.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID);
+    if (isAssistantProject(project)) {
+      return active.find((item) => item.projectId === project?.id)
+        ?? active.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID);
+    }
     return undefined;
   }, [teamMembers, selectedMemberId, session?.agentMemberId, project]);
   const [createMemberOpen, setCreateMemberOpen] = useState(false);
@@ -516,41 +543,120 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const approvalsList = useApprovals((state) => state.approvals);
   const inboxNotices = useApprovals((state) => state.notices);
   const approvalsLoaded = useApprovals((state) => state.loaded);
+  const [inboxAlerts, setInboxAlerts] = useState<InboxAlertItem[]>([]);
   const seenInboxRef = useRef<Set<string> | undefined>(undefined);
+
+  const openNoticeFromAlert = useCallback((notice: RiffetNotice) => {
+    if (!notice.readAt) void approvalsStore.markNoticeRead(notice.id);
+    if (notice.sessionId) openSessionById(notice.sessionId);
+    else openPage('inbox');
+  }, [approvalsStore, openSessionById, openPage]);
+
+  const markNoticeReadFromAlert = useCallback((notice: RiffetNotice) => {
+    if (!notice.readAt) void approvalsStore.markNoticeRead(notice.id);
+  }, [approvalsStore]);
+
+  const dismissInboxAlert = useCallback((key: string) => {
+    setInboxAlerts((current) => current.filter((item) => item.key !== key));
+  }, []);
+
+  const onUserMenuOpenChange = useCallback((open: boolean) => {
+    if (open) setInboxAlerts([]);
+  }, []);
+
+  const isViewingNotice = useCallback((notice: RiffetNotice, member: AgentMember | undefined): boolean => {
+    if (inboxOpen) return true;
+    if (anyPageOpen) return false;
+    if (selectedSessionId && notice.sessionId === selectedSessionId) return true;
+    if (activeMember && activeMember.sessionMode === 'continuous' && member && activeMember.id === member.id) return true;
+    return false;
+  }, [inboxOpen, anyPageOpen, selectedSessionId, activeMember]);
+
+  const inboxContextRef = useRef({
+    sessions,
+    teamMembers,
+    inboxOpen,
+    notifications: settings.notifications,
+    isViewingNotice,
+    openNoticeFromAlert,
+    openPage,
+  });
+  inboxContextRef.current = {
+    sessions,
+    teamMembers,
+    inboxOpen,
+    notifications: settings.notifications,
+    isViewingNotice,
+    openNoticeFromAlert,
+    openPage,
+  };
+
   useEffect(() => {
     if (!approvalsLoaded) return;
     const keys = new Set([
       ...approvalsList.map((item) => `approval:${item.pluginId}:${item.id}`),
       ...inboxNotices.filter((item) => !item.readAt).map((item) => `notice:${item.id}`),
     ]);
+    // Drop any floating alerts that have since been read, resolved, or deleted.
+    setInboxAlerts((current) => {
+      const next = current.filter((item) => keys.has(item.key));
+      return next.length === current.length ? current : next;
+    });
+
     const previous = seenInboxRef.current;
     seenInboxRef.current = keys;
     if (!previous) return;
-    const alertInbox = (tag: string, message: string) => {
-      toast.info(message, {
-        action: { label: t`查看收件箱`, onClick: () => openPage('inbox') },
-        duration: 10_000,
-      });
-      if (settings.notifications === true && 'Notification' in window && Notification.permission === 'granted') {
+
+    const ctx = inboxContextRef.current;
+    const pushNativeNotification = (tag: string, body: string, onClick: () => void) => {
+      if (ctx.notifications === true && 'Notification' in window && Notification.permission === 'granted') {
         try {
-          const notification = new Notification('Riffet', { body: message, tag });
-          notification.onclick = () => { window.focus(); openPage('inbox'); };
+          const notification = new Notification('Riffet', { body, tag });
+          notification.onclick = () => { window.focus(); onClick(); };
         } catch { /* ignore */ }
       }
     };
+
+    const incoming: InboxAlertItem[] = [];
     for (const item of approvalsList) {
       const key = `approval:${item.pluginId}:${item.id}`;
-      if (!previous.has(key)) alertInbox(key, item.title);
+      if (previous.has(key)) continue;
+      if (!ctx.inboxOpen) incoming.push({ key, kind: 'approval', approval: item });
+      if (!ctx.inboxOpen || document.visibilityState === 'hidden') {
+        pushNativeNotification(key, item.title, () => ctx.openPage('inbox'));
+      }
     }
     for (const notice of inboxNotices) {
       if (notice.readAt) continue;
       const key = `notice:${notice.id}`;
-      if (!previous.has(key)) {
-        const headline = [notice.senderName, notice.title || notice.body].filter(Boolean).join(' · ').slice(0, 120);
-        alertInbox(key, headline);
+      if (previous.has(key)) continue;
+      const member = resolveNoticeMember(notice, ctx.sessions, ctx.teamMembers);
+      const suppressed = ctx.isViewingNotice(notice, member);
+      if (!suppressed) incoming.push({ key, kind: 'notice', notice, ...(member ? { member } : {}) });
+      if (!suppressed || document.visibilityState === 'hidden') {
+        const summary = plainMarkdownText(notice.title || notice.body, { singleLine: true });
+        const headline = [member?.name || notice.senderName, summary].filter(Boolean).join(' · ').slice(0, 120);
+        pushNativeNotification(key, headline, () => ctx.openNoticeFromAlert(notice));
       }
     }
-  }, [approvalsLoaded, approvalsList, inboxNotices, openPage, settings.notifications, t]);
+    if (incoming.length > 0) {
+      // Latest arrival sits on top of the stack; older unread items peek behind it.
+      setInboxAlerts((current) => {
+        const incomingKeys = new Set(incoming.map((item) => item.key));
+        return [...incoming.reverse(), ...current.filter((item) => !incomingKeys.has(item.key))];
+      });
+    }
+  }, [approvalsLoaded, approvalsList, inboxNotices]);
+
+  // Dismiss matching floating alerts as soon as the reader enters Inbox or the target conversation.
+  useEffect(() => {
+    setInboxAlerts((current) => {
+      if (current.length === 0) return current;
+      if (inboxOpen) return [];
+      const next = current.filter((item) => item.kind !== 'notice' || !isViewingNotice(item.notice, item.member));
+      return next.length === current.length ? current : next;
+    });
+  }, [inboxOpen, isViewingNotice]);
   const unreadNoticeCount = useMemo(() => inboxNotices.filter((item) => !item.readAt).length, [inboxNotices]);
   const inboxUnreadCount = approvalsList.length + unreadNoticeCount;
   const tasksAttentionCount = useMemo(() => (workItemSummaries ? countWorkItemInbox(workItemSummaries, sessions) : 0), [workItemSummaries, sessions]);
@@ -734,6 +840,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onCustomizeSidebar={() => openSettingsAt('sidebar')}
       onOpenProfile={() => openSettingsAt('profile')}
       onOpenInbox={() => openPage('inbox')}
+      onUserMenuOpenChange={onUserMenuOpenChange}
       inboxCount={inboxUnreadCount}
       onOpenStats={() => openPage('stats')}
       {...(assistantProject && listsState !== 'syncing' && !teamMembers.length ? { onOpenAssistant: openAssistant, assistantActive: assistantPage, ...(assistantMain ? { assistantSession: assistantMain } : {}) } : {})}
@@ -1330,6 +1437,16 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         </Suspense>
       )}
       {pluginCommands.dialogs}
+      <InboxAlertDock
+        items={inboxAlerts}
+        inboxCount={inboxUnreadCount}
+        desktop={desktop}
+        sidebarFooterVisible={desktop && !sidebarCollapsed && !settingsAsPage}
+        onDismiss={dismissInboxAlert}
+        onOpenNotice={openNoticeFromAlert}
+        onMarkNoticeRead={markNoticeReadFromAlert}
+        onOpenInbox={() => openPage('inbox')}
+      />
       <AppearanceBackdrop placement="overlay" />
     </div>
   );

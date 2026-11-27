@@ -167,10 +167,15 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   const selectSession = useCallback((next: Session) => {
     void nav.navigate(() => {
       if (next.id !== nav.get().sessionId) { clearContext(ui); nav.set({ focusMessage: undefined, sessionView: undefined }); }
-      nav.set({ projectId: next.projectId, memberId: next.agentMemberId ?? '', sessionId: next.id, ...NO_PAGE });
+      const { projects: allProjects, teamMembers: allMembers } = lists.get();
+      const ownerMemberId = next.agentMemberId
+        ?? allProjects.find((item) => item.id === next.projectId)?.agentMemberId
+        ?? allMembers.find((item) => !item.archivedAt && item.scope.kind !== 'project' && item.projectId === next.projectId)?.id
+        ?? '';
+      nav.set({ projectId: next.projectId, memberId: ownerMemberId, sessionId: next.id, ...NO_PAGE });
       ui.setMobileSidebar(false);
     });
-  }, [nav, ui]);
+  }, [lists, nav, ui]);
 
   /**
    * Opens a conversation search result. The conversation is selected first, and the transcript is

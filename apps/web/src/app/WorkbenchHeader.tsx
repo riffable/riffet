@@ -61,7 +61,8 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
       : project?.agentMemberId
         ? teamMembers.find((item) => item.id === project.agentMemberId)
         : project?.system === 'assistant'
-          ? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID)
+          ? (teamMembers.find((item) => !item.archivedAt && item.projectId === project.id)
+            ?? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID))
           : undefined;
   const memberSessionCount = activeMember
     ? sessions.filter((item) => !item.archivedAt && (item.agentMemberId === activeMember.id || (activeMember.scope.kind !== 'project' && item.projectId === activeMember.projectId))).length

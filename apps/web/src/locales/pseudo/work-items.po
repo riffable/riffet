@@ -155,6 +155,10 @@ msgstr ""
 msgid "关闭"
 msgstr ""
 
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "关闭通知"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "再开一个会话"
 msgstr ""
@@ -202,6 +206,10 @@ msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "到期提醒"
+msgstr ""
+
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "前往确认"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -283,6 +291,7 @@ msgstr ""
 msgid "定时 {0}"
 msgstr ""
 
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 msgid "定时提醒"
 msgstr ""
@@ -342,6 +351,10 @@ msgstr ""
 msgid "待开始的任务"
 msgstr ""
 
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "待确认"
+msgstr ""
+
 #: src/app/work-items/parts.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgctxt "workbench-session-pending"
@@ -378,6 +391,7 @@ msgstr ""
 msgid "成功"
 msgstr ""
 
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 msgid "成员消息"
 msgstr ""
@@ -392,6 +406,7 @@ msgid "或者写下回答…"
 msgstr ""
 
 #: src/app/work-items/ApprovalRow.tsx
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 #: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
@@ -429,6 +444,10 @@ msgstr ""
 #. placeholder {0}: event.question.text
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "提问：{0}"
+msgstr ""
+
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "插件审批"
 msgstr ""
 
 #: src/app/work-items/InboxPage.tsx
@@ -581,6 +600,11 @@ msgstr ""
 msgid "未达成"
 msgstr ""
 
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "查看收件箱"
+msgstr ""
+
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 msgid "标为已读"
 msgstr ""
@@ -866,6 +890,10 @@ msgstr ""
 #. placeholder {0}: files.length - SHOWN_FILES
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "还有 {0} 个"
+msgstr ""
+
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "还有 {extraCount} 条"
 msgstr ""
 
 #: src/app/work-items/WorkItemsPage.tsx

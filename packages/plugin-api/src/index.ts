@@ -378,6 +378,8 @@ export interface PluginHost {
     get(sessionId: string): PluginSessionView | undefined;
     /** The personal assistant's active main conversation id, if one exists. Absent on a host that predates it. */
     assistantMainSessionId?(): string | undefined;
+    /** Active main conversation id of a continuous standing team member, if one exists. Absent on a host that predates it. */
+    memberMainSessionId?(memberId: string): string | undefined;
     wake(sessionId: string, note: string): void;
     notify(sessionId: string, notice: { title?: string; body: string }): void;
     /**
@@ -454,6 +456,8 @@ export interface PluginAgentMemberSummary {
   description?: string;
   scope: 'global' | 'personal' | 'project';
   projectIds?: string[];
+  /** Active main conversation id for continuous standing members, when one exists. */
+  mainSessionId?: string;
   backendId?: NativeBackendId;
   model?: string;
 }

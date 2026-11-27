@@ -2110,10 +2110,6 @@ msgstr "来自 {0}"
 msgid "查看"
 msgstr "查看"
 
-#: src/app/Workbench.tsx
-msgid "查看收件箱"
-msgstr "查看收件箱"
-
 #: src/app/SessionInfo.tsx
 msgctxt "session-info-tags"
 msgid "标签"

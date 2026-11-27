@@ -2074,6 +2074,28 @@ html.dark {
 .md-thought p {
   margin-bottom: 8px;
 }
+/* Compact Markdown for background-run report cards docked above the composer. */
+.md-compact {
+  color: var(--fg-2);
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+}
+.md-compact p,
+.md-compact ul,
+.md-compact ol,
+.md-compact blockquote {
+  margin-bottom: 6px;
+}
+.md-compact h1,
+.md-compact h2,
+.md-compact h3,
+.md-compact h4,
+.md-compact h5,
+.md-compact h6 {
+  margin: 8px 0 4px;
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
 
 /* xterm */
 .xterm {

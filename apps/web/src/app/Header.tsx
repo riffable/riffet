@@ -129,7 +129,8 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       : project?.agentMemberId
         ? teamMembers.find((item) => item.id === project.agentMemberId)
         : isAssistantProject(project)
-          ? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID)
+          ? (teamMembers.find((item) => !item.archivedAt && item.projectId === project?.id)
+            ?? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID))
           : undefined;
   // A continuous member's main conversation (or legacy 助理's) carries its setup in 会话信息.
   const isAssistantMain = Boolean(

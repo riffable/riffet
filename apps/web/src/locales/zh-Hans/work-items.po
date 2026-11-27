@@ -155,6 +155,10 @@ msgstr "关联会话"
 msgid "关闭"
 msgstr "关闭"
 
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "关闭通知"
+msgstr "关闭通知"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "再开一个会话"
 msgstr "再开一个会话"
@@ -203,6 +207,10 @@ msgstr "到 {0}"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "到期提醒"
 msgstr "到期提醒"
+
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "前往确认"
+msgstr "前往确认"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "前置任务"
@@ -283,6 +291,7 @@ msgstr "完成标准，一条一行"
 msgid "定时 {0}"
 msgstr "定时 {0}"
 
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 msgid "定时提醒"
 msgstr "定时提醒"
@@ -342,6 +351,10 @@ msgstr "待处理"
 msgid "待开始的任务"
 msgstr "待开始的任务"
 
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "待确认"
+msgstr "待确认"
+
 #: src/app/work-items/parts.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgctxt "workbench-session-pending"
@@ -378,6 +391,7 @@ msgstr "恢复默认"
 msgid "成功"
 msgstr "成功"
 
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 msgid "成员消息"
 msgstr "成员消息"
@@ -392,6 +406,7 @@ msgid "或者写下回答…"
 msgstr "或者写下回答…"
 
 #: src/app/work-items/ApprovalRow.tsx
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 #: src/app/work-items/WorkItemCard.tsx
 #: src/app/work-items/WorkItemPanel.tsx
@@ -430,6 +445,10 @@ msgstr "提问"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "提问：{0}"
 msgstr "提问：{0}"
+
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "插件审批"
+msgstr "插件审批"
 
 #: src/app/work-items/InboxPage.tsx
 msgid "插件待确认操作，以及团队成员主动发给你的重要消息会出现在这里"
@@ -581,6 +600,11 @@ msgstr "未读"
 msgid "未达成"
 msgstr "未达成"
 
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "查看收件箱"
+msgstr "查看收件箱"
+
+#: src/app/work-items/InboxAlertDock.tsx
 #: src/app/work-items/InboxPage.tsx
 msgid "标为已读"
 msgstr "标为已读"
@@ -867,6 +891,10 @@ msgstr "返工：{0}"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "还有 {0} 个"
 msgstr "还有 {0} 个"
+
+#: src/app/work-items/InboxAlertDock.tsx
+msgid "还有 {extraCount} 条"
+msgstr "还有 {extraCount} 条"
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
