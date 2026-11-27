@@ -96,6 +96,15 @@
 
 开发构建里的 React 慢好几倍，StrictMode 还会把 effect 执行两遍。量、比、写进文档的数字都来自生产构建；需要可读的函数名时，用不压缩的生产构建（`PERF_MINIFY=0`，§3.1）。
 
+### 2.12 循环动画只交给合成器
+
+运行中的会话一直挂着转圈、流光和呼吸点，循环动画每一帧都在跑。只有元素自身的 `transform` 和 `opacity` 由合成器执行；`background-position` 的动画，以及 `<svg>` 内部元素（`<g>`、`<circle>`）的变换，每帧都要在主线程上重新计算样式、绘制和栅格化，代价还会随页面的 DOM 规模和图层面积增长。
+
+- 扫过的高光做成独立的子元素或伪元素，用 `transform` 平移；文字流光用 `ShimmerText`（`components/ui/controls.tsx`）：带遮罩的窗口与窗口里的文字副本反向平移，字形保持不动。
+- SVG 里只有一部分要转时，把这部分拆成单独的 `<svg>` 叠在上面，旋转加在这个 `<svg>` 上（`work-items/parts.tsx` 的 `StatusIcon`）。
+- `pnpm check:design` 拦下 `@keyframes` 里的 `background-position` 和 SVG 内部元素上的 `animate-*`。
+- 实例：一个开了 5 天的会话页挂着 7 个循环动画，JS 几乎空闲，主线程却有约 28% 的时间花在样式与绘制上，渲染进程 CPU 持续约 40%。原因是文字流光（`background-clip: text` 加 `background-position`）和任务状态环（`<g>` 上的 `animate-spin`）。骨架屏和画布卡片的高光条也是同一种写法。全部改为 `transform` 之后，在只放这几种动画的页面上，5 秒内的绘制从 600 次降到 0 次，主线程忙碌从 2.3% 降到 0.1%。
+
 ## 3. 测量
 
 ### 3.1 环境

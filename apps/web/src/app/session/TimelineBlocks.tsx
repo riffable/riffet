@@ -7,6 +7,7 @@ import {
 import type { OutputRate } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
+import { ShimmerText } from '@/components/ui/controls';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Tip } from '@/components/ui/tooltip';
 import { downloadProjectFile, projectFileUrl } from '@/lib/files';
@@ -385,7 +386,7 @@ export function WorkingIndicator({ startedAt, outputRate, connected = true, labe
     <div role="status" className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
       {/* motion-loop: liveness dot while the run is working */}
       <span className="grid size-4 shrink-0 place-items-center"><span className="size-2 rounded-full bg-accent animate-pulse-dot" /></span>
-      <span className="text-shimmer font-medium">{shownLabel}</span>
+      <ShimmerText className="font-medium">{shownLabel}</ShimmerText>
       {startedAt !== undefined && Number.isFinite(startedAt) && <span aria-live="off" className="contents"><ElapsedSince startedAt={startedAt} /></span>}
       {rate !== undefined && outputRate && (
         // An estimate is dimmed and marked `~`, so it never reads as a measurement even in a screenshot.

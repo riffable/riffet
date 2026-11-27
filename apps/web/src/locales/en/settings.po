@@ -9362,6 +9362,7 @@ msgstr "运行Codex，改了文件"
 msgid "运行与用量"
 msgstr "Runs and usage"
 
+#: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "运行中"
 msgstr "Running"
@@ -9555,6 +9556,7 @@ msgid "进程 · {0} 个，其中 Agent {agents} 个"
 msgstr "{0, plural, one {# process} other {# processes}}, including {agents, plural, one {# agent} other {# agents}}"
 
 #: src/app/design/components/ActionsChapter.tsx
+#: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "进行中"

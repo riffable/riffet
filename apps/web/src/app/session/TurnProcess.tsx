@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useId, useLayoutEffect, useRef, u
 import { useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconSparkles } from '@/components/icons';
 import { Collapse } from '@/components/ui/collapse';
+import { ShimmerText } from '@/components/ui/controls';
 import { formatDuration } from '@/lib/format-duration';
 import { cn, formatDateTime } from '@/lib/utils';
 import { canReleaseDeferredProcessFold, decideProcessFold, TRANSCRIPT_ATTR, type ProcessFoldMetrics } from './readingAnchor';
@@ -199,7 +200,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
         )}
       >
         <span className="grid size-4 shrink-0 place-items-center [&_svg]:size-[15px]"><IconSparkles className={cn(running && 'text-accent')} /></span>
-        <span className={cn('min-w-0 truncate', running && 'text-shimmer')}>{label}</span>
+        <ShimmerText active={running} className="min-w-0 truncate">{label}</ShimmerText>
         <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 opacity-70 transition-transform duration-[var(--duration-base)] ease-out-soft', open && 'rotate-90')} />
       </button>
       {/* Opening and on-screen folding animate height; folds whose lost height `scrollTop` can

@@ -44,12 +44,9 @@ export function StatusIcon({ status, running, className }: { status: WorkItemSta
   const tone = STATUS_TONE[status];
   const ring = (dashArray?: string) => <circle cx="7" cy="7" r="5.5" fill="none" stroke={tone} strokeWidth="1.25" strokeLinecap={running ? 'round' : undefined} strokeDasharray={dashArray} />;
   const check = 'M4.5 7.2 6.2 8.9 9.6 5.4';
-  return (
-    <svg viewBox="0 0 14 14" role="img" aria-label={running ? `${statusLabel} · ${t`运行中`}` : statusLabel} className={cn('size-3.5 shrink-0', className)}>
-      {/* motion-loop: the spinner's rotation, on the ring; `ui-spinner` fades it instead under reduced motion */}
-      {running
-        ? <g className="ui-spinner animate-spin" style={{ transformBox: 'view-box', transformOrigin: 'center' }}>{ring('24 10.6')}</g>
-        : status !== 'done' && ring(status === 'todo' ? '1.4 2' : undefined)}
+  const label = running ? `${statusLabel} · ${t`运行中`}` : statusLabel;
+  const marks = (
+    <>
       {status === 'doing' && <path d="M7 7V3.6A3.4 3.4 0 0 1 7 10.4Z" fill={tone} />}
       {status === 'watching' && <circle cx="7" cy="7" r="2" fill={tone} />}
       {status === 'review' && <path d="M7 7V3.6A3.4 3.4 0 1 1 3.6 7Z" fill={tone} />}
@@ -57,7 +54,24 @@ export function StatusIcon({ status, running, className }: { status: WorkItemSta
         ? <path d={check} fill="none" stroke={tone} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         : <><circle cx="7" cy="7" r="6.1" fill={tone} /><path d={check} fill="none" stroke="var(--bg)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></>)}
       {status === 'cancelled' && <path d="M4.6 9.4 9.4 4.6" stroke={tone} strokeWidth="1.25" strokeLinecap="round" />}
-    </svg>
+    </>
+  );
+  if (!running) {
+    return (
+      <svg viewBox="0 0 14 14" role="img" aria-label={label} className={cn('size-3.5 shrink-0', className)}>
+        {status !== 'done' && ring(status === 'todo' ? '1.4 2' : undefined)}
+        {marks}
+      </svg>
+    );
+  }
+  // The ring turns as its own <svg>: a transform on an element inside an SVG is repainted every
+  // frame, one on the <svg> itself is moved by the compositor.
+  return (
+    <span role="img" aria-label={label} className={cn('inline-grid size-3.5 shrink-0 *:col-start-1 *:row-start-1 *:size-full', className)}>
+      {/* motion-loop: the spinner's rotation, on the ring; `ui-spinner` fades it instead under reduced motion */}
+      <svg viewBox="0 0 14 14" aria-hidden className="ui-spinner animate-spin">{ring('24 10.6')}</svg>
+      <svg viewBox="0 0 14 14" aria-hidden>{marks}</svg>
+    </span>
   );
 }
 

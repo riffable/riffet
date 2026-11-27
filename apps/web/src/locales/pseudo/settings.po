@@ -9362,6 +9362,7 @@ msgstr ""
 msgid "运行与用量"
 msgstr ""
 
+#: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "运行中"
 msgstr ""
@@ -9555,6 +9556,7 @@ msgid "进程 · {0} 个，其中 Agent {agents} 个"
 msgstr ""
 
 #: src/app/design/components/ActionsChapter.tsx
+#: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "进行中"

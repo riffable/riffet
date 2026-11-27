@@ -2246,22 +2246,53 @@ html.dark {
   font-size: 12px;
 }
 
-@keyframes shimmer {
-  from {
-    background-position: 150% 0;
-  }
-  to {
-    background-position: -50% 0;
+/* `ShimmerText`: a band of `fg` sweeping across a dimmed label. Only transforms move, so the
+   compositor runs it and the page is not repainted each frame (an animated `background-position`
+   under `background-clip: text` was). The band is a masked window over a full-colour copy of the
+   label; the window travels one way and the copy inside it the other way by the same distance, so
+   the copy's glyphs stay on top of the label's. The copy inherits the label's wrapping and
+   ellipsis, so the two lay out alike. */
+@layer components {
+  .ui-shimmer {
+    position: relative;
   }
 }
-/* motion-loop: in-progress text shimmer */
-.text-shimmer {
-  background: linear-gradient(90deg, var(--fg-3) 0%, var(--fg-3) 40%, var(--fg) 50%, var(--fg-3) 60%, var(--fg-3) 100%);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: shimmer 2.2s linear infinite;
+.ui-shimmer {
+  color: var(--fg-3);
+}
+.ui-shimmer-band,
+.ui-shimmer-band > span {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  text-overflow: inherit;
+  /* motion-loop: in-progress text shimmer; window and copy share one timing so they stay locked */
+  animation: shimmer-window 2.2s linear infinite;
+}
+.ui-shimmer-band {
+  pointer-events: none;
+  user-select: none;
+  mask-image: linear-gradient(90deg, transparent 30%, #000 50%, transparent 70%);
+}
+.ui-shimmer-band > span {
+  color: var(--fg);
+  animation-name: shimmer-copy;
+}
+@keyframes shimmer-window {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes shimmer-copy {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
 }
 
 @keyframes pulse-dot {
@@ -2329,27 +2360,34 @@ html.dark {
   animation: canvas-pop 0.18s cubic-bezier(0.33, 1, 0.68, 1) both;
 }
 /* A card at work: a soft band of the accent sweeping along its top edge. */
+/* The band is a half-width child moved by transform, so the compositor runs the loop; `--canvas-sweep`
+   sets its pace. */
 @keyframes canvas-shimmer {
   from {
-    background-position: 200% 0;
+    transform: translateX(200%);
   }
   to {
-    background-position: -100% 0;
+    transform: translateX(-100%);
   }
 }
-/* motion-loop: loading placeholder shimmer */
 .canvas-shimmer {
+  overflow: hidden;
+}
+.canvas-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 50%;
   background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--accent) 70%, transparent) 50%, transparent 100%);
-  background-size: 50% 100%;
-  background-repeat: no-repeat;
-  animation: canvas-shimmer 1.8s ease-in-out infinite;
+  /* motion-loop: loading placeholder shimmer */
+  animation: canvas-shimmer var(--canvas-sweep, 1.8s) ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .canvas-draw,
   .canvas-enter,
   .canvas-fade,
   .canvas-pop,
-  .canvas-shimmer {
+  .canvas-shimmer::after {
     animation: none;
   }
 }
@@ -2763,10 +2801,8 @@ html.dark {
   }
 
   /* A looping highlight keeps drawing the eye even when it never moves. */
-  .text-shimmer {
-    animation: none !important;
-    background: none;
-    color: var(--fg-3);
+  .ui-shimmer-band {
+    display: none;
   }
 
   /* Still says "working", without rotation: a slow fade outranks the blanket rules above. */
@@ -3616,19 +3652,32 @@ html[data-settings-transition='pop']::view-transition-new(settings-list) {
   outline-offset: 3px;
   border-radius: 8px;
 }
-.ui-skeleton {
+/* The sheen is a strip four boxes wide holding two periods of the gradient, slid one period by
+   transform, so the compositor runs the loop instead of repainting the block each frame. In a layer
+   so a caller's `absolute` still wins. */
+@layer components {
+  .ui-skeleton {
+    position: relative;
+    overflow: hidden;
+  }
+}
+.ui-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 400%;
   /* Translucent tones, so a placeholder reads on the page and on a bg-subtle panel alike. */
   background: linear-gradient(100deg, var(--bg-active) 30%, var(--bg-hover) 50%, var(--bg-active) 70%);
-  background-size: 200% 100%;
+  background-size: 50% 100%;
   /* motion-loop: loading placeholder shimmer */
   animation: ui-skeleton 1.4s ease-in-out infinite;
 }
 @keyframes ui-skeleton {
-  from { background-position: 100% 0; }
-  to { background-position: -100% 0; }
+  from { transform: translateX(-75%); }
+  to { transform: translateX(-25%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ui-skeleton { animation: none; }
+  .ui-skeleton::after { animation: none; transform: translateX(-50%); }
 }
 
 /* Derive selection from the palette without changing its shared colour-role contract. */

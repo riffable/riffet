@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The web page no longer keeps the CPU busy while sessions run: spinners, the shimmering status text, task status rings and loading placeholders are now animated by the GPU compositor instead of repainting the page every frame, and look the same.
 - In the session side column, plan items stop at two lines and the current one is no longer bold, so several items in progress no longer turn into a wall of text; the avatar menu keeps a single divider, below the profile.
 - The theme color now drives buttons, switches, checkboxes, progress bars and the current tab on every client: filled controls use a deeper shade of the theme's accent that keeps white text readable, selected controls get a soft tint, and running spinners are gray. Pages are white again, and grouped settings pages sit on a light gray ground with white cards. Android keeps two interface styles, Riffet and Material 3; anyone who picked another now sees Riffet. Dialog buttons on Android are wider, and the session list says the server can't be reached, with Retry, instead of showing a raw connection error (Web, Mac, Android, iPhone).
 - On iPhone, file diffs start at the top of the page and long lines scroll sideways instead of wrapping, and the personal assistant's capability packs show their description instead of debug text. On the web, the model button on the new-session page is translated, and figures on the server status page are no longer cut off.

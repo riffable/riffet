@@ -8,6 +8,7 @@ import { AgentLogo } from '@/components/AgentLogo';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
+import { ShimmerText } from '@/components/ui/controls';
 import { CopyButton } from '@/components/ui/copy-button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -369,7 +370,7 @@ export const ThoughtRow = memo(function ThoughtRow({ text, channel, running }: {
       touchCompact
       icon={<IconBrain />}
       title={<ToolVerbLabel verb="Think" />}
-      detail={open ? undefined : <span className={cn('min-w-0 truncate font-sans text-xs text-fg-3', running && 'text-shimmer')}>{reasoningPreview(text, running)}</span>}
+      detail={open ? undefined : <ShimmerText active={running} className="min-w-0 truncate font-sans text-xs text-fg-3">{reasoningPreview(text, running)}</ShimmerText>}
       open={open}
       onToggle={() => setOpen(!open)}
     >

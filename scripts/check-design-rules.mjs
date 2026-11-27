@@ -6,6 +6,8 @@
 //               animate-[… infinite]) says why with `motion-loop: <reason>` at the end of the statement's
 //               first line or at most two lines above it (CSS: also just above the rule's selector);
 //               loops are only for in-progress / loading indicators and the ambient brand mark.
+//   repaint     Web keyframes do not animate `background-position`, and no looping `animate-*` sits on an
+//               element inside an <svg>: both repaint the page every frame (docs/guide/web-performance.md §2.12).
 //   web         no `text-[Npx]`, `rounded-[Npx]`, `z-[N]` or `-[#hex]` in apps/web/src tsx; use the tokens.
 //   ratchets    per file, these counts may not grow past scripts/design-rules-baseline.json (a file new
 //               to it starts at 0); the values come from docs/design/system/foundations.md:
@@ -141,6 +143,30 @@ for (const source of loopSources) {
       });
     }
   }
+}
+
+// --- compositor-only loops (Web) -------------------------------------------------------------------
+// A loop that animates `background-position`, or a transform on an element inside an <svg>, is
+// repainted on the main thread every frame (docs/guide/web-performance.md §2.12); move a child or
+// the <svg> itself by transform instead.
+
+const REPAINTED = 'repainted every frame; animate transform or opacity on an element of its own (web-performance.md §2.12)';
+const braces = (line) => (line.match(/\{/g) ?? []).length - (line.match(/\}/g) ?? []).length;
+for (const file of walk(join(root, 'apps/web/src'), ['.css'])) {
+  const lines = read(file);
+  let depth = 0; // > 0 inside an @keyframes block
+  lines.forEach((line, index) => {
+    const inside = depth > 0 || /@keyframes\b/.test(line);
+    depth = inside ? Math.max(0, depth + braces(line)) : 0;
+    if (inside && /\bbackground-position\b/.test(line) && !allowed(lines, index)) problems.push(`${rel(file)}:${index + 1}: keyframes animate background-position — ${REPAINTED}`);
+  });
+}
+const SVG_CHILD_LOOP = /<(?:g|path|circle|rect|line|polyline|polygon|ellipse|use)\b[^>]*\banimate-(?:spin|pulse|\[)/;
+for (const file of walk(join(root, 'apps/web/src'), ['.tsx'])) {
+  const lines = read(file);
+  lines.forEach((line, index) => {
+    if (SVG_CHILD_LOOP.test(line) && !allowed(lines, index)) problems.push(`${rel(file)}:${index + 1}: looping animation on an element inside an <svg> — ${REPAINTED}`);
+  });
 }
 
 // --- web literals ----------------------------------------------------------------------------------

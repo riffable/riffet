@@ -6,7 +6,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeActivity } from '@contracts';
 import { IconBot, IconCompress, IconEye, IconRepeat, IconSquare, IconSquareTerminal, IconTerminal } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/controls';
+import { ShimmerText, Spinner } from '@/components/ui/controls';
 import { api, HttpError } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { formatNumber } from '@/lib/i18n/format';
@@ -225,7 +225,7 @@ function CompactionRow({ item, status }: { item: ActivityItem; status: NativeAct
     return (
       <div role="status" className="flex h-7 min-w-0 items-center gap-2 text-sm text-fg-3 no-hover:h-9">
         <span className="grid size-4 shrink-0 place-items-center"><Spinner className="size-3.5" /></span>
-        <span className="text-shimmer font-medium"><Trans>正在压缩上下文</Trans></span>
+        <ShimmerText className="font-medium"><Trans>正在压缩上下文</Trans></ShimmerText>
         {Number.isFinite(since) && <span aria-live="off" className="text-xs">· <Elapsed since={since} /></span>}
       </div>
     );

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconCircleAlert, IconCircleCheck, IconCopy, IconSmartphone, IconInfo, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { EmptyState, Spinner } from '@/components/ui/controls';
+import { EmptyState, ShimmerText, Spinner } from '@/components/ui/controls';
 import { Collapse } from '@/components/ui/collapse';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,6 +86,12 @@ export function FeedbackChapter() {
           <Spinner />
           <Spinner className="size-4" />
           <Button disabled><Spinner className="text-current" />{t`保存中`}</Button>
+        </Specimen>
+      </Family>
+      <Family title="ShimmerText">
+        <Specimen name={t`进行中`} prop="active · className">
+          <ShimmerText className="text-sm font-medium">{t`运行中`}</ShimmerText>
+          <ShimmerText active={false} className="text-sm font-medium text-fg-3">{t`运行中`}</ShimmerText>
         </Specimen>
       </Family>
       <Family title="Progress">

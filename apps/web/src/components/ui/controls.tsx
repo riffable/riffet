@@ -104,6 +104,21 @@ export function Spinner({ className }: { className?: string }) {
   return <IconLoaderCircle aria-hidden className={cn('ui-spinner size-3.5 animate-spin text-fg-3', className)} />;
 }
 
+/**
+ * In-progress text: `fg-3`, with a band of `fg` sweeping across it while `active`. The band draws a
+ * hidden copy of `children` over the padding box, so pass text, not controls, and put no padding on
+ * it (the copy would sit off the text). Stands still under reduced motion.
+ */
+export function ShimmerText({ active = true, className, children }: { active?: boolean; className?: string; children: React.ReactNode }) {
+  return (
+    <span className={cn(active && 'ui-shimmer', className)}>
+      {children}
+      {/* motion-loop: in-progress text shimmer (index.css `.ui-shimmer-band`) */}
+      {active && <span aria-hidden className="ui-shimmer-band"><span>{children}</span></span>}
+    </span>
+  );
+}
+
 export interface SegmentOption<T extends string> {
   value: T; label: React.ReactNode; icon?: React.ReactNode; disabled?: boolean;
   /** `UnderlineTabs` only: the id of the panel this tab shows, set as `aria-controls`. */

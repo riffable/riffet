@@ -267,7 +267,7 @@ function Answer({ node, far, cutoff, now, pulse, lit, press, className, style }:
         lit && !far && 'border-line-strong')}
       style={{ ...style, padding: far ? 0 : `${ROW.agentPad}px` }}
     >
-      {running && !far && <span aria-hidden className="canvas-shimmer absolute inset-x-5 top-0 h-[1.5px] rounded-full" style={{ animationDuration: `${sweep}s` }} />}
+      {running && !far && <span aria-hidden className="canvas-shimmer absolute inset-x-5 top-0 h-[1.5px] rounded-full" style={{ '--canvas-sweep': `${sweep}s` } as CSSProperties} />}
       {!far && (
         <>
           <div className="flex shrink-0 items-center gap-2 text-[11px] font-medium tabular-nums text-fg-3" style={{ height: ROW.meta }}>
