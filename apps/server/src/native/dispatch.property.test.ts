@@ -37,6 +37,10 @@ abstract class SimCli {
   gates: Gate[] = [];
   /** Fails the next write between its fence and the CLI: fenced, never written. */
   loseNextWrite = false;
+  /** The running turn's screen shows no busy hint (Cursor after a stop and a send, docs/TURN-LIFECYCLE.md §1); cleared when it ends. */
+  hidesTurn = false;
+  /** Command ids whose turn the CLI actually ended. */
+  readonly endedTurns: Set<string> = new Set();
   protected readonly unechoed: Array<{ commandId: string; text: string; turnId: string }> = [];
   protected events: NativeWorkbenchEvent[] = [];
   protected sequence = 0;
@@ -51,7 +55,7 @@ abstract class SimCli {
   async supportsSendNow(): Promise<boolean> { return false; }
   /** Status reads since the schedule last moved; a dispatcher that never comes to rest shows up here. */
   reads = 0;
-  status(): NativeStatus { this.spinning(); return { phase: this.turn === undefined ? 'idle' : 'busy' }; }
+  status(): NativeStatus { this.spinning(); return { phase: this.turn === undefined || this.hidesTurn ? 'idle' : 'busy' }; }
   protected spinning(): void { if (++this.reads > 20_000) throw new Error('The dispatcher keeps reading the status without coming to rest'); }
   async snapshot() { return { events: [...this.events], status: this.status(), nativeSessionId: this.chatId }; }
   /** Like the journal feed: the log so far and the status, once the subscriber is in place. */
@@ -70,7 +74,13 @@ abstract class SimCli {
   async interrupt(): Promise<void> {
     await this.gate('interrupt');
     this.ended('run_cancelled');
+    this.over();
+  }
+
+  private over(): void {
+    if (this.turn) this.endedTurns.add(this.turn.ownerCommandId);
     this.turn = undefined;
+    this.hidesTurn = false;
   }
 
   /** The CLI persists the oldest input it has not written to its transcript yet, however late. */
@@ -84,7 +94,7 @@ abstract class SimCli {
     if (this.turn === undefined) return;
     this.push([this.event('agent_message_chunk', { content: { text: 'done' } }, this.turn.id)]);
     this.ended('run_completed');
-    this.turn = undefined;
+    this.over();
   }
 
   /** The provider notices where the CLI stands and says so. */
@@ -184,12 +194,12 @@ class ProtocolCli extends SimCli {
 }
 
 type Command =
-  | { kind: 'send' | 'steer' | 'echo' | 'finish' | 'publish' | 'stop' | 'restart' | 'loseWrite' }
+  | { kind: 'send' | 'steer' | 'echo' | 'finish' | 'publish' | 'stop' | 'restart' | 'loseWrite' | 'hide' }
   | { kind: 'open' | 'break' | 'cancel' | 'sendNow' | 'recover'; pick: number }
   | { kind: 'advance'; ms: number };
 
 const pick = (kind: 'open' | 'break' | 'cancel' | 'sendNow' | 'recover') => fc.nat(3).map(index => ({ kind, pick: index }) as Command);
-const command: fc.Arbitrary<Command> = fc.oneof(
+const commandsWith = (...extra: Array<{ weight: number; arbitrary: fc.Arbitrary<Command> }>): fc.Arbitrary<Command> => fc.oneof(
   { weight: 6, arbitrary: fc.constant<Command>({ kind: 'send' }) },
   { weight: 3, arbitrary: fc.constant<Command>({ kind: 'steer' }) },
   { weight: 8, arbitrary: pick('open') },
@@ -205,7 +215,10 @@ const command: fc.Arbitrary<Command> = fc.oneof(
   { weight: 1, arbitrary: pick('recover') },
   { weight: 1, arbitrary: fc.constant<Command>({ kind: 'restart' }) },
   { weight: 1, arbitrary: fc.constant<Command>({ kind: 'loseWrite' }) },
+  ...extra,
 );
+const command = commandsWith();
+const hidingCommand = commandsWith({ weight: 3, arbitrary: fc.constant<Command>({ kind: 'hide' }) });
 
 /** Lets every promise chain already able to run do so, and fires timers that are due. */
 async function settle(): Promise<void> {
@@ -263,6 +276,7 @@ class World {
     else if (step.kind === 'finish') this.cli.finish();
     else if (step.kind === 'publish') this.cli.publish();
     else if (step.kind === 'loseWrite') this.cli.loseNextWrite = true;
+    else if (step.kind === 'hide') this.cli.hidesTurn = true;
     else if (step.kind === 'advance') await vi.advanceTimersByTimeAsync(step.ms);
     else if (step.kind === 'stop') {
       // A3: a stop that reports success has settled everything that was running.
@@ -299,6 +313,10 @@ class World {
 
   private check(after: Command): void {
     const found = [...this.cli.violations, ...this.problems];
+    // T3/T4 (docs/TURN-LIFECYCLE.md §3): a message completes only once the CLI has ended the turn it started.
+    for (const run of this.runs()) {
+      if (run.state === 'completed' && !run.native!.intent && !this.cli.endedTurns.has(run.commandId)) found.push(`${run.commandId} completed while its turn was still running`);
+    }
     if (found.length) throw new Error(`after ${JSON.stringify(after)}: ${found.join('; ')}`);
   }
 
@@ -367,6 +385,19 @@ describe('NativeDispatcher delivery under arbitrary interleavings', () => {
         // An unknown delivery the user has not released is the only thing that may remain open.
         expect(outcome.filter(line => line.includes(' uncertain') && !line.includes(' released') && !line.includes(' written')), outcome.join('\n')).toEqual([]);
         expect(vi.getTimerCount(), outcome.join('\n')).toBe(0);
+      } finally {
+        await world.close();
+      }
+    }), { numRuns: Number(process.env.RIFFET_PROPERTY_RUNS ?? 300), seed: Number(process.env.RIFFET_PROPERTY_SEED ?? 20261120) });
+  }, 60_000 + Number(process.env.RIFFET_PROPERTY_RUNS ?? 300) * 100);
+
+  // Known defect until P2 (docs/TURN-LIFECYCLE.md §7): an idle screen without a turn id still completes a terminal CLI's run.
+  it.fails('completes a message only after the CLI ended its turn, even when the screen shows no busy hint (terminal CLI)', async () => {
+    await fc.assert(fc.asyncProperty(fc.array(hidingCommand, { maxLength: 60, size: '+1' }), async schedule => {
+      const world = new World('terminal');
+      try {
+        for (const step of schedule) await world.apply(step);
+        await world.quiesce();
       } finally {
         await world.close();
       }

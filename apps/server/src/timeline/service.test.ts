@@ -737,6 +737,21 @@ describe('timeline service', () => {
     env.close();
   });
 
+  // docs/TURN-LIFECYCLE.md §1: a is stopped before the CLI records it, b replaces it and is echoed later.
+  // Known defect until P1 writes `meta.input`: a's row is dropped because it predates the window's first event.
+  it.fails('keeps a sent message the CLI never recorded when the next one replaces its turn', async () => {
+    const env = open();
+    env.setRun(nativeRun('a', 'interrupted', 'review the change', { delivery: 'cancelled', stage: 'interrupted', nativeSessionId: 'chat-1' }));
+    env.setRun(nativeRun('b', 'running', 'the change link', { nativeMessageId: 'ub', nativeSessionId: 'chat-1', nativeTurnId: 'tb' }));
+    env.writer.turnStarted('tb', stamp(++tick), 'b');
+    commit(env, user('ub', 'tb', 'the change link'), answer('ab', 'tb', 'reading it'));
+    await env.ready();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await env.ready();
+    expect(env.all().filter(row => row.kind === 'user').map(row => row.key)).toEqual(['user:cmd-a', 'user:cmd-b']);
+    env.close();
+  });
+
   it('keeps a row within budget: long text as a preview with the whole row in a blob, tool output cut, images as blob URLs; the model output whole', async () => {
     const env = open();
     const long = 'x'.repeat(40 * 1024);
