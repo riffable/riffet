@@ -84,6 +84,8 @@ export class ClaudeSessionRuntime {
   /** Last sign of life from the CLI (a hook, transcript growth), for the long-silence notice. */
   private lastActivityAt = Date.now();
   private silenceNoticed = false;
+  /** A notice about one turn (a response Claude never confirmed), and the turn it is about. */
+  private turnNotice?: { text: string; turnSeq: number };
   private disposed = false;
   /** When the CLI was first found gone since it last ran (see `exitedAt`). */
   private exitSeen?: string;
@@ -126,6 +128,10 @@ export class ClaudeSessionRuntime {
       isDisposed: () => this.disposed,
       transcript: () => this.transcript,
       setStatus: status => this.setStatus(status),
+      setTurnNotice: (status, notice) => {
+        this.turnNotice = { text: notice, turnSeq: this.turnSeq };
+        this.setStatus({ ...status, notice });
+      },
       dispatchSignal: (signal, status) => { this.dispatchSignal(signal, status); },
       refreshTranscript: () => this.reads.refreshTranscript(),
       refreshScreenState: () => this.watch.refreshScreenState(),
@@ -447,7 +453,10 @@ export class ClaudeSessionRuntime {
     const interaction = requestedInteraction?.transport === 'protocol' && !this.interactions.has(requestedInteraction.id) ? undefined : requestedInteraction;
     const rest = { ...withoutInteraction, ...(interaction ? { interaction } : {}) };
     // The long-silence notice is withdrawn as soon as the CLI shows life or the turn ends.
-    const notice = requestedNotice === TURN_SILENCE_NOTICE && !this.silenceNoticed ? undefined : requestedNotice;
+    // So is a notice about one turn, once the next has started.
+    const staleTurnNotice = this.turnNotice !== undefined && requestedNotice === this.turnNotice.text && this.turnNotice.turnSeq !== this.turnSeq;
+    if (staleTurnNotice) this.turnNotice = undefined;
+    const notice = (requestedNotice === TURN_SILENCE_NOTICE && !this.silenceNoticed) || staleTurnNotice ? undefined : requestedNotice;
     const activeTurnId = this.activeTurnId(phase);
     const runtimeControl = this.relaunchControl();
     // Background work and compaction in progress, independent of the main turn. A CLI that has exited has none: its tasks died with it.

@@ -7,6 +7,7 @@
 ### 工作台
 
 - Riffet 现在能识别 Claude Code 2.1.332 的后台任务列表，可从会话中停止后台 shell。
+- 回答 Claude Code 审批卡的同时点了停止，会话顶部不再一直挂着「Claude was interrupted before the web interaction completed.」；Claude 没有确认回答的提示在下一轮开始时消失。
 
 - Antigravity 的技能列表现在也显示 `~/.agents/skills` 里的共享技能。Codex 或 TRAE CLI 启动探测超时时，Riffet 会先重试再报告可用状态。
 

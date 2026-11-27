@@ -7,6 +7,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Workbench
 
 - Riffet recognizes Claude Code 2.1.332’s background task list, so you can stop a background shell from its conversation.
+- Pressing Stop while answering a Claude Code approval card no longer leaves "Claude was interrupted before the web interaction completed." at the top of the conversation, and a notice that Claude did not confirm an answer now goes away when the next turn starts.
 
 - Antigravity's skill list now includes shared skills from `~/.agents/skills`. Riffet retries a slow Codex or TRAE CLI startup probe before marking the CLI unavailable.
 

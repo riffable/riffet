@@ -79,6 +79,8 @@ export interface ClaudeInteractionsDeps {
   isDisposed(): boolean;
   transcript(): ClaudeTranscript;
   setStatus(status: Omit<NativeStatus, 'phase'>): void;
+  /** Say something about this turn alone: withdrawn once the next turn starts. */
+  setTurnNotice(status: Omit<NativeStatus, 'phase'>, notice: string): void;
   dispatchSignal(signal: ClaudeSignal, status?: Omit<NativeStatus, 'phase'>): void;
   refreshTranscript(): Promise<void>;
   refreshScreenState(): Promise<void>;
@@ -491,7 +493,7 @@ export class ClaudeInteractions {
     }
   }
 
-  confirmProviderInteraction(pending: PendingInteraction, message: string, status: 'completed' | 'uncertain' = 'completed'): void {
+  confirmProviderInteraction(pending: PendingInteraction, message: string, status: 'completed' | 'uncertain' = 'completed', quiet = false): void {
     if (!pending.candidate || pending.providerResult) return;
     const result: NativeInteractionResult = { status, message };
     pending.providerResult = result;
@@ -501,7 +503,7 @@ export class ClaudeInteractions {
     pending.confirmationWaiters.clear();
     const displayed = this.deps.status().interaction?.id === pending.interaction.id;
     this.removePendingInteraction(pending, true);
-    if (displayed && status === 'uncertain') this.deps.setStatus({ ...this.deps.status(), interaction: undefined, notice: message, noticeLevel: 'warning' });
+    if (displayed && status === 'uncertain' && !quiet) this.deps.setTurnNotice({ ...this.deps.status(), interaction: undefined, noticeLevel: 'warning' }, message);
   }
 
   /**
@@ -509,10 +511,11 @@ export class ClaudeInteractions {
    * CLI outlives this runtime; only a stop that interrupted the turn refuses it, as the reader's own decision, and with
    * `interrupt` so the refusal itself ends the turn rather than letting Claude carry on without that tool.
    */
-  cancelPending(reason: string, answer: 'release' | 'deny' = 'release'): void {
+  /** `quiet`: the reader caused this (a stop), so the outcome is the stop's and raises no notice of its own. */
+  cancelPending(reason: string, answer: 'release' | 'deny' = 'release', quiet = false): void {
     for (const pending of [...this.pending.values()]) {
       if (pending.candidate) {
-        this.confirmProviderInteraction(pending, reason, 'uncertain');
+        this.confirmProviderInteraction(pending, reason, 'uncertain', quiet);
         this.removePendingInteraction(pending, false);
         continue;
       }

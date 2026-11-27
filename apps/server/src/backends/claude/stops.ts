@@ -193,7 +193,8 @@ export class ClaudeStops {
 
   private async stopMainTurn(terminalId: string, expectedStop?: NativeStopRequest): Promise<void> {
     if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId);
-    this.deps.interactions.cancelPending('Claude was interrupted before the web interaction completed.', 'deny');
+    // The reader stopped the turn: an answer still on its way is overtaken by that, and the tool row shows what came of it.
+    this.deps.interactions.cancelPending('Claude was interrupted before the web interaction completed.', 'deny', true);
     this.interrupting = true;
     const withdrawn = this.deps.withdrawPublishedTurn();
     const target = withdrawn?.target;
