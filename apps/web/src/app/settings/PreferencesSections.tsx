@@ -569,8 +569,8 @@ export function TerminalSettingsSection({ settings, onSaved, onError }: ServerSe
   const saveTerminalServer = async (next: TerminalServerSettingsUpdate) => {
     setSavingServer(true);
     try {
-      const patch = { terminal: next };
-      onSaved(await api.updateSettings(patch), patch);
+      const saved = await api.updateSettings({ terminal: next });
+      onSaved(saved, { terminal: saved.terminal });
     } catch (error) {
       onError(errorMessage(error, t`无法保存终端设置`));
     } finally {

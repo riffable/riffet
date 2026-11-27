@@ -11,6 +11,7 @@ import { ProjectFileOpener } from './projectFileOpener';
 import { useViewCatalog } from './registry';
 import { viewIcon } from './viewIcons';
 
+// perf-rules: allow immutable empty set shared across renders
 const NO_CAPABILITIES: ReadonlySet<string> = new Set();
 const GIT_CAPABILITIES: ReadonlySet<string> = new Set(['git']);
 

@@ -90,6 +90,10 @@ class RiffetConnectionTest {
             // Network responses and the switch deadline must share the test's virtual clock.
             dispatcher = StandardTestDispatcher(testScheduler)
             addHandler { request ->
+                if (request.url.encodedPath == "/api/devices/prove") {
+                    assertNull(request.authorization(), "TLS proof probe must never carry a device token")
+                    return@addHandler respond("""{"error":{"code":"DEVICE_NOT_FOUND","message":"not found"}}""", HttpStatusCode.NotFound, jsonHeaders)
+                }
                 seen += request
                 when (request.url.encodedPath) {
                     "/api/devices/pair" -> {

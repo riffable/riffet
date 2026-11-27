@@ -52,7 +52,7 @@ class BareUrlsTest {
                 "https://example.com" to "https://example.com",
                 "http://example.com" to "http://example.com",
             ),
-            links("https://example.com.: 说明, http://example.com,a@b.com"),
+            links("https://example.com.: 说明, http://example.com,a@example.com"),
         )
     }
 
@@ -62,9 +62,9 @@ class BareUrlsTest {
             "把http://改成https://",
             "http:// https:///foo https://. https://a..b.com https://-a.com",
             "http://localhost:99999 http://localhost:0 http://localhost:80abc",
-            "xhttp://a.com foo_https://a.com a.www.a.com path/www.a.com user@www.a.com",
+            "xhttp://a.com foo_https://a.com a.www.a.com path/www.a.com user@www.example.com",
             "www.x www.foo.1 www..com",
-            "javascript:alert(1) file:///etc/passwd ftp://a.com mailto:a@b.com user@example.com",
+            "javascript:alert(1) file:///etc/passwd ftp://a.com mailto:a@example.com user@example.com",
         )
         for (sample in samples) {
             assertEquals(emptyList(), links(sample), sample)

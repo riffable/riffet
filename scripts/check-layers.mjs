@@ -59,7 +59,7 @@ const LAYERS = [
     'plugins', 'plugins-host', 'riffet-mcp', 'dictation', 'monitor.ts', 'system.ts', 'storage', 'session-deletion.ts', 'update',
     'visualization.ts', 'static-assets.ts', 'math-assets.ts', 'diagram-assets.ts']],
   ['surfaces', ['routes', 'channels']],
-  ['root', ['app.ts', 'index.ts', 'cli.ts', 'cli', 'doctor.ts']],
+  ['root', ['app.ts', 'app-wiring.ts', 'index.ts', 'cli.ts', 'cli', 'doctor.ts']],
 ];
 // Drivers and features are one rank: neither is below the other.
 const RANK = { base: 0, 'kernel-fact': 1, 'kernel-engine': 2, 'kernel-wire': 3, kit: 4, drivers: 5, features: 5, surfaces: 6, root: 7 };

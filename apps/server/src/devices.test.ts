@@ -140,7 +140,10 @@ describe('device pairing over HTTP',()=>{
       const proved=await app.inject({method:'POST',url:'/api/devices/prove',headers:host,payload:{device:device.id,nonce}});
       expect(proved.statusCode).toBe(200);
       const key=createHash('sha256').update(token).digest('base64url');
-      expect(proved.json()).toEqual({proof:createHmac('sha256',key).update(nonce).digest('base64url')});
+      const provedBody=proved.json() as {proof:string;tls:{fingerprint:string;proof:string}};
+      expect(provedBody.proof).toBe(createHmac('sha256',key).update(nonce).digest('base64url'));
+      expect(provedBody.tls.fingerprint).toMatch(/^[0-9A-F]{64}$/);
+      expect(provedBody.tls.proof).toBe(createHmac('sha256',key).update(`riffet-tls\n${nonce}\n${provedBody.tls.fingerprint}`).digest('base64url'));
       expect((await app.inject({method:'POST',url:'/api/devices/prove',headers:host,payload:{device:'unknown',nonce}})).statusCode).toBe(404);
 
       expect((await app.inject({method:'DELETE',url:`/api/devices/${device.id}`,headers:auth})).json()).toEqual({ok:true});

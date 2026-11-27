@@ -5318,6 +5318,7 @@ msgstr ""
 #: src/app/design/patterns/SearchChapter.tsx
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/StorageSection.tsx
+#: src/app/settings/TitleRulesSection.tsx
 msgid "插件"
 msgstr ""
 

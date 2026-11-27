@@ -30,8 +30,8 @@ const CACHE_KEY = 'riffet.appearance.cache.v1';
 /** Read by `public/theme-init.js` for the first frame: the palette in effect, as the sheet needs it. */
 const FIRST_FRAME_KEY = 'riffet.appearance.palette.v1';
 const STYLE_ID = 'riffet-plugin-themes';
-/** The page of a frozen share has no workbench to decorate. */
-const inert = import.meta.env.MODE === 'share';
+/** The page of a frozen share (or a headless non-DOM test import) has no workbench to decorate. */
+const inert = import.meta.env.MODE === 'share' || typeof window === 'undefined';
 
 interface PaletteData { palette: { light: ThemePalette; dark: ThemePalette }; ansi: ThemeAnsi; design?: ThemeDesign; syntax?: CustomCodeSyntax }
 interface State { selection: AppearanceSelection; catalog?: AppearanceCatalog; palettes: Record<string, PaletteData> }
@@ -164,13 +164,14 @@ function writeFirstFrame(): void {
 }
 
 function applyUnderlayRoot(bg: AppearanceBackground | undefined): void {
+  if (typeof document === 'undefined') return;
   const root = document.documentElement;
   if (bg?.placement === 'underlay') {
     root.dataset.appearanceUnderlay = '';
-    root.style.setProperty('--appearance-surface-opacity', `${Math.round((bg.surfaceOpacity ?? 0.86) * 1000) / 10}%`);
+    root.style?.setProperty?.('--appearance-surface-opacity', `${Math.round((bg.surfaceOpacity ?? 0.86) * 1000) / 10}%`);
   } else {
     delete root.dataset.appearanceUnderlay;
-    root.style.removeProperty('--appearance-surface-opacity');
+    root.style?.removeProperty?.('--appearance-surface-opacity');
   }
 }
 

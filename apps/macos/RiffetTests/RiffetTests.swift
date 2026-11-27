@@ -82,7 +82,7 @@ final class RiffetTests: XCTestCase {
         XCTAssertEqual(pieces("[https://a.com/x](https://b.com/y)").compactMap(\.1), ["https://a.com/x", "https://b.com/y"])
         XCTAssertEqual(pieces("http://[::1]:8080/api?a[0]=1, HTTPS://Example.COM/P").filter { $0.1 != nil }.map(\.0), ["http://[::1]:8080/api?a[0]=1", "HTTPS://Example.COM/P"])
         XCTAssertEqual(pieces("http://[::1]:8080/api?a[0]=1, HTTPS://Example.COM/P").compactMap(\.1), ["http://[::1]:8080/api?a%5B0%5D=1", "https://Example.COM/P"])
-        XCTAssertEqual(pieces("https://example.com.: 说明, http://example.com,a@b.com", includeEmails: false).compactMap(\.1), ["https://example.com", "http://example.com"])
+        XCTAssertEqual(pieces("https://example.com.: 说明, http://example.com,a@example.com", includeEmails: false).compactMap(\.1), ["https://example.com", "http://example.com"])
         XCTAssertEqual(pieces("a.www.example.com http://localhost:99999 www.foo.1").compactMap(\.1), [])
     }
 

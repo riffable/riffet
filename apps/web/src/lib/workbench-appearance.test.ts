@@ -78,7 +78,7 @@ it('waits for an assistant send, then acknowledges only supported and persisted 
   vi.stubGlobal('window', client);
   vi.stubGlobal('document', {
     querySelector: () => meta,
-    documentElement: { dataset: {}, style: { setProperty: vi.fn() } },
+    documentElement: { dataset: {}, style: { setProperty: vi.fn(), removeProperty: vi.fn() } },
   });
   vi.stubGlobal('WebSocket', WorkbenchSocket);
   const { connectWorkbenchAppearance, needsWorkbenchDocumentReload, workbenchAppearanceConnection } = await import('./workbench-appearance');

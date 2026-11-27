@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api, CLIENT_FEATURES, restoreContext, restoreNewSessionContext, mergeRestoredReferences, listNativeCreateRequests, removeNativeCreateRequest, saveNativeCreateRequest, withClientFeatures } from './api';
-import { acknowledgeRecoveredCreationDraft } from '../app/session/Composer';
+import { acknowledgeRecoveredCreationDraft } from '../app/session/composerDraft';
 
 beforeEach(() => {
   const values = new Map<string, string>();

@@ -72,7 +72,7 @@ describe('splitBareUrls', () => {
     expect(links('地址 https://example.com: 说明')).toEqual([
       ['https://example.com', 'https://example.com'],
     ]);
-    expect(links('https://example.com.: 说明, http://example.com,a@b.com')).toEqual([
+    expect(links('https://example.com.: 说明, http://example.com,a@example.com')).toEqual([
       ['https://example.com', 'https://example.com'],
       ['http://example.com', 'http://example.com'],
     ]);
@@ -102,9 +102,9 @@ describe('splitBareUrls', () => {
       '把http://改成https://',
       'http:// https:///foo https://. https://a..b.com https://-a.com',
       'http://localhost:99999 http://localhost:0 http://localhost:80abc',
-      'xhttp://a.com foo_https://a.com a.www.a.com path/www.a.com user@www.a.com',
+      'xhttp://a.com foo_https://a.com a.www.a.com path/www.a.com user@www.example.com',
       'www.x www.foo.1 www..com',
-      'javascript:alert(1) file:///etc/passwd ftp://a.com mailto:a@b.com user@example.com',
+      'javascript:alert(1) file:///etc/passwd ftp://a.com mailto:a@example.com user@example.com',
     ]) {
       expect(links(text), text).toEqual([]);
     }

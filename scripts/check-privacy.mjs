@@ -93,8 +93,8 @@ const range = flag('--range');
 const messageFile = flag('--message');
 if (range && messageFile) fail('Use either --range or --message.');
 
-// Lockfiles and vendored or generated trees carry hashes and upstream addresses, not our data.
-const SKIP = /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock|Podfile\.lock|gradle\.lockfile|Package\.resolved)$|(?:^|\/)(?:node_modules|vendor|Pods|Licenses|icon-sources|Icons\.xcassets)\/|\.generated\.|\.svg$/;
+// Lockfiles, third-party license notices, and vendored or generated trees carry hashes and upstream addresses, not our data.
+const SKIP = /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock|Podfile\.lock|gradle\.lockfile|Package\.resolved|NOTICE(?:\.txt)?)$|(?:^|\/)(?:node_modules|vendor|Pods|Licenses|icon-sources|Icons\.xcassets)\/|\.generated\.|\.svg$/;
 // Test fixtures use LAN addresses and sample home paths as their subject; the other rules still apply.
 const TEST_FILE = /\.test\.[cm]?[jt]sx?$|(?:^|\/)(?:commonTest|jvmTest|androidTest|[A-Za-z]*Tests)\/|Tests?\.(?:kt|swift)$/;
 

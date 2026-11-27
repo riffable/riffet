@@ -27,7 +27,7 @@ HTTP 与 WebSocket 接口：把请求翻译成对内核服务的调用。只做�
 - 预热路由按内存压力放行，压力读数最多每 5 s 取一次，因为每个打开的页面每 30 s 都会请求（`native.ts#prewarmPressure`）。
 - 停止是一个请求：活动先变 `stopping`，只有驱动证据到达才变 `stopped`（`native.ts` 的 stop 路由）。不要在路由里直接写 `stopped`。
 - 重启前的暂停派发由调用方各自持有租约（`service.ts#registerServiceRoutes`），解除只撤销自己的。
-- 新路由要在 `access/capabilities.ts` 登记所需能力（`read`、`chat`、`exec`、`admin`），没登记的要求 `admin`，`app.test.ts` 对漏登记的路由报错。只改调用方自己视图的写操作（已读、置顶顺序、客户端日志）记 `read`，否则明文浏览器连这些也做不了。经 `/api/servers/:serverId/*` 转发的请求按它在对端到达的路由判断。
+- 新路由要在 `apps/server/src/access/capabilities.ts` 登记所需能力（`read`、`chat`、`exec`、`admin`），没登记的要求 `admin`，`apps/server/src/app.test.ts` 对漏登记的路由报错。只改调用方自己视图的写操作（已读、置顶顺序、客户端日志）记 `read`，否则明文浏览器连这些也做不了。经 `/api/servers/:serverId/*` 转发的请求按它在对端到达的路由判断。
 
 ## 外部行为
 

@@ -2,7 +2,7 @@ import { toolObject as object, type BoundAssistantTool, type ToolDefinition } fr
 import { createHash, randomUUID } from 'node:crypto';
 import type { AgentToolGroup } from '@riffet/plugin-api';
 import type { AgentMember, DeviceCapability, Session, RiffetWakeup, ServerInfo, WorkItem, WorkItemQuestion } from '../../../../packages/contracts/src/index.js';
-import { DEFAULT_AGENT_MEMBER_ID } from '../../../../packages/contracts/src/index.js';
+import { DEFAULT_AGENT_MEMBER_ID, LINK_BUDGET } from '../../../../packages/contracts/src/index.js';
 import type { SessionReferenceService } from '../context-references/service.js';
 import type { Auth } from '../auth.js';
 import { materializeAttachment } from '../backends/attachments.js';

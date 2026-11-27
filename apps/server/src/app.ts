@@ -22,7 +22,8 @@ import { ServerCacheRegistry } from './memory/cache-registry.js';
 import { serverProfileBudget, type ServerProfile } from './memory/profile.js';
 import { startIntegrityCheck } from './storage/integrity.js';
 import { Auth, type AuthContext, FILE_SITE_ROUTE, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
-import { AppError, requireString } from './errors.js';
+import { AppError } from './errors.js';
+import { createActiveWorkbenchRunResolver, createControlCapabilityTracker, createNativeInputReader, createPluginAgentHostFactory } from './app-wiring.js';
 import { clearAuxiliaryAuthCache, completeForPlugin, resolveAuxiliaryModel, streamForPlugin, type GatewayProfiles } from './auxiliary/models.js';
 import { AuxiliaryStats } from './stats/auxiliary.js';
 import { PlanFileWriter } from './native/plan-files.js';
@@ -38,7 +39,6 @@ import { ThemeService } from './themes/index.js';
 import { codexGeneratedImageHomes, migratePluginStorage } from './compat.js';
 import { SessionLock } from './agent-host/session-lock.js';
 import { NativeDispatcher } from './native/dispatch.js';
-import { resolveNativeSessionInput } from './native/session-input.js';
 import { buildSessionControlSnapshot } from './native/control.js';
 import { defaultBackendForClient, effectiveSettingsForClient, registerProjectVisibilityHook, registerSessionVisibilityHook } from './native/client-features.js';
 import { ClientLogs } from './clientLogs.js';
@@ -101,8 +101,7 @@ import { registerWorkspaceRoutes } from './routes/workspace.js';
 import { registerGitRoutes } from './routes/git.js';
 import { registerOrchestrationRoutes } from './routes/orchestration.js';
 import { OrchestrationService } from './orchestration/service.js';
-import { CONTEXT_LIMITS, sessionReferenceInputs } from './context-references/input.js';
-import { agentMentionInputs } from './native/agent-mentions.js';
+import { CONTEXT_LIMITS } from './context-references/input.js';
 import { SessionReferenceService } from './context-references/service.js';
 import { SessionCommands } from './orchestration/session-commands.js';
 import { registerSettingsRoutes } from './routes/settings.js';
@@ -136,8 +135,8 @@ import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerTraceRoutes } from './routes/trace.js';
-import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, ASSISTANT_BUDGET, CODE_INDEX_BUDGET, DEFAULT_AGENT_MEMBER_ID, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, assistantChoice, isAssistantBackend, memberChoice, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
+import type { RouteDeps } from './routes/deps.js';
+import { AGENT_PROCESS_BUDGET, ASSISTANT_BUDGET, CODE_INDEX_BUDGET, DEFAULT_AGENT_MEMBER_ID, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, assistantChoice, isAssistantBackend, memberChoice, titleTemplateKeepsTitle, workItemAgentChoice, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -276,20 +275,7 @@ export async function createApp(options: AppOptions = {}) {
   let agentCallsRef:AgentCallService|undefined;
   let teamRef:AgentTeamService|undefined;
   let pluginAgentsRef:((pluginId:import('@riffet/plugin-api').PluginManifest['id'])=>import('@riffet/plugin-api').PluginAgentHost)|undefined;
-  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,team:()=>teamRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:(sessionId):string|undefined=>{
-    const session=store.getSession(sessionId);
-    if(session.archivedAt || session.state==='archived') return undefined;
-    const project=store.getProject(session.projectId);
-    if(project.system!=='assistant' || project.archivedAt || project.mainSessionId!==sessionId || session.origin?.kind==='assistant') return undefined;
-    const member=teamRef?.resolveFor(project,session);
-    if(member && !member.capabilities.workbenchAdmin) return undefined;
-    const turn=nativeBackends.ownedForegroundTurn(sessionId);
-    if(!turn) return undefined;
-    const run=store.getRun(turn.ownerRunId);
-    if(run.sessionId!==sessionId || run.state!=='running' || !run.native || run.native.intent
-      || run.native.nativeSessionId!==turn.nativeSessionId || (run.native.nativeTurnId && run.native.nativeTurnId!==turn.turnId)) return undefined;
-    return run.id;
-  },workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
+  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,team:()=>teamRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:createActiveWorkbenchRunResolver({store,nativeBackends:()=>nativeBackends,team:()=>teamRef}),workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
   // A state directory in the system temp directory is a test's, a probe's or a demo's: its tmux server goes with it.
   const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),shellSettings:()=>settings.getSettings().terminal,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   // Warm CLIs a previous process reserved have no page left to renew them.
@@ -547,24 +533,7 @@ export async function createApp(options: AppOptions = {}) {
     reply.code(status).send({error:{code:typed.code??'INTERNAL_ERROR',message:status<500||(error instanceof AppError&&typed.code==='MODEL_CATALOG_UNAVAILABLE')?typed.message:'The local service could not complete this operation',...(error instanceof AppError&&typed.params?{params:typed.params}:{}),...(typed.details?{details:typed.details}:{})}});
     if (status>=500) app.log.error(error);
   });
-  const readNativeInput=async(body:NativeMessageBody,options:{validateAttachments?:boolean}={}):Promise<NativeRunInput>=>{
-    const text=requireString(body?.text,'text',100_000).trim();
-    if(!text)throw new AppError('INVALID_PROMPT','Enter a message');
-    if(body.attachments!==undefined&&(!Array.isArray(body.attachments)||body.attachments.length>20))throw new AppError('INVALID_ATTACHMENTS','Use at most 20 attachments');
-    const attachmentIds=(body.attachments??[]).map(item=>requireString(item?.id,'attachment.id',100));
-    // Metadata and a stat prove the file is there and intact; the bytes are read at delivery.
-    if(options.validateAttachments!==false)for(const id of attachmentIds)await workspace.readAttachmentMetadata(id);
-    if(body.context!==undefined&&(!Array.isArray(body.context)||body.context.length>20))throw new AppError('INVALID_CONTEXT','Use at most 20 file references');
-    const context=(body.context??[]).map(item=>{
-      const path=requireString(item?.path,'context.path',8192);
-      if(item.line!==undefined&&(!Number.isSafeInteger(item.line)||item.line<1))throw new AppError('INVALID_LINE','Reference line must be a positive integer');
-      return {path,...(item.line!==undefined?{line:item.line}:{})};
-    });
-    if(body.expectedConfigRevision!==undefined&&(!Number.isSafeInteger(body.expectedConfigRevision)||body.expectedConfigRevision<0))throw new AppError('INVALID_CONFIG_REVISION','Configuration revision must be a non-negative integer');
-    const references=sessionReferenceInputs(body.references);
-    const agents=agentMentionInputs(body.agents);
-    return {text,attachmentIds,context,...(references?{references}:{}),...(agents?{agents}:{})};
-  };
+  const readNativeInput=createNativeInputReader(workspace);
   const nativeRuns=(id:string)=>[...new Map([...store.listRecentNativeRuns(id).reverse(),...store.listUnfinishedNativeRuns(id)].map(run=>[run.id,run])).values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
   // Sync v3 (docs/SYNC-V3.md): the journal folded into timeline rows in L2 `derived.db`, and each backend's transcript read into L1 `journal.db`.
   const timeline=new TimelineService({db:store.derivedDb,journal:store.journal,listRuns:id=>store.listRuns(id),onRunChanged:listener=>store.onRunChanged(listener),
@@ -573,76 +542,7 @@ export async function createApp(options: AppOptions = {}) {
     listJobs:id=>nativeBackends.listJobs(id),onJobChanged:listener=>nativeBackends.onJobChanged(listener),
     activity:id=>store.sessionActivity(id),
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
-  pluginAgentsRef=pluginId=>({
-    listBackends:async()=>(await nativeBackends.catalog.listBackends()).map(entry=>({id:entry.backendId,label:entry.label,available:entry.available,...(entry.defaultModel?{defaultModel:entry.defaultModel}:{})})),
-    listMembers:()=>team.list().map(member=>{
-      const mainSessionId=memberMainRef?.(member.id);
-      return {id:member.id,name:member.name,...(member.description?{description:member.description}:{}),scope:member.scope.kind,...(member.scope.projectIds?.length?{projectIds:member.scope.projectIds}:{}),...(mainSessionId?{mainSessionId}:{}),...(member.target?.backendId?{backendId:member.target.backendId}:{}),...(member.target?.model?{model:member.target.model}:{})};
-    }),
-    listProjects:()=>store.listProjects().filter(project=>!project.archivedAt&&!project.system).map(project=>({id:project.id,name:project.name,cwd:project.cwd})),
-    run:async request=>{
-      const prompt=typeof request.prompt==='string'?request.prompt.trim():'';
-      if(!prompt)throw new AppError('INVALID_INPUT','prompt is required');
-      const target=request.target??{};
-      const commandId=request.commandId?.trim()||randomUUID();
-      const timeoutMs=Math.min(15*60_000,Math.max(5_000,Math.floor(request.timeoutMs??5*60_000)));
-      const input={text:prompt,attachmentIds:[],context:[]};
-      let sessionId:string;
-      let run:import('../../../packages/contracts/src/index.js').Run;
-      if(target.sessionId){
-        const session=store.getSession(target.sessionId);
-        if(session.archivedAt)throw new AppError('SESSION_ARCHIVED','Restore this conversation before continuing it',409);
-        if(session.kind!=='native')throw new AppError('NOT_NATIVE','Only native conversations accept text input',409);
-        const existing=store.findRunByCommand(session.id,commandId);
-        if(existing){run=store.acceptNativeRun(session.id,commandId,input,existing.native!.config);}
-        else{
-          sessionCommands.admit(session);
-          nativeBackends.assertAvailable(session);
-          run=store.acceptNativeRun(session.id,commandId,input,{model:session.model,mode:session.mode,approval:session.approval});
-        }
-        sessionId=session.id;
-        dispatch.kick();
-      }else{
-        const sessionInput=await resolveNativeSessionInput({store,settings,nativeBackends,team:()=>team},{
-          ...(target.memberId?{agentMemberId:target.memberId}:{agentMemberId:null}),
-          ...(target.projectId?{projectId:target.projectId}:{}),
-          ...(target.backendId?{backendId:target.backendId}:{}),
-          ...(target.profileId?{backendProfileId:target.profileId}:{}),
-          ...(target.model?{model:target.model}:{}),
-          ...(target.approval?{approval:target.approval}:{}),
-          ...(target.title?{title:target.title}:{}),
-        });
-        const created=store.createNativeSubmission(randomUUID(),{...sessionInput,origin:{kind:'plugin',pluginId}},commandId,input);
-        sessionId=created.session.id;
-        run=created.run;
-        dispatch.kick();
-      }
-      const terminal=(state:string):state is 'completed'|'failed'|'cancelled'|'interrupted'=>state==='completed'||state==='failed'||state==='cancelled'||state==='interrupted';
-      const settled=await new Promise<import('../../../packages/contracts/src/index.js').Run>((resolve,reject)=>{
-        const finish=(current:import('../../../packages/contracts/src/index.js').Run)=>{cleanup();resolve(current);};
-        const fail=(error:Error)=>{cleanup();reject(error);};
-        const onAbort=()=>fail(new AppError('PLUGIN_AGENT_ABORTED','Agent run wait aborted',499));
-        const timer=setTimeout(()=>fail(new AppError('PLUGIN_AGENT_TIMEOUT',`Agent run did not settle within ${Math.round(timeoutMs/1000)}s`,504)),timeoutMs);
-        timer.unref?.();
-        const off=store.onRunChanged(changed=>{if(changed.id===run.id&&terminal(changed.state))finish(changed);});
-        const cleanup=()=>{clearTimeout(timer);off();request.signal?.removeEventListener('abort',onAbort);};
-        if(request.signal?.aborted){onAbort();return;}
-        request.signal?.addEventListener('abort',onAbort,{once:true});
-        const current=store.getRun(run.id);
-        if(terminal(current.state))finish(current);
-      });
-      await ingest.read(sessionId)?.catch(()=>undefined);
-      await timeline.ready(sessionId,'main').catch(()=>undefined);
-      const turn=timeline.outline(sessionId,'main',20).turns.find(item=>item.runId===settled.id);
-      let answer=turn?(timeline.turnText(sessionId,turn.turn)?.answer?.trim()??''):'';
-      if(!answer&&turn){
-        const page=timeline.page(sessionId,'main',{from:turn.startPos,rows:400});
-        const last=page.rows.filter(row=>row.turn===turn.turn).findLast(row=>row.kind==='assistant'&&'text' in row&&typeof row.text==='string'&&Boolean(row.text.trim()));
-        answer=last&&'text' in last&&typeof last.text==='string'?last.text.trim():'';
-      }
-      return {sessionId,runId:settled.id,status:settled.state as 'completed'|'failed'|'cancelled'|'interrupted',answer,...(settled.error?{error:settled.error}:{})};
-    },
-  });
+  pluginAgentsRef=createPluginAgentHostFactory({store,settings,nativeBackends,team,memberMain:id=>memberMainRef?.(id),sessionCommands,dispatch,ingest,timeline});
   cacheRegistry.register({name:'store',stats:()=>store.cacheStats(),trim:()=>store.trimCaches()});
   cacheRegistry.register({name:'timeline',stats:()=>timeline.cacheStats(),trim:()=>timeline.trimCaches()});
   cacheRegistry.register({name:'exec-worker',stats:()=>execWorkerStats(),trim:()=>trimExecWorker()});
@@ -650,34 +550,13 @@ export async function createApp(options: AppOptions = {}) {
   const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>resolveAuxiliaryModel(settings.getSettings(),'summary'),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);},record:recordAuxiliaryCall});
   const sessionMedia=new SessionMedia(sessionId=>timeline.namedPaths(sessionId),sessionId=>timeline.revision(sessionId),sessionId=>timeline.ready(sessionId,'main'),
     (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside,generatedImageHomes:codexGeneratedImageHomes(nativeBackends.catalog.profileSettings('codex')?.profiles??[])}));
-  // Read on the sync tick, which cannot await. A known backend defaults to interrupt and targeted stop until `capabilitiesFor` fills this cache; when it resolves, active sync streams refresh `control`.
-  const controlCapabilityCache=new Map<string,{supportsInterrupt:boolean;supportsTargetedStop:boolean;supportsSteer?:boolean}>();
-  const controlCapabilityPending=new Set<string>();
-  const controlRefreshListeners=new Set<()=>void>();
-  const notifyControlRefresh=()=>{for(const listener of controlRefreshListeners){try{listener();}catch{/* each stream is independent */}}};
-  const controlCapabilities=(session:{backendId?:string;backendProfileId?:string})=>{
-    const backendId=session.backendId;
-    if(!backendId||!isNativeBackendId(backendId))return undefined;
-    const driver=backendRegistry.get(backendId);
-    if(!driver)return undefined;
-    const key=`${backendId}\n${session.backendProfileId??''}`;
-    const cached=controlCapabilityCache.get(key);
-    if(!cached&&!controlCapabilityPending.has(key)){
-      controlCapabilityPending.add(key);
-      // A profile that no longer resolves (deleted, renamed) falls back to the backend's default one, so steering is not lost with it.
-      void nativeBackends.catalog.capabilitiesFor(backendId,session.backendProfileId).catch(()=>nativeBackends.catalog.capabilitiesFor(backendId)).then(caps=>{
-        controlCapabilityCache.set(key,{supportsInterrupt:caps.supportsInterrupt,supportsTargetedStop:caps.supportsTargetedStop!==false,supportsSteer:caps.supportsSteer===true});
-        notifyControlRefresh();
-      }).catch(()=>undefined).finally(()=>{controlCapabilityPending.delete(key);});
-    }
-    return cached??{supportsInterrupt:true,supportsTargetedStop:true};
-  };
+  const {capabilities:controlCapabilities,subscribeRefresh:subscribeControlRefresh}=createControlCapabilityTracker(backendRegistry,nativeBackends);
   const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id),controlSnapshot:(sessionId,status,revision)=>{
     try{
       const session=store.getSession(sessionId);
       return buildSessionControlSnapshot({revision,session,status,queue:dispatch.queue(sessionId,status),taken:dispatch.taken(sessionId),runs:store.listUnfinishedNativeRuns(sessionId),capabilities:controlCapabilities(session)});
     }catch{return undefined;}
-  },subscribeControlRefresh:listener=>{controlRefreshListeners.add(listener);return ()=>{controlRefreshListeners.delete(listener);};}});
+  },subscribeControlRefresh});
   // Needs the timeline, so it is built here rather than beside orchestration. Unfinished turn cards are taken over once connected.
   const channels=new ChannelService({store,settings,nativeBackends,dispatch,sessionCommands,sessionLock,timeline,ingest,workspace,owner,stateDir,...(options.channelProviders?{providers:()=>options.channelProviders!}:{providers:()=>plugins.imChannels().map(({id,title,provider})=>channelProvider(id,provider,title)),onProvidersChanged:listener=>plugins.onChange(listener)})});
   if(!lite)void channels.start().catch(error=>console.warn('[riffet] channels failed to start',error));

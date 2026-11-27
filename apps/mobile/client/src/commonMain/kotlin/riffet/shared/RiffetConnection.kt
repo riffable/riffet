@@ -31,7 +31,7 @@ class RiffetConnection(
 ) {
     private var api: RiffetApi? = null
     /** Moves paired servers to TLS in the background ([securePairings]); ends with [close]. */
-    private val background = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val background = CoroutineScope(SupervisorJob() + parseContext)
 
     var baseUrl: String? = null
         private set

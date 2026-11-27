@@ -79,12 +79,16 @@ final class DeviceIdentity: NSObject, DeviceCredentialProvider, @unchecked Senda
         return Data(sequence(tbs + ecdsaSHA256 + tlv(0x03, [0x00] + [UInt8](signature))))
     }
 
-    private static func utcTime(_ date: Date) -> [UInt8] {
+    private static let utcFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyMMddHHmmss'Z'"
-        return tlv(0x17, [UInt8](formatter.string(from: date).utf8))
+        return formatter
+    }()
+
+    private static func utcTime(_ date: Date) -> [UInt8] {
+        return tlv(0x17, [UInt8](utcFormatter.string(from: date).utf8))
     }
 
     private static func sequence(_ content: [UInt8]) -> [UInt8] { tlv(0x30, content) }
