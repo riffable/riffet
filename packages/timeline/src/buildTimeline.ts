@@ -494,6 +494,7 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     placed?.set(compacted.key, compacted);
   }
   const recordedAt = new Map<TimelineItem, number>();
+  const turnStarts = log ? turnStartsIn(items) : undefined;
   for (const run of context.runs) {
     let receipt: TimelineItem | undefined;
     let entry: number | undefined;
@@ -544,7 +545,8 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     if (receipt) items.splice(items.indexOf(receipt), 0, resolved);
     else if (entry !== undefined) {
       // Where it was sent, in the log's own order: no clock of the CLI's is compared with ours.
-      items.splice(journalIndex(items, entry, recordedAt), 0, resolved);
+      // A steer joins the turn it was sent into, so only it is filed among that turn's own rows.
+      items.splice(journalIndex(items, entry, recordedAt, native?.intent === 'steer' ? undefined : turnStarts), 0, resolved);
       recordedAt.set(resolved, entry);
     }
     else if (compaction) items.splice(items.indexOf(compaction), 0, resolved);
@@ -704,15 +706,39 @@ const itemTimes = new WeakMap<TimelineItem, number>();
  * Where a run recorded at journal seq `entry` goes: after every row of an event the log holds before it.
  * A run row stands where it was recorded, or after everything when that is not known (a queued run).
  */
-function journalIndex(items: TimelineItem[], entry: number, recordedAt: Map<TimelineItem, number>): number {
+function journalIndex(items: TimelineItem[], entry: number, recordedAt: Map<TimelineItem, number>, turnStarts?: Map<string, number>): number {
   let index = items.length;
-  while (index > 0) {
-    const item = items[index - 1]!;
-    const at = recordedAt.get(item) ?? (item.event.sequence === Number.MAX_SAFE_INTEGER ? Number.POSITIVE_INFINITY : item.event.sequence);
-    if (at < entry) break;
-    index -= 1;
-  }
+  while (index > 0 && logPlace(items[index - 1]!, recordedAt, turnStarts) >= entry) index -= 1;
   return index;
+}
+
+/**
+ * Where a row stands in the log, for filing a recorded run. A row of a turn counts from where that turn began
+ * (`turnStarts`): a turn begun before the run was sent is an earlier one, however late the log took in its rows
+ * (a transcript flushed after the next message's fence). A run row with no place of its own counts as earlier
+ * (a run from before inputs were recorded, or one filed at its echo), except one still waiting for its fence.
+ */
+function logPlace(item: TimelineItem, recordedAt: Map<TimelineItem, number>, turnStarts?: Map<string, number>): number {
+  const recorded = recordedAt.get(item);
+  if (recorded !== undefined) return recorded;
+  if (item.event.sequence === Number.MAX_SAFE_INTEGER) {
+    const delivery = item.kind === 'user' ? item.run?.native?.delivery : undefined;
+    return delivery === 'queued' || delivery === 'preparing' ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+  }
+  const turn = (item.event as Partial<NativeWorkbenchEvent>).nativeTurnId;
+  return (turn !== undefined ? turnStarts?.get(turn) : undefined) ?? item.event.sequence;
+}
+
+function turnStartsIn(items: readonly TimelineItem[]): Map<string, number> {
+  const starts = new Map<string, number>();
+  for (const item of items) {
+    const turn = (item.event as Partial<NativeWorkbenchEvent>).nativeTurnId;
+    const seq = item.event.sequence;
+    if (!turn || seq === Number.MAX_SAFE_INTEGER) continue;
+    const known = starts.get(turn);
+    if (known === undefined || seq < known) starts.set(turn, seq);
+  }
+  return starts;
 }
 
 export function chronologicalIndex(items: TimelineItem[], at: number): number {

@@ -755,6 +755,22 @@ describe('timeline service', () => {
     env.close();
   });
 
+  // A transcript written in batches: the turn before flushes its last rows after the next message's write fence.
+  it('files a sent message after the rows of the turn before it, however late the log took them in', async () => {
+    const env = open();
+    env.writer.turnStarted('t1', stamp(++tick));
+    commit(env, user('u1', 't1', 'first'), answer('a1', 't1', 'part one'));
+    const c = nativeRun('c', 'running', 'next', { delivery: 'input_sent', nativeSessionId: 'chat-1' });
+    env.setRun({ ...c, native: { ...c.native!, inputEntry: env.writer.inputSent('c', c.commandId, c.createdAt) } });
+    commit(env, answer('a1b', 't1', 'part two'));
+    await env.ready();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    await env.ready();
+    const keys = env.all().map(row => row.key);
+    expect(keys.indexOf('user:cmd-c')).toBeGreaterThan(keys.indexOf('event:a1b'));
+    env.close();
+  });
+
   it('keeps a row within budget: long text as a preview with the whole row in a blob, tool output cut, images as blob URLs; the model output whole', async () => {
     const env = open();
     const long = 'x'.repeat(40 * 1024);

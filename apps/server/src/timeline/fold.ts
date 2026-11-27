@@ -28,7 +28,7 @@ import type { RowState, TimelineTables } from './tables.js';
  */
 
 /** Bumped when a change to the fold rules must refold every lane: it changes every lane's generation. */
-export const FOLD_VERSION = 18;
+export const FOLD_VERSION = 19;
 const READ_BATCH = 2000;
 const PREVIEW_CHARS = 120;
 const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);

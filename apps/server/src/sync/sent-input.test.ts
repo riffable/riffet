@@ -11,7 +11,7 @@ describe('sent inputs in the journal (docs/TURN-LIFECYCLE.md T1)', () => {
   const stores: Store[] = [];
   afterEach(() => { for (const store of stores.splice(0)) store.close(); });
 
-  it('records a message once, when its write fence is committed and before anything the CLI echoes', () => {
+  it('records a message once, when its write fence is committed and before anything the CLI echoes', async () => {
     const store = new Store(':memory:');
     stores.push(store);
     const ingest = new TranscriptIngest({ journal: store.journal, source: () => undefined });
@@ -26,6 +26,7 @@ describe('sent inputs in the journal (docs/TURN-LIFECYCLE.md T1)', () => {
 
     // The fence: the CLI is written to only after this returns.
     store.transitionNativeRun(run.id, ['preparing'], { delivery: 'dispatching', timings: { dispatchAt: Date.parse('2026-11-27T09:34:48.135Z') } });
+    await Promise.resolve();
     const recorded = store.getRun(run.id).native!.inputEntry!;
     const row = store.journal.locate(key, inputMetaId(run.id))!;
     expect(recorded).toEqual({ generation: store.journal.head(key).generation, seq: row.identity });

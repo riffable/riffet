@@ -14,12 +14,22 @@ export function journalSentInputs(store: Store, ingest: TranscriptIngest): () =>
   return store.onRunChanged(run => {
     const native = run.native;
     if (!native || native.delivery !== 'dispatching' || native.inputEntry) return;
+    let entry: NonNullable<NonNullable<Run['native']>['inputEntry']>;
     try {
-      const entry = ingest.writer(run.sessionId).inputSent(run.id, run.commandId, fencedAt(run));
-      store.transitionNativeRun(run.id, ['dispatching'], { inputEntry: entry });
+      // The record itself is written now, before the CLI is: the place is taken here.
+      entry = ingest.writer(run.sessionId).inputSent(run.id, run.commandId, fencedAt(run));
     } catch (error) {
       console.warn(`[riffet] recording the sent input of ${run.sessionId}/${run.id} failed`, error);
+      return;
     }
+    // The run is told its place once the store has told every listener of the fence: a write from inside
+    // a listener would reach the listeners after this one ahead of the change they are still to be told.
+    queueMicrotask(() => {
+      try {
+        const current = store.getRun(run.id).native;
+        if (current && !current.inputEntry) store.transitionNativeRun(run.id, [current.delivery], { inputEntry: entry });
+      } catch { /* the run is gone */ }
+    });
   });
 }
 

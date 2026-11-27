@@ -77,6 +77,8 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 - 写到哪份日志：`apps/server/src/journal/ingest.ts#JournalLaneWriter` 的 `inputSent`，写进当前服务主车道的那份日志（长会话首次导入期间是导入窗口）。Run 记下 `NativeRunDetails.inputEntry`：日志的 generation 和这条记录的 seq。
 - 失效：导入窗口被提升、日志重建后 generation 变化，`inputEntry` 不再成立，该 Run 按旧规则放置（§7）。
 - 写入失败只记日志警告，不拦下发送：失去的只是位置，Run 按旧规则放置。为一次日志写入失败拒绝发送，代价比位置不准大。
+- 日志记录在监听里同步写，`inputEntry` 在下一个微任务才记到 Run 上：在 store 的变更监听里再改 Run，后面的监听会先收到新值、再收到这次栅栏的旧值。
+- 已知局限：车道还没读过 CLI 的历史（游标为空，如接管一个已有对话后立刻发送）时，这条记录排在随后导入的整段历史之前。有回显的消息不受影响；没有回显的会显示在历史最上方。
 - 写入栅栏之前的消息（`queued`、`preparing`）不进日志，由控制快照的 `inbox` 显示：`placement: 'queued'` 在输入框上方，`placement: 'sending'` 在内容区末尾（DISPATCH-ARCHITECTURE A6）。行键都是 `user:<commandId>`，进入日志后不重新挂载。
 
 ### 4.2 时间线折叠（P1 已实施）
@@ -84,10 +86,10 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 - `TimelineSeed.log`（`packages/timeline/src/buildTimeline.ts#TimelineLog`）告诉时间线：事件来自哪份日志、窗口从哪个 seq 开始。服务端折叠（`apps/server/src/timeline/fold.ts`）每次建窗口时传入。
 - 位置规则：
   - 有回显的 Run：行在回显的位置（不变）。引导消息的回执落在本回合首条输出之后时，行在回执位置。
-  - 没有回显、`inputEntry` 属于这份日志的 Run：行在日志里 `meta.input` 的位置，按 seq 比较，不比较任何时钟。seq 早于窗口起点的跳过：它的行在已冻结的回合里。
+  - 没有回显、`inputEntry` 属于这份日志的 Run：行在日志里 `meta.input` 的位置，按 seq 比较，不比较任何时钟。seq 早于窗口起点的跳过：它的行在已冻结的回合里。比较时一个回合的行都按该回合在日志里开始的位置算：在这条消息之前开始的回合，行即使在栅栏之后才写进日志（转写分批落盘），也排在消息上方。引导消息只和所进回合自己的行按 seq 比较。没有位置的 Run 行算作更早，还在等写入栅栏的（`queued`、`preparing`）算作更晚。
   - 没有 `inputEntry`（或 generation 不符）的 Run：沿用 `placeRunRows` 原有规则。
 - CLI 未记录的输入（样本中的 a）：行保留，状态取自 Run（如「已中断」）。是否已进入模型上下文无法确认，文案不做断言。
-- 折叠规则变化加大了 `FOLD_VERSION`（17）。
+- 折叠规则变化加大了 `FOLD_VERSION`（17；按回合起点比较后为 19）。
 
 ### 4.3 回合终态（P2 已实施）
 
