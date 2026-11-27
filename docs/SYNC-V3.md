@@ -229,7 +229,7 @@ export interface TranscriptSource {
 
 - 真实 CLI 探针（2026-10-26）：Codex、Cursor（需 `--cursor-cli` 带上服务的网关设置）、Droid、TraeX 通过；DSH 默认路由缺 `DEEPSEEK_API_KEY`、Claude 的模型源目录里唯一可用模型返回 403，两者以环境跳过（退出码 2）结束。据此修正：Droid 把回合的 runId 标到该回合每个事件上；dispatcher 先读完转写再接受点名新回合的状态，免得上一回合的结束晚到而被判为未确认；`dispose` 先 drain 再停止读取，不再经已关闭的 app-server 读。
 - Claude 真实 CLI 探针（deepseek-v4.1-flash）的后续修正：
-  - 发起后台任务的回合被判为「结果未确认」（场景 5、13）：Claude Code 先发下一回合（任务通知）的 UserPromptSubmit hook，上一回合的 `turn_duration` 稍后才成批落盘，dispatcher 那次读日志时上一回合还开着。`dispatch-feed` 在状态点名新回合、而日志里上一回合仍未结束时，最多 2s 内每 50ms 再读一次。Stop hook 之后到 `turn_duration` 之前（其他 Stop hook 未跑完，本机插件 hook 超时 10s）phase 已 idle、Run 仍在运行。已修正：正在等待回合结果的 Run 用 60s 的对账宽限（`IDLE_OUTCOME_GRACE_MS`），不再在 15s 时先判未确认再改正；仍未收到结果时依旧按未确认收尾。
+  - 发起后台任务的回合被判为「结果未确认」（场景 5、13）：Claude Code 先发下一回合（任务通知）的 UserPromptSubmit hook，上一回合的 `turn_duration` 稍后才成批落盘，dispatcher 那次读日志时上一回合还开着。`dispatch-feed` 在状态点名新回合、而日志里上一回合仍未结束时，最多 2s 内每 50ms 再读一次。Stop hook 之后到 `turn_duration` 之前（其他 Stop hook 未跑完，本机插件 hook 超时 10s）phase 已 idle、Run 仍在运行。已修正：空闲收敛只有一档 60s（`IDLE_RECONCILE_MS`），不再在 15s 时先判未确认再改正；仍未收到结果时依旧按未确认收尾。
   - 后台任务的 `stopping` 只进了运行时的状态摘要，没进日志（v2 由流下发），客户端从 running 直接跳到 stopped（场景 13）。现在同时写入车道 ledger，CLI 没停下的改回 running。
   - Monitor 的第一条事件可能早于它的启动结果进入 CLI 队列，活动的首个状态没有 `toolCallId`（切换前已存在）；现在取尚未返回结果、描述相同的 Monitor 调用。
   - 探针：场景 11 在较慢模型上超出 300s 预算，改为再加 300s；场景 5 的 CLI 结束发起回合后立刻处理子 Agent 的通知时，改为检查状态随之为 busy。

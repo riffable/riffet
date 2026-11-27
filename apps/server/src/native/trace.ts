@@ -7,10 +7,19 @@ import type { Run } from '../../../../packages/contracts/src/index.js';
  */
 export type SessionPhase = 'stopping' | 'recovering' | 'sending' | 'running' | 'unconfirmed' | 'queued' | 'idle';
 
-/** One line of the dispatch trace: a conversation changing phase, or one of its runs changing delivery or stage. */
+/**
+ * What the actor was handling when a change showed: an observation of the provider (`status`, `echo`, `turn_end`,
+ * other `events`), its own timer or a kick (`wake`), or an operation of its own returning (`settle`).
+ */
+export type TraceSource = 'status' | 'echo' | 'turn_end' | 'events' | 'wake' | 'settle';
+
+/**
+ * One line of the dispatch trace: a conversation changing phase, or one of its runs changing delivery or stage,
+ * with the turn the run is bound to (docs/TURN-LIFECYCLE.md §4.7).
+ */
 export type DispatchTraceEntry =
-  | { event: 'phase'; session: string; from: SessionPhase; to: SessionPhase; ms: number; cause: string }
-  | { event: 'run'; session: string; run: string; intent?: string; from?: string; to: string; state: string; attempt: number; code?: string };
+  | { event: 'phase'; session: string; from: SessionPhase; to: SessionPhase; ms: number; cause: TraceSource }
+  | { event: 'run'; session: string; run: string; intent?: string; from?: string; to: string; state: string; attempt: number; code?: string; source: TraceSource; turn?: string };
 
 /** The operations a conversation has in flight, beside what its runs say. */
 export interface InFlight { stopping: boolean; recovering: boolean; sending: boolean }
@@ -39,13 +48,13 @@ export class DispatchTrace {
   constructor(private readonly sessionId: string, private readonly log: (entry: DispatchTraceEntry) => void) {}
 
   /** `finished` reads a run that is no longer unfinished, to report where it ended. */
-  record(runs: readonly Run[], phase: SessionPhase, cause: string, finished: (runId: string) => Run | undefined): void {
+  record(runs: readonly Run[], phase: SessionPhase, cause: TraceSource, finished: (runId: string) => Run | undefined): void {
     const unfinished = new Set(runs.map(run => run.id));
-    for (const run of runs) this.report(run, true);
+    for (const run of runs) this.report(run, true, cause);
     for (const id of [...this.runs.keys()]) {
       if (unfinished.has(id)) continue;
       const run = finished(id);
-      if (run) this.report(run, false);
+      if (run) this.report(run, false, cause);
       this.runs.delete(id);
     }
     if (phase === this.phase) return;
@@ -57,7 +66,7 @@ export class DispatchTrace {
 
   clear(): void { this.runs.clear(); }
 
-  private report(run: Run, unfinished: boolean): void {
+  private report(run: Run, unfinished: boolean, source: TraceSource): void {
     const native = run.native;
     if (!native) return;
     const from = this.runs.get(run.id);
@@ -66,6 +75,7 @@ export class DispatchTrace {
     if (unfinished) this.runs.set(run.id, to);
     this.log({ event: 'run', session: this.sessionId, run: run.id, ...(native.intent ? { intent: native.intent } : {}),
       ...(from ? { from } : {}), to, state: run.state, attempt: native.attempt,
-      ...(native.diagnostic?.code ? { code: native.diagnostic.code } : {}) });
+      ...(native.diagnostic?.code ? { code: native.diagnostic.code } : {}), source,
+      ...(native.nativeTurnId ? { turn: native.nativeTurnId } : {}) });
   }
 }

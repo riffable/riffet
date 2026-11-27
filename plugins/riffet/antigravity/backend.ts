@@ -57,7 +57,6 @@ export class AntigravityBackend implements AgentBackend {
   readonly traits = {
     survivesRestart: true,
     resumesByNativeId: true,
-    completesOnTurnEvent: true,
     offlineMayBeRunning: true,
     riffetTools: true,
     relaunchesForPendingConfig: true,

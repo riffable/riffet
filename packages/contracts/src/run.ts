@@ -49,7 +49,7 @@ export interface NativeRunDetails {
   ownerRunId?: string;
   /** A queued submission atomically replaced by this steering input. */
   sourceRunId?: string;
-  /** This execution was observed through live native turn hooks; idle alone cannot settle it. */
+  /** @deprecated Written by servers before every run waited for its turn's end; ignored. */
   expectsTurnOutcome?: boolean;
   /** Actual model selection after CLI capability normalization; config remains the request snapshot. */
   resolvedConfig?: NativeRunConfig;

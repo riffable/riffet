@@ -59,7 +59,7 @@ export interface NativeRunDetails {
   nativeTurnId?: string;  // 原生执行回合的身份
   ownerRunId?: string;    // 引导消息所关联的原始 Riffet Run；可缺失
   sourceRunId?: string;   // 从队列转引导时，已原子取消的原排队 Run
-  expectsTurnOutcome?: boolean; // 已观察到 live hooks，不能仅凭 idle 结算此执行
+  expectsTurnOutcome?: boolean; // 已废弃并忽略：所有执行都只由回合结束事件结算（TURN-LIFECYCLE.md T4）
 }
 
 export type NativeWorkbenchEvent = WorkbenchEvent & {
@@ -143,7 +143,7 @@ Content-Type: application/json
 
 后端确认目标 `completed / failed / interrupted` 后，向原始 owner 及属于该目标、已确认输入的引导传播同一个执行终态；明确未送达或仍无法确认的提交保留各自结果，不用目标终态覆盖。对具备可靠 turn 事件的引导路径，`phase: idle` 只更新会话显示，不能把尚未拿到终态的 owner 或引导结算为 completed。终态去重按原生 turn 身份执行；目标消失而结束原因未知时先核对历史，不用空闲状态把失败或取消改成成功。
 
-Cursor、Claude 的原生历史即使带 turn ID，也不代表当前进程接通了 Riffet hooks。Dispatcher 只在实际观察到 `activeTurn` 的精确目标后，为普通 owner 记录 `expectsTurnOutcome`；旧 CLI、无 plugin 或冷监控会话保留既有 idle 完成判断。Stop 先于原始 user echo 时，未关联 commandId 的真实目标终态短暂按 session/turn 缓存，唯一原始消息认领后再结算，避免纯文本回复卡住。中断失败 hook 的 `is_interrupt:true` 拒绝未领取的输入并发布取消结果，子 agent metadata 不能领取或终止父 turn。
+Cursor、Claude 的原生历史即使带 turn ID，也不代表当前进程接通了 Riffet hooks。Dispatcher 不按 idle 结算任何执行（TURN-LIFECYCLE.md T4）：没有结束事件的执行在空闲满 `IDLE_RECONCILE_MS` 后记为结果未确认；只有状态点名过的回合，才会因状态点名另一个回合而被判为结果未确认。Stop 先于原始 user echo 时，未关联 commandId 的真实目标终态短暂按 session/turn 缓存，唯一原始消息认领后再结算，避免纯文本回复卡住。中断失败 hook 的 `is_interrupt:true` 拒绝未领取的输入并发布取消结果，子 agent metadata 不能领取或终止父 turn。
 
 **Dispatcher 增加显式引导分支，继续使用现有会话锁。** 后端 driver 增加可选 `steer()`，与 `send()`、`interrupt()` 对齐；backend service 负责解析 profile、订阅和调用，不建立另一套会话生命周期。
 

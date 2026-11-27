@@ -1,6 +1,6 @@
 # 用户输入与回合生命周期：单一事实来源
 
-日期：2026-11-27。状态：方案已确认；P0、P1 已实施，P2–P4 未实施。
+日期：2026-11-27。状态：方案已确认；P0–P2 已实施，P3、P4 未实施。
 
 本文补齐 [SESSION-JOURNAL.md](SESSION-JOURNAL.md) 不变量 4、5 和 [DISPATCH-ARCHITECTURE.md](DISPATCH-ARCHITECTURE.md) A1 在实现上留下的缺口：经 Riffet 发出的用户输入不在日志里，回合终态可以绕过日志直接写进 Run。两份文档的其余约定不变，[DELIVERY.md](DELIVERY.md) 的 S1–S3、L1–L4 不变。
 
@@ -62,7 +62,7 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 
 - **T1 输入入日志。** 经 Riffet 发出的每条消息，在写入栅栏提交（`commitDispatchFence`）的同一步写一条 `meta.input` 到主车道日志。它在日志里的序号就是这条消息在时间线上的位置。写入栅栏之前取消的消息不写。
 - **T2 回显是回执。** CLI 的用户消息事件与 `meta.input` 按 `commandId`（或回执里的原生消息 ID）合并成一行，行键为 `user:<commandId>`；回显带来的回合 ID 挂到这一行上。只有无法关联的回显（终端里直接输入的消息）单独成行。时间线不再用时间戳或文本决定用户消息的位置；无命令 ID 的后端用文本匹配建立关联（`packages/contracts/src/prompt-match.ts#samePromptText`），只用于关联，不用于定位。
-- **T3 终态只有一条写入路径。** Run 的执行结果（完成、失败、中断、结果未知）只由日志里带回合 ID 的 `meta.turn_ended` 投影得出。调度器自己裁决的结束（停止确认、空闲收敛、进程退出、被后续回合取代）也先写 `meta.turn_ended`，再由同一条投影路径结算 Run。调度器不直接把 Run 改成终态。
+- **T3 结局只有一条写入路径。** Run 的结局（完成、失败、取消）只来自指明回合（回合 ID）或指明 Run（`commandId`）的结束事件：日志里的 `meta.turn_ended` 经 `DispatchFeed` 投影，或驱动在转写之外报告的同一种事件。停止确认先写 `meta.turn_ended(interrupted)`，再经同一路径结算。调度器自己的判断（空闲收敛、进程退出、被后续回合取代）只得出「结果未确认」，记在 Run 上，不写进日志（§4.3）。
 - **T4 无身份的信号不产生「完成」。** 画面空闲、进程空闲这类不指明回合的观测，最多触发空闲收敛，结果是 `outcome_unknown`；完成只来自指明回合的结束信号。
 - **T5 证据按投递尝试隔离。** 每次写入栅栏提交分配一个尝试号；忙、输出、空闲起点等证据记在尝试上，只接受写入之后、并能归属到该尝试回合的证据。
 - **T6 替换回合是一个操作。** 「直接发送」在 `SessionActor` 里是一个操作：停止当前回合，等到它的结局（`meta.turn_ended`，或确认 CLI 未记录该输入），再写入下一条。下一条的证据从它自己的写入开始收集。
@@ -89,12 +89,13 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 - CLI 未记录的输入（样本中的 a）：行保留，状态取自 Run（如「已中断」）。是否已进入模型上下文无法确认，文案不做断言。
 - 折叠规则变化加大了 `FOLD_VERSION`（17）。
 
-### 4.3 回合终态
+### 4.3 回合终态（P2 已实施）
 
-- 删除 `applyObservation` 的通用空闲完成规则和 `completesOnTurnEvent` 开关：所有后端都按回合结束事件完成。
-- `reconcileIdleRun` 改为写 `meta.turn_ended(outcome_unknown)`，经投影结算 Run。界面上「待核对」期间仍显示进行中，收敛后才显示结果未确认（DELIVERY §6 规则 1 的方向不变）。
-- 后端驱动的契约：每个回合必须产出带回合 ID 的 `meta.turn_ended`。来源可以是实时信号（hook、协议事件），也可以是对账（服务重启后读到 store 里该回合已答完）。只能看画面判断结束的后端，在驱动内部完成判断并指明回合，核心不接受无身份的结束。
-- 投影：`DispatchFeed` 把 `meta.turn_ended` 翻译为 Run 结算，这是唯一路径；Run 上的 `expectsTurnOutcome`、`hookedTurns` 等「是否等结束事件」的判断随之删除。
+- 删除了 `applyObservation` 的通用空闲完成规则：所有后端都按回合结束事件完成。`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome`、`hookedTurns` 不再参与判断；两个特性在插件 API、`expectsTurnOutcome` 在 Run 契约里保留为已废弃字段，旧插件和旧数据照常加载，取值被忽略。
+- 空闲收敛（`reconcileIdleRun`）合并为一档 `IDLE_RECONCILE_MS`（60 s）：Run 等到画面空闲满 60 s 仍没有结束事件，记为结果未确认。期间界面显示进行中（DELIVERY §6 规则 1 的方向不变）。
+- 结果未确认不写进日志。设计时打算写 `meta.turn_ended(outcome_unknown)`，实现时发现两处问题：各后端的转写读取在写结束前都查 `hasTurnEnded`，日志里先有一条「未知」，迟到的真实结束就不会再写，今天能自我更正的情形会变成永久未确认；`LaneFold` 在 `meta.turn_ended` 处丢弃草稿，一个仍在运行、只是画面不显示忙的回合会被截断。日志只记 CLI 做了什么，「未知」是缺少这条记录，所以留在 Run 上；大纲的 `outcome_unknown` 从 Run 的阶段得出（`timeline/fold.ts`），迟到的结局照常更正 Run（`canApplyTurnOutcome`）。
+- 「被后续回合取代」只对状态点名过本回合的 Run 生效（`namedTurns`）：这证明后端状态里的回合 ID 与回显带来的回合 ID 是同一套编号。
+- 后端驱动的契约：每个回合都要报出指明回合或 Run 的结束。来源可以是实时信号（hook、协议事件），也可以是对账（服务重启后读到 store 里该回合已答完）。只能看画面判断结束的后端，在驱动内部完成判断并指明回合，核心不接受无身份的结束。
 
 ### 4.4 证据隔离
 
@@ -147,24 +148,26 @@ a「未被 CLI 记录」的判定由后端驱动给出（Cursor：store 和 live
 
 ### 4.7 可观测性
 
-dispatch 日志的 `event=run` 增加 `source`（`hook`、`protocol`、`store`、`screen`、`reconcile`、`stop`）和 `turn`。时间线折叠在合并回执失败时记一行（`commandId`、回显的 nativeId）。
+dispatch 日志的 `event=run` 带 `turn`（Run 绑定的回合）和 `source`（P2 已实施）。`source` 是调度器当时在处理的消息：`status`（状态）、`echo`（回显）、`turn_end`（结束事件）、`events`（其他事件）、`wake`（定时或派发）、`settle`（自己的操作返回）。空闲收敛、进程退出、被取代从 `to` 的阶段区分（`turn_outcome_unknown`、`runtime_exit`）。结束事件来自 hook、协议还是 store 要由驱动给事件打标，留到 P4 与 Cursor 分层一起做。
+
+时间线折叠在合并回执失败时记一行（`commandId`、回显的 nativeId），未实施。
 
 ## 5. 各后端现状与改动
 
 | 后端 | 结束信号 | 指明回合 | 回显关联 | 服务重启 | 是否受通用空闲规则影响 | 需要的改动 |
 |---|---|---|---|---|---|---|
-| Claude | Stop / StopFailure hook；转写的 `turn_duration`、Stop 汇总、中断标记（`claude/rows.ts`） | hook 的 `promptId` 可缺省；转写结束带回合 | 回显带 `commandId` | CLI 继续运行；hook 记忆丢失，靠转写结束行，否则空闲收敛 | 否（`reportsTurnOutcome` 命名回合后设 `expectsTurnOutcome`）；回合未被命名时是 | hook 缺 `promptId` 时由转写结束补出带回合的 `meta.turn_ended` |
+| Claude | Stop / StopFailure hook；转写的 `turn_duration`、Stop 汇总、中断标记（`claude/rows.ts`） | hook 的 `promptId` 可缺省；转写结束带回合 | 回显带 `commandId` | CLI 继续运行；hook 记忆丢失，靠转写结束行，否则空闲收敛 | 否（`reportsTurnOutcome` 命名回合后设 `expectsTurnOutcome`）；回合未被命名时是 | P2：转写读不到时，hook 报的结束按 `commandId` 直接发给 Run（`claude/runtime.ts#onTurnEnded`）；读得到时仍等转写结束行 |
 | Codex / TraeX | app-server `turn/completed`；读历史时 `settleOutcome` | 是，RPC 回合 ID | 带标记的消息 ID | app-server 独立运行，重读线程补出结束 | 否（`completesOnTurnEvent`） | 无 |
-| pi | 自身会话 JSONL 的回合结束；进程退出由 `finishDelivery` 结束 | 转写结束是；`finishDelivery` 用的是 `commandId` | 带 `commandId` | 不跨重启，重启前须无在途回合 | 否 | `finishDelivery` 改为指明原生回合 |
+| pi | 自身会话 JSONL 的回合结束；进程退出由 `finishDelivery` 结束 | 是：`finishDelivery` 用提示条目 ID 结束回合，与转写的回合 ID 相同；没有条目 ID 时按 `commandId` | 带 `commandId` | 不跨重启，重启前须无在途回合 | 否 | 无（核对后确认已指明回合） |
 | chat | 自己写的回答记录带状态 | 是 | 带 `commandId` | 进程内；启动时把未结束回合记为中断 | 否 | 无 |
 | Droid | JSONL `agent_turn_outcome`、实时 `agent_turn_completed` | 是，回合 ID 为发起它的用户消息 ID | `commandId` 在 `nativeAliases` | 不跨重启 | **是**（未声明 `completesOnTurnEvent`） | 只需删除通用规则，信号已具备 |
-| DSH | 会话记录 `turn/end`（`reason.kind`） | **否**：事件带 `commandId` 和回合序号，没有 `nativeTurnId`（`dsh/events.ts#projectTurnEnd`） | 带 `commandId` | 不跨重启 | **是** | 结束事件和用户消息设 `nativeTurnId`（取会话记录的回合序号） |
-| Cursor | hook（经网关时只有本地工具 hook）；`answered`：画面空闲 + store 答完 + 静默 3 s | hook 是；`answered` 的回合取 store 的最后回合，画面部分无身份 | 文本匹配（`untaggedEcho`） | CLI 继续运行；无 hook 记忆时从前台 Run 推断活跃回合 | 是（回合未被命名时） | §4.6；`answered` 只结束 store 指明且已答完的回合 |
+| DSH | 会话记录 `turn/end`（`reason.kind`） | 是：结束事件带 `commandId`，日志的回合结束带回合 ID（`dsh/journal-source.ts`） | 带 `commandId` | 不跨重启 | **是** | 无（核对后确认已指明 Run） |
+| Cursor | hook（经网关时只有本地工具 hook）；`answered`：画面空闲 + store 答完 + 静默 3 s | hook 是；`answered` 结束 store 的回合，带 `commandId` 和回合 ID（`cursor/backend/steer.ts`），画面只决定何时去看 | 文本匹配（`untaggedEcho`） | CLI 继续运行；无 hook 记忆时从前台 Run 推断活跃回合 | 是（回合未被命名时） | P4：§4.6 分层，回合结束不再等画面空闲 |
 | Antigravity | 守护进程轨迹步骤的终态（`_DONE`、`_ERROR`、`_CANCELED`） | 是，`executionId` | 服务端写的回执带 `commandId` 和回合 | 守护进程独立运行，重读轨迹补出结束 | 否（`completesOnTurnEvent`） | 无 |
 
 要点：
 
-- 删除通用空闲规则后，Droid 不需要额外工作；DSH 要先补回合 ID，否则 `turnOutcomeScope` 不接受它的结束事件。
+- 「是否受通用空闲规则影响」一列是 P2 之前的情况，P2 删除了这条规则。核对后 Droid、DSH、pi 的结束事件都已指明 Run 或回合，不需要额外工作。
 - Claude 和 Cursor 是两个依赖「回合已被命名」才不走通用规则的后端，P2 之前它们在回合未被命名时（重启后、经网关、替换回合时）都会被画面空闲提前结算。样本故障就是 Cursor 的这一情形。
 - 回显关联只有 Cursor 用文本匹配。T2 下文本匹配只建立关联；匹配失败时用户行仍在，只是缺回合 ID，与样本中 a 的处理一致。
 
@@ -180,7 +183,7 @@ dispatch 日志的 `event=run` 增加 `source`（`hook`、`protocol`、`store`�
 |---|---|---|---|
 | P0 | 样本故障写成用例，以 `it.fails` 标为已知缺陷：`dispatch.property.test.ts` 的模拟 CLI 加「画面不显示忙」，检查「Run 不早于本回合结束完成」（该性质同时加进原有性质，原有调度下成立）；`timeline/service.test.ts` 检查「写入过栅栏的消息不从时间线消失」 | — | 两个用例在当前代码上失败；修好的阶段把 `it.fails` 改回 `it` |
 | P1（已实施） | `meta.input` 写入与 `inputEntry`；有 `inputEntry` 的 Run 按日志位置放置；客户端占位行键已是 `user:<commandId>`，无需改动 | 对有 `inputEntry` 的 Run 不再使用时间比较；旧规则只服务旧 Run | P0 时间线用例改为 `it` 并通过；`sync/sent-input.test.ts` 检查记录先于回显、只记一次 |
-| P2 | dispatch 日志加 `source`、`turn`（§4.7）；终态单一路径；空闲收敛写 `meta.turn_ended`；按 §5 补齐：DSH 回合 ID、pi `finishDelivery`、Claude 缺 `promptId` 时的转写结束、Cursor `answered` 只认 store 指明的回合 | 通用空闲完成规则、`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome`、`hookedTurns` | P0 调度用例通过；各后端 `transcript-source` 测试 |
+| P2（已实施） | dispatch 日志加 `source`、`turn`（§4.7）；结局只来自指明回合或 Run 的结束事件；空闲收敛合并为一档，结果未确认留在 Run 上（§4.3）；Claude 转写读不到时按 `commandId` 报 hook 的结束 | 通用空闲完成规则；`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome` 不再参与判断（保留为已废弃字段）；`hookedTurns` 改为只服务「被后续回合取代」的 `namedTurns`；`IDLE_OUTCOME_GRACE_MS` | P0 调度用例改为 `it` 并通过；`dispatch.property.test.ts` 的模拟终端 CLI 按回合报结束；各后端测试 |
 | P3 | 尝试号与证据隔离；`replaceTurn` 按 §4.5 | `paneBusyAt` 重置 | 「中断后立刻发送」「回合开始前画面空闲」两种时序的属性测试 |
 | P4 | Cursor 按 §4.6 分层；live tap 记录流中断 | 画面参与回合判定的路径 | 重跑 §4.6 的对照：提前或滞后结算 0 次；`pnpm record` 补录制 |
 

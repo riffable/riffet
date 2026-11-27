@@ -286,11 +286,10 @@ export function recoverInterruptedRuns(port: StorePort): void {
               error: 'Local service restarted while native terminal delivery was in progress; the prompt was not resent.',
             });
           } else if (!run.native.queueReleasedAt && (restartObservation(run.native.backendId) === 'hook'
-            && (delivery === 'observed' || delivery === 'uncertain' && run.native.nativeMessageId
+            && (delivery === 'observed' || delivery === 'uncertain' && run.native.nativeMessageId && run.native.nativeTurnId
               && ['runtime_exit', 'turn_outcome_unknown'].includes(run.native.stage ?? ''))
-            && (run.native.expectsTurnOutcome || run.native.intent === 'steer')
             || restartObservation(run.native.backendId) === 'daemon' && delivery === 'observed' && run.native.nativeTurnId)) {
-            port.transitionNativeRun(run.id, [delivery], { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true }, {
+            port.transitionNativeRun(run.id, [delivery], { delivery: 'observed', stage: 'executing' }, {
               state: 'running', error: undefined,
             });
           } else if (delivery === 'uncertain' && run.native.intent === 'steer' && !run.native.queueReleasedAt && port.isSteerTargetTurnEnded(run)) {

@@ -87,6 +87,11 @@ const PLUGIN_ENTRY = /^(?:plugins\/riffet|official)\/[^/]+\/index\.ts$/;
 
 // Traits used only by core built-in drivers and intentionally not exposed on the plugin AgentTraits API yet.
 const CORE_ONLY_TRAITS = new Set(['extensionToggles']);
+/**
+ * Traits the core no longer reads but `AgentTraits` keeps, marked `@deprecated`, so plugins built against a released
+ * API still compile (docs/TURN-LIFECYCLE.md §4.3).
+ */
+const RETIRED_PLUGIN_TRAITS = new Set(['reportsTurnOutcome', 'completesOnTurnEvent']);
 
 const PROTECTED_CAPABILITY_FLAGS = new Set([
   'supportsTargetedStop',
@@ -269,9 +274,12 @@ function checkAgentTraitsSync() {
     }
   }
   for (const name of agentTraits) {
-    if (!nativeTraits.has(name)) {
+    if (!nativeTraits.has(name) && !RETIRED_PLUGIN_TRAITS.has(name)) {
       problems.push(`${PLUGIN_AGENT_FILE}: AgentTraits declares "${name}" which does not exist on NativeBackendTraits`);
     }
+  }
+  for (const name of RETIRED_PLUGIN_TRAITS) {
+    if (nativeTraits.has(name)) problems.push(`scripts/check-plugin-boundaries.mjs: RETIRED_PLUGIN_TRAITS entry "${name}" is back on NativeBackendTraits — remove it from the list`);
   }
   for (const name of CORE_ONLY_TRAITS) {
     if (agentTraits.has(name)) {

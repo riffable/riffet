@@ -146,7 +146,7 @@ function makeStopContractDriver(options: {
   const driver: NativeBackendDriver = {
     id: options.id,
     label: options.label,
-    traits: { completesOnTurnEvent: true },
+    traits: {},
     profiles: () => [{ id: 'default', backendId: options.id, name: options.label, isDefault: true, config: {} }],
     capabilities: (): NativeBackendCapabilities => ({
       backendId: options.id,

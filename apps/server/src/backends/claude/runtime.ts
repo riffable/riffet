@@ -608,8 +608,10 @@ export class ClaudeSessionRuntime {
     const web = this.sends.takeWebTurn();
     if (web && ended.reason !== 'exit') {
       // An end the transcript records (an answer's duration row, the API error a failure writes, the next prompt) settles
-      // the Run through the journal's turn mark.
-      const marked = !this.stops.interrupting && (ended.reason === 'stop' || ended.reason === 'duration' || ended.reason === 'superseded' || ended.reason === 'stop_failure');
+      // the Run through the journal's turn mark. A transcript we cannot read records nothing: the hook's end goes to the
+      // Run by its command id, since an idle screen no longer completes it (docs/TURN-LIFECYCLE.md T4).
+      const marked = this.transcript.state === 'ok' && !this.stops.interrupting
+        && (ended.reason === 'stop' || ended.reason === 'duration' || ended.reason === 'superseded' || ended.reason === 'stop_failure');
       this.sends.emitRunTerminal(outcome, web, error, reason, marked);
     }
   }

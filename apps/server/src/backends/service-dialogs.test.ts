@@ -7,7 +7,7 @@ import { NativeBackendService } from './service.js';
 import { CLAUDE_TRAITS } from './claude/index.js';
 
 /** The traits the Cursor plugin declares (`plugins/riffet/cursor/backend.ts`); the service reads traits, never a backend id. */
-const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, reportsTurnOutcome: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
+const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
 
 /**
  * These tests pin the seam that makes a Claude Code or Codex startup screen reach the web: the

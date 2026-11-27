@@ -8,17 +8,17 @@ import { admission, heldByProvider, holdsUnconfirmed, nextLook, queueOf, steerTu
 import type { DispatchObservation, NativeDispatcherBackend } from './dispatch.js';
 import { ExecutionAdapter, type TurnDeliveryResult } from './execution-adapter.js';
 import { Mailbox } from './mailbox.js';
-import { DispatchTrace, phaseOf, type DispatchTraceEntry, type SessionPhase } from './trace.js';
+import { DispatchTrace, phaseOf, type DispatchTraceEntry, type SessionPhase, type TraceSource } from './trace.js';
 import {
-  applyObservation, IDLE_OUTCOME_GRACE_MS, IDLE_RECONCILE_MS, isSlashCommand,
-  releaseEndedSteers, trackTurnOutcome, watchDeliveries, type ActorObservationDeps,
+  applyObservation, IDLE_RECONCILE_MS, isSlashCommand, isTurnOutcome,
+  releaseEndedSteers, watchDeliveries, type ActorObservationDeps,
 } from './actor-observations.js';
 import {
   awaitingLaterTurn, beginInterrupt, checkRecovery, continueRecovery, idleForRecovery, releaseAfterLaterTurn,
   type ActorControlDeps,
 } from './actor-interrupt.js';
 
-export { IDLE_OUTCOME_GRACE_MS, IDLE_RECONCILE_MS };
+export { IDLE_RECONCILE_MS };
 
 const now = () => Date.now();
 /**
@@ -37,7 +37,6 @@ export interface SessionDispatchOptions {
   beforeTurn?: (session: Session, run: Run, since: number) => Promise<unknown>;
   busyLimitMs?: number;
   idleReconcileMs?: number;
-  idleOutcomeGraceMs?: number;
   /** Where phase and delivery changes are reported (`trace.ts`). Absent: nothing is traced. */
   log?: (entry: DispatchTraceEntry) => void;
 }
@@ -46,6 +45,12 @@ type ActorMessage =
   | { type: 'wake' }
   | { type: 'observation'; sessionId: string; observation: DispatchObservation }
   | { type: 'settle' };
+
+function sourceOf(observation: DispatchObservation): TraceSource {
+  if (observation.type === 'status') return 'status';
+  if (observation.events.some(isTurnOutcome)) return 'turn_end';
+  return observation.events.some(event => event.type === 'user_message_chunk' || event.type === 'native_input_receipt') ? 'echo' : 'events';
+}
 
 /**
  * Whether an unfinished native run still needs a standing live watch on its provider.
@@ -94,7 +99,7 @@ export class SessionActor {
   readonly pendingSteerOutcomes = new Map<string, NativeWorkbenchEvent>();
   readonly pendingTurnOutcomes = new Map<string, NativeWorkbenchEvent>();
   readonly turnOutcomeRevisions = new Map<string, number>();
-  readonly hookedTurns = new Set<string>();
+  readonly namedTurns = new Set<string>();
   readonly idleSince = new Map<string, number>();
   readonly drainHeldSteers = new Set<string>();
   timer: NodeJS.Timeout | undefined;
@@ -133,7 +138,7 @@ export class SessionActor {
       pendingSteerOutcomes: this.pendingSteerOutcomes,
       pendingTurnOutcomes: this.pendingTurnOutcomes,
       turnOutcomeRevisions: this.turnOutcomeRevisions,
-      hookedTurns: this.hookedTurns,
+      namedTurns: this.namedTurns,
       isClosed: () => this.host.closed,
       isInterrupting: () => this.interrupting,
       traits: backendId => this.traits(backendId),
@@ -213,7 +218,7 @@ export class SessionActor {
     }
     if (this.host.closed) return;
     try { this.apply(message.sessionId, message.observation); }
-    finally { this.finish(false, message.type); }
+    finally { this.finish(false, sourceOf(message.observation)); }
   }
 
   private wake(): void {
@@ -265,7 +270,7 @@ export class SessionActor {
     this.pendingSteerOutcomes.clear();
     this.pendingTurnOutcomes.clear();
     this.turnOutcomeRevisions.clear();
-    this.hookedTurns.clear();
+    this.namedTurns.clear();
     this.idleSince.clear();
     this.nextAttempt.clear();
     this.drainHeldSteers.clear();
@@ -276,7 +281,7 @@ export class SessionActor {
 
   private attached(): boolean { return this.host.current(this.sessionId) === this; }
 
-  private finish(evictNow: boolean, cause: ActorMessage['type'], checkedAt?: number): void {
+  private finish(evictNow: boolean, cause: TraceSource, checkedAt?: number): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
     let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     if (runs.some(runNeedsDispatchWatch) && !this.workspaceBlocked()) this.ensureObserver();
@@ -403,7 +408,7 @@ export class SessionActor {
 
   private scheduleTimer(runs: readonly Run[], checkedAt?: number): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
-    const idleWindow = (run: Run) => run.native?.expectsTurnOutcome ? (this.options.idleOutcomeGraceMs ?? IDLE_OUTCOME_GRACE_MS) : (this.options.idleReconcileMs ?? IDLE_RECONCILE_MS);
+    const idleWindow = () => this.options.idleReconcileMs ?? IDLE_RECONCILE_MS;
     const at = nextLook({ runs, now: checkedAt ?? now(), intervalMs: this.options.intervalMs ?? 500, confirmationMs: this.options.confirmationMs ?? 30_000,
       retryAt: id => this.nextAttempt.get(id) ?? 0, idleSince: id => this.idleSince.get(id), idleWindow, held: () => this.providerHold(runs) });
     if (at === undefined) { this.clearTimer(); return; }
@@ -600,8 +605,6 @@ export class SessionActor {
           if (!target || session.nativeSessionId !== current.native!.nativeSessionId || target.nativeSessionId !== current.native!.nativeSessionId || target.turnId !== current.native!.nativeTurnId) {
             throw new AppError('STEER_TARGET_CHANGED', 'The target turn ended or changed; the steer message was not sent', 409);
           }
-          const owner = this.store.findRunsByNativeTurn(sessionId, target.nativeSessionId, target.turnId).find(run => !run.native?.intent);
-          if (owner) trackTurnOutcome(this.obsDeps, owner, status);
           if (this.store.listUnfinishedNativeRuns(sessionId).some(other => other.id !== runId && holdsUnconfirmed(other, status, item => this.store.isSteerTargetTurnEnded(item)))) {
             throw new AppError('NATIVE_DELIVERY_UNCERTAIN', 'Another message has an unconfirmed outcome; check it first', 409);
           }

@@ -118,7 +118,7 @@ const scenarios: Scenario[] = [
       ev(4, 'tool_call', { toolCallId: 'call-1', title: 'Run tests', status: 'in_progress' }, { nativeId: 'chat-1:t1:item-2', nativeTurnId: 't1' }),
     ],
     runs: [
-      nativeRun('run-a', 'running', '重构解析器', 1, { nativeMessageId: 'chat-1:t1:user', nativeSessionId: 'chat-1', nativeTurnId: 't1', expectsTurnOutcome: true }),
+      nativeRun('run-a', 'running', '重构解析器', 1, { nativeMessageId: 'chat-1:t1:user', nativeSessionId: 'chat-1', nativeTurnId: 't1' }),
       nativeRun('run-s', 'running', '顺便补测试', 3, { intent: 'steer', ownerRunId: 'run-a', nativeTurnId: 't1', nativeMessageId: 'chat-1:t1:steer-1', nativeSessionId: 'chat-1' }),
       nativeRun('run-q', 'queued', '然后更新文档', 5, { delivery: 'queued' }),
     ],

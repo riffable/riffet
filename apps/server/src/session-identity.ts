@@ -103,9 +103,9 @@ export function requestedNativeSessionId(body: RequestedNativeSession): string |
  * a turn that ended meanwhile closes by what the provider recorded, one that did not is not left running for ever,
  * and nothing is resent. The store recovers its runs before any backend or plugin is up and so cannot read the
  * trait; the list is frozen here and a backend added later is not on it.
- * - `hook`: Claude and Cursor (the legacy default) report a turn's end by hook, which a restart can lose. A run
- *   that was waiting for it keeps waiting; Claude's transcript end rows (`stop_hook_summary`, `turn_duration`)
- *   settle it, otherwise it closes unconfirmed once the CLI is idle.
+ * - `hook`: Claude and Cursor (the legacy default) report a turn's end by hook, which a restart can lose. An
+ *   observed run keeps waiting; Claude's transcript end rows (`stop_hook_summary`, `turn_duration`) or Cursor's
+ *   store settle it, otherwise it closes unconfirmed once the CLI has been idle a while.
  * - `daemon`: Codex, Traex and Antigravity keep a detached daemon/app-server that holds the thread. The watch the dispatcher opens
  *   for every unfinished run reads the thread back, which yields the ends recorded meanwhile; a run it cannot
  *   settle closes by the same idle rule.

@@ -129,7 +129,6 @@ export const CURSOR_TRAITS: AgentTraits = {
   startsNewTopic: true,
   settlesSlashOnSubmit: true,
   untaggedEcho: true,
-  reportsTurnOutcome: true,
   survivesRestart: true,
   ownsSessionObservation: true,
   resumesByNativeId: true,

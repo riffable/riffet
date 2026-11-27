@@ -10,8 +10,11 @@ import type { DispatchObservation, NativeDispatcherBackend } from './dispatch.js
 import type { ExecutionAdapter } from './execution-adapter.js';
 import type { StopReceipt } from './stop-receipt.js';
 
-export const IDLE_RECONCILE_MS = 15_000;
-export const IDLE_OUTCOME_GRACE_MS = 60_000;
+/**
+ * How long an observed run waits on an idle CLI for its turn's end before it closes as unconfirmed. Long enough
+ * for a Stop hook chain and a batched transcript write (docs/TURN-LIFECYCLE.md T4).
+ */
+export const IDLE_RECONCILE_MS = 60_000;
 export const OUTCOME_MEMORY = 256;
 
 const now = () => Date.now();
@@ -42,13 +45,13 @@ export interface ActorObservationDeps {
   readonly options: {
     confirmationMs?: number;
     idleReconcileMs?: number;
-    idleOutcomeGraceMs?: number;
   };
   readonly idleSince: Map<string, number>;
   readonly pendingSteerOutcomes: Map<string, NativeWorkbenchEvent>;
   readonly pendingTurnOutcomes: Map<string, NativeWorkbenchEvent>;
   readonly turnOutcomeRevisions: Map<string, number>;
-  readonly hookedTurns: Set<string>;
+  /** Turns a status has named as active: proof that the provider's turn ids are the ones runs are bound to. */
+  readonly namedTurns: Set<string>;
   isClosed(): boolean;
   isInterrupting(): boolean;
   traits(backendId: string | undefined): NativeBackendTraits;
@@ -84,16 +87,13 @@ export function turnOutcomeScope(store: Store, sessionId: string, event: NativeW
   return { key: turnKey(nativeSessionId, event.nativeTurnId), nativeSessionId, turnId: event.nativeTurnId };
 }
 
-export function trackTurnOutcome(deps: ActorObservationDeps, run: Run, status?: NativeStatus): void {
-  const native = run.native, target = status?.activeTurn;
-  if (!native || native.intent || !deps.traits(native.backendId).reportsTurnOutcome) return;
-  if (target) {
-    deps.hookedTurns.add(turnKey(target.nativeSessionId, target.turnId));
-    if (deps.hookedTurns.size > OUTCOME_MEMORY) deps.hookedTurns.delete(deps.hookedTurns.values().next().value!);
-  }
-  if (native.expectsTurnOutcome || !native.nativeSessionId || !native.nativeTurnId
-    || !deps.hookedTurns.has(turnKey(native.nativeSessionId, native.nativeTurnId))) return;
-  deps.store.transitionNativeRun(run.id, [native.delivery], { expectsTurnOutcome: true });
+function noteActiveTurn(deps: ActorObservationDeps, status: NativeStatus): void {
+  const target = status.activeTurn;
+  if (!target) return;
+  const key = turnKey(target.nativeSessionId, target.turnId);
+  deps.namedTurns.delete(key);
+  deps.namedTurns.add(key);
+  if (deps.namedTurns.size > OUTCOME_MEMORY) deps.namedTurns.delete(deps.namedTurns.values().next().value!);
 }
 
 export function releaseEndedSteers(store: Store, runs: readonly Run[], status?: NativeStatus): boolean {
@@ -109,9 +109,7 @@ export function releaseEndedSteers(store: Store, runs: readonly Run[], status?: 
 export function watchDeliveries(deps: ActorObservationDeps, runs: readonly Run[], at = now()): void {
   for (const run of runs) {
     if (run.native?.queueReleasedAt) continue;
-    const since = run.native?.timings?.firstOutputAt ?? run.native?.timings?.busyAt ?? run.native?.timings?.observedAt;
-    if (run.native?.delivery === 'observed' && typeof deps.native.status === 'function'
-      && (run.native.expectsTurnOutcome || run.native.intent === 'steer' || deps.idleSince.has(run.id) || since === undefined || at - since >= 500)) {
+    if (run.native?.delivery === 'observed' && typeof deps.native.status === 'function') {
       applyObservation(deps, run.sessionId, { type: 'status', status: deps.native.status(run.sessionId) });
     }
     if (run.native?.delivery === 'input_sent' && at - (run.native.timings?.inputSentAt ?? at) > (deps.options.confirmationMs ?? 30_000)) {
@@ -188,7 +186,7 @@ function reconcileTurnCorrections(deps: ActorObservationDeps, sessionId: string,
       deps.store.transitionNativeRun(run.id, [native.delivery], {
         delivery: native.nativeMessageId ? 'observed' : 'input_sent',
         stage: native.nativeMessageId ? 'executing' : native.intent === 'steer' ? 'steer_confirmation' : 'confirmation',
-        expectsTurnOutcome: true, timings,
+        timings,
       }, { state: 'running', error: undefined });
     }
   }
@@ -205,10 +203,7 @@ function reconcileIdleRun(deps: ActorObservationDeps, sessionId: string, runId: 
   }
   const since = deps.idleSince.get(runId) ?? now();
   deps.idleSince.set(runId, since);
-  const window = current.native?.expectsTurnOutcome
-    ? (deps.options.idleOutcomeGraceMs ?? IDLE_OUTCOME_GRACE_MS)
-    : (deps.options.idleReconcileMs ?? IDLE_RECONCILE_MS);
-  if (now() - since < window) return;
+  if (now() - since < (deps.options.idleReconcileMs ?? IDLE_RECONCILE_MS)) return;
   deps.idleSince.delete(runId);
   const closed = deps.store.transitionNativeRun(runId, ['observed'], {
     delivery: 'cancelled', stage: 'turn_outcome_unknown', timings: { ...current.native.timings, interruptedAt: now() },
@@ -349,13 +344,10 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         const outcome = deps.pendingSteerOutcomes.get(current.id);
         if (outcome) { deps.pendingSteerOutcomes.delete(current.id); applyObservation(deps, sessionId, { type: 'events', events: [outcome] }); }
       }
-      if (event.type === 'user_message_chunk' || event.type === 'native_input_receipt') {
-        const bound = deps.store.getRun(current.id);
-        trackTurnOutcome(deps, bound);
-        replayTurnOutcome(deps, bound);
-      }
+      if (event.type === 'user_message_chunk' || event.type === 'native_input_receipt') replayTurnOutcome(deps, deps.store.getRun(current.id));
     }
   }
+  if (message.type === 'status') noteActiveTurn(deps, message.status);
   const runs = deps.store.listUnfinishedNativeRuns(sessionId);
   for (const run of runs) {
     const delivery = run.native!;
@@ -381,9 +373,7 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
           ...(session.nativeSessionId ? { nativeSessionId: session.nativeSessionId } : {}),
           stage: 'executing', timings: { ...delivery.timings, observedAt: now() },
         }, { state: delivery.queueReleasedAt ? 'interrupted' : 'running', error: undefined });
-        const bound = deps.store.getRun(run.id);
-        trackTurnOutcome(deps, bound);
-        replayTurnOutcome(deps, bound);
+        replayTurnOutcome(deps, deps.store.getRun(run.id));
       }
       const updated = deps.store.getRun(run.id);
       if (updated.native?.delivery === 'observed' && !updated.native.timings?.firstOutputAt && message.events.some(event => event.sequence > (delivery.baselineSequence ?? Infinity) && event.type === 'agent_message_chunk')) {
@@ -391,7 +381,6 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
       }
     }
     if (message.type === 'status') {
-      trackTurnOutcome(deps, deps.store.getRun(run.id), message.status);
       let current = deps.store.getRun(run.id);
       if (current.native?.queueReleasedAt) { deps.idleSince.delete(run.id); continue; }
       const terminal = matchingTerminal(deps.store, current);
@@ -404,17 +393,17 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         continue;
       }
       if (current.native?.delivery === 'uncertain' && current.native.stage === 'turn_outcome_unknown'
-        && current.native.nativeMessageId && current.native.nativeSessionId
-        && deps.traits(current.native.backendId).reportsTurnOutcome
+        && current.native.nativeMessageId && current.native.nativeSessionId && current.native.nativeTurnId
         && ['busy', 'attention', 'idle'].includes(message.status.phase)
         && (!target || target.nativeSessionId === current.native.nativeSessionId)
         && current.native.nativeSessionId === linkedSession.nativeSessionId) {
         current = deps.store.transitionNativeRun(run.id, ['uncertain'], {
-          delivery: 'observed', stage: 'executing', expectsTurnOutcome: true,
+          delivery: 'observed', stage: 'executing',
         }, { state: 'running', error: undefined }) ?? current;
       }
-      if (current.native?.delivery === 'observed' && current.native.nativeMessageId && current.native.nativeTurnId
-        && (current.native.expectsTurnOutcome || current.native.intent === 'steer') && target
+      // Another named turn running says this one is over; only for runs whose turn ids a status has used.
+      if (current.native?.delivery === 'observed' && current.native.nativeMessageId && current.native.nativeTurnId && current.native.nativeSessionId
+        && (current.native.intent === 'steer' || deps.namedTurns.has(turnKey(current.native.nativeSessionId, current.native.nativeTurnId))) && target
         && ['busy', 'attention'].includes(message.status.phase)
         && target.nativeSessionId === current.native.nativeSessionId
         && target.turnId !== current.native.nativeTurnId) {
@@ -433,10 +422,8 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
           delivery: 'observed', stage: 'executing',
         }, { state: 'running', error: undefined }) ?? current;
       }
-      if (current.native?.delivery === 'observed' && !current.native.intent && !current.native.expectsTurnOutcome && !(current.native.nativeTurnId && deps.traits(current.native.backendId).completesOnTurnEvent) && message.status.phase === 'idle' && message.status.noticeLevel !== 'error' && (current.native.timings?.firstOutputAt || current.native.timings?.busyAt) && !deps.isInterrupting()) {
-        deps.store.transitionNativeRun(run.id, ['observed'], { stage: 'completed', timings: { ...current.native.timings, completedAt: now() } }, { state: 'completed' });
-        deps.store.updateSessionActivity(sessionId);
-      } else if (message.status.phase === 'busy' && ['dispatching', 'input_sent', 'observed'].includes(current.native?.delivery ?? '') && !current.native?.timings?.busyAt) {
+      // An idle screen names no turn: it never completes a run (T4), it only starts the wait in `reconcileIdleRun`.
+      if (message.status.phase === 'busy' && ['dispatching', 'input_sent', 'observed'].includes(current.native?.delivery ?? '') && !current.native?.timings?.busyAt) {
         deps.store.transitionNativeRun(run.id, ['dispatching', 'input_sent', 'observed'], { timings: { ...current.native?.timings, busyAt: now() } });
       } else if (message.status.phase === 'offline' && ['dispatching', 'input_sent', 'observed'].includes(current.native?.delivery ?? '')) {
         const mayBeRunning = deps.traits(deps.store.getSession(sessionId).backendId).offlineMayBeRunning;

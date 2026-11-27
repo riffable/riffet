@@ -135,7 +135,6 @@ function isClaudeSessionId(value: string): boolean {
 export const CLAUDE_TRAITS: NativeBackendTraits = {
   settlesSlashOnSubmit: true,
   startsNewTopic: true,
-  reportsTurnOutcome: true,
   survivesRestart: true,
   offlineMayBeRunning: true,
   stopKeepsPendingInput: true,

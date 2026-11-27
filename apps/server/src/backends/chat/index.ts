@@ -197,7 +197,6 @@ export const CHAT_TRAITS: NativeBackendTraits = {
   // `/clear` is answered by the driver itself: writing it is its delivery and its completion.
   settlesSlashOnSubmit: true,
   // The answer's end is recorded before the status goes idle, but read after; only the record settles a run.
-  completesOnTurnEvent: true,
 };
 
 export class ChatBackendAdapter implements NativeBackendDriver {

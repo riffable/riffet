@@ -10,7 +10,7 @@ import { NativeBackendService } from './service.js';
 import { CLAUDE_TRAITS } from './claude/index.js';
 
 /** The traits the Cursor plugin declares (`plugins/riffet/cursor/backend.ts`); the service reads traits, never a backend id. */
-const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, reportsTurnOutcome: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
+const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
 
 const at = '2026-10-04T05:00:00.000Z';
 const call = (id: string, status: string, turn = 't1'): NativeWorkbenchEvent => ({ sequence: 0, sessionId: 'session-a', type: 'tool_call', nativeId: id, nativeTurnId: turn, data: { toolCallId: id, status }, createdAt: at });

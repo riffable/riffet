@@ -12,7 +12,7 @@ import { NativeBackendService } from './service.js';
 import type { NativeBackendDriver, NativeBackendHost, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage } from './types.js';
 
 /** The traits the Cursor plugin declares (`plugins/riffet/cursor/backend.ts`); the service reads traits, never a backend id. */
-const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, reportsTurnOutcome: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
+const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
 
 /*
  * The dispatcher reading the journal instead of the v2 pump (docs/SYNC-V3.md, 接线): a real store, journal,
@@ -324,7 +324,6 @@ describe('dispatcher fed by the journal', () => {
     send.kick();
     await waitFor(() => expect(env.store.getRun(run.id).native).toMatchObject({ delivery: 'observed', nativeTurnId: 'turn-1' }));
     env.setStatus({ phase: 'busy', activeTurn: { nativeSessionId: 'chat-1', turnId: 'turn-1' } });
-    await waitFor(() => expect(env.store.getRun(run.id).native?.expectsTurnOutcome).toBe(true));
     // The CLI ended turn-1 and began turn-2 (a background task's notification); the end is on disk, not read yet.
     env.unread.push(() => env.writer.turnEnded('turn-1', 'completed', at(3)));
     env.setStatus({ phase: 'busy', activeTurn: { nativeSessionId: 'chat-1', turnId: 'turn-2' } });
@@ -343,7 +342,6 @@ describe('dispatcher fed by the journal', () => {
     send.kick();
     await waitFor(() => expect(env.store.getRun(run.id).native).toMatchObject({ delivery: 'observed', nativeTurnId: 'turn-1' }));
     env.setStatus({ phase: 'busy', activeTurn: { nativeSessionId: 'chat-1', turnId: 'turn-1' } });
-    await waitFor(() => expect(env.store.getRun(run.id).native?.expectsTurnOutcome).toBe(true));
     // Claude Code runs the next turn's hook at once and writes the rows ending this one a little later.
     env.setStatus({ phase: 'busy', activeTurn: { nativeSessionId: 'chat-1', turnId: 'turn-2' } });
     setTimeout(() => env.unread.push(() => env.writer.turnEnded('turn-1', 'completed', at(3))), 150);

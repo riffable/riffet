@@ -77,4 +77,5 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 服务重启后引导一直补充不进当前回合、每次都变成下一条消息：引导只看 `runtime.ts#steerTarget`，没有 `started`（本服务没启动这个 CLI）时要求这一回合的工具 hook 已到达本服务（`outputPromptId`）；状态里有 `activeTurn` 而这里不认，就会在 `enqueue` 抛 `STEER_TARGET_CHANGED` 并由 `requeueSteer` 转成排队消息。
 - 屏幕解析在新版 CLI 上失效：`npx vitest run apps/server/src/backends/claude/screen-fixtures.test.ts`，再用 `scripts/probe-claude-e2e.ts --capture` 录制现场。
 - 点停止后提示「暂时无法确认任务是否已停止」，回合照常在跑：先看停止时屏幕是否停在工具审批框上。曾经按的是 `C-c`，它在审批框上没有反应，20 秒后报 `NATIVE_INTERRUPT_UNCONFIRMED`；之后同一个停止请求重试时只做核对、不再按键，于是一直停不下来。现在按 Esc，Claude 声明 `repeatableStop`，重试会对仍在运行的同一回合再按一次（`apps/server/src/native/actor-interrupt.ts#beginInterrupt`）。停止回执在会话设置 `native-stops:<会话 id>` 里，`error` 是上一次失败的原因。
+- 消息在回合结束后还转圈约一分钟，然后显示「结果未确认」：画面空闲不结算消息，结局要么来自转写的结束行（`turn_duration`、Stop 汇总，经日志的回合结束），要么来自 hook 按 `commandId` 报的结束。后者只在转写读不到（状态的 `transcript` 不是 `ok`）时发出（`runtime.ts#onTurnEnded` 的 `marked`），读得到时等转写。先看那段时间的 `transcript` 状态和日志里这一回合有没有 `meta.turn_ended`。
 - 点停止后界面显示「已停止」但 Claude 仍在跑：查 `journal.db` 是否未发停止键就写入合成 `turn_ended(cancelled)`，并跑 `screen-fixtures.test.ts` 与 `recordings.test.ts` 核对当前 CLI 版本的忙碌屏识别与停止键发送。

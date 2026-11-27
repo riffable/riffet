@@ -44,7 +44,6 @@ function defaultProfile(): NativeBackendProfileConfig {
 export const PI_TRAITS: NativeBackendTraits = {
   acceptsInputWhileBusy: false,
   untaggedEcho: false,
-  completesOnTurnEvent: true,
   offlineMayBeRunning: true,
   resumesByNativeId: true,
   riffetTools: true,

@@ -7,7 +7,7 @@ import { codexFlavor, traexFlavor } from './codex/flavors.js';
 import { DSH_TRAITS } from './dsh/index.js';
 
 /** The traits the Cursor plugin declares (`plugins/riffet/cursor/backend.ts`); the service reads traits, never a backend id. */
-const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, reportsTurnOutcome: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
+const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
 
 /**
  * The provider watch behind a conversation is what keeps a Codex app-server, Claude's pollers or

@@ -119,7 +119,7 @@ abstract class SimCli {
 
   protected abstract receipt(input: { commandId: string; text: string; turnId: string }): NativeWorkbenchEvent[];
   /** What the provider records when a turn ends. */
-  protected ended(_type: 'run_completed' | 'run_cancelled'): void { /* a terminal CLI records nothing */ }
+  protected abstract ended(type: 'run_completed' | 'run_cancelled'): void;
 
   protected event(type: string, data: Record<string, unknown>, turnId?: string, nativeId?: string): NativeWorkbenchEvent {
     const sequence = ++this.sequence;
@@ -138,7 +138,10 @@ abstract class SimCli {
   private emit(message: DispatchObservation): void { this.listener?.(message); }
 }
 
-/** A CLI driven through its terminal: the prompt is pasted, its echo carries no command id, and an idle screen ends the turn. */
+/**
+ * A CLI driven through its terminal: the prompt is pasted and its echo carries no command id. Its driver reads each
+ * turn's end from the CLI's own records (Cursor's store, a hook) and reports it by the turn, never by the screen.
+ */
 class TerminalCli extends SimCli {
   traits(): NativeBackendTraits { return { untaggedEcho: true }; }
 
@@ -151,8 +154,12 @@ class TerminalCli extends SimCli {
     await this.gate('deliver:after');
   }
 
-  protected receipt(input: { text: string }): NativeWorkbenchEvent[] {
-    return [this.event('user_message_chunk', { content: { text: input.text } })];
+  protected receipt(input: { text: string; turnId: string }): NativeWorkbenchEvent[] {
+    return [this.event('user_message_chunk', { content: { text: input.text } }, input.turnId)];
+  }
+
+  protected ended(type: 'run_completed' | 'run_cancelled'): void {
+    if (this.turn) this.push([this.event(type, { nativeSessionId: this.chatId, outcomeRevision: 1 }, this.turn.id, `end:${this.turn.id}`)]);
   }
 }
 
@@ -391,8 +398,8 @@ describe('NativeDispatcher delivery under arbitrary interleavings', () => {
     }), { numRuns: Number(process.env.RIFFET_PROPERTY_RUNS ?? 300), seed: Number(process.env.RIFFET_PROPERTY_SEED ?? 20261120) });
   }, 60_000 + Number(process.env.RIFFET_PROPERTY_RUNS ?? 300) * 100);
 
-  // Known defect until P2 (docs/TURN-LIFECYCLE.md §7): an idle screen without a turn id still completes a terminal CLI's run.
-  it.fails('completes a message only after the CLI ended its turn, even when the screen shows no busy hint (terminal CLI)', async () => {
+  // The sample failure of docs/TURN-LIFECYCLE.md §1: an idle screen names no turn and completes nothing (T4).
+  it('completes a message only after the CLI ended its turn, even when the screen shows no busy hint (terminal CLI)', async () => {
     await fc.assert(fc.asyncProperty(fc.array(hidingCommand, { maxLength: 60, size: '+1' }), async schedule => {
       const world = new World('terminal');
       try {

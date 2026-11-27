@@ -336,15 +336,11 @@ export interface NativeBackendTraits {
   startsNewTopic?: boolean;
   /** The provider's prompt echo carries no command id, so a receipt is matched by text after the captured boundary. */
   untaggedEcho?: boolean;
-  /** A hook reports each turn's end against the active turn, so a run whose turn was hooked waits for that outcome. */
-  reportsTurnOutcome?: boolean;
   /**
    * The provider's CLI keeps running while Riffet's service restarts (tmux, or a detached app-server), so its turns
    * do not hold a restart back; `restartObservation` (session-identity.ts) picks up their observed runs afterwards.
    */
   survivesRestart?: boolean;
-  /** An idle status never completes a run bound to a native turn; the provider's own turn-end event does. */
-  completesOnTurnEvent?: boolean;
   /** Going offline does not prove the CLI stopped, so an unconfirmed run is fenced rather than left as it was. */
   offlineMayBeRunning?: boolean;
   /** A stop leaves a message held in the CLI's input box or queue; the CLI's own records settle that run. */

@@ -21,7 +21,9 @@ verify:
 
 - 一条消息写入 CLI 至多一次，超时、重启、收敛都不重写；不确定的投递记为 `uncertain` 并占住队列（`lane.ts#holdsUnconfirmed`），由用户确认后才继续。契约见 docs/DELIVERY.md §2。
 - CLI 不在提示符、也没有在跑回合时，消息只允许反复被拒 `session-actor.ts#CLI_BUSY_LIMIT_MS`；排在活跃回合后面不计时。只有待处理的设置重启可以暂停这个计时，后台任务不行。
-- 空闲收敛有两档：`session-actor.ts#IDLE_RECONCILE_MS` 关闭丢了完成事件的回合，`session-actor.ts#IDLE_OUTCOME_GRACE_MS` 给 Stop hook 链留时间。缩短后者会先显示「结果未确认」再自我更正。
+- 画面空闲不指明回合，不结算任何 Run：完成、失败、取消只来自带 `commandId` 或回合 ID 的结束事件（docs/TURN-LIFECYCLE.md T4）。只能看画面判断结束的后端，在驱动里判断并指明回合后再报。
+- 空闲收敛只有一档 `actor-observations.ts#IDLE_RECONCILE_MS`（60 s），把丢了结束事件的回合记为「结果未确认」，迟到的真实结局仍可更正。它要盖过 Stop hook 链和转写的批量落盘，缩短会先显示「结果未确认」再自我更正。
+- 「状态点名了另一个回合」只对状态点名过本回合的 Run 生效（`actor-observations.ts#ActorObservationDeps` 的 `namedTurns`），否则回合 ID 不属于同一套编号的后端会在一开始就被判为结果未确认。
 - 回合的 checkpoint 与消息同时发出，不等待它；checkpoint 只保留能证明早于回合认领时间的内容，宁可拒绝恢复也不还原回合自己的改动（`dispatch.ts#NativeDispatcher` 内的 `beforeTurn`）。
 - `SessionActor` 的处理函数不嵌套：处理一条消息期间到达的消息排在它后面。处理函数内部要应用自己读到的观测时调 `apply`，不调 `observe`，否则会被排到当前消息之后。
 - 会话所处阶段（`trace.ts#SessionPhase`）由未完结的 run 与在途操作推导，不单独存储：`runs` 表是跨重启的唯一依据。
@@ -41,7 +43,7 @@ verify:
 
 ## 排障
 
-- 一条消息或一个会话经历了什么：`riffet logs --scope dispatch`。`event=run` 是某条消息的投递状态或阶段变了（`from`、`to`、`attempt`、`code`），`event=phase` 是会话阶段变了，`ms` 是在上一个阶段停了多久（`trace.ts#DispatchTrace`）。两条消息之间由在途操作造成的多步变化合并成一行。
+- 一条消息或一个会话经历了什么：`riffet logs --scope dispatch`。`event=run` 是某条消息的投递状态或阶段变了（`from`、`to`、`attempt`、`code`；`turn` 是它绑定的回合，`source` 是当时在处理什么：`status`、`echo`、`turn_end`、`events`、`wake`、`settle`），`event=phase` 是会话阶段变了，`ms` 是在上一个阶段停了多久（`trace.ts#DispatchTrace`）。两条消息之间由在途操作造成的多步变化合并成一行。
 - 消息停在 `queued` 且队列有 `held`：看 `lane.ts#admission` 的返回，再看该会话 `runs` 表里 json 的 `native.delivery` 与 `native.stage`。
 - 消息一直是 `running` 而 CLI 早已空闲：回合在回执到达前就结束、期间没有收到过 busy 状态时出现过，原因是只对见过输出或 busy 的消息读状态。现在有回执就读（`session-actor.ts#SessionActor` 的 `watchDeliveries`），空闲满 `session-actor.ts#IDLE_RECONCILE_MS` 后按「结果未确认」关闭。
 - 补充消息（hook steer）一直停在 `input_sent` 且前端看起来像已送达：hook 返回 `additional_context` 但 CLI 未写入 transcript 时，父轮次原本就处于 `busy`，不能用 `busy`/`attention` 跳过 `confirmationMs` 超时（仅带 `providerAcceptedAt` 的直接 RPC steer 豁免），且客户端判定 steer `received` 时不能采信父轮次的 `hasTurnOutput` 或 `running`。

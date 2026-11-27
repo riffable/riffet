@@ -315,17 +315,17 @@ describe('native backend session identity', () => {
     const oldUnknown = first.acceptNativeRun(session.id, 'old-outcome-unknown', input, { mode: 'agent' });
     const ambiguous = first.acceptNativeRun(session.id, 'ambiguous-write', input, { mode: 'agent' });
     const unreceipted = first.acceptNativeRun(session.id, 'unreceipted-outcome', input, { mode: 'agent' });
-    first.transitionNativeRun(observed.id, ['queued'], { delivery: 'observed', expectsTurnOutcome: true, nativeMessageId: 'receipt-one', nativeTurnId: 'turn-one' }, { state: 'running' });
-    first.transitionNativeRun(oldUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', expectsTurnOutcome: true, nativeMessageId: 'receipt-two', nativeTurnId: 'turn-two' }, { state: 'interrupted', error: 'old outcome check' });
-    first.transitionNativeRun(ambiguous.id, ['queued'], { delivery: 'input_sent', expectsTurnOutcome: true });
-    first.transitionNativeRun(unreceipted.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', expectsTurnOutcome: true }, { state: 'interrupted' });
+    first.transitionNativeRun(observed.id, ['queued'], { delivery: 'observed', nativeMessageId: 'receipt-one', nativeTurnId: 'turn-one' }, { state: 'running' });
+    first.transitionNativeRun(oldUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', nativeMessageId: 'receipt-two', nativeTurnId: 'turn-two' }, { state: 'interrupted', error: 'old outcome check' });
+    first.transitionNativeRun(ambiguous.id, ['queued'], { delivery: 'input_sent' });
+    first.transitionNativeRun(unreceipted.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown' }, { state: 'interrupted' });
     // Codex keeps its app-server through a restart: its observed turn waits for the daemon's record of the end.
     const codex = first.createSession({ projectId: project.id, kind: 'native', backendId: 'codex', nativeSessionId: 'codex-thread' });
     const codexObserved = first.acceptNativeRun(codex.id, 'codex-observed', input, { mode: 'default' });
     const codexUnknown = first.acceptNativeRun(codex.id, 'codex-old-unknown', input, { mode: 'default' });
     first.transitionNativeRun(codexObserved.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeMessageId: 'codex-receipt', nativeTurnId: 'codex-turn' }, { state: 'running' });
     first.transitionNativeRun(codexUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', nativeMessageId: 'codex-receipt-2', nativeTurnId: 'codex-turn-2' }, { state: 'interrupted', error: 'old outcome check' });
-    // Droid dies with the service; recovery leaves its run to the idle/exit rules.
+    // Droid dies with the service; recovery leaves its run as it was, to the exit and idle rules.
     const droid = first.createSession({ projectId: project.id, kind: 'native', backendId: 'droid', nativeSessionId: 'droid-chat' });
     const droidObserved = first.acceptNativeRun(droid.id, 'droid-observed', input, { mode: 'default' });
     first.transitionNativeRun(droidObserved.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeMessageId: 'droid-receipt', nativeTurnId: 'droid-turn' }, { state: 'running' });
@@ -334,14 +334,14 @@ describe('native backend session identity', () => {
     try {
       restored.recoverInterruptedRuns();
       for (const run of [observed, oldUnknown]) {
-        expect(restored.getRun(run.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true } });
+        expect(restored.getRun(run.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing' } });
         expect(restored.getRun(run.id).native?.nativeMessageId).toBeDefined();
         expect(restored.getRun(run.id).error).toBeUndefined();
       }
       for (const run of [ambiguous, unreceipted]) expect(restored.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
-      expect(restored.getRun(codexObserved.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true, nativeTurnId: 'codex-turn' } });
+      expect(restored.getRun(codexObserved.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', nativeTurnId: 'codex-turn' } });
       expect(restored.getRun(codexUnknown.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain', stage: 'turn_outcome_unknown' } });
-      expect(restored.getRun(droidObserved.id).native?.expectsTurnOutcome).toBeUndefined();
+      expect(restored.getRun(droidObserved.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing' } });
     } finally { restored.close(); }
   });
 
@@ -359,7 +359,7 @@ describe('native backend session identity', () => {
     const doneOwnerSteer = first.acceptNativeRun(cursor.id, 'done-owner-steer', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-done' }, ownerRunId: completedOwner.id });
     first.transitionNativeRun(doneOwnerSteer.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation' }, { state: 'interrupted' });
     const liveOwner = first.acceptNativeRun(cursor.id, 'live-owner', input, { mode: 'agent' });
-    first.transitionNativeRun(liveOwner.id, ['queued'], { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true, nativeSessionId: 'cursor-chat', nativeTurnId: 'turn-live', nativeMessageId: 'msg-live' }, { state: 'running' });
+    first.transitionNativeRun(liveOwner.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeSessionId: 'cursor-chat', nativeTurnId: 'turn-live', nativeMessageId: 'msg-live' }, { state: 'running' });
     const liveSteer = first.acceptNativeRun(cursor.id, 'live-steer', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-live' }, ownerRunId: liveOwner.id });
     first.transitionNativeRun(liveSteer.id, ['queued'], { delivery: 'uncertain', stage: 'confirmation' }, { state: 'interrupted' });
     const lateObservedReleasedSteer = first.acceptNativeRun(cursor.id, 'late-observed-released', input, { mode: 'agent' }, undefined, { target: { nativeSessionId: 'cursor-chat', turnId: 'turn-done' }, ownerRunId: completedOwner.id });

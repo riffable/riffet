@@ -93,7 +93,7 @@ HTTP 接口只接受受限的原生 ID。服务端在允许的 session 根目录
 
 停止流程为：拒绝本会话新投递 → `clear_queue` → `abort` → drain/settled → 发布最终状态。清队列失败仍尝试 abort；RPC 无法确认时关闭子进程，防止残留队列再次启动，并返回未确认的 RPC 中断结果。清掉的原生排队内容不丢失已有 Riffet Run；Riffet 自己的队列按现有取消、归档和“立即发送”语义处理。优雅关闭随后关闭 stdin；超时才终止子进程。断线/超时后的不明投递沿用 `uncertain` 和不重放规则。
 
-Traits 首版：`acceptsInputWhileBusy=false`、`untaggedEcho=false`、`completesOnTurnEvent=true`（仅适配器的最终 turn end 可结算）、`offlineMayBeRunning=true`；没有 TUI/子代理专属 traits。下节确认后给用户事件补可信 `commandId`，因此不依赖通用文本推断路径。
+Traits 首版：`acceptsInputWhileBusy=false`、`untaggedEcho=false`（回合只由适配器的最终 turn end 结算，所有后端都如此）、`offlineMayBeRunning=true`；没有 TUI/子代理专属 traits。下节确认后给用户事件补可信 `commandId`，因此不依赖通用文本推断路径。
 
 ## 4 Run 与原生 entry 的可靠归属
 

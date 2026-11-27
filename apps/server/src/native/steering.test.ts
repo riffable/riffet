@@ -13,14 +13,14 @@ import { Store } from '../store.js';
 import { NativeDispatcher, type DispatchObservation } from './dispatch.js';
 
 /** The traits the Cursor plugin declares (`plugins/riffet/cursor/backend.ts`): the dispatcher reads traits, never a backend id. */
-const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, reportsTurnOutcome: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
+const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
 
 const cleanups: Array<() => unknown | Promise<unknown>> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 const input = (text: string) => ({ text, attachmentIds: [], context: [] });
 const config = { mode: 'agent', model: 'original-model' };
 
-function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: number; confirmationMs?: number } = {}) {
+function harness(options: { idleReconcileMs?: number; confirmationMs?: number } = {}) {
   const store = new Store(':memory:');
   cleanups.push(() => store.close());
   const project = store.createProject('/tmp/riffet-steering-test', 'steering');
@@ -244,7 +244,7 @@ describe('native steering through HTTP and durable dispatch', () => {
     for (const backendId of ['cursor', 'claude'] as const) {
       const h = harness(), steer = (await h.submit()).json<Run>();
       h.store.updateSession(h.session.id, { backendId });
-      h.store.transitionNativeRun(h.owner.id, ['observed'], { backendId, expectsTurnOutcome: true });
+      h.store.transitionNativeRun(h.owner.id, ['observed'], { backendId });
       h.store.transitionNativeRun(steer.id, ['observed'], { backendId });
       const queued = h.store.acceptNativeRun(h.session.id, 'after-recovery', input('next task'), config);
       // Repair rows parked by older service versions as well as already-observed rows.
@@ -253,7 +253,7 @@ describe('native steering through HTTP and durable dispatch', () => {
       h.setStatus({ phase: 'busy', activeTurn: h.target });
       h.dispatch.kick();
       for (const run of [h.owner, steer]) expect(h.store.getRun(run.id)).toMatchObject({
-        state: 'running', native: { delivery: 'observed', expectsTurnOutcome: true },
+        state: 'running', native: { delivery: 'observed', stage: 'executing' },
       });
       expect(h.store.getRun(steer.id).error).toBeUndefined();
       expect(h.native.sendRun).not.toHaveBeenCalled();
@@ -268,9 +268,9 @@ describe('native steering through HTTP and durable dispatch', () => {
   });
 
   it.each(['idle', 'superseded'] as const)('closes receipted hook turns after restart as interrupted when %s, without a manual resend check', async end => {
-    const h = harness({ idleReconcileMs: 0, idleOutcomeGraceMs: 0 }), steer = (await h.submit()).json<Run>();
+    const h = harness({ idleReconcileMs: 0 }), steer = (await h.submit()).json<Run>();
     h.store.updateSession(h.session.id, { backendId: 'claude' });
-    h.store.transitionNativeRun(h.owner.id, ['observed'], { backendId: 'claude', expectsTurnOutcome: true });
+    h.store.transitionNativeRun(h.owner.id, ['observed'], { backendId: 'claude' });
     h.store.transitionNativeRun(steer.id, ['observed'], { backendId: 'claude' });
     const queued = h.store.acceptNativeRun(h.session.id, 'after-idle-recovery', input('next task'), config);
     h.store.recoverInterruptedRuns();
@@ -510,17 +510,15 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.store.getRun(h.owner.id).state).toBe('running');
   });
 
-  it('keeps legacy idle reconciliation until a live Cursor hook target is observed', () => {
+  it('never completes a Cursor run on an idle screen, before or after a status named its turn', () => {
     const backendId = 'cursor';
     const h = harness();
     h.store.updateSession(h.session.id, { backendId });
     h.store.transitionNativeRun(h.owner.id, ['observed'], { backendId });
     h.setStatus({ phase: 'idle' });
     h.dispatch.kick();
-    expect(h.store.getRun(h.owner.id).state).toBe('completed');
-    h.store.transitionNativeRun(h.owner.id, ['observed'], { stage: 'executing' }, { state: 'running' });
+    expect(h.store.getRun(h.owner.id).state).toBe('running');
     h.setStatus({ phase: 'busy', activeTurn: { ...h.target, ownerRunId: h.owner.id } });
-    expect(h.store.getRun(h.owner.id).native?.expectsTurnOutcome).toBe(true);
     h.setStatus({ phase: 'idle' });
     expect(h.store.getRun(h.owner.id).state).toBe('running');
     h.finish('run_failed');

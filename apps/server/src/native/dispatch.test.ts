@@ -12,7 +12,7 @@ import { CODEX_TRAITS } from '../backends/codex/index.js';
 import { DSH_TRAITS } from '../backends/dsh/index.js';
 
 /** The traits the Cursor plugin declares (`plugins/riffet/cursor/backend.ts`): the dispatcher reads traits, never a backend id. */
-const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, reportsTurnOutcome: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
+const CURSOR_TRAITS: NativeBackendTraits = { settlesSlashOnSubmit: true, untaggedEcho: true, ownsSessionObservation: true, resumesByNativeId: true, terminalName: 'Cursor' };
 const TRAITS: Record<string, NativeBackendTraits> = { cursor: CURSOR_TRAITS, claude: CLAUDE_TRAITS, codex: CODEX_TRAITS, dsh: DSH_TRAITS };
 
 const input = (text: string) => ({ text, attachmentIds: [], context: [] });
@@ -166,11 +166,14 @@ class FakeProtocolBackend extends FakeNative {
     commitDispatchFence({ backendId: 'codex', nativeSessionId: session.nativeSessionId ?? 'thread-protocol', baselineSequence: 0, renderedText: details.input.text, resolvedConfig: details.config });
     const user = { ...makeEvent(session.id, 1, 'user_message_chunk', details.input.text), data: { commandId: run.commandId, content: { text: details.input.text } } };
     const answer = makeEvent(session.id, 2, 'agent_message_chunk', 'Done');
-    this.events = [user, answer];
+    // As the journal feed reports the turn's end, for the run its start names.
+    const end = { ...makeEvent(session.id, 3, 'run_completed', ''), data: { commandId: run.commandId } };
+    this.events = [user, answer, end];
     this.currentStatus = { phase: 'busy' };
     this.emit(session.id, { type: 'events', events: [user] });
     this.emit(session.id, { type: 'events', events: [answer] });
     this.emit(session.id, { type: 'status', status: this.currentStatus });
+    this.emit(session.id, { type: 'events', events: [end] });
     this.currentStatus = { phase: 'idle' };
     this.emit(session.id, { type: 'status', status: this.currentStatus });
   }
@@ -1063,7 +1066,7 @@ describe('NativeDispatcher durable delivery', () => {
     const run = accept(session.id, 'confirmed-exit', 'continue the task');
     const next = accept(session.id, 'after-confirmed-exit', '/clear');
     seedDeliveredRun(store, session, run.id, 'observed', { terminalState: 'exited' });
-    store.transitionNativeRun(run.id, ['observed'], { backendId, expectsTurnOutcome: true });
+    store.transitionNativeRun(run.id, ['observed'], { backendId });
     store.recoverInterruptedRuns();
     const native = new FakeNative(store), runtime = makeRuntime(), send = dispatcher(store, native, runtime, workspace);
     cleanups.push(() => store.close(), () => send.close());
@@ -1094,7 +1097,7 @@ describe('NativeDispatcher durable delivery', () => {
     expect(store.getRun(run.id).error).toContain('不会自动重发');
   });
 
-  it('keeps a Claude receipt observed on connection loss while its PTY lives, then completes its legacy turn once idle', async () => {
+  it('keeps a Claude receipt observed on connection loss while its PTY lives, then completes it on its turn end, not on idle', async () => {
     const { store, createSession, accept, workspace } = setup();
     const initial = createSession();
     const session = store.updateSession(initial.id, { backendId: 'claude', backendProfileId: 'local', nativeSessionId: 'claude-thread-1', cursorSessionId: undefined });
@@ -1116,7 +1119,10 @@ describe('NativeDispatcher durable delivery', () => {
     native.currentStatus = { phase: 'idle' };
     native.emit(session.id, { type: 'status', status: { phase: 'idle' } });
     send.kick();
-    await until(() => store.getRun(run.id).state === 'completed', 'the original run after its provider reports idle');
+    await pause();
+    expect(store.getRun(run.id).state).toBe('running');
+    native.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, 9, 'run_completed', ''), data: { commandId: run.commandId } }] });
+    await until(() => store.getRun(run.id).state === 'completed', 'the original run after its turn ended');
     expect(store.getRun(run.id)).toMatchObject({ state: 'completed', native: { delivery: 'observed' } });
     expect(native.deliverCalls).toEqual([queuedSession.id]);
   });
@@ -1124,7 +1130,8 @@ describe('NativeDispatcher durable delivery', () => {
   it.each([
     { phase: 'busy' as const, expectedState: 'running' as const },
     { phase: 'attention' as const, expectedState: 'running' as const },
-    { phase: 'idle' as const, expectedState: 'completed' as const },
+    // An idle screen names no turn: the recovered run waits for its end like any other.
+    { phase: 'idle' as const, expectedState: 'running' as const },
   ])('recovers a runtime_exit run with an exact receipt on matching $phase status despite a terminal epoch change', ({ phase, expectedState }) => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const session = createSession(), run = accept(session.id, `recover-${phase}`, 'continue the task');
@@ -1140,11 +1147,7 @@ describe('NativeDispatcher durable delivery', () => {
     // already the exact receipt. Status is valid only while terminal/session/chat identity matches.
     native.emit(session.id, { type: 'status', status: { phase } });
 
-    if (expectedState === 'completed') {
-      expect(store.getRun(run.id)).toMatchObject({ state: 'completed', native: { delivery: 'observed', stage: 'completed' } });
-    } else {
-      expect(store.getRun(run.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', nativeMessageId: 'native-receipt-1' } });
-    }
+    expect(store.getRun(run.id)).toMatchObject({ state: expectedState, native: { delivery: 'observed', stage: 'executing', nativeMessageId: 'native-receipt-1' } });
     expect(native.writes).toEqual([]);
     expect(native.deliverCalls).toEqual([]);
   });
@@ -1467,6 +1470,7 @@ describe('NativeDispatcher durable delivery', () => {
     const sequence = Math.max(0, ...native.events.map(event => event.sequence)) + 1;
     native.emit(session.id, { type: 'events', events: [makeEvent(session.id, sequence, 'agent_message_chunk', 'five digits answer')] });
     native.emit(session.id, { type: 'status', status: { phase: 'idle' } });
+    native.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, sequence + 1, 'run_completed', ''), data: { commandId: queued.commandId } }] });
     await until(() => store.getRun(queued.id).state === 'completed', 'promoted prompt completion');
     const remainingDeadline = Date.now() + 1500;
     while (store.getRun(older.id).state !== 'completed' && Date.now() < remainingDeadline) { send.kick(); await pause(5); }
@@ -1750,7 +1754,7 @@ describe('NativeDispatcher durable delivery', () => {
     expect(native.writes).toEqual([]);
   });
 
-  it('binds a unique post-baseline user echo and completes only after output then idle', async () => {
+  it('binds a unique post-baseline user echo and completes it on its turn end, not on output then idle', async () => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const session = createSession(), run = accept(session.id, 'command-observe', 'inspect the project');
     // Pre-seed a live terminal so the dispatcher stays on the paste path.
@@ -1772,6 +1776,8 @@ describe('NativeDispatcher durable delivery', () => {
     expect(store.getRun(run.id).native?.timings?.firstOutputAt).toEqual(expect.any(Number));
     expect(store.getRun(run.id).state).toBe('running');
     native.emit(session.id, { type: 'status', status: { phase: 'idle' } });
+    expect(store.getRun(run.id).state).toBe('running');
+    native.emit(session.id, { type: 'events', events: [{ ...makeEvent(session.id, 13, 'run_completed', ''), data: { commandId: run.commandId } }] });
     expect(store.getRun(run.id)).toMatchObject({ state: 'completed', native: { delivery: 'observed', stage: 'completed' } });
   });
 
@@ -1783,15 +1789,15 @@ describe('NativeDispatcher durable delivery', () => {
     saveNativeTerminal(store, store.getSession(session.id));
     const native = new FakeNative(store), runtime = makeRuntime();
     native.echoOnWrite = true;
-    const send = new NativeDispatcher(store, native as never, runtime as never, workspace as never, { intervalMs: 60_000, idleReconcileMs: 20, idleOutcomeGraceMs: 20 });
+    const send = new NativeDispatcher(store, native as never, runtime as never, workspace as never, { intervalMs: 60_000, idleReconcileMs: 20 });
     cleanups.push(() => send.close(), () => store.close());
 
     send.kick();
     await until(() => store.getRun(run.id).native?.delivery === 'observed', 'transcript echo binding');
-    // The hook-reported turn never delivers its Stop, so idle alone cannot complete this run.
-    // The status keeps claiming that same turn (only the lost Stop would clear the claim); the
-    // idle screen must still settle the run once it has stayed idle past the reconcile window.
-    store.transitionNativeRun(run.id, ['observed'], { expectsTurnOutcome: true, nativeTurnId: 'turn-lost-stop' });
+    // The turn never delivers its end, so idle alone cannot complete this run. The status keeps
+    // claiming that same turn (only the lost end would clear the claim); the idle screen must still
+    // settle the run as unconfirmed once it has stayed idle past the reconcile window.
+    store.transitionNativeRun(run.id, ['observed'], { nativeTurnId: 'turn-lost-stop' });
     const next = accept(session.id, 'command-after-lost-completion', 'and the tests');
     const idle: NativeStatus = { phase: 'idle', activeTurn: { nativeSessionId: session.cursorSessionId!, turnId: 'turn-lost-stop' } };
     native.emit(session.id, { type: 'status', status: idle });
@@ -1813,18 +1819,18 @@ describe('NativeDispatcher durable delivery', () => {
     saveNativeTerminal(store, store.getSession(session.id));
     const native = new FakeNative(store), runtime = makeRuntime();
     native.echoOnWrite = true;
-    const send = new NativeDispatcher(store, native as never, runtime as never, workspace as never, { intervalMs: 60_000, idleReconcileMs: 20, idleOutcomeGraceMs: 200 });
+    const send = new NativeDispatcher(store, native as never, runtime as never, workspace as never, { intervalMs: 60_000, idleReconcileMs: 200 });
     cleanups.push(() => send.close(), () => store.close());
 
     send.kick();
     await until(() => store.getRun(run.id).native?.delivery === 'observed', 'transcript echo binding');
-    store.transitionNativeRun(run.id, ['observed'], { expectsTurnOutcome: true, nativeTurnId: 'turn-slow-stop' });
+    store.transitionNativeRun(run.id, ['observed'], { nativeTurnId: 'turn-slow-stop' });
     const idle: NativeStatus = { phase: 'idle', activeTurn: { nativeSessionId: session.cursorSessionId!, turnId: 'turn-slow-stop' } };
     native.emit(session.id, { type: 'status', status: idle });
     await pause(60);
     native.emit(session.id, { type: 'status', status: idle });
-    // Longer than the plain idle window but inside the outcome grace: the Stop hook chain is still
-    // running, so the run must not be shown as unconfirmed and corrected a moment later.
+    // Inside the reconcile window the Stop hook chain may still be running: the run must not be
+    // shown as unconfirmed and corrected a moment later.
     expect(store.getRun(run.id)).toMatchObject({ state: 'running' });
     // The turn duration only reaches the transcript once the other hooks finish.
     native.emit(session.id, { type: 'events', events: [{
@@ -1840,7 +1846,7 @@ describe('NativeDispatcher durable delivery', () => {
     const session = createSession(), run = accept(session.id, 'command-idle-before-echo', 'inspect the project');
     const native = new FakeNative(store), runtime = makeRuntime();
     native.events = [makeEvent(session.id, 10, 'agent_message_chunk', 'previous turn')];
-    const send = dispatcher(store, native, runtime, workspace);
+    const send = new NativeDispatcher(store, native as never, runtime as never, workspace as never, { intervalMs: 60_000, idleReconcileMs: 20 });
     cleanups.push(() => send.close(), () => store.close());
 
     send.kick();
@@ -1860,15 +1866,17 @@ describe('NativeDispatcher durable delivery', () => {
     expect(store.getRun(run.id)).toMatchObject({ state: 'running', native: { delivery: 'observed' } });
     expect(store.getRun(run.id).native?.timings?.firstOutputAt).toEqual(expect.any(Number));
 
+    // No new stream status arrives: the dispatcher reads the status itself. Idle names no turn, so the
+    // run waits for its end and, when none comes, closes as unconfirmed.
     const emittedStatuses = native.emittedStatusCount;
-    await pause(520); // Dispatcher reconciliation is intentionally delayed to avoid per-tick status reads.
-    expect(store.getRun(run.id).state).toBe('running');
-    expect(native.emittedStatusCount).toBe(emittedStatuses); // No new stream status event arrived.
     const reads = native.statusCalls;
     send.kick();
-
     expect(native.statusCalls).toBe(reads + 1);
-    expect(store.getRun(run.id)).toMatchObject({ state: 'completed', native: { delivery: 'observed', stage: 'completed' } });
+    expect(store.getRun(run.id).state).toBe('running');
+    await pause(40);
+    send.kick();
+    expect(native.emittedStatusCount).toBe(emittedStatuses);
+    expect(store.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'turn_outcome_unknown' } });
   });
 
   it('queries only unfinished native runs from the indexed JSON state', () => {
@@ -2163,7 +2171,7 @@ describe('message recovery and targeted stop', () => {
     const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
     const active = accept(session.id, 'running-task', 'still running');
     seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest(), firstOutputAt: nowForTest() } });
-    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'live-turn', expectsTurnOutcome: true, terminalEpoch: 8 });
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'live-turn', terminalEpoch: 8 });
     const bound = store.getSession(session.id);
     const terminal = store.getTerminal(bound.terminalId!);
     const live = store.updateTerminal(terminal.id, { epoch: terminal.epoch + 9 });

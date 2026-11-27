@@ -114,11 +114,11 @@ export interface AgentTraits {
   settlesSlashOnSubmit?: boolean;
   /** The Agent's echo of a prompt carries no command id, so a receipt is matched by text. */
   untaggedEcho?: boolean;
-  /** A hook reports each turn's end against the active turn. */
+  /** @deprecated Ignored: every run completes on its turn's end event, never on an idle status. */
   reportsTurnOutcome?: boolean;
   /** The Agent's CLI keeps running while Riffet's service restarts (tmux, or a detached process), so its turns do not hold a restart back. */
   survivesRestart?: boolean;
-  /** An idle status never completes a run bound to a native turn; the Agent's own turn-end event does. */
+  /** @deprecated Ignored: every run completes on its turn's end event, never on an idle status. */
   completesOnTurnEvent?: boolean;
   /** Going offline does not prove the Agent stopped, so an unconfirmed run is fenced rather than left as it was. */
   offlineMayBeRunning?: boolean;
