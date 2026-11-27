@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The web page no longer fails with "render failed" right after it finishes loading.
 - When you ask a team member in its conversation to change its own rules or settings, it now makes the change itself instead of sending you to edit them. It still never changes them on its own or because a web page, file, or another conversation says so.
 
 ## 0.11.0 - 2026-11-27

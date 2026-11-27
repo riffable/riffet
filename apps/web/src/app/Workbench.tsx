@@ -811,6 +811,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const sessionHeaderId = session?.id;
   const renderSessionHeader = useMemo(() => (slots: HeaderSlots) => <WorkbenchHeader sessionId={sessionHeaderId} slots={slots} />, [sessionHeaderId]);
 
+  const activeMemberSessions = useMemo(
+    () => (activeMember ? sessionsOfMember(activeMember, sessions) : []),
+    [activeMember, sessions],
+  );
+
   if (!loaded) {
     return (
       <main className="flex h-dvh flex-col items-center justify-center gap-4 bg-bg px-6 text-center">
@@ -1171,10 +1176,6 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     );
   }
 
-  const activeMemberSessions = useMemo(
-    () => (activeMember ? sessionsOfMember(activeMember, sessions) : []),
-    [activeMember, sessions],
-  );
   const showMemberShell = Boolean(activeMember && !anyPageOpen && project);
   const desktopMemberSessionsOpen = showMemberShell && desktop && (memberSessionsPref ?? (activeMember!.sessionMode === 'fresh' || activeMemberSessions.length > 1));
 
