@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import http from 'node:http';
 import http2 from 'node:http2';
 import type { AddressInfo } from 'node:net';
 import WebSocket, { createWebSocketStream } from 'ws';
@@ -118,6 +119,38 @@ describe('server links', () => {
     const [first] = await new Promise<[string]>((resolve, reject) => { socket.once('message', data => resolve([String(data)])); socket.once('error', reject); socket.once('close', code => reject(new Error(`closed ${code}`))); });
     expect(JSON.parse(first)).toMatchObject({ event: 'changed' });
     socket.close();
+  });
+
+  it('relays a browser to the peer\'s own web app on a loopback port, signed in as a remote browser there', async () => {
+    let localWebUrl: string | undefined;
+    await until(async () => { localWebUrl = (await a.call<{ links: Array<{ localWebUrl?: string }> }>('GET', '/api/links')).body.links[0]?.localWebUrl; return !!localWebUrl; });
+    // B does not let A's side be operated from B, so B relays nothing to A.
+    expect((await b.call<{ links: Array<{ localWebUrl?: string }> }>('GET', '/api/links')).body.links[0]?.localWebUrl).toBeUndefined();
+    const url = new URL(localWebUrl!);
+    expect(url.hostname).toMatch(/\.localhost$/);
+    // `*.localhost` is not resolved the same everywhere, so the request goes to 127.0.0.1 and names the host itself.
+    const send = (path: string, options: { method?: string; host?: string; headers?: Record<string, string>; body?: unknown } = {}) => new Promise<{ status: number; headers: http.IncomingHttpHeaders; body: { error?: { code?: string }; csrfToken?: string } }>((resolve, reject) => {
+      const payload = options.body === undefined ? undefined : JSON.stringify(options.body);
+      const request = http.request({ host: '127.0.0.1', port: Number(url.port), method: options.method ?? 'GET', path, headers: { host: options.host ?? url.host, ...(payload ? { 'content-type': 'application/json' } : {}), ...options.headers } }, response => {
+        const chunks: Buffer[] = [];
+        response.on('data', chunk => chunks.push(chunk));
+        response.on('end', () => resolve({ status: response.statusCode ?? 0, headers: response.headers, body: JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') }));
+      });
+      request.on('error', reject);
+      request.end(payload);
+    });
+    // Not the link's identity: B asks for its own sign-in, and a page that rebound its own name to the port is refused.
+    expect((await send('/api/projects')).body.error?.code).toBe('UNAUTHENTICATED');
+    expect((await send('/api/projects', { host: `evil.example:${url.port}` })).body.error?.code).toBe('INVALID_HOST');
+    const token = (await readFile(join(b.stateDir, 'access-token'), 'utf8')).trim();
+    const login = await send('/api/auth/login', { method: 'POST', body: { token } });
+    expect(login.status).toBe(200);
+    const cookie = String(login.headers['set-cookie']?.[0] ?? '').split(';')[0]!;
+    expect(cookie).toMatch(/^cw_session=/);
+    // Encrypted all the way, so the browser is not held to an unencrypted one's reads; B's own settings are reachable.
+    expect((await send('/api/links', { headers: { cookie } })).status).toBe(200);
+    const created = await send('/api/projects', { method: 'POST', headers: { cookie, 'x-csrf-token': login.body.csrfToken!, origin: `http://${url.host}` }, body: { cwd: tmpdir() } });
+    expect(created.status, JSON.stringify(created.body)).toBeLessThan(300);
   });
 
   it('denies what a peer must not reach, and its control over this server', async () => {

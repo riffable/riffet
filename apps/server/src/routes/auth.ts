@@ -7,6 +7,7 @@ import { AppError } from '../errors.js';
 import { requireDeviceName } from '../auth.js';
 import { createPairingCode, redeemPairingCode } from '../pairing.js';
 import { peerCertificateFingerprint } from '../access/tls.js';
+import { linkWebOfRequest } from '../links/socket.js';
 import { PROTOCOL_INFO, summarizeWorkItem } from '../../../../packages/contracts/src/index.js';
 import type { ServerInfo } from '../../../../packages/contracts/src/index.js';
 import { withoutQuickChats } from '../chat/quick-chat.js';
@@ -22,6 +23,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
    * could write the header themselves.
    */
   const clientKey=(request:FastifyRequest)=>{
+    // A browser a linked server relayed has no address here; it is counted by the link it came through.
+    const relayedWeb=linkWebOfRequest(request.raw);
+    if(relayedWeb)return `link:${relayedWeb}`;
     if(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(request.ip))return request.ip;
     const forwarded=String(request.headers['x-forwarded-for']??'').split(',').at(-1)?.trim();
     return forwarded&&isIP(forwarded)?forwarded:request.ip;

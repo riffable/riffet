@@ -5,7 +5,7 @@ import { networkInterfaces, hostname } from 'node:os';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './errors.js';
 import { mdnsNames } from './mdns-name.js';
-import { linkOfRequest } from './links/socket.js';
+import { linkOfRequest, linkWebOfRequest, loopbackWebHost } from './links/socket.js';
 import { SESSION_COOKIE_BUDGET, type DevicePushRegistration, type DeviceReport } from '../../../packages/contracts/src/index.js';
 import { secureTransport, trustedNetworks } from './access/transport.js';
 import { peerCertificateFingerprint } from './access/tls.js';
@@ -16,9 +16,9 @@ import { sameFingerprint } from './links/identity.js';
  * loopback binding too, so the peer address alone does not mean the request came from this machine.
  */
 export const proxiedRequest = (headers?: import('node:http').IncomingHttpHeaders): boolean =>
-  // `x-riffet-link` is set by the server itself on requests that came through a link (`app.ts`); a client sending it
-  // only makes its own request count as remote.
-  Boolean(headers && (headers['x-forwarded-for'] || headers.forwarded || headers['x-real-ip'] || headers['tailscale-user-login'] || headers['x-riffet-link']));
+  // `x-riffet-link` and `x-riffet-link-web` are set by the server itself on requests that came through a link (`app.ts`);
+  // a client sending them only makes its own request count as remote.
+  Boolean(headers && (headers['x-forwarded-for'] || headers.forwarded || headers['x-real-ip'] || headers['tailscale-user-login'] || headers['x-riffet-link'] || headers['x-riffet-link-web']));
 const LOOPBACK_NAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
 /** Sent from this machine itself: a loopback peer, not relayed by a proxy, and addressed by a loopback name. */
@@ -148,7 +148,10 @@ export class Auth {
     if (!hostHeader) throw new AppError('INVALID_HOST','Host header is required',403);
     let host: URL;
     try { host=new URL(`http://${hostHeader}`); } catch { throw new AppError('INVALID_HOST','Invalid Host header',403); }
-    if (!this.allowedHosts.has(normalizeHost(host.hostname))) throw new AppError('INVALID_HOST','This hostname is not allowed',403);
+    // A browser a linked server relays from its loopback port addresses that port by a loopback name; any other name
+    // would be a page that rebound its own domain to it.
+    const relayed=linkWebOfRequest(request.raw);
+    if (relayed ? !loopbackWebHost(host.hostname) : !this.allowedHosts.has(normalizeHost(host.hostname))) throw new AppError('INVALID_HOST','This hostname is not allowed',403);
     // A previewed page runs in an opaque origin, so its links, assets and fetches arrive cross-site
     // with `Origin: null`. Its route only reads, behind the token in its path.
     const fileSite=request.routeOptions?.url===FILE_SITE_ROUTE&&['GET','HEAD'].includes(request.method);
@@ -169,6 +172,8 @@ export class Auth {
     // Token-free access is for this machine only. A proxy on the same machine connects from
     // loopback, so a forwarded request or one addressed to a non-loopback name is refused as well.
     if(!this.tokenRequired&&!localRequest(request))throw new AppError('LOCAL_ACCESS_ONLY','Token-free access only accepts local connections',403);
+    // Anyone on the peer's machine can reach its relay port, so a short token fit only for a loopback binding stays local.
+    if(relayed&&this.token.length<24)throw new AppError('WEAK_TOKEN','Opening this server through a link requires an access token with at least 24 characters',403);
   }
   private sign(value: string) { return createHmac('sha256',this.signingKey).update(value).digest('base64url'); }
   verifyToken(value: unknown): boolean { return typeof value==='string' && equal(value,this.token); }

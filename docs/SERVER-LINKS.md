@@ -304,7 +304,9 @@ SSH 的注意点：
 
 devbox 是多人共用的机器时，建议只开「devbox 允许 Mac」。
 
-浏览器到入口服务器这一段没有 TLS，这是现有缺口（[SECURITY.md](SECURITY.md) 已知缺口第 1 条），链接管不到。目前这一段继续用 Tailscale、SSH 隧道或 HTTPS 反向代理；客户端加密、互联入站分级与本机转发访问对端的方案见 [TRANSPORT-SECURITY.md](TRANSPORT-SECURITY.md)。
+浏览器到入口服务器这一段没有 TLS，这是现有缺口（[SECURITY.md](SECURITY.md) 已知缺口第 1 条），链接管不到。目前这一段继续用 Tailscale、SSH 隧道或 HTTPS 反向代理；客户端加密与互联入站分级的方案见 [TRANSPORT-SECURITY.md](TRANSPORT-SECURITY.md)。
+
+「设置 › 互联」里的「打开对端的网页」：浏览器在入口服务器本机时，打开的是入口服务器回环地址上的转发端口（`http://<别名>.localhost:<端口>`），经隧道到对端，对端照常要求登录；浏览器不在本机、对端版本旧或对端没允许本机操作它时，仍是对端的直连地址，那一段是明文（[TRANSPORT-SECURITY.md](TRANSPORT-SECURITY.md) §3）。
 
 ## 9. 连不通时
 

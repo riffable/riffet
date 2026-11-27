@@ -10,6 +10,7 @@ import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTi
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
+import { hostInfo } from '@/lib/platform';
 import { cn, errorMessage, timeAgo } from '@/lib/utils';
 import { formatServerPlatform } from '../useServerLabel';
 import { SettingsGroup, SettingsRow } from './SettingsLayout';
@@ -207,6 +208,8 @@ function LinkGroup({ link, busy, onInbound, onEdit, onRemove }: { link: LinkInfo
     link.version ?? '',
     link.state !== 'online' && link.state !== 'removed' && link.lastError ? link.lastError : '',
   ].filter(Boolean).join(' · ');
+  // The relayed port is on this server's machine, so only a browser there can open it; it is encrypted up to the peer.
+  const webUrl = (hostInfo().local && link.localWebUrl) || link.webUrl;
 
   return <SettingsGroup title={link.name}>
     <div className="flex items-center gap-3 py-3.5 max-md:flex-col max-md:items-stretch max-md:py-3">
@@ -217,7 +220,7 @@ function LinkGroup({ link, busy, onInbound, onEdit, onRemove }: { link: LinkInfo
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {link.state !== 'removed' && <Button size="sm" variant="ghost" disabled={busy} onClick={onEdit}><IconPencilLine /><Trans>编辑</Trans></Button>}
-        {link.webUrl && <Button size="sm" variant="ghost" asChild><a href={link.webUrl} target="_blank" rel="noreferrer"><IconExternalLink /><Trans>打开 {link.name} 的网页</Trans></a></Button>}
+        {webUrl && <Button size="sm" variant="ghost" asChild><a href={webUrl} target="_blank" rel="noreferrer"><IconExternalLink /><Trans>打开 {link.name} 的网页</Trans></a></Button>}
         <Button size="sm" variant="danger-ghost" className="max-md:min-h-11" disabled={busy} onClick={onRemove}>{link.state === 'removed' ? <Trans>移除</Trans> : <Trans>断开</Trans>}</Button>
       </div>
     </div>

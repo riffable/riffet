@@ -160,7 +160,7 @@ import { secureTransport, trustedNetworks } from './access/transport.js';
 import { SecurityAudit } from './access/audit.js';
 import { acceptTlsOnSamePort, loadServerTlsIdentity } from './access/tls.js';
 import { peerPath } from './links/forward.js';
-import { linkOfRequest } from './links/socket.js';
+import { linkOfRequest, linkWebOfRequest } from './links/socket.js';
 import { LINK_TUNNEL_ROUTE, SERVER_FORWARD_ROUTE, registerLinkRoutes } from './routes/links.js';
 import { ChannelService, channelProvider } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
@@ -458,7 +458,9 @@ export async function createApp(options: AppOptions = {}) {
     try{context=auth.authenticate(request);}catch{/* not signed in */}
     const loopback=['127.0.0.1','::1','::ffff:127.0.0.1'].includes(request.ip);
     const relayed=loopback?String(request.headers['x-forwarded-for']??'').split(',').at(-1)?.trim():undefined;
-    const address=relayed||request.ip;
+    // A browser a linked server relayed from its own machine has no address here; the link names where it is.
+    const relayedWeb=linkWebOfRequest(request.raw);
+    const address=relayed||request.ip||(relayedWeb?`link:${relayedWeb}`:undefined);
     const id=context?.linkServerId??context?.deviceId;
     const name=context?.linkServerId?linksRef?.list().find(link=>link.serverId===context.linkServerId)?.name:context?.deviceId?auth.device(context.deviceId)?.name:undefined;
     return {...(context?{kind:context.kind}:{}),...(id?{id}:{}),...(name?{name}:{}),...(address?{address}:{}),secure:context?.kind==='link'||secureTransport(request,trusted)};
@@ -503,6 +505,11 @@ export async function createApp(options: AppOptions = {}) {
       return;
     }
     delete request.headers['x-riffet-link'];
+    // A browser on a linked server's machine, relayed through the link (docs/TRANSPORT-SECURITY.md §3): it signs in as
+    // a remote browser does. The header makes `proxiedRequest` see it as one wherever only headers are at hand.
+    const relayedWeb=linkWebOfRequest(request.raw);
+    if (relayedWeb) request.headers['x-riffet-link-web']=relayedWeb;
+    else delete request.headers['x-riffet-link-web'];
     auth.checkOrigin(request);
     reply.header('X-Content-Type-Options','nosniff').header('Referrer-Policy','no-referrer');
     if (isApiRequest(request)) {

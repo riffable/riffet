@@ -57,6 +57,11 @@ export interface LinkInfo {
   protocol?: ProtocolInfo;
   /** Where a browser opens the other server's own web app, when known. */
   webUrl?: string;
+  /**
+   * The other server's web app through the link's encrypted tunnel, on a loopback port of this server
+   * (docs/TRANSPORT-SECURITY.md §3). Only a browser on this server's machine can open it.
+   */
+  localWebUrl?: string;
   /** Six digits both servers derive from their two certificates; equal on both ends unless someone joined in between. */
   verificationCode: string;
   createdAt: string;

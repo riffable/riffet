@@ -9,9 +9,10 @@ import { LINK_BUDGET } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { linkVerificationCode, loadLinkIdentity, sameFingerprint, type LinkIdentity } from './identity.js';
 import { decodeInvite, encodeInvite, inviteProof, newInviteSecret, proofMatches, type LinkInvite } from './invite.js';
-import { LINK_SOCKET } from './socket.js';
+import { LINK_SOCKET, LINK_WEB_SOCKET } from './socket.js';
 import { PinMismatchError, boundedWrites, plain, secure } from './tunnel.js';
 import { sshTransport } from './ssh.js';
+import { LinkWebPorts } from './web-ports.js';
 
 /**
  * Links between this server and others (docs/SERVER-LINKS.md). Each link is a pinned pair of certificates and two
@@ -20,7 +21,9 @@ import { sshTransport } from './ssh.js';
  * the other side's on the session where it is the server, so the roles at the HTTP/2 layer never depend on who dialed.
  *
  * A forwarded connection is one CONNECT stream carrying plain HTTP/1.1. The serving side hands it to its ordinary
- * HTTP server marked with `LINK_SOCKET`; `app.ts` then applies `policy.ts` and the inbound switch to it.
+ * HTTP server marked with `LINK_SOCKET`; `app.ts` then applies `policy.ts` and the inbound switch to it. A stream for
+ * `WEB_AUTHORITY` is a browser's connection relayed from a loopback port on the other machine (`web-ports.ts`); it is
+ * marked with `LINK_WEB_SOCKET` instead and signs in like any remote browser.
  */
 
 export interface StoredLink {
@@ -47,7 +50,12 @@ export interface StoredLink {
   removedByPeer?: true;
   version?: string;
   protocol?: ProtocolInfo;
+  /** The loopback port this side last relayed the peer's web app on, kept so the page's origin survives a restart. */
+  webPort?: number;
 }
+
+/** The CONNECT authority of a browser's relayed connection. A peer without `link-web-v1` would treat it as the link's own. */
+const WEB_AUTHORITY = 'riffet.web:80';
 
 interface Hello { serverId: string; name: string; inbound: boolean; version: string; protocol: ProtocolInfo; platform?: ServerPlatform }
 interface PendingInvite { inviteId: string; key: string; inbound: boolean; expiresAt: number }
@@ -99,6 +107,7 @@ type Listener = () => void;
 
 export class LinkService {
   readonly identity: LinkIdentity;
+  private readonly webPorts: LinkWebPorts;
   private records = new Map<string, StoredLink>();
   private readonly live = new Map<string, Live>();
   private readonly invites = new Map<string, PendingInvite>();
@@ -136,6 +145,15 @@ export class LinkService {
     for (const [serverId, entries] of Object.entries(readJson<Record<string, LinkAuditEntry[]>>(this.auditPath, {}))) {
       if (Array.isArray(entries)) this.audits.set(serverId, entries.slice(-LINK_BUDGET.auditEntries));
     }
+    this.webPorts = new LinkWebPorts({
+      open: serverId => this.openWeb(serverId),
+      onListening: (serverId, port) => {
+        const record = this.records.get(serverId);
+        if (record && record.webPort !== port) { record.webPort = port; this.save(); }
+        this.changed();
+      },
+      ...(options.log ? { log: options.log } : {}),
+    });
   }
 
   private defaultName(): string {
@@ -174,6 +192,7 @@ export class LinkService {
   /** Dials every link this side dials. Called once the HTTP server is ready to take forwarded connections. */
   start() {
     for (const record of this.records.values()) if (record.dialer && !record.removedByPeer) void this.dial(record.serverId);
+    this.syncWebPorts();
   }
 
   onChange(listener: Listener): () => void { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
@@ -347,6 +366,15 @@ export class LinkService {
     return plain(client.request({ ':method': 'CONNECT', ':authority': 'riffet.link:80' }) as unknown as Duplex);
   }
 
+  /** A browser's connection to the peer's own web app through the tunnel (`web-ports.ts`). */
+  private openWeb(serverId: string): Duplex {
+    const record = this.records.get(serverId);
+    if (!record || !relaysWeb(record)) throw new AppError('LINK_NOT_ALLOWED', 'This link does not relay the other server\'s web app', 403);
+    const client = this.live.get(serverId)?.client;
+    if (!client || client.destroyed || client.closed) throw new AppError('LINK_OFFLINE', `${this.displayName(record)} is offline`, 503);
+    return plain(client.request({ ':method': 'CONNECT', ':authority': WEB_AUTHORITY }) as unknown as Duplex);
+  }
+
   /** Sends one internal JSON HTTP request to a linked server over its tunnel (e.g. Riffet MCP `remote_*` tools). */
   async requestJson<T>(serverId: string, method: 'GET' | 'POST', path: string, body?: unknown, options?: { signal?: AbortSignal; timeoutMs?: number; origin?: string }): Promise<T> {
     const tunnel = this.open(serverId);
@@ -445,6 +473,7 @@ export class LinkService {
 
   close() {
     this.closed = true;
+    this.webPorts.closeAll();
     clearTimeout(this.auditTimer);
     this.saveAudit();
     for (const serverId of [...this.live.keys()]) this.teardown(serverId);
@@ -481,6 +510,7 @@ export class LinkService {
     const state: LinkState = record.removedByPeer ? 'removed' : up ? 'online' : live?.connecting || (live?.client || live?.served.size) ? 'connecting' : 'offline';
     const name = this.displayName(record);
     const alias = record.alias || this.uniqueAlias(name, record.serverId);
+    const webPort = relaysWeb(record) ? this.webPorts.port(record.serverId) : undefined;
     return {
       serverId: record.serverId, name,
       ...(record.customName && record.customName !== record.name ? { peerName: record.name } : {}),
@@ -491,6 +521,7 @@ export class LinkService {
       inbound: record.inbound, outbound: record.outbound, state,
       ...(record.version ? { version: record.version } : {}), ...(record.protocol ? { protocol: record.protocol } : {}),
       ...(record.transport === 'direct' && record.dialer && record.address ? { webUrl: record.address } : {}),
+      ...(webPort ? { localWebUrl: `http://${webHost(alias, record.serverId)}:${webPort}/` } : {}),
       verificationCode: linkVerificationCode(this.identity.fingerprint, record.peerFingerprint),
       createdAt: record.createdAt, ...(record.lastConnectedAt ? { lastConnectedAt: record.lastConnectedAt } : {}),
       ...(live?.lastError && state !== 'online' ? { lastError: live.lastError } : {}),
@@ -652,8 +683,10 @@ export class LinkService {
       if (method === 'CONNECT') {
         if (!linkId || !this.admits(linkId)) { stream.respond({ ':status': 403 }); stream.end(); return; }
         stream.respond({ ':status': 200 });
-        const connection = plain(stream as unknown as Duplex) as Duplex & { [LINK_SOCKET]?: string };
-        connection[LINK_SOCKET] = linkId;
+        const connection = plain(stream as unknown as Duplex) as Duplex & { [LINK_SOCKET]?: string; [LINK_WEB_SOCKET]?: string };
+        // A browser on the peer's machine: no link identity, or it would skip this server's sign-in.
+        if (headers[':authority'] === WEB_AUTHORITY) connection[LINK_WEB_SOCKET] = linkId;
+        else connection[LINK_SOCKET] = linkId;
         const live = this.liveOf(linkId);
         live.streams.add(connection);
         connection.once('close', () => live.streams.delete(connection));
@@ -834,10 +867,35 @@ export class LinkService {
     for (const [id, invite] of this.invites) if (invite.expiresAt <= now) this.invites.delete(id);
   }
 
-  private changed() { for (const listener of this.listeners) listener(); }
+  private changed() {
+    this.syncWebPorts();
+    for (const listener of this.listeners) listener();
+  }
+
+  /** A loopback port for each link that may operate a peer able to tell a relayed browser from the link itself. */
+  private syncWebPorts() {
+    if (this.closed) return;
+    const wanted = new Map<string, number | undefined>();
+    for (const record of this.records.values()) if (relaysWeb(record)) wanted.set(record.serverId, record.webPort);
+    this.webPorts.sync(wanted);
+  }
 
   private save() { writeJson(this.path, [...this.records.values()]); }
   private saveAudit() { writeJson(this.auditPath, Object.fromEntries(this.audits)); }
+}
+
+function relaysWeb(record: StoredLink): boolean {
+  return !record.removedByPeer && record.outbound && !!record.protocol?.features?.includes('link-web-v1');
+}
+
+/**
+ * One loopback host name per peer. Cookies ignore the port, so on a shared name the peer's sign-in would replace this
+ * server's (and another peer's); `*.localhost` keeps each apart and still counts as a secure context.
+ */
+function webHost(alias: string, serverId: string): string {
+  const label = alias.replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '');
+  // An alias with dots or underscores could fold onto another one's label, so it is told apart by the server id.
+  return `${label === alias ? label : `${label || 'server'}-${serverId.replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase()}`}.localhost`;
 }
 
 /** Thrown by a dial that found the link changed under it; it is not the link's error. */

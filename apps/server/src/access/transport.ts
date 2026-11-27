@@ -1,6 +1,7 @@
 import { BlockList, isIPv4 } from 'node:net';
 import type { IncomingHttpHeaders } from 'node:http';
 import type { TLSSocket } from 'node:tls';
+import { linkWebOfRequest } from '../links/socket.js';
 
 /**
  * Whether the connection a request came on is encrypted end to end (docs/TRANSPORT-SECURITY.md §4). A browser on a
@@ -11,12 +12,14 @@ import type { TLSSocket } from 'node:tls';
  *   https`) or is `tailscale serve`. Only a loopback peer is believed about this: from anyone else the header is the
  *   client's own claim, and a man in the middle could add it.
  * - A peer inside an encrypted overlay: Tailscale's ranges, and the networks the operator names (`--trust-network`).
+ * - A browser a linked server relayed from a loopback port on its machine: loopback there, the link's TLS after.
  */
 export function secureTransport(request: { ip: string; headers: IncomingHttpHeaders; raw: { socket?: unknown } }, trusted: BlockList | undefined): boolean {
   if ((request.raw.socket as Partial<TLSSocket> | undefined)?.encrypted) return true;
   // No socket at all is an in-process injection (`app.injectWS`); a connection from the network always has one. A
   // stream this server hands its HTTP server itself (a link's tunnel) has a socket without an address, and is marked.
   if (!request.raw.socket) return true;
+  if (linkWebOfRequest(request.raw)) return true;
   if (!request.ip) return false;
   const peer = request.ip.replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/, '');
   if (peer === '127.0.0.1' || peer === '::1') {

@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Opening a linked server's web page from Settings › Links in a browser on this server's own machine now goes through the link's encrypted tunnel, so the other server's access token and conversations no longer cross the network in plain text; servers linked over SSH can now be opened this way too. Both servers need this version, and the other server must allow this one to operate it.
 - Answering an approval or question card no longer makes the card grow and shrink: the spinner now shows in the button you pressed, and "Submitting…" or "Submit after reconnecting" sits at the end of the title row when there is no button for it (Web, Mac, Android, iPhone).
 - For agents whose mode is a setting apart from their permissions (Antigravity, Droid, TRAE), the permission button now lists the modes above the permissions, on the new-session page and in an open conversation, so an Antigravity conversation in Sandbox can switch to Accept edits instead of confirming every edit. Antigravity's options now say what each covers: Sandbox runs terminal commands without asking, file edits follow the mode (Web, Mac).
 - Team members running on Cursor or Antigravity now execute background tasks such as memory consolidation without failing permission validation before launch; failed background runs that never created a conversation can now be clicked in the sidebar and session info panel to view and copy the full error details (Web).
