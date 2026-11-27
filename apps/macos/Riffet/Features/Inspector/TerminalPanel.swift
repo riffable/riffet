@@ -290,13 +290,13 @@ struct TerminalSurface<Accessory: View>: View {
                     .foregroundStyle(searchSummary.total == 0 ? palette.danger : palette.fg3)
             }
             Button { searchCaseSensitive.toggle() } label: {
-                Text("Aa").font(RiffetFont.codeSmall)
+                Text(verbatim: "Aa").font(RiffetFont.codeSmall)
                     .foregroundStyle(searchCaseSensitive ? palette.accent : palette.fg3)
             }
             .buttonStyle(IconButtonStyle(size: 22))
             .help("区分大小写")
             Button { searchRegex.toggle() } label: {
-                Text(".*").font(RiffetFont.codeSmall)
+                Text(verbatim: ".*").font(RiffetFont.codeSmall)
                     .foregroundStyle(searchRegex ? palette.accent : palette.fg3)
             }
             .buttonStyle(IconButtonStyle(size: 22))

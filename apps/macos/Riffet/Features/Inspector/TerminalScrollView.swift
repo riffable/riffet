@@ -195,7 +195,7 @@ final class TerminalScrollView: NSScrollView, TerminalSurfaceBackend {
         live.installColors(appearance.ansiColors)
         live.updateColorScheme(appearance.dark ? .dark : .light, notify: false)
         live.optionAsMetaKey = appearance.optionAsMeta
-        live.copyOnSelect = appearance.copyOnSelect
+        live.autoCopyOnSelect = appearance.copyOnSelect
         live.rightClickCopyPaste = appearance.rightClick == .copyPaste
         live.scrollSensitivity = CGFloat(appearance.scrollSensitivity)
         scrollOnInput = appearance.scrollOnInput
@@ -337,7 +337,7 @@ final class ScrollingTerminalView: SwiftTerm.TerminalView {
     var onAttachmentPaste: ((NSPasteboard) -> Bool)?
     /// Pasted text goes to the server, which brackets it when the program asked for that.
     var onTextPaste: ((String) -> Void)?
-    var copyOnSelect = false
+    var autoCopyOnSelect = false
     var rightClickCopyPaste = false
     private var copyWorkItem: DispatchWorkItem?
 
@@ -349,10 +349,10 @@ final class ScrollingTerminalView: SwiftTerm.TerminalView {
     nonisolated override func selectionChanged(source: SwiftTerm.Terminal) {
         super.selectionChanged(source: source)
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.copyOnSelect else { return }
+            guard let self, self.autoCopyOnSelect else { return }
             self.copyWorkItem?.cancel()
             let item = DispatchWorkItem { [weak self] in
-                guard let self, self.copyOnSelect, let text = self.getSelection(), !text.isEmpty else { return }
+                guard let self, self.autoCopyOnSelect, let text = self.getSelection(), !text.isEmpty else { return }
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(text, forType: .string)
             }

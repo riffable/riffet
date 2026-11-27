@@ -21689,13 +21689,13 @@
         }
       }
     },
-    "外观 终端 字号 边距 terminal": {
+    "外观 终端 字体 字号 字重 边距 光标 右键 滚动 滚轮 terminal font scroll": {
       "comment": "Search terms, space-separated",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "appearance terminal font size padding"
+            "value": "appearance terminal font size weight padding cursor right click scroll"
           }
         }
       }
@@ -24554,6 +24554,336 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "字重": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weight"
+          }
+        }
+      }
+    },
+    "跟随应用等宽字体": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow app monospace font"
+          }
+        }
+      }
+    },
+    "常规": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regular"
+          }
+        }
+      }
+    },
+    "中等": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medium"
+          }
+        }
+      }
+    },
+    "半粗": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semibold"
+          }
+        }
+      }
+    },
+    "光标样式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor style"
+          }
+        }
+      }
+    },
+    "光标闪烁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor blink"
+          }
+        }
+      }
+    },
+    "选中即复制": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy on select"
+          }
+        }
+      }
+    },
+    "右键行为": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right-click behavior"
+          }
+        }
+      }
+    },
+    "Option 作为 Meta 键": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Option as Meta key"
+          }
+        }
+      }
+    },
+    "响铃提醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bell"
+          }
+        }
+      }
+    },
+    "方块": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block"
+          }
+        }
+      }
+    },
+    "下划线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Underline"
+          }
+        }
+      }
+    },
+    "竖线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bar"
+          }
+        }
+      }
+    },
+    "菜单": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu"
+          }
+        }
+      }
+    },
+    "复制或粘贴": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy or paste"
+          }
+        }
+      }
+    },
+    "闪烁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visual"
+          }
+        }
+      }
+    },
+    "声音": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sound"
+          }
+        }
+      }
+    },
+    "输入时滚到底部": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll to bottom on input"
+          }
+        }
+      }
+    },
+    "新输出时滚到底部": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll to bottom on output"
+          }
+        }
+      }
+    },
+    "滚轮速度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scroll speed"
+          }
+        }
+      }
+    },
+    "上一条命令退出码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last command exit code"
+          }
+        }
+      }
+    },
+    "在终端中查找 (⌘F)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find in terminal (⌘F)"
+          }
+        }
+      }
+    },
+    "在终端中查找": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find in terminal"
+          }
+        }
+      }
+    },
+    "在终端中查找…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find in terminal…"
+          }
+        }
+      }
+    },
+    "跳到上一条命令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jump to previous command"
+          }
+        }
+      }
+    },
+    "跳到下一条命令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jump to next command"
+          }
+        }
+      }
+    },
+    "查找": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find"
+          }
+        }
+      }
+    },
+    "区分大小写": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Match case"
+          }
+        }
+      }
+    },
+    "正则表达式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use regular expression"
+          }
+        }
+      }
+    },
+    "上一个匹配": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous match"
+          }
+        }
+      }
+    },
+    "下一个匹配": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next match"
+          }
+        }
+      }
+    },
+    "终端不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal unavailable"
           }
         }
       }

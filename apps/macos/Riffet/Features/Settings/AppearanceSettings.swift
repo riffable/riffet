@@ -374,11 +374,11 @@ struct TerminalSettings: View {
 
             Section {
                 SettingsRow("字体") {
-                    Picker("", selection: $prefs.terminalFontFamily) {
+                    Picker("字体", selection: $prefs.terminalFontFamily) {
                         Text("跟随应用等宽字体").tag("")
                         Divider()
                         ForEach(families, id: \.self) { family in
-                            Text(family).tag(family)
+                            Text(verbatim: family).tag(family)
                         }
                     }
                     .labelsHidden()
@@ -396,7 +396,7 @@ struct TerminalSettings: View {
                 }
 
                 SettingsRow("字重") {
-                    Picker("", selection: $prefs.terminalFontWeight) {
+                    Picker("字重", selection: $prefs.terminalFontWeight) {
                         Text("常规").tag(TerminalFontWeight.regular)
                         Text("中等").tag(TerminalFontWeight.medium)
                         Text("半粗").tag(TerminalFontWeight.semibold)
@@ -423,7 +423,7 @@ struct TerminalSettings: View {
 
             Section {
                 SettingsRow("光标样式") {
-                    Picker("", selection: $prefs.terminalCursorStyle) {
+                    Picker("光标样式", selection: $prefs.terminalCursorStyle) {
                         Text("方块").tag(TerminalCursorShape.block)
                         Text("下划线").tag(TerminalCursorShape.underline)
                         Text("竖线").tag(TerminalCursorShape.bar)
@@ -434,15 +434,15 @@ struct TerminalSettings: View {
                 }
 
                 SettingsRow("光标闪烁") {
-                    Toggle("", isOn: $prefs.terminalCursorBlink).labelsHidden()
+                    Toggle("光标闪烁", isOn: $prefs.terminalCursorBlink).labelsHidden()
                 }
 
                 SettingsRow("选中即复制") {
-                    Toggle("", isOn: $prefs.terminalCopyOnSelect).labelsHidden()
+                    Toggle("选中即复制", isOn: $prefs.terminalCopyOnSelect).labelsHidden()
                 }
 
                 SettingsRow("右键行为") {
-                    Picker("", selection: $prefs.terminalRightClick) {
+                    Picker("右键行为", selection: $prefs.terminalRightClick) {
                         Text("菜单").tag(TerminalRightClickBehavior.menu)
                         Text("复制或粘贴").tag(TerminalRightClickBehavior.copyPaste)
                     }
@@ -452,11 +452,11 @@ struct TerminalSettings: View {
                 }
 
                 SettingsRow("Option 作为 Meta 键") {
-                    Toggle("", isOn: $prefs.terminalOptionAsMeta).labelsHidden()
+                    Toggle("Option 作为 Meta 键", isOn: $prefs.terminalOptionAsMeta).labelsHidden()
                 }
 
                 SettingsRow("响铃提醒") {
-                    Picker("", selection: $prefs.terminalBell) {
+                    Picker("响铃提醒", selection: $prefs.terminalBell) {
                         Text("关闭").tag(TerminalBellMode.none)
                         Text("闪烁").tag(TerminalBellMode.visual)
                         Text("声音").tag(TerminalBellMode.sound)
@@ -469,11 +469,11 @@ struct TerminalSettings: View {
 
             Section {
                 SettingsRow("输入时滚到底部") {
-                    Toggle("", isOn: $prefs.terminalScrollOnInput).labelsHidden()
+                    Toggle("输入时滚到底部", isOn: $prefs.terminalScrollOnInput).labelsHidden()
                 }
 
                 SettingsRow("新输出时滚到底部") {
-                    Toggle("", isOn: $prefs.terminalScrollOnOutput).labelsHidden()
+                    Toggle("新输出时滚到底部", isOn: $prefs.terminalScrollOnOutput).labelsHidden()
                 }
 
                 SettingsRow("滚轮速度") {
@@ -518,11 +518,11 @@ struct TerminalSettings: View {
                 Image(icon: "terminal")
                     .font(RiffetFont.caption)
                     .foregroundStyle(palette.fg3)
-                Text("zsh · ~/riffet")
+                Text(verbatim: "zsh · ~/riffet")
                     .font(RiffetFont.codeSmall)
                     .foregroundStyle(palette.fg3)
                 Spacer()
-                Text("\(Int(prefs.terminalHorizontalPadding))×\(Int(prefs.terminalVerticalPadding))")
+                Text(verbatim: "\(Int(prefs.terminalHorizontalPadding))×\(Int(prefs.terminalVerticalPadding))")
                     .font(RiffetFont.codeSmall)
                     .foregroundStyle(palette.fg4)
             }
@@ -534,19 +534,19 @@ struct TerminalSettings: View {
 
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.xs) {
-                    Text("~/riffet").foregroundStyle(green)
-                    Text("main").foregroundStyle(cyan)
-                    Text("pnpm test").bold()
+                    Text(verbatim: "~/riffet").foregroundStyle(green)
+                    Text(verbatim: "main").foregroundStyle(cyan)
+                    Text(verbatim: "pnpm test").bold()
                 }
                 HStack(spacing: Space.xs) {
-                    Text("✓").foregroundStyle(green)
-                    Text("terminal").bold()
-                    Text("12 passed").foregroundStyle(muted)
-                    Text("42ms").foregroundStyle(yellow)
+                    Text(verbatim: "✓").foregroundStyle(green)
+                    Text(verbatim: "terminal").bold()
+                    Text(verbatim: "12 passed").foregroundStyle(muted)
+                    Text(verbatim: "42ms").foregroundStyle(yellow)
                 }
                 HStack(spacing: Space.xs) {
-                    Text("❯").foregroundStyle(green)
-                    Text("git status")
+                    Text(verbatim: "❯").foregroundStyle(green)
+                    Text(verbatim: "git status")
                     terminalCursorPreview(style: prefs.terminalCursorStyle, color: fg, size: CGFloat(prefs.terminalFontSize))
                 }
             }

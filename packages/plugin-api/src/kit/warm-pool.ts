@@ -260,7 +260,11 @@ export class WarmPool<T> {
   private arm(entry: Entry<T>): void {
     clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
-      void this.locked(async () => { if (!entry.ended && entry.leaseUntil <= this.now()) void this.end(entry, true); });
+      void this.locked(async () => {
+        if (entry.ended) return;
+        if (entry.leaseUntil <= this.now()) void this.end(entry, true);
+        else this.arm(entry);
+      });
     }, Math.max(0, entry.leaseUntil - this.now()));
     entry.timer.unref?.();
   }

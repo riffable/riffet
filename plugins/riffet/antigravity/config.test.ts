@@ -94,7 +94,7 @@ describe('Antigravity launch configuration', () => {
     const overlay = JSON.parse(await readFile(first.settingsPath, 'utf8'));
     // Only Riffet's own choices: everything else, including a model saved by /model, stays agy's to read.
     expect(overlay).toEqual({
-      trustedWorkspaces: ['/elsewhere', f.project, await realpath(f.project)],
+      trustedWorkspaces: [...new Set(['/elsewhere', f.project, await realpath(f.project)])],
       customModelsConfig: { customModels: { mine: { modelName: 'mine' }, 'gateway-model': { modelName: 'gateway-model' } } },
       queuedMessages: 'queue',
       altScreenMode: 'always',
