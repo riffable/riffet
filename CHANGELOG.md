@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Segmented controls on Web no longer sit in a gray track, so the selected option shows as a clean tint of the theme color instead of a muddy gray-purple.
 - The web page no longer fails with "render failed" right after it finishes loading.
 - When you ask a team member in its conversation to change its own rules or settings, it now makes the change itself instead of sending you to edit them. It still never changes them on its own or because a web page, file, or another conversation says so.
 

@@ -244,7 +244,7 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
     <div
       ref={track}
       role="radiogroup" aria-label={ariaLabel} onKeyDown={roving.onKeyDown}
-      className={cn('relative inline-flex w-fit min-w-0 max-w-full items-center overflow-x-auto scrollbar-none rounded-lg bg-muted p-0.5 shadow-[inset_0_0_0_0.5px_var(--line)]', className)}
+      className={cn('relative inline-flex w-fit min-w-0 max-w-full items-center overflow-x-auto scrollbar-none rounded-lg p-0.5 shadow-[inset_0_0_0_1px_var(--line-strong)]', className)}
     >
       <span
         ref={thumb}
