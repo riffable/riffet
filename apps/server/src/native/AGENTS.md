@@ -54,3 +54,5 @@ verify:
 - 重启被拒或一直等待：`GET /api/service/restartable`，对应 `dispatch.ts#restartability`；暂停派发是 30 s 租约（`dispatch.ts#DRAIN_LEASE_MS`），等待方不续期会自行失效。
 - 空闲 CLI 不被回收或被误回收：监控接口 `agentProcesses` 给出每个 CLI 的 `AgentRetention` 与预计停止时间；回收日志无 scope，按消息文本过滤 `riffet logs`，如 `reclaimed idle agent CLIs`、`agent reclaim pass failed`。生命周期见 docs/guide/performance.md §3.10。
 - 终端持有的会话无法发送：日志 `releasing a terminal hold failed`、`following a terminal-held conversation failed`；持有的 token 存在会话旁的 `terminal-hold:` 密钥里（`terminal-hold.ts#SECRET_PREFIX`）。
+- `input_sent` 回执超时偶发被推迟一整段 `intervalMs`：定时器提前 1ms 醒来时，若 `watchDeliveries` 读到的 `now()` 刚未超过 `confirmationMs`，紧随其后的 `scheduleTimer` 跨毫秒后再读 `now()` 会使 `lane.ts#nextLook` 误以为已过窗口被 `busy` 豁免而改排 `intervalMs`。现 `SessionActor.wake()` 把同一次 `now()` 快照同时传给 `watchDeliveries` 与 `scheduleTimer`，消除跨毫秒裂缝。
+- 立即替换发送（`replaceTurn`）回退到「先停再发」后仍被旧的 `CLI_BUSY` 退避挡住 1.5s：`execution-adapter.ts#replaceTurn` 在 `recover` 将消息退回 `queued` 时返回 `skipped`，`actor-interrupt.ts#performInterrupt` 原先只在 `delivered` 分支清理 `nextAttempt`。现回退分支同步清理 `accepted.id` 的 `nextAttempt`，停完回合即可立刻派发。

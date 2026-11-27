@@ -219,6 +219,7 @@ export class SessionActor {
   private wake(): void {
     if (this.host.closed || !this.attached()) return;
     let startedIdle = false;
+    let watchedAt: number | undefined;
     try {
       let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
       startedIdle = !runs.some(runNeedsDispatchWatch);
@@ -242,13 +243,14 @@ export class SessionActor {
           }
         }
       }
-      this.watchDeliveries(runs);
+      watchedAt = now();
+      this.watchDeliveries(runs, watchedAt);
       const afterWatch = this.store.listUnfinishedNativeRuns(this.sessionId);
       if (afterWatch.some(run => run.native?.intent === 'steer' && run.native.delivery === 'uncertain' && !run.native.queueReleasedAt)) {
         releaseEndedSteers(this.store, afterWatch, this.readStatus(this.sessionId));
       }
     } finally {
-      this.finish(startedIdle, 'wake');
+      this.finish(startedIdle, 'wake', watchedAt);
     }
   }
 
@@ -274,13 +276,13 @@ export class SessionActor {
 
   private attached(): boolean { return this.host.current(this.sessionId) === this; }
 
-  private finish(evictNow: boolean, cause: ActorMessage['type']): void {
+  private finish(evictNow: boolean, cause: ActorMessage['type'], checkedAt?: number): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
     let runs = this.store.listUnfinishedNativeRuns(this.sessionId);
     if (runs.some(runNeedsDispatchWatch) && !this.workspaceBlocked()) this.ensureObserver();
     if (!this.attached()) { this.clearTimer(); return; }
     runs = this.store.listUnfinishedNativeRuns(this.sessionId);
-    this.scheduleTimer(runs);
+    this.scheduleTimer(runs, checkedAt);
     this.traced?.record(runs, this.phase(runs), cause, id => { try { return this.store.getRun(id); } catch { return undefined; } });
     if (this.mailbox.pending) return;
     if (this.shouldDispatch(runs)) this.wakeSoon();
@@ -399,10 +401,10 @@ export class SessionActor {
     this.timerAt = undefined;
   }
 
-  private scheduleTimer(runs: readonly Run[]): void {
+  private scheduleTimer(runs: readonly Run[], checkedAt?: number): void {
     if (this.host.closed || !this.attached()) { this.clearTimer(); return; }
     const idleWindow = (run: Run) => run.native?.expectsTurnOutcome ? (this.options.idleOutcomeGraceMs ?? IDLE_OUTCOME_GRACE_MS) : (this.options.idleReconcileMs ?? IDLE_RECONCILE_MS);
-    const at = nextLook({ runs, now: now(), intervalMs: this.options.intervalMs ?? 500, confirmationMs: this.options.confirmationMs ?? 30_000,
+    const at = nextLook({ runs, now: checkedAt ?? now(), intervalMs: this.options.intervalMs ?? 500, confirmationMs: this.options.confirmationMs ?? 30_000,
       retryAt: id => this.nextAttempt.get(id) ?? 0, idleSince: id => this.idleSince.get(id), idleWindow, held: () => this.providerHold(runs) });
     if (at === undefined) { this.clearTimer(); return; }
     if (this.timer && this.timerAt !== undefined && this.timerAt <= at) return;
@@ -421,8 +423,8 @@ export class SessionActor {
     try { return heldByProvider(this.admission(this.sessionId, runs)); } catch { return false; }
   }
 
-  private watchDeliveries(runs: readonly Run[]): void {
-    watchDeliveries(this.obsDeps, runs);
+  private watchDeliveries(runs: readonly Run[], at = now()): void {
+    watchDeliveries(this.obsDeps, runs, at);
   }
 
   private resumeDrainHeldSteers(): void {

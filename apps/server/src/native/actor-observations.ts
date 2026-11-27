@@ -106,15 +106,15 @@ export function releaseEndedSteers(store: Store, runs: readonly Run[], status?: 
   return released;
 }
 
-export function watchDeliveries(deps: ActorObservationDeps, runs: readonly Run[]): void {
+export function watchDeliveries(deps: ActorObservationDeps, runs: readonly Run[], at = now()): void {
   for (const run of runs) {
     if (run.native?.queueReleasedAt) continue;
     const since = run.native?.timings?.firstOutputAt ?? run.native?.timings?.busyAt ?? run.native?.timings?.observedAt;
     if (run.native?.delivery === 'observed' && typeof deps.native.status === 'function'
-      && (run.native.expectsTurnOutcome || run.native.intent === 'steer' || deps.idleSince.has(run.id) || since === undefined || now() - since >= 500)) {
+      && (run.native.expectsTurnOutcome || run.native.intent === 'steer' || deps.idleSince.has(run.id) || since === undefined || at - since >= 500)) {
       applyObservation(deps, run.sessionId, { type: 'status', status: deps.native.status(run.sessionId) });
     }
-    if (run.native?.delivery === 'input_sent' && now() - (run.native.timings?.inputSentAt ?? now()) > (deps.options.confirmationMs ?? 30_000)) {
+    if (run.native?.delivery === 'input_sent' && at - (run.native.timings?.inputSentAt ?? at) > (deps.options.confirmationMs ?? 30_000)) {
       const terminal = matchingTerminal(deps.store, run);
       const session = deps.store.getSession(run.sessionId);
       const linkedProtocol = deps.adapter.hasDriverSend() && run.native.nativeSessionId

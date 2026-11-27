@@ -1529,8 +1529,10 @@ describe('NativeDispatcher durable delivery', () => {
     expect(native.interruptOptions).toEqual([{ clearPrompt: true }]);
     expect(followUp).toMatchObject({ state: 'queued', native: { delivery: 'queued', stage: 'interrupt_followup' } });
     expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted' });
-    const deadline = Date.now() + 1500;
-    while (store.getRun(followUp.id).native?.delivery === 'queued' && Date.now() < deadline) { send.kick(); await pause(5); }
+    await until(() => {
+      if (native.writes.length === 0) send.kick();
+      return native.writes.length > 0;
+    }, 'follow-up written after interrupt', 1500);
     expect(native.writes).toEqual([{ sessionId: session.id, text: 'please clear' }]);
   });
 

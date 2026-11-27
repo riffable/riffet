@@ -386,6 +386,8 @@ async function performInterrupt(deps: ActorControlDeps, sessionId: string, submi
         return after;
       }
       deps.nextAttempt.delete(after.id);
+    } else if (accepted) {
+      deps.nextAttempt.delete(accepted.id);
     }
   }
   if (stop) assertStopTarget(deps, sessionId, stop);
