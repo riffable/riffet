@@ -41,6 +41,11 @@ abstract class SimCli {
   hidesTurn = false;
   /** Command ids whose turn the CLI actually ended. */
   readonly endedTurns: Set<string> = new Set();
+  /** Command ids whose own turn the CLI showed busy, and whose own turn wrote output. */
+  readonly shownBusy: Set<string> = new Set();
+  readonly answered: Set<string> = new Set();
+  /** The turn that ended last, which may still flush output or be named by a status that lags. */
+  protected lastEnded: { id: string; ownerRunId: string; ownerCommandId: string } | undefined;
   protected readonly unechoed: Array<{ commandId: string; text: string; turnId: string }> = [];
   protected events: NativeWorkbenchEvent[] = [];
   protected sequence = 0;
@@ -55,7 +60,14 @@ abstract class SimCli {
   async supportsSendNow(): Promise<boolean> { return false; }
   /** Status reads since the schedule last moved; a dispatcher that never comes to rest shows up here. */
   reads = 0;
-  status(): NativeStatus { this.spinning(); return { phase: this.turn === undefined || this.hidesTurn ? 'idle' : 'busy' }; }
+  status(): NativeStatus {
+    this.spinning();
+    const busy = this.turn !== undefined && !this.hidesTurn;
+    if (busy) this.shownBusy.add(this.turn!.ownerCommandId);
+    return { phase: busy ? 'busy' : 'idle' };
+  }
+  /** What a status that lags says: the turn that just ended is still the one running. */
+  protected staleStatus(): NativeStatus | undefined { return undefined; }
   protected spinning(): void { if (++this.reads > 20_000) throw new Error('The dispatcher keeps reading the status without coming to rest'); }
   async snapshot() { return { events: [...this.events], status: this.status(), nativeSessionId: this.chatId }; }
   /** Like the journal feed: the log so far and the status, once the subscriber is in place. */
@@ -79,6 +91,7 @@ abstract class SimCli {
 
   private over(): void {
     if (this.turn) this.endedTurns.add(this.turn.ownerCommandId);
+    this.lastEnded = this.turn ?? this.lastEnded;
     this.turn = undefined;
     this.hidesTurn = false;
   }
@@ -92,6 +105,7 @@ abstract class SimCli {
   /** The running turn answers and the CLI returns to its prompt. */
   finish(): void {
     if (this.turn === undefined) return;
+    this.answered.add(this.turn.ownerCommandId);
     this.push([this.event('agent_message_chunk', { content: { text: 'done' } }, this.turn.id)]);
     this.ended('run_completed');
     this.over();
@@ -99,6 +113,19 @@ abstract class SimCli {
 
   /** The provider notices where the CLI stands and says so. */
   publish(): void { this.emit({ type: 'status', status: this.status() }); }
+
+  /**
+   * Right after a stop (docs/TURN-LIFECYCLE.md T5): the stopped turn still flushes a line of output, and a status
+   * that lags still names it as the running one, while the next message is already on its way.
+   */
+  straggle(): void {
+    const ended = this.lastEnded;
+    if (!ended) return;
+    this.answered.add(ended.ownerCommandId);
+    this.push([this.event('agent_message_chunk', { content: { text: 'late' } }, ended.id)]);
+    const stale = this.staleStatus();
+    if (stale) this.emit({ type: 'status', status: stale });
+  }
 
   /** A restart: the service's side of every operation in flight is gone, the CLI is not. */
   detach(): void { this.gates = []; this.listener = undefined; }
@@ -168,8 +195,15 @@ class ProtocolCli extends SimCli {
   traits(): NativeBackendTraits { return CODEX_TRAITS; }
   override status(): NativeStatus {
     this.spinning();
+    if (this.turn) this.shownBusy.add(this.turn.ownerCommandId);
     return this.turn ? { phase: 'busy', activeTurn: { nativeSessionId: this.chatId, turnId: this.turn.id, ownerRunId: this.turn.ownerRunId } } : { phase: 'idle' };
   }
+  protected override staleStatus(): NativeStatus | undefined {
+    const ended = this.lastEnded;
+    return ended ? { phase: 'busy', activeTurn: { nativeSessionId: this.chatId, turnId: ended.id, ownerRunId: ended.ownerRunId } } : undefined;
+  }
+  /** Whose turn is running now. */
+  running(): string | undefined { return this.turn?.ownerCommandId; }
   async supportsSteer(): Promise<boolean> { return true; }
 
   async sendRun(_session: Session, run: Run, fence: (binding?: NativeDispatchBinding) => Run): Promise<void> {
@@ -201,7 +235,7 @@ class ProtocolCli extends SimCli {
 }
 
 type Command =
-  | { kind: 'send' | 'steer' | 'echo' | 'finish' | 'publish' | 'stop' | 'restart' | 'loseWrite' | 'hide' }
+  | { kind: 'send' | 'steer' | 'echo' | 'finish' | 'publish' | 'stop' | 'restart' | 'loseWrite' | 'hide' | 'straggle' }
   | { kind: 'open' | 'break' | 'cancel' | 'sendNow' | 'recover'; pick: number }
   | { kind: 'advance'; ms: number };
 
@@ -222,6 +256,7 @@ const commandsWith = (...extra: Array<{ weight: number; arbitrary: fc.Arbitrary<
   { weight: 1, arbitrary: pick('recover') },
   { weight: 1, arbitrary: fc.constant<Command>({ kind: 'restart' }) },
   { weight: 1, arbitrary: fc.constant<Command>({ kind: 'loseWrite' }) },
+  { weight: 2, arbitrary: fc.constant<Command>({ kind: 'straggle' }) },
   ...extra,
 );
 const command = commandsWith();
@@ -284,6 +319,7 @@ class World {
     else if (step.kind === 'publish') this.cli.publish();
     else if (step.kind === 'loseWrite') this.cli.loseNextWrite = true;
     else if (step.kind === 'hide') this.cli.hidesTurn = true;
+    else if (step.kind === 'straggle') this.cli.straggle();
     else if (step.kind === 'advance') await vi.advanceTimersByTimeAsync(step.ms);
     else if (step.kind === 'stop') {
       // A3: a stop that reports success has settled everything that was running.
@@ -323,6 +359,12 @@ class World {
     // T3/T4 (docs/TURN-LIFECYCLE.md §3): a message completes only once the CLI has ended the turn it started.
     for (const run of this.runs()) {
       if (run.state === 'completed' && !run.native!.intent && !this.cli.endedTurns.has(run.commandId)) found.push(`${run.commandId} completed while its turn was still running`);
+      // T5: what a message records of its turn comes from that turn, not from the one stopped before it.
+      const timings = run.native!.timings ?? {};
+      if (!run.native!.intent && timings.firstOutputAt !== undefined && !this.cli.answered.has(run.commandId)) found.push(`${run.commandId} took output from another turn`);
+      if (!run.native!.intent && timings.busyAt !== undefined && !this.cli.shownBusy.has(run.commandId)) found.push(`${run.commandId} took a busy status from another turn`);
+      // A status that lags behind a stop names a turn that is over: it does not close the next one as superseded.
+      if (this.cli instanceof ProtocolCli && run.native!.stage === 'turn_outcome_unknown' && this.cli.running() === run.commandId) found.push(`${run.commandId} closed as unconfirmed while its turn was still running`);
     }
     if (found.length) throw new Error(`after ${JSON.stringify(after)}: ${found.join('; ')}`);
   }

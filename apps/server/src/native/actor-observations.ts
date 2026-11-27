@@ -96,6 +96,29 @@ function noteActiveTurn(deps: ActorObservationDeps, status: NativeStatus): void 
   if (deps.namedTurns.size > OUTCOME_MEMORY) deps.namedTurns.delete(deps.namedTurns.values().next().value!);
 }
 
+/**
+ * T5 (docs/TURN-LIFECYCLE.md): evidence about a run is evidence about its own turn. An event or status naming another
+ * turn says nothing about it — typically the turn stopped just before it, still flushing output or lagging in a status.
+ * A run is written at most once, so its write fence already marks the attempt: evidence counts only after it.
+ */
+function ownTurn(store: Store, run: Run, turnId: string | undefined, nativeSessionId?: string, ownerRunId?: string): boolean {
+  const native = run.native!;
+  if (!turnId) return true;
+  if (native.nativeTurnId) return turnId === native.nativeTurnId && (!nativeSessionId || !native.nativeSessionId || nativeSessionId === native.nativeSessionId);
+  if (ownerRunId) return ownerRunId === run.id || ownerRunId === native.ownerRunId;
+  const chat = nativeSessionId ?? native.nativeSessionId ?? store.getSession(run.sessionId).nativeSessionId;
+  return !chat || !store.findRunsByNativeTurn(run.sessionId, chat, turnId).some(other => other.id !== run.id);
+}
+
+/** A turn one of our earlier messages started: a status naming it as running lags behind its end. */
+function earlierTurn(store: Store, run: Run, target: NonNullable<NativeStatus['activeTurn']>): boolean {
+  let owners: Run[];
+  if (target.ownerRunId) {
+    try { owners = [store.getRun(target.ownerRunId)]; } catch { owners = []; }
+  } else owners = store.findRunsByNativeTurn(run.sessionId, target.nativeSessionId, target.turnId);
+  return owners.some(other => other.id !== run.id && other.id !== run.native?.ownerRunId && other.createdAt <= run.createdAt);
+}
+
 export function releaseEndedSteers(store: Store, runs: readonly Run[], status?: NativeStatus): boolean {
   let released = false;
   for (const run of runs) {
@@ -195,8 +218,9 @@ function reconcileTurnCorrections(deps: ActorObservationDeps, sessionId: string,
 function reconcileIdleRun(deps: ActorObservationDeps, sessionId: string, runId: string, status: NativeStatus): void {
   const current = deps.store.getRun(runId);
   const claimed = status.activeTurn;
-  const staleClaim = claimed !== undefined && claimed.turnId === current.native?.nativeTurnId
-    && (current.native?.nativeSessionId === undefined || claimed.nativeSessionId === current.native.nativeSessionId);
+  const staleClaim = claimed !== undefined && (claimed.turnId === current.native?.nativeTurnId
+    && (current.native?.nativeSessionId === undefined || claimed.nativeSessionId === current.native.nativeSessionId)
+    || current.native !== undefined && earlierTurn(deps.store, current, claimed));
   if (status.phase !== 'idle' || (claimed && !staleClaim) || current.native?.delivery !== 'observed' || current.state !== 'running' || deps.isInterrupting()) {
     deps.idleSince.delete(runId);
     return;
@@ -376,7 +400,8 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         replayTurnOutcome(deps, deps.store.getRun(run.id));
       }
       const updated = deps.store.getRun(run.id);
-      if (updated.native?.delivery === 'observed' && !updated.native.timings?.firstOutputAt && message.events.some(event => event.sequence > (delivery.baselineSequence ?? Infinity) && event.type === 'agent_message_chunk')) {
+      if (updated.native?.delivery === 'observed' && !updated.native.timings?.firstOutputAt && message.events.some(event => event.sequence > (delivery.baselineSequence ?? Infinity) && event.type === 'agent_message_chunk'
+        && ownTurn(deps.store, updated, event.nativeTurnId, typeof event.data.nativeSessionId === 'string' ? event.data.nativeSessionId : undefined))) {
         deps.store.transitionNativeRun(run.id, ['observed'], { timings: { ...updated.native.timings, firstOutputAt: updated.native.timings?.firstOutputAt ?? now() } });
       }
     }
@@ -406,7 +431,7 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         && (current.native.intent === 'steer' || deps.namedTurns.has(turnKey(current.native.nativeSessionId, current.native.nativeTurnId))) && target
         && ['busy', 'attention'].includes(message.status.phase)
         && target.nativeSessionId === current.native.nativeSessionId
-        && target.turnId !== current.native.nativeTurnId) {
+        && target.turnId !== current.native.nativeTurnId && !earlierTurn(deps.store, current, target)) {
         deps.store.transitionNativeRun(run.id, ['observed'], {
           delivery: 'cancelled', stage: 'turn_outcome_unknown', timings: { ...current.native.timings, interruptedAt: now() },
         }, { state: 'interrupted', error: '会话已进入后续任务，但未收到原任务的完成确认；消息已送达，不会重发。' });
@@ -423,8 +448,9 @@ export function applyObservation(deps: ActorObservationDeps, sessionId: string, 
         }, { state: 'running', error: undefined }) ?? current;
       }
       // An idle screen names no turn: it never completes a run (T4), it only starts the wait in `reconcileIdleRun`.
-      if (message.status.phase === 'busy' && ['dispatching', 'input_sent', 'observed'].includes(current.native?.delivery ?? '') && !current.native?.timings?.busyAt) {
-        deps.store.transitionNativeRun(run.id, ['dispatching', 'input_sent', 'observed'], { timings: { ...current.native?.timings, busyAt: now() } });
+      if (message.status.phase === 'busy' && ['input_sent', 'observed'].includes(current.native?.delivery ?? '') && !current.native?.timings?.busyAt
+        && ownTurn(deps.store, current, target?.turnId, target?.nativeSessionId, target?.ownerRunId)) {
+        deps.store.transitionNativeRun(run.id, ['input_sent', 'observed'], { timings: { ...current.native?.timings, busyAt: now() } });
       } else if (message.status.phase === 'offline' && ['dispatching', 'input_sent', 'observed'].includes(current.native?.delivery ?? '')) {
         const mayBeRunning = deps.traits(deps.store.getSession(sessionId).backendId).offlineMayBeRunning;
         const terminalExited = matchingTerminal(deps.store, current)?.state === 'exited';
