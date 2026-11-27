@@ -131,6 +131,7 @@ import { TimelineService } from './timeline/service.js';
 import { SessionMedia } from './timeline/media.js';
 import { TurnSummaryService } from './turn-summary/service.js';
 import { TranscriptIngest } from './sync/ingest.js';
+import { journalSentInputs } from './sync/sent-input.js';
 import { JournalFeed, latestEvents } from './journal/feed.js';
 import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
@@ -375,6 +376,8 @@ export async function createApp(options: AppOptions = {}) {
   // Codex one then logs its own draft chunks over the ones the transcript reads.
   const ingest=new TranscriptIngest({journal:store.journal,source:id=>nativeBackends.transcriptSource(id)});
   nativeBackends.attachIngest(ingest);
+  // T1 (docs/TURN-LIFECYCLE.md): before the dispatcher resumes anything, so no fence is committed unrecorded.
+  const stopJournalingInputs=journalSentInputs(store,ingest);
   // Evaluated only once the backends exist, since turning a plugin on refreshes their catalogs.
   options.onStartupPhase?.('plugins');
   await plugins.refreshWithin(1_500);
@@ -972,7 +975,7 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['cache-trim',()=>stopCacheTrim()],['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['code-index',()=>workspace.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['cache-trim',()=>stopCacheTrim()],['links',()=>links.close()],['assistant',()=>{stopWatchingAppearance();stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['council',()=>council.close()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['approvals',()=>{stopApprovalSweep();pluginApprovals.close();}],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>{stopJournalingInputs();ingest.close();}],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['code-index',()=>workspace.close()],['integrity-check',()=>cancelIntegrityCheck()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }

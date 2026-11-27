@@ -1,6 +1,6 @@
 # 用户输入与回合生命周期：单一事实来源
 
-日期：2026-11-27。状态：方案已确认，未实施。
+日期：2026-11-27。状态：方案已确认；P0、P1 已实施，P2–P4 未实施。
 
 本文补齐 [SESSION-JOURNAL.md](SESSION-JOURNAL.md) 不变量 4、5 和 [DISPATCH-ARCHITECTURE.md](DISPATCH-ARCHITECTURE.md) A1 在实现上留下的缺口：经 Riffet 发出的用户输入不在日志里，回合终态可以绕过日志直接写进 Run。两份文档的其余约定不变，[DELIVERY.md](DELIVERY.md) 的 S1–S3、L1–L4 不变。
 
@@ -69,27 +69,25 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 
 ## 4. 设计
 
-### 4.1 `meta.input` 事件
+### 4.1 `meta.input` 事件（P1 已实施）
 
-| 字段 | 说明 |
-|---|---|
-| `runId`、`commandId` | 关联 Run 与回显 |
-| `intent` | `message` 或 `steer`；`steer` 带目标回合 `(nativeSessionId, nativeTurnId)` |
-| `text` | 实际写入 CLI 的文本（`renderedText`），超过内联上限按 blob 存 |
-| `attachments` | 上传 ID 列表，顺序与 `Run.native.input.attachmentIds` 一致 |
-| `at` | 写入栅栏提交时间，仅用于显示 |
+主车道日志里的一条 `meta.input`，`nativeId` 为 `meta:input:<runId>`，载荷只有 `runId`、`commandId`。正文、附件、引导目标仍在 Run 上，日志只记位置。
 
-- 写入方：`ExecutionAdapter` 提交写入栅栏的同一步，经 `host.transcript` 写主车道。日志写失败时不写 CLI，消息按写入前失败处理（保持 S1）。
-- 车道：只写主车道；子 Agent 车道没有经 Riffet 发出的输入。
-- 写入栅栏之前的消息（`queued`、`preparing`）不进日志，由控制快照的 `inbox` 显示：`placement: 'queued'` 在输入框上方，`placement: 'sending'` 在内容区末尾（DISPATCH-ARCHITECTURE A6）。两处使用同一个行键 `user:<commandId>`，写入日志后由日志行接替，不重新挂载。
+- 写入方：`apps/server/src/sync/sent-input.ts#journalSentInputs`。所有发送路径都以 Run 进入 `dispatching` 作为写入栅栏，store 在提交后同步通知 Run 变化，所以记录发生在写入 CLI 之前，五条发送路径（启动参数、`sendRun`、插件的 `commitDispatchFence`、终端粘贴、引导）不需要各自改动。
+- 写到哪份日志：`apps/server/src/journal/ingest.ts#JournalLaneWriter` 的 `inputSent`，写进当前服务主车道的那份日志（长会话首次导入期间是导入窗口）。Run 记下 `NativeRunDetails.inputEntry`：日志的 generation 和这条记录的 seq。
+- 失效：导入窗口被提升、日志重建后 generation 变化，`inputEntry` 不再成立，该 Run 按旧规则放置（§7）。
+- 写入失败只记日志警告，不拦下发送：失去的只是位置，Run 按旧规则放置。为一次日志写入失败拒绝发送，代价比位置不准大。
+- 写入栅栏之前的消息（`queued`、`preparing`）不进日志，由控制快照的 `inbox` 显示：`placement: 'queued'` 在输入框上方，`placement: 'sending'` 在内容区末尾（DISPATCH-ARCHITECTURE A6）。行键都是 `user:<commandId>`，进入日志后不重新挂载。
 
-### 4.2 时间线折叠
+### 4.2 时间线折叠（P1 已实施）
 
-- 用户行只来自日志：`meta.input`、CLI 的用户消息事件，或两者合并。`placeRunRows` 删除，Run 只为行提供投递状态（发送中、未确认、失败）。
-- 位置规则：行在 `meta.input` 的位置；回执落在本回合首条输出之后（引导消息）时，行移到回执位置，与现在引导消息的行为一致。
-- 回合边界：`meta.input` 开始一个回合；随后的回显并入这一行，不开始第二个回合。
+- `TimelineSeed.log`（`packages/timeline/src/buildTimeline.ts#TimelineLog`）告诉时间线：事件来自哪份日志、窗口从哪个 seq 开始。服务端折叠（`apps/server/src/timeline/fold.ts`）每次建窗口时传入。
+- 位置规则：
+  - 有回显的 Run：行在回显的位置（不变）。引导消息的回执落在本回合首条输出之后时，行在回执位置。
+  - 没有回显、`inputEntry` 属于这份日志的 Run：行在日志里 `meta.input` 的位置，按 seq 比较，不比较任何时钟。seq 早于窗口起点的跳过：它的行在已冻结的回合里。
+  - 没有 `inputEntry`（或 generation 不符）的 Run：沿用 `placeRunRows` 原有规则。
 - CLI 未记录的输入（样本中的 a）：行保留，状态取自 Run（如「已中断」）。是否已进入模型上下文无法确认，文案不做断言。
-- 折叠规则变化需要加大 `apps/server/src/timeline/fold.ts#FOLD_VERSION`。
+- 折叠规则变化加大了 `FOLD_VERSION`（17）。
 
 ### 4.3 回合终态
 
@@ -181,7 +179,7 @@ dispatch 日志的 `event=run` 增加 `source`（`hook`、`protocol`、`store`�
 | 阶段 | 内容 | 删除 | 验收 |
 |---|---|---|---|
 | P0 | 样本故障写成用例，以 `it.fails` 标为已知缺陷：`dispatch.property.test.ts` 的模拟 CLI 加「画面不显示忙」，检查「Run 不早于本回合结束完成」（该性质同时加进原有性质，原有调度下成立）；`timeline/service.test.ts` 检查「写入过栅栏的消息不从时间线消失」 | — | 两个用例在当前代码上失败；修好的阶段把 `it.fails` 改回 `it` |
-| P1 | `meta.input` 写入；折叠改为只读日志；客户端占位行键统一 | `placeRunRows` 及其时间、文本规则 | P0 时间线用例通过；`pnpm gen:timeline-fixtures` 更新 |
+| P1（已实施） | `meta.input` 写入与 `inputEntry`；有 `inputEntry` 的 Run 按日志位置放置；客户端占位行键已是 `user:<commandId>`，无需改动 | 对有 `inputEntry` 的 Run 不再使用时间比较；旧规则只服务旧 Run | P0 时间线用例改为 `it` 并通过；`sync/sent-input.test.ts` 检查记录先于回显、只记一次 |
 | P2 | dispatch 日志加 `source`、`turn`（§4.7）；终态单一路径；空闲收敛写 `meta.turn_ended`；按 §5 补齐：DSH 回合 ID、pi `finishDelivery`、Claude 缺 `promptId` 时的转写结束、Cursor `answered` 只认 store 指明的回合 | 通用空闲完成规则、`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome`、`hookedTurns` | P0 调度用例通过；各后端 `transcript-source` 测试 |
 | P3 | 尝试号与证据隔离；`replaceTurn` 按 §4.5 | `paneBusyAt` 重置 | 「中断后立刻发送」「回合开始前画面空闲」两种时序的属性测试 |
 | P4 | Cursor 按 §4.6 分层；live tap 记录流中断 | 画面参与回合判定的路径 | 重跑 §4.6 的对照：提前或滞后结算 0 次；`pnpm record` 补录制 |

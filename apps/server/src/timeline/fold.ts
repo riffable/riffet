@@ -27,7 +27,7 @@ import type { RowState, TimelineTables } from './tables.js';
  */
 
 /** Bumped when a change to the fold rules must refold every lane: it changes every lane's generation. */
-export const FOLD_VERSION = 16;
+export const FOLD_VERSION = 17;
 const READ_BATCH = 2000;
 const PREVIEW_CHARS = 120;
 const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);
@@ -220,6 +220,11 @@ export class LaneFold {
   }
 
   private runsById(id: string): Run | undefined { return this.runs.find(run => run.id === id); }
+
+  /** The build of the window from `windowStart`: it files a recorded input by its place in this log (docs/TURN-LIFECYCLE.md T1). */
+  private windowTimeline(): IncrementalTimeline {
+    return new IncrementalTimeline({ ...this.seed, ...(this.journalGeneration ? { log: { generation: this.journalGeneration, from: this.windowStart } } : {}) });
+  }
 
   setChat(chatId: string | undefined): void {
     if (this.chatId !== chatId) this.setInputs({ chatId, runs: this.runs, jobs: [] });
@@ -460,7 +465,7 @@ export class LaneFold {
     this.emitted = new Map(tables.rowsFrom(this.sessionId, this.lane, boundary).map(state => [state.key, { deco: '', state }]));
     this.outlines = new Map(tables.turnsFrom(this.sessionId, this.lane, boundary).map(turn => [turn.turn, turn.outline]));
     this.reproject = true;
-    this.timeline = new IncrementalTimeline(this.seed);
+    this.timeline = this.windowTimeline();
     for (const job of this.jobs.values()) this.timeline.setJob(job);
     this.settleFrozen(frozen, since);
     for (const [toolCallId, meta] of this.subagents) if (meta) this.decorationChanged(toolCallId);
@@ -969,7 +974,7 @@ export class LaneFold {
     for (const [nativeId, entity] of this.entities) if (entity.event.sequence < cut) this.entities.delete(nativeId);
     this.events = this.events.filter(event => event.sequence >= cut);
     this.reproject = true;
-    this.timeline = new IncrementalTimeline(this.seed);
+    this.timeline = this.windowTimeline();
     for (const job of this.jobs.values()) this.timeline.setJob(job);
     const outline = this.outlines.get(turn);
     this.tableTx(() => {

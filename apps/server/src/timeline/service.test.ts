@@ -96,7 +96,8 @@ function foldedFromScratch(env: ReturnType<typeof open>, lane: SyncLane = 'main'
     .sort((left, right) => left.identity - right.identity)
     .map(entity => ({ ...(entity.payload as object), sessionId: S, sequence: entity.identity }) as WorkbenchEvent);
   const runs = lane === 'main' ? timelineRuns(env.runs) : [];
-  return timelineRows(buildTimeline(projectEvents(events), runs, undefined, undefined, lane === 'main' ? 'chat-1' : undefined));
+  const generation = env.journal.peek(key)?.generation;
+  return timelineRows(buildTimeline(projectEvents(events), runs, undefined, undefined, lane === 'main' ? 'chat-1' : undefined, generation ? { generation, from: 1 } : undefined));
 }
 
 const withoutSeq = (rows: TimelineRow[]) => rows.map(({ seq: _seq, rev: _rev, ...row }) => row);
@@ -737,12 +738,14 @@ describe('timeline service', () => {
     env.close();
   });
 
-  // docs/TURN-LIFECYCLE.md §1: a is stopped before the CLI records it, b replaces it and is echoed later.
-  // Known defect until P1 writes `meta.input`: a's row is dropped because it predates the window's first event.
-  it.fails('keeps a sent message the CLI never recorded when the next one replaces its turn', async () => {
+  // docs/TURN-LIFECYCLE.md §1: a is stopped before the CLI records it, b replaces it and is echoed later,
+  // stamped by the CLI's own clock after a was sent. Each was recorded in the journal at its write fence (T1).
+  it('keeps a sent message the CLI never recorded when the next one replaces its turn', async () => {
     const env = open();
-    env.setRun(nativeRun('a', 'interrupted', 'review the change', { delivery: 'cancelled', stage: 'interrupted', nativeSessionId: 'chat-1' }));
-    env.setRun(nativeRun('b', 'running', 'the change link', { nativeMessageId: 'ub', nativeSessionId: 'chat-1', nativeTurnId: 'tb' }));
+    const a = nativeRun('a', 'interrupted', 'review the change', { delivery: 'cancelled', stage: 'interrupted', nativeSessionId: 'chat-1' });
+    const b = nativeRun('b', 'running', 'the change link', { nativeMessageId: 'ub', nativeSessionId: 'chat-1', nativeTurnId: 'tb' });
+    env.setRun({ ...a, native: { ...a.native!, inputEntry: env.writer.inputSent('a', a.commandId, a.createdAt) } });
+    env.setRun({ ...b, native: { ...b.native!, inputEntry: env.writer.inputSent('b', b.commandId, b.createdAt) } });
     env.writer.turnStarted('tb', stamp(++tick), 'b');
     commit(env, user('ub', 'tb', 'the change link'), answer('ab', 'tb', 'reading it'));
     await env.ready();

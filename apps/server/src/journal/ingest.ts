@@ -133,8 +133,10 @@ export interface TranscriptSource {
 const TURN_STARTED = 'meta.turn_started';
 const TURN_ENDED = 'meta.turn_ended';
 const SUBAGENT = 'meta.subagent';
+const INPUT_SENT = 'meta.input';
 
 export const turnMetaId = (turnId: string, edge: 'started' | 'ended'): string => `meta:turn:${turnId}:${edge}`;
+export const inputMetaId = (runId: string): string => `meta:input:${runId}`;
 export const subagentMetaId = (toolCallId: string): string => `meta:subagent:${toolCallId}`;
 
 function readTurnEnd(journal: Journal, key: string, turnId: string): ReturnType<LaneWriter['turnEnd']> {
@@ -302,6 +304,20 @@ export class JournalLaneWriter implements LaneWriter {
       this.journal.append(this.key, [turnStartInput(turnId, at, runId ?? (typeof kept === 'string' ? kept : undefined))]);
     });
     this.turn = turnId;
+  }
+
+  /**
+   * T1 (docs/TURN-LIFECYCLE.md): a message sent through Riffet, recorded where its write fence was
+   * committed, in the log that serves the main lane. Recording it again writes nothing new and gives
+   * the same place. The place holds only for this generation of that log.
+   */
+  inputSent(runId: string, commandId: string, at: string): { generation: string; seq: number } {
+    const target = (this.scratch as JournalLaneWriter | undefined) ?? this;
+    const nativeId = inputMetaId(runId);
+    const known = target.journal.locate(target.key, nativeId);
+    if (known) return { generation: target.generation, seq: known.identity };
+    const { head, rows } = target.journal.append(target.key, [{ kind: INPUT_SENT, nativeId, at, payload: { runId, commandId } }]);
+    return { generation: head.generation, seq: rows[0]!.identity };
   }
 
   turnEnded(turnId: string, status: TurnEndStatus, at: string, error?: string): void {

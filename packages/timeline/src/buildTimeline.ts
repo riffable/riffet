@@ -141,7 +141,16 @@ const timelinePass = (): TimelinePass => ({ seenRunIds: new Set(), echoedRuns: n
  * tail of a transcript (the server's open turn, see `apps/server/src/timeline`). Seeded values are not
  * logged, so no rewind gives them back.
  */
-export interface TimelineSeed { seenRunIds?: Iterable<string>; echoedRuns?: Iterable<string>; echoedPrompts?: Iterable<string> }
+export interface TimelineSeed { seenRunIds?: Iterable<string>; echoedRuns?: Iterable<string>; echoedPrompts?: Iterable<string>; log?: TimelineLog }
+
+/**
+ * The journal log the events were read from: its generation, and the seq the window starts at (an
+ * event's `sequence` is its journal identity). A run recorded in this log (`NativeRunDetails.inputEntry`)
+ * is filed at that place until its echo joins it (docs/TURN-LIFECYCLE.md T1); one recorded before
+ * `from` belongs to a turn already folded. Without it every run is filed by the rules for runs from
+ * before inputs were recorded.
+ */
+export interface TimelineLog { generation: string; from: number }
 
 function seededPass(seed: TimelineSeed | undefined): TimelinePass {
   const pass = timelinePass();
@@ -475,7 +484,7 @@ function manualCompactionSince(items: readonly TimelineItem[], since: number): T
  * Files the compaction receipt and the runs no event row stands for into `items` — the event rows,
  * which it extends in place and returns.
  */
-function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: TimelineContext, pass: TimelinePass, previous: PreviousRow, placed?: Map<string, TimelineItem>): TimelineItem[] {
+function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: TimelineContext, pass: TimelinePass, previous: PreviousRow, placed?: Map<string, TimelineItem>, log?: TimelineLog): TimelineItem[] {
   items = reconcileInputReceipts(items);
   commandsBeforeCompaction(items);
   const locate = receiptLocator(items, context.runs, context.nativeChatId);
@@ -484,8 +493,10 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     items.unshift(compacted);
     placed?.set(compacted.key, compacted);
   }
+  const recordedAt = new Map<TimelineItem, number>();
   for (const run of context.runs) {
     let receipt: TimelineItem | undefined;
+    let entry: number | undefined;
     if (run.native) {
       if (pass.echoedRuns.has(run.id)) continue;
       // A pre-dispatch cancellation has no user-visible CLI message to reconcile. Keep a real
@@ -496,9 +507,13 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
       // fresh prompts and must not be appended after the restored latest turn's answer.
       if (compacted && !activeDelivery && run.native.nativeMessageId) continue;
       receipt = locate(run);
+      entry = log && run.native.inputEntry?.generation === log.generation ? run.native.inputEntry.seq : undefined;
+      // Recorded before the window: its row is in a turn folded already, or it never had one there.
+      if (!receipt && entry !== undefined && entry < log!.from) continue;
+      // From before inputs were recorded: a run older than the first event is taken to be outside the window.
       const oldestVisibleAt = events[0]?.createdAt ? Date.parse(events[0].createdAt) : Number.NEGATIVE_INFINITY;
       const runAt = Date.parse(run.createdAt);
-      if (!receipt && !activeDelivery && run.native.fingerprint !== 'client-pending' && !(Number.isFinite(runAt) && runAt >= oldestVisibleAt)) continue;
+      if (entry === undefined && !receipt && !activeDelivery && run.native.fingerprint !== 'client-pending' && !(Number.isFinite(runAt) && runAt >= oldestVisibleAt)) continue;
     } else if (run.state !== 'running' || pass.echoedRuns.has(run.id) || pass.echoedPrompts.has(run.prompt)) continue;
     // Standing in for a receipt, the row takes the CLI turn id its output carries, so the turn is
     // joined exactly as if the receipt itself were in the window.
@@ -527,6 +542,11 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
     // already in the transcript (its hook), and is the only output the command has. The command goes before it.
     const compaction = pending && /^\/compact(?:\s|$)/.test(run.prompt.trim()) ? manualCompactionSince(items, Date.parse(run.createdAt)) : undefined;
     if (receipt) items.splice(items.indexOf(receipt), 0, resolved);
+    else if (entry !== undefined) {
+      // Where it was sent, in the log's own order: no clock of the CLI's is compared with ours.
+      items.splice(journalIndex(items, entry, recordedAt), 0, resolved);
+      recordedAt.set(resolved, entry);
+    }
     else if (compaction) items.splice(items.indexOf(compaction), 0, resolved);
     else if (pending && native?.intent !== 'steer') items.push(resolved);
     else if (pending && native?.intent === 'steer' && (native.delivery === 'queued' || native.delivery === 'preparing')) {
@@ -538,7 +558,7 @@ function placeRunRows(items: TimelineItem[], events: ProjectedEvent[], context: 
   return items;
 }
 
-export function buildTimeline(events: ProjectedEvent[], runs: Run[], jobs?: Map<string, NativeJob>, previousItems?: TimelineItem[], nativeChatId?: string): TimelineItem[] {
+export function buildTimeline(events: ProjectedEvent[], runs: Run[], jobs?: Map<string, NativeJob>, previousItems?: TimelineItem[], nativeChatId?: string, log?: TimelineLog): TimelineItem[] {
   const previousByKey = previousItems ? new Map(previousItems.map((item) => [item.key, item])) : undefined;
   const previous: PreviousRow = (key) => previousByKey?.get(key);
   const context = timelineContext(runs, jobs, nativeChatId);
@@ -548,7 +568,7 @@ export function buildTimeline(events: ProjectedEvent[], runs: Run[], jobs?: Map<
     const row = eventRow(event, index, context, pass, previous);
     if (row) items.push(row);
   });
-  return placeRunRows(items, events, context, pass, previous);
+  return placeRunRows(items, events, context, pass, previous, undefined, log);
 }
 
 /**
@@ -654,7 +674,7 @@ export class IncrementalTimeline {
 
   private place(context: TimelineContext, previous: PreviousRow): TimelineItem[] {
     const placed = new Map<string, TimelineItem>();
-    this.items = placeRunRows(this.rows.slice(), this.events, context, this.pass, previous, placed);
+    this.items = placeRunRows(this.rows.slice(), this.events, context, this.pass, previous, placed, this.seed?.log);
     this.runRows = placed;
     return this.items;
   }
@@ -680,6 +700,21 @@ function targetTurnEndIndex(items: readonly TimelineItem[], native: NonNullable<
 const itemTimes = new WeakMap<TimelineItem, number>();
 
 /** Index of the first row that is newer than `at`, or the list length when nothing is newer. */
+/**
+ * Where a run recorded at journal seq `entry` goes: after every row of an event the log holds before it.
+ * A run row stands where it was recorded, or after everything when that is not known (a queued run).
+ */
+function journalIndex(items: TimelineItem[], entry: number, recordedAt: Map<TimelineItem, number>): number {
+  let index = items.length;
+  while (index > 0) {
+    const item = items[index - 1]!;
+    const at = recordedAt.get(item) ?? (item.event.sequence === Number.MAX_SAFE_INTEGER ? Number.POSITIVE_INFINITY : item.event.sequence);
+    if (at < entry) break;
+    index -= 1;
+  }
+  return index;
+}
+
 export function chronologicalIndex(items: TimelineItem[], at: number): number {
   if (!Number.isFinite(at)) return items.length;
   for (let index = 0; index < items.length; index += 1) {

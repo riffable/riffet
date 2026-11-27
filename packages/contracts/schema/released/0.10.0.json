@@ -2350,6 +2350,21 @@
                   "type": "number"
                 }
               },
+              "inputEntry": {
+                "type": "object",
+                "properties": {
+                  "generation": {
+                    "type": "string"
+                  },
+                  "seq": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "generation",
+                  "seq"
+                ]
+              },
               "baselineSequence": {
                 "type": "number"
               },
@@ -2868,6 +2883,21 @@
                     "additionalProperties": {
                       "type": "number"
                     }
+                  },
+                  "inputEntry": {
+                    "type": "object",
+                    "properties": {
+                      "generation": {
+                        "type": "string"
+                      },
+                      "seq": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "generation",
+                      "seq"
+                    ]
                   },
                   "baselineSequence": {
                     "type": "number"
@@ -4610,6 +4640,21 @@
                           "additionalProperties": {
                             "type": "number"
                           }
+                        },
+                        "inputEntry": {
+                          "type": "object",
+                          "properties": {
+                            "generation": {
+                              "type": "string"
+                            },
+                            "seq": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "generation",
+                            "seq"
+                          ]
                         },
                         "baselineSequence": {
                           "type": "number"
@@ -10249,6 +10294,21 @@
                             "type": "number"
                           }
                         },
+                        "inputEntry": {
+                          "type": "object",
+                          "properties": {
+                            "generation": {
+                              "type": "string"
+                            },
+                            "seq": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "generation",
+                            "seq"
+                          ]
+                        },
                         "baselineSequence": {
                           "type": "number"
                         },
@@ -10759,6 +10819,21 @@
                         "additionalProperties": {
                           "type": "number"
                         }
+                      },
+                      "inputEntry": {
+                        "type": "object",
+                        "properties": {
+                          "generation": {
+                            "type": "string"
+                          },
+                          "seq": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "generation",
+                          "seq"
+                        ]
                       },
                       "baselineSequence": {
                         "type": "number"

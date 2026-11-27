@@ -19,6 +19,7 @@ co-change:
 - `service.ts#SyncService`：打开一条流，订阅并生成 `hello`、`delta`、`snapshot`。
 - `connection.ts#SyncConnection`：SSE 写出、两条队列、背压与断开。
 - `ingest.ts#TranscriptIngest`：被持有的会话的转写拉取、退避与释放。
+- `sent-input.ts#journalSentInputs`：经 Riffet 发出的消息在写入栅栏处记进日志（`meta.input`），Run 记下位置 `inputEntry`（docs/TURN-LIFECYCLE.md T1）。
 
 ## 不变量
 
@@ -27,6 +28,7 @@ co-change:
 - 控制帧先于排队的转写帧写出，历史补齐不得阻塞状态与交互（`connection.ts#SyncConnection`）；客户端用 `headSeq` 而不是到达顺序判断追平。
 - 状态、交互、Run、上下文这类整场会话的帧只发主车道，子 Agent 车道只有自己的行、大纲和活动（`service.ts#SyncService`）。
 - 读者跟不上就断开：连接积压超过 `slowBacklog` 持续两个心跳，或超过 `maxBacklog`（`connection.ts#SyncConnectionOptions`），数值来自 `packages/contracts/src/sync.ts#SYNC_BUDGET`。
+- `meta.input` 必须在写入 CLI 之前记下：它依赖 store 在 Run 进入 `dispatching` 时同步通知（`sent-input.ts#journalSentInputs`）。把这条通知改成异步，或新增一条不经 `dispatching` 就写 CLI 的发送路径，都会让回显排到它前面。
 - 同一会话同一时刻只有一次读取，期间的唤醒合并成再读一次；最后一个持有者离开后保留 `lingerMs`（`ingest.ts#TranscriptIngest`）。
 - 插件重载后，被跟随会话的转写源要换成新激活的那一个，保留持有者和 writer（`ingest.ts#TranscriptIngest` 的 `reopen`）；否则对话停止收新行，下一条消息按「可能未送达」超时。
 

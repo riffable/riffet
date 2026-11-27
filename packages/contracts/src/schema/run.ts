@@ -115,6 +115,7 @@ export const NativeRunDetailsSchema = z.object({
   nativeMessageId: z.string().optional(),
   stage: z.string().optional(),
   timings: z.record(z.string(), z.number()).optional(),
+  inputEntry: z.object({ generation: z.string(), seq: z.number() }).optional(),
   baselineSequence: z.number().optional(),
   renderedText: z.string().optional(),
   nativeInputBoundary: z.string().optional(),

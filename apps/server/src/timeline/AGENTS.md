@@ -29,6 +29,7 @@ co-change:
 - 折叠规则变了必须同时加大 `fold.ts#FOLD_VERSION`：它进入 `fold.ts#generationOf`，所有车道因此换 generation，客户端收到快照而不是错位的增量。
 - 折叠不在调用方的栈上执行，journal 提交只排下一轮事件循环（`service.ts#TimelineService`）；读取方等 `service.ts#ready`，不要在提交回调里同步读行表。
 - 车道 seq 只在行摘要变化或行被删除时加一，摘要取自截断之前的行（`tables.ts#RowState`）；改了截断规则不会让 seq 空转，但会让已发出的行与表里不一致，需要升 `FOLD_VERSION`。
+- 没有回显的 Run 按 `NativeRunDetails.inputEntry` 在日志里的 seq 放置，只在它的 generation 与窗口所读日志一致时（`fold.ts#LaneFold` 传入 `TimelineSeed.log`）；不一致或没有的，走 `packages/timeline/src/buildTimeline.ts` 里按时间放置的旧规则。不要给有 `inputEntry` 的 Run 再加时间比较（docs/TURN-LIFECYCLE.md §4.2）。
 - 只折叠窗口尾部。已结束回合里的实体出新版本、工具更新、迟到输出或 Run 变化，要经 `fold.ts#LaneFold` 的 `unfreeze` 退回到那个回合的开头重折叠；新增会改写旧回合的输入时，要确认它走了这条路。
 - 冷会话清理（`service.ts#sweepCold`）删行但保留 head 并换 `epoch`，子 Agent 车道先把行数和文件改动存进 `timeline_heads.summary`，否则父工具行重折叠后摘要会变。内存里的后台任务不在日志里，行上带任务的会话不会被清理。
 - 迟到的旧回合记录不能覆盖子 Agent 当前轮次的状态；回合结束标记被撤销（tombstone）后，错误状态行要同步移除（`fold.ts#LaneFold`）。

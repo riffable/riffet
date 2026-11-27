@@ -64,6 +64,13 @@ export interface NativeRunDetails {
   nativeMessageId?: string;
   stage?: string;
   timings?: Record<string, number>;
+  /**
+   * Where the input was recorded in the session journal when its write fence was committed: the main
+   * lane log's generation and the `meta.input` seq. The timeline files the message there until the
+   * CLI's echo joins it (docs/TURN-LIFECYCLE.md T1). Absent for runs from before this was recorded,
+   * and stale once the log is rebuilt or its import window promoted (another generation).
+   */
+  inputEntry?: { generation: string; seq: number };
   /** Baseline native event sequence and the exact text delivered to the CLI, when known. */
   baselineSequence?: number;
   renderedText?: string;

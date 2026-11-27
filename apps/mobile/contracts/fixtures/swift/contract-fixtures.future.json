@@ -4540,6 +4540,11 @@
       "timings": {
         "key": 1
       },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1,
+        "futureField": 4
+      },
       "baselineSequence": 1,
       "renderedText": "text",
       "nativeInputBoundary": "text",
@@ -4667,6 +4672,11 @@
       "stage": "text",
       "timings": {
         "key": 1
+      },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1,
+        "futureField": 4
       },
       "baselineSequence": 1,
       "renderedText": "text",
@@ -4796,6 +4806,11 @@
       "timings": {
         "key": 1
       },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1,
+        "futureField": 4
+      },
       "baselineSequence": 1,
       "renderedText": "text",
       "nativeInputBoundary": "text",
@@ -4923,6 +4938,11 @@
       "stage": "text",
       "timings": {
         "key": 1
+      },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1,
+        "futureField": 4
       },
       "baselineSequence": 1,
       "renderedText": "text",
@@ -5052,6 +5072,11 @@
       "timings": {
         "key": 1
       },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1,
+        "futureField": 4
+      },
       "baselineSequence": 1,
       "renderedText": "text",
       "nativeInputBoundary": "text",
@@ -5179,6 +5204,11 @@
       "stage": "text",
       "timings": {
         "key": 1
+      },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1,
+        "futureField": 4
       },
       "baselineSequence": 1,
       "renderedText": "text",
@@ -5314,6 +5344,11 @@
         "stage": "text",
         "timings": {
           "key": 1
+        },
+        "inputEntry": {
+          "generation": "text",
+          "seq": 1,
+          "futureField": 4
         },
         "baselineSequence": 1,
         "renderedText": "text",
@@ -5778,6 +5813,11 @@
           "stage": "text",
           "timings": {
             "key": 1
+          },
+          "inputEntry": {
+            "generation": "text",
+            "seq": 1,
+            "futureField": 4
           },
           "baselineSequence": 1,
           "renderedText": "text",
@@ -6598,6 +6638,11 @@
           "timings": {
             "key": 1
           },
+          "inputEntry": {
+            "generation": "text",
+            "seq": 1,
+            "futureField": 4
+          },
           "baselineSequence": 1,
           "renderedText": "text",
           "nativeInputBoundary": "text",
@@ -6730,6 +6775,11 @@
         "stage": "text",
         "timings": {
           "key": 1
+        },
+        "inputEntry": {
+          "generation": "text",
+          "seq": 1,
+          "futureField": 4
         },
         "baselineSequence": 1,
         "renderedText": "text",
@@ -9368,6 +9418,10 @@
       "timings": {
         "key": 1
       },
+      "inputEntry": {
+        "generation": "text",
+        "seq": 1
+      },
       "baselineSequence": 1,
       "renderedText": "text",
       "nativeInputBoundary": "text",
@@ -9483,6 +9537,10 @@
         "stage": "text",
         "timings": {
           "key": 1
+        },
+        "inputEntry": {
+          "generation": "text",
+          "seq": 1
         },
         "baselineSequence": 1,
         "renderedText": "text",
@@ -9889,6 +9947,10 @@
           "stage": "text",
           "timings": {
             "key": 1
+          },
+          "inputEntry": {
+            "generation": "text",
+            "seq": 1
           },
           "baselineSequence": 1,
           "renderedText": "text",
