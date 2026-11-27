@@ -206,7 +206,7 @@ Claude 后端连续两次在启动后 30 秒内退出时，放弃 `--resume`，�
 - 为什么要有：长对话在提示缓存过期后，每次唤醒都按未缓存价格重读整段上下文；换话题是用户自己能做的最直接的省钱办法。
 - Codex 的时间线跨 thread 读（`codex/transcript-source.ts`）：lane 的身份是对话的第一个 thread，换话题不重建 lane；游标记着读到哪个 thread，读完一个旧 thread 后写入结束它的 `/new`（发送时 fence 里记了 `nativeInputBoundary`，指明它结束的 thread），再进下一个。从头重读时先给当前 thread 开尾部窗口，再从第一个 thread 依次导入。分享和会话引用读 journal，因为它按顺序存着所有 thread。
 - 接上新会话（Claude Code）：CLI 执行 `/clear` 后以新的 `session_id` 发 `SessionStart`（`source: clear`），运行时记下它（`clearedTo`）。新 id 还没有登记的处理方，hook 命令带着发起它的 Riffet 会话（`--owner`），hook 通道按这个会话找到原来的运行时（`ClaudeHookBridge`）；下一条消息开始时，Claude 后端把旧 id 移进 `previousNativeSessionIds`、记下新 id，换一个运行时接管同一个终端里的 CLI。这是 Claude 后端的通用处理，项目会话里用户直接发 `/clear` 也一样。
-- 现状：Web 时间线上已将完成的新话题 `/new` 渲染为「新话题」分隔线，并默认收起最近一次 `/new` 之前的话题（点击可展开/收起，搜索和大纲跳转时自动展开）；Mac 与手机端仍显示为普通消息。`previousNativeSessionIds` 最多保留 8 段，换过 8 次以上话题后，最早的话题不再出现在时间线上。对于长期活跃的主对话，后台维护对超过 `STORAGE_BUDGET.assistantTrimDays`（14 天）且已经记忆整理（`assistant-consolidated-through`）的旧工具大块输出执行首尾冷裁剪，对话文本与 `message_index` 保持完整。
+- 现状：Web 时间线上已将完成的新话题 `/new` 渲染为「新话题」分隔线，并默认收起最近一次 `/new` 之前的话题（点击可展开/收起，搜索命中历史时自动展开）；右侧大纲与边缘导轨同步只导航当前话题并从 `1` 开始计数（标题显示「本话题」，当前话题 0 条时隐藏），展开更早话题后按话题分段各自从 `1` 计数（标题回「本会话」，`/new` 本身不占序号）。Mac 与手机端仍显示为普通消息。`previousNativeSessionIds` 最多保留 8 段，换过 8 次以上话题后，最早的话题不再出现在时间线上。对于长期活跃的主对话，后台维护对超过 `STORAGE_BUDGET.assistantTrimDays`（14 天）且已经记忆整理（`assistant-consolidated-through`）的旧工具大块输出执行首尾冷裁剪，对话文本与 `message_index` 保持完整。
 
 ## 6. 工具
 

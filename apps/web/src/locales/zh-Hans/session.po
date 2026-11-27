@@ -1348,7 +1348,7 @@ msgid "新文件"
 msgstr "新文件"
 
 #: src/app/session/Timeline.tsx
-#: src/app/session/TranscriptView.tsx
+#: src/app/session/TurnRail.tsx
 msgid "新话题"
 msgstr "新话题"
 
@@ -1590,6 +1590,10 @@ msgstr "本会话"
 #: src/app/session/marks.tsx
 msgid "本会话收藏"
 msgstr "本会话收藏"
+
+#: src/app/session/TurnRail.tsx
+msgid "本话题"
+msgstr "本话题"
 
 #: src/app/session/TranscriptView.tsx
 msgid "本轮已结束"

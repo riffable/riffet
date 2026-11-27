@@ -17,7 +17,7 @@ import { showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp } from './TurnProcess';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { SWITCH_HOLD_MS, useSwitchedIn } from './sessionFrame';
-import { TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
+import { scopeTopicTurns, TurnOutline, TurnRail, type RowIndex, type Turn } from './TurnRail';
 import type { MessageFocus } from './focus-message';
 import { findRow, type ReadingAnchor } from './readingAnchor';
 import { useTranscriptScroll, type TranscriptScrollHandle } from './useTranscriptScroll';
@@ -279,20 +279,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     }
     return keys;
   }, [newTopicDivider, timeline, timelineVersion]);
-  const turns = useMemo<Turn[]>(() => {
-    if (suppliedTurns) {
-      let changed = false;
-      const mapped = suppliedTurns.map((turn) => {
-        const settled = newTopicDivider && (settledNewTopicKeys?.has(turn.key) || (turn.key.startsWith('outline-turn:') && turn.text.trim() === '/new'));
-        const text = settled ? t`新话题` : outlinePromptText(turn.text);
-        if (text === turn.text) return turn;
-        changed = true;
-        return { ...turn, text };
-      });
-      return changed ? mapped : suppliedTurns;
-    }
-    return timeline.flatMap((item) => (item.kind === 'user' ? [{ key: item.key, text: newTopicDivider && isSettledNewTopic(item) ? t`新话题` : outlinePromptText(item.text.trim()) || (item.attachments.length ? t`附件` : ''), at: item.event.createdAt }] : []));
-  }, [suppliedTurns, timeline, timelineVersion, newTopicDivider, settledNewTopicKeys, t]);
   const latestTopicIndex = useMemo(() => {
     if (!newTopicDivider || hasMoreLater) return -1;
     for (let index = timeline.length - 1; index >= 0; index -= 1) {
@@ -306,6 +292,25 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const canCollapseEarlier = Boolean(latestTopicKey && (latestTopicIndex > 0 || hasMoreHistory));
   const earlierTopicsOpen = Boolean(latestTopicKey && expandedTopicKey === latestTopicKey);
   const earlierTopicsCollapsed = canCollapseEarlier && !earlierTopicsOpen;
+  const rawTurns = useMemo<readonly Turn[]>(() => {
+    if (suppliedTurns) {
+      let changed = false;
+      const mapped = suppliedTurns.map((turn) => {
+        const text = outlinePromptText(turn.text);
+        if (text === turn.text) return turn;
+        changed = true;
+        return { ...turn, text };
+      });
+      return changed ? mapped : suppliedTurns;
+    }
+    return timeline.flatMap((item) => (item.kind === 'user' ? [{ key: item.key, text: outlinePromptText(item.text.trim()) || (item.attachments.length ? t`附件` : ''), at: item.event.createdAt }] : []));
+  }, [suppliedTurns, timeline, timelineVersion, t]);
+  const turns = useMemo<Turn[]>(() => scopeTopicTurns(rawTurns, {
+    enabled: newTopicDivider,
+    settledBoundaryKeys: settledNewTopicKeys,
+    collapseEarlier: earlierTopicsCollapsed,
+    latestBoundaryKey: latestTopicKey,
+  }), [rawTurns, newTopicDivider, settledNewTopicKeys, earlierTopicsCollapsed, latestTopicKey]);
   const displayTimeline = useMemo(() => (
     earlierTopicsCollapsed && latestTopicIndex > 0 ? timeline.slice(latestTopicIndex) : timeline
   ), [earlierTopicsCollapsed, latestTopicIndex, timeline, timelineVersion]);
@@ -716,9 +721,11 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         if (current.offsets[current.turnRows[middle]!]! <= top) low = middle;
         else high = middle - 1;
       }
-      return current.rows[current.turnRows[low]!]!.key;
+      while (low > 0 && settledNewTopicKeys?.has(current.rows[current.turnRows[low]!]!.key)) low -= 1;
+      const key = current.rows[current.turnRows[low]!]!.key;
+      return settledNewTopicKeys?.has(key) ? undefined : key;
     },
-  }), [layoutFor, locate]);
+  }), [layoutFor, locate, settledNewTopicKeys]);
 
   // Callers pass fresh closures on every render; the rows reach the latest one through this ref, so
   // a parent render alone never invalidates a memoized turn. Presence still decides what renders.
@@ -893,7 +900,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         </div>
       )}
       {!embedded && !outlineTarget && <TurnRail turns={turns} turnsVersion={turnsVersion} marked={markedKeys} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn || earlierTopicsCollapsed ? loadTurn : undefined} />}
-      {!embedded && outlineTarget && createPortal(<TurnOutline turns={turns} turnsVersion={turnsVersion} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn || earlierTopicsCollapsed ? loadTurn : undefined} />, outlineTarget)}
+      {!embedded && outlineTarget && createPortal(<TurnOutline turns={turns} turnsVersion={turnsVersion} topicOnly={earlierTopicsCollapsed} scrollRef={scrollRef} columnRef={contentRef} onJump={onJump} onNavigate={navigateToRow} navigationVersion={scroll.intentVersion} rows={rowIndex} onLoadTurn={onLoadTurn || earlierTopicsCollapsed ? loadTurn : undefined} />, outlineTarget)}
       {confirmationOffscreen && (
         <button
           type="button"

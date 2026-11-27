@@ -13,6 +13,76 @@ export interface Turn {
   at?: string;
   /** The turn's native turn id and run id, as a mark's anchor names them. */
   refs?: string[];
+  /** 1-based display number within its topic when `/new` boundaries are active. */
+  number?: number;
+  /** Opens a new topic section after one or more settled `/new` boundaries. */
+  startsTopic?: boolean;
+  /** Timestamp of the `/new` boundary that opened this topic. */
+  topicStartedAt?: string;
+}
+
+export interface TopicTurnOptions {
+  /** Whether settled `/new` entries act as topic boundaries rather than numbered turns. */
+  enabled: boolean;
+  /** Keys of loaded timeline items that are settled `/new` boundaries. */
+  settledBoundaryKeys?: ReadonlySet<string>;
+  /** Hide turns at and before `latestBoundaryKey`, keeping only the current topic. */
+  collapseEarlier?: boolean;
+  /** Key of the latest settled `/new` boundary in the timeline. */
+  latestBoundaryKey?: string;
+}
+
+/**
+ * Strips settled `/new` topic boundaries from navigation turns, optionally scopes the list to the
+ * current topic while earlier topics are collapsed, and numbers each topic's prompts starting at 1.
+ */
+export function scopeTopicTurns(rawTurns: readonly Turn[], {
+  enabled,
+  settledBoundaryKeys,
+  collapseEarlier = false,
+  latestBoundaryKey,
+}: TopicTurnOptions): Turn[] {
+  if (!enabled) return rawTurns as Turn[];
+  const isBoundary = (turn: Turn) => Boolean(
+    settledBoundaryKeys?.has(turn.key) || (turn.key.startsWith('outline-turn:') && turn.text.trim() === '/new'),
+  );
+
+  let startIndex = 0;
+  if (collapseEarlier) {
+    let boundaryIndex = latestBoundaryKey ? rawTurns.findIndex((turn) => turn.key === latestBoundaryKey) : -1;
+    if (boundaryIndex < 0) {
+      for (let index = rawTurns.length - 1; index >= 0; index -= 1) {
+        if (isBoundary(rawTurns[index]!)) { boundaryIndex = index; break; }
+      }
+    }
+    if (boundaryIndex >= 0) startIndex = boundaryIndex + 1;
+  }
+
+  const result: Turn[] = [];
+  let topicNumber = 0;
+  let pendingTopicBreak = false;
+  let pendingTopicAt: string | undefined;
+
+  for (let index = startIndex; index < rawTurns.length; index += 1) {
+    const turn = rawTurns[index]!;
+    if (isBoundary(turn)) {
+      topicNumber = 0;
+      if (result.length > 0) {
+        pendingTopicBreak = true;
+        pendingTopicAt = turn.at;
+      }
+      continue;
+    }
+    topicNumber += 1;
+    result.push({
+      ...turn,
+      number: topicNumber,
+      ...(pendingTopicBreak ? { startsTopic: true, ...(pendingTopicAt ? { topicStartedAt: pendingTopicAt } : {}) } : {}),
+    });
+    pendingTopicBreak = false;
+    pendingTopicAt = undefined;
+  }
+  return result;
 }
 
 /**
@@ -391,7 +461,7 @@ export const TurnRail = memo(function TurnRail({ className, marked, ...tracking 
  * being read in full ink. A long history scrolls inside its own band, which follows the current line,
  * so the sections below it stay in reach.
  */
-export const TurnOutline = memo(function TurnOutline(tracking: TurnTracking) {
+export const TurnOutline = memo(function TurnOutline({ topicOnly = false, ...tracking }: TurnTracking & { topicOnly?: boolean }) {
   const { t } = useLingui();
   const { turns } = tracking;
   const { active, jump } = useActiveTurn(tracking);
@@ -407,27 +477,38 @@ export const TurnOutline = memo(function TurnOutline(tracking: TurnTracking) {
 
   // The side column is there from the session's first message, so the outline is too.
   if (!turns.length) return null;
+  const title = topicOnly ? t`本话题` : t`本会话`;
   return (
-    <nav aria-label={t`本会话`}>
-      <h2 className="mb-1.5 flex items-center px-2 text-2xs font-medium text-fg-4">{t`本会话`}<span className="ml-auto tabular-nums">{turns.length}</span></h2>
+    <nav aria-label={title}>
+      <h2 className="mb-1.5 flex items-center px-2 text-2xs font-medium text-fg-4">{title}<span className="ml-auto tabular-nums">{turns.length}</span></h2>
       <ol ref={listRef} className="max-h-[min(45vh,400px)] overflow-y-auto overscroll-contain scrollbar-none">
-        {turns.map((turn, index) => (
-          <li key={turn.key}>
-            <button
-              type="button"
-              aria-current={index === active ? 'true' : undefined}
-              onClick={() => jump(turn.key)}
-              title={turn.text}
-              className={cn('flex w-full min-w-0 items-baseline gap-2 rounded-lg px-2 py-1 text-left text-sm transition-colors hover:bg-hover', index === active ? 'font-medium text-fg' : 'text-fg-3 hover:text-fg-2')}
-            >
-              {/* The number is the turn list's left content, so it sits on the column's left edge —
-                  the same edge as a todo's glyph and an output's file name. Right-aligning it inside
-                  the 16px column pushed its glyph ~10px right of everything else in the aside. */}
-              <span className={cn('w-4 shrink-0 text-left text-2xs tabular-nums', index === active ? 'text-accent' : 'text-fg-4')}>{index + 1}</span>
-              <span className="min-w-0 flex-1 truncate">{turn.text}</span>
-            </button>
-          </li>
-        ))}
+        {turns.map((turn, index) => {
+          const topicTime = index > 0 && turn.startsTopic ? promptTime(turn.topicStartedAt) : undefined;
+          return (
+            <li key={turn.key}>
+              {index > 0 && turn.startsTopic && (
+                <div role="separator" aria-label={t`新话题`} className="my-1.5 flex items-center gap-2 px-2 select-none">
+                  <span aria-hidden className="h-px flex-1 bg-line" />
+                  {topicTime && <time dateTime={turn.topicStartedAt} className="shrink-0 text-2xs tabular-nums text-fg-4">{topicTime}</time>}
+                  {topicTime && <span aria-hidden className="h-px flex-1 bg-line" />}
+                </div>
+              )}
+              <button
+                type="button"
+                aria-current={index === active ? 'true' : undefined}
+                onClick={() => jump(turn.key)}
+                title={turn.text}
+                className={cn('flex w-full min-w-0 items-baseline gap-2 rounded-lg px-2 py-1 text-left text-sm transition-colors hover:bg-hover', index === active ? 'font-medium text-fg' : 'text-fg-3 hover:text-fg-2')}
+              >
+                {/* The number is the turn list's left content, so it sits on the column's left edge —
+                    the same edge as a todo's glyph and an output's file name. Right-aligning it inside
+                    the 16px column pushed its glyph ~10px right of everything else in the aside. */}
+                <span className={cn('w-4 shrink-0 text-left text-2xs tabular-nums', index === active ? 'text-accent' : 'text-fg-4')}>{turn.number ?? index + 1}</span>
+                <span className="min-w-0 flex-1 truncate">{turn.text}</span>
+              </button>
+            </li>
+          );
+        })}
       </ol>
     </nav>
   );
