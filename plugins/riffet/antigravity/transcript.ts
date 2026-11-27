@@ -354,7 +354,10 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
           });
         }
         const command = record(step.runCommand),
-          commandLine = text(command.commandLine);
+          genericArgs = record(record(step.generic).args),
+          commandLine =
+            text(command.commandLine) ??
+            (text(rawCall.name) === 'run_command' ? text(genericArgs.CommandLine ?? genericArgs.command) : undefined);
         if (commandLine && (!settled(step) || command.blocking === false || text(command.commandId)))
           out.jobs.push({
             toolCallId: id,
@@ -686,6 +689,25 @@ export interface AntigravityTranscriptOptions {
   watch: (wake: () => void) => () => void;
   host?: AgentHost;
 }
+const GENERIC_COMPATIBLE_TYPES = new Set([
+  'CORTEX_STEP_TYPE_RUN_COMMAND',
+  'CORTEX_STEP_TYPE_ASK_QUESTION',
+  'CORTEX_STEP_TYPE_INVOKE_SUBAGENT',
+  'CORTEX_STEP_TYPE_CODE_ACTION',
+  'CORTEX_STEP_TYPE_VIEW_FILE',
+]);
+
+function compatibleStepType(persistedType: unknown, liveType: unknown): boolean {
+  if (!liveType || persistedType === liveType) return true;
+  if (persistedType === 'CORTEX_STEP_TYPE_GENERIC' && typeof liveType === 'string' && GENERIC_COMPATIBLE_TYPES.has(liveType)) {
+    return true;
+  }
+  if (liveType === 'CORTEX_STEP_TYPE_GENERIC' && typeof persistedType === 'string' && GENERIC_COMPATIBLE_TYPES.has(persistedType)) {
+    return true;
+  }
+  return false;
+}
+
 /** The TUI and the conversation view share one native store and one journal lane. */
 export class AntigravityTranscriptSource implements AgentTranscriptSource {
   private static readonly CACHE_LIMIT = 64;
@@ -715,7 +737,7 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
       // fields, so none of the store is trusted for this read; the live copy alone is still correct.
       const agrees = live.steps.every((s, i) => {
         const p = stored.get(agyStepIdentity(live, s, i));
-        return !p || !s.type || p.type === s.type;
+        return !p || compatibleStepType(p.type, s.type);
       });
       if (agrees) {
         snapshot = {

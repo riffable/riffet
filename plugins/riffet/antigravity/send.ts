@@ -6,7 +6,7 @@ import { required } from './lifecycle.js';
 import { COMMANDS } from './metadata.js';
 import { resync } from './poll.js';
 import { mcpReady } from './mcp-scope.js';
-import { changed, detach, idle, nativeStatus, owned, userBoundary, type Hub, type Runtime } from './runtime.js';
+import { changed, detach, foregroundIdle, nativeStatus, owned, userBoundary, type Hub, type Runtime } from './runtime.js';
 
 const SUPPORTED_IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif']);
 const BLOCKED_TERMINAL_COMMANDS = new Set(COMMANDS);
@@ -215,7 +215,7 @@ async function dispatch(
     Date.now() - (runtime.frameAt ?? 0) < 5000;
   if (id && !freshIdleSnapshot) await resync(hub, runtime, id);
   const status = await nativeStatus(runtime);
-  if (!idle(runtime, status) || (status?.conversation_id ?? '') !== (id ?? '')) {
+  if (!foregroundIdle(runtime, status) || (status?.conversation_id ?? '') !== (id ?? '')) {
     throw host.error('CLI_BUSY', 'Antigravity is waiting for the current operation', 409);
   }
   await mcpReady(runtime, control);

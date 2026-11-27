@@ -13,6 +13,7 @@ import {
   OWNERSHIP_MISSES,
   changed,
   detach,
+  foregroundIdle,
   idle,
   nativeStatus,
   owned,
@@ -54,6 +55,7 @@ export function schedule(hub: Hub, runtime: Runtime): void {
   clearTimeout(runtime.timer);
   const quiet =
     runtime.status.phase === 'idle' &&
+    !(runtime.status.activity?.background) &&
     runtime.status.connection?.state === 'connected' &&
     Boolean(runtime.stream && !runtime.stream.signal.aborted) &&
     !runtime.host.view.session(runtime.context.session.id)?.configPending;
@@ -172,7 +174,7 @@ const STREAM_SILENT_MS = 30_000;
 
 function derivePhase(runtime: Runtime, status: AgyRecord) {
   if (waiting(runtime.snapshot) || status.tool_confirmation_pending) return 'attention';
-  if (idle(runtime, status)) return 'idle';
+  if (foregroundIdle(runtime, status)) return 'idle';
   if (status.agent_state === 'working' || runtime.snapshot?.status === 'CASCADE_RUN_STATUS_RUNNING') return 'busy';
   return 'starting';
 }
@@ -325,7 +327,7 @@ export async function poll(hub: Hub, runtime: Runtime): Promise<void> {
         : {}),
   };
   if (runtime.snapshot) await receipts(runtime);
-  if (phase === 'idle' && session.configPending) await settleConfiguration(hub, runtime, session);
+  if (idle(runtime, status) && session.configPending) await settleConfiguration(hub, runtime, session);
   if (!runtime.host.view.session(session.id)?.configPending) await adoptObservedConfig(runtime, session, status);
   const meter = status.context_window;
   if (Number.isFinite(meter?.context_window_size) && meter.context_window_size > 0) {

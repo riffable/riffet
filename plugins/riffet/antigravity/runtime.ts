@@ -147,7 +147,8 @@ export function changed(hub: Hub, runtime: Runtime): void {
   for (const wake of hub.watchers.get(runtime.context.session.id) ?? []) wake();
   runtime.host.transcript.wake(runtime.context.session.id);
   const connected = runtime.status.connection?.state === 'connected';
-  const stoppable = connected && ['busy', 'attention'].includes(runtime.status.phase);
+  const stoppable =
+    connected && (['busy', 'attention'].includes(runtime.status.phase) || (runtime.status.activity?.background ?? 0) > 0);
   const notice = connected ? configNotice(runtime) : undefined;
   runtime.status.runtimeControl =
     stoppable || notice
@@ -172,19 +173,16 @@ export async function nativeStatus(runtime: Runtime): Promise<AgyRecord | undefi
   return record.payload;
 }
 
-export function idle(runtime: Runtime, status: AgyRecord | undefined): boolean {
+/**
+ * Whether the foreground composer and active turn are idle (accepting new user input), even if
+ * detached background shell commands (`task_count > 0`) or subagents are still running.
+ */
+export function foregroundIdle(runtime: Runtime, status: AgyRecord | undefined): boolean {
   if (
     !status ||
     status.agent_state !== 'idle' ||
     status.tool_confirmation_pending ||
-    Number(status.pending_input_count ?? 0) > 0 ||
-    Number(status.task_count ?? 0) > 0
-  ) {
-    return false;
-  }
-  if (
-    Array.isArray(status.subagents) &&
-    status.subagents.some((child: AgyRecord) => !FINISHED_SUBAGENT_STATES.has(String(child.state ?? child.status ?? '').toLowerCase()))
+    Number(status.pending_input_count ?? 0) > 0
   ) {
     return false;
   }
@@ -194,6 +192,19 @@ export function idle(runtime: Runtime, status: AgyRecord | undefined): boolean {
     runtime.snapshot?.status === 'CASCADE_RUN_STATUS_IDLE' &&
     !waiting(runtime.snapshot)
   );
+}
+
+/** Whether both foreground work and all background commands/subagents are idle (safe to restart the process). */
+export function idle(runtime: Runtime, status: AgyRecord | undefined): boolean {
+  if (!foregroundIdle(runtime, status)) return false;
+  if (Number(status!.task_count ?? 0) > 0) return false;
+  if (
+    Array.isArray(status!.subagents) &&
+    status!.subagents.some((child: AgyRecord) => !FINISHED_SUBAGENT_STATES.has(String(child.state ?? child.status ?? '').toLowerCase()))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export async function owned(runtime: Runtime): Promise<number> {

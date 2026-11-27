@@ -12,7 +12,7 @@ import { required } from './lifecycle.js';
 import { mcpConfigPath, mcpReady, mcpServerName, validateMcp } from './mcp-scope.js';
 import { poll } from './poll.js';
 import { receipts } from './receipts.js';
-import type { Hub } from './runtime.js';
+import { foregroundIdle, idle, type Hub } from './runtime.js';
 import { agyStepIdentity } from './transcript.js';
 
 vi.mock('./lifecycle.js', async importOriginal => ({ ...(await importOriginal<typeof import('./lifecycle.js')>()), required: vi.fn() }));
@@ -458,4 +458,28 @@ it('matches image-only receipts and extracts sanitized startup errors', async ()
 
   expect(f.backend.terminal.startupError('Error: Authentication failed')).toContain('Authentication failed');
   expect(f.backend.terminal.startupError('Antigravity\n? for shortcuts')).toBeUndefined();
+});
+
+it('stays idle with background activity (never stuck in starting) when foreground finishes with a detached background task', async () => {
+  const f = await fixture();
+  f.runtime.snapshot = snapshot([]);
+  f.runtime.rpc = {
+    snapshot: async () => snapshot([]),
+    call: async () => ({}),
+    stream: async (_id: string, _onUpdate: unknown, signal: AbortSignal) =>
+      await new Promise<void>(resolve => {
+        signal.addEventListener('abort', () => resolve(), { once: true });
+      }),
+    close() {},
+  } as never;
+  const status = { conversation_id: conversationId, agent_state: 'idle', task_count: 1 };
+  expect(foregroundIdle(f.runtime, status)).toBe(true);
+  expect(idle(f.runtime, status)).toBe(false);
+
+  await f.status(status);
+  await poll(hub(f.backend), f.runtime);
+  expect(f.runtime.status.phase).toBe('idle');
+  expect(f.runtime.status.activity).toEqual({ compacting: false, background: 1 });
+  expect(f.runtime.status.runtimeControl?.actions?.map((action: { id: string }) => action.id)).toContain('stop-current');
+  f.runtime.stream?.abort();
 });
