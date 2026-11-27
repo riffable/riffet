@@ -127,14 +127,13 @@ function SessionListBody({
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
-        {member.sessionMode === 'fresh' && (
+        {mobile && member.sessionMode === 'fresh' && (
           <button
             type="button"
             aria-current={!activeSessionId ? 'page' : undefined}
             onClick={onNewSession}
             className={cn(
-              'mb-1.5 flex w-full items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus',
-              mobile ? 'h-11' : 'h-9',
+              'mb-1.5 flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-focus',
               !activeSessionId ? 'bg-active font-medium text-fg' : 'text-fg-2 hover:bg-hover hover:text-fg',
             )}
           >

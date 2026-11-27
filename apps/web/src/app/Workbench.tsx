@@ -20,7 +20,7 @@ import { toast } from '@/lib/toast';
 import { cn, errorMessage, writeStored } from '@/lib/utils';
 import { isShellTerminal, sessionBackend } from '@/lib/backends';
 import { parseSelection } from '@/lib/models';
-import { sessionActivityAt } from '@/lib/session-order';
+import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { setThemeMode } from '@/lib/theme';
 import { setDisplaySettings, useDisplaySettings, type SettingsPresentation } from '@/lib/display-settings';
 import { useDocumentTitle } from '@/lib/document-title';
@@ -94,6 +94,13 @@ const pushError = (message: string) => toast.error(message);
 /** A quick chat has no project files, so it neither reads nor writes the shared reference list. */
 const NO_REFERENCES: PromptContextReference[] = [];
 const noReferences = () => undefined;
+
+function sessionsOfMember(member: AgentMember, sessions: readonly Session[]): Session[] {
+  return sessions.filter((item) => !item.archivedAt && (
+    item.agentMemberId === member.id
+    || (member.scope.kind !== 'project' && !item.agentMemberId && item.origin?.kind !== 'call' && item.projectId === member.projectId)
+  ));
+}
 
 function resolveNoticeMember(notice: RiffetNotice, sessions: readonly Session[], members: readonly AgentMember[]): AgentMember | undefined {
   const active = members.filter((item) => !item.archivedAt);
@@ -475,18 +482,17 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       ui.set({ previewTarget: undefined });
     });
   };
-  /** Opens a standing team member: continuous mode lands on its live main conversation; fresh mode opens its clean composer. */
+  /** Opens a standing team member: continuous mode lands on its live main conversation; fresh mode opens its latest conversation (or a clean composer if none). */
   const openMember = useCallback((member: AgentMember) => {
     const memberProject = projects.find((item) => item.id === member.projectId);
-    const liveMain = member.sessionMode === 'continuous'
+    const targetSession = member.sessionMode === 'continuous'
       ? (() => {
         const id = member.mainSessionId ?? mainSessionIdOf(memberProject);
-        const found = id ? sessions.find((item) => item.id === id && !item.archivedAt) : undefined;
-        return found;
+        return id ? sessions.find((item) => item.id === id && !item.archivedAt) : undefined;
       })()
-      : undefined;
+      : sortSessionsByActivity(sessionsOfMember(member, sessions))[0];
     void nav.navigate(() => {
-      nav.set({ projectId: member.projectId, memberId: member.id, sessionId: liveMain?.id ?? '', ...NO_PAGE });
+      nav.set({ projectId: member.projectId, memberId: member.id, sessionId: targetSession?.id ?? '', ...NO_PAGE });
       ui.set({ previewTarget: undefined });
       ui.setMobileSidebar(false);
     });
@@ -1165,13 +1171,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     );
   }
 
-  const activeMemberSessions = useMemo(() => {
-    if (!activeMember) return [];
-    return sessions.filter((item) => !item.archivedAt && (
-      item.agentMemberId === activeMember.id
-      || (activeMember.scope.kind !== 'project' && !item.agentMemberId && item.origin?.kind !== 'call' && item.projectId === activeMember.projectId)
-    ));
-  }, [activeMember, sessions]);
+  const activeMemberSessions = useMemo(
+    () => (activeMember ? sessionsOfMember(activeMember, sessions) : []),
+    [activeMember, sessions],
+  );
   const showMemberShell = Boolean(activeMember && !anyPageOpen && project);
   const desktopMemberSessionsOpen = showMemberShell && desktop && (memberSessionsPref ?? (activeMember!.sessionMode === 'fresh' || activeMemberSessions.length > 1));
 
