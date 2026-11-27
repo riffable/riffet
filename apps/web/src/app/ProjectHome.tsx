@@ -172,9 +172,10 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
   const defaultProfileId = backend?.profiles.find((entry) => entry.isDefault)?.id;
   const defaults = (profileId ?? defaultProfileId) === (savedDefaults?.profileId ?? defaultProfileId) ? savedDefaults : undefined;
   const rememberedProfileModel = !assistant && profileId ? savedDefaults?.profileModels?.[profileId] : undefined;
-  // New sessions always start in agent mode. Plan and ask remain reachable from the session's own
-  // mode picker, where the conversation they apply to is already on screen.
-  const mode = capabilities?.modes.find((option) => option.id === 'agent')?.id ?? capabilities?.modes[0]?.id ?? 'agent';
+  // New sessions start in agent mode unless the permission menu picked another for this Agent.
+  const [pickedMode, setPickedMode] = useState<string>();
+  const mode = (pickedMode && capabilities?.modes.some((option) => option.id === pickedMode) ? pickedMode : undefined)
+    ?? capabilities?.modes.find((option) => option.id === 'agent')?.id ?? capabilities?.modes[0]?.id ?? 'agent';
   const preferredChat = settings.auxiliaryModels?.chat;
   const preferredChatModel = preferredChat ? `${preferredChat.backendId}:${preferredChat.profileId}:${preferredChat.model}` : '';
   const lastChat = parseSelection(recentModel);
@@ -221,6 +222,7 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
     setSelection(previous?.edited ? previous.selection : defaultModel);
     setApproval(previous?.approval ?? defaultApproval);
     approvalBaseline.current = defaultApproval;
+    setPickedMode(undefined);
   }
   // With several providers the model list spans all of them and each entry carries the provider
   // it came from; with one there is nothing to group and the plain catalog is the whole story.
@@ -584,6 +586,7 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
             value={approval}
             options={capabilities.permissions}
             onChange={setApproval}
+            {...(capabilities.supportsModeSelection ? { modes: capabilities.modes, mode, onModeChange: setPickedMode } : {})}
             compact={!mobile}
             disabled={busy || !capabilities.supportsPermissionSelection}
           />

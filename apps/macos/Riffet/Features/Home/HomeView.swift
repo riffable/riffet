@@ -13,6 +13,7 @@ struct HomeView: View {
     @State private var taskModel: String?
     @State private var chatModel: String?
     @State private var approval: String?
+    @State private var mode: String?
     @State private var tools = ToolsPickerModel()
     @State private var catalog: NativeBackendCatalogEntry?
     @State private var loadedCatalogKey: String?
@@ -255,7 +256,12 @@ struct HomeView: View {
             ) {
                 if !quickChat, let catalog = shownCatalog {
                     if catalog.capabilities.supportsPermissionSelection, !catalog.capabilities.permissions.isEmpty {
-                        OptionMenu(title: String(localized: "审批"), options: catalog.capabilities.permissions, selection: approval ?? catalog.capabilities.permissions.first?.id ?? "") { approval = $0 }
+                        let modes = catalog.capabilities.supportsModeSelection ? catalog.capabilities.modes : []
+                        OptionMenu(
+                            title: String(localized: "审批"), options: catalog.capabilities.permissions,
+                            selection: approval ?? catalog.capabilities.permissions.first?.id ?? "",
+                            modes: modes, modeSelection: effectiveMode, chooseMode: { mode = $0 }
+                        ) { approval = $0 }
                             .equatable()
                             .disabled(!catalogCurrent)
                     }
@@ -436,6 +442,7 @@ struct HomeView: View {
                     guard profileId != profile.id else { return }
                     profileId = profile.id
                     model = nil
+                    mode = nil
                     approval = nonEmpty(workbench.settings?.defaultsFor(agent: backend)?.approval)
                     let selectedBackend = backend
                     Task { await workbench.rememberDefaults(agent: selectedBackend, profileId: profile.id, model: "") }
@@ -483,6 +490,7 @@ struct HomeView: View {
         taskProfileId = nonEmpty(defaults?.profileId)
         taskModel = nonEmpty(defaults?.model)
         approval = nonEmpty(defaults?.approval)
+        mode = nil
     }
 
     private func chooseBackend(_ id: String) {
@@ -582,6 +590,7 @@ struct HomeView: View {
             profileId = provider
             // A different provider has different capabilities; restore its permission default.
             approval = nonEmpty(workbench.settings?.defaultsFor(agent: backend)?.approval)
+            mode = nil
             // The provider's catalog was read for the menu, so the composer does not go blank
             // while the switch's own request answers. One read for another project or revision
             // is not taken as current: the switch's own read decides.
@@ -641,6 +650,7 @@ struct HomeView: View {
 
     private var effectiveMode: String {
         guard !quickChat, let modes = currentCatalog?.capabilities.modes else { return "agent" }
+        if let mode, modes.contains(where: { $0.id == mode }) { return mode }
         return modes.first { $0.id == "agent" }?.id ?? modes.first?.id ?? "agent"
     }
 

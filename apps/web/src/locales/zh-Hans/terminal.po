@@ -336,6 +336,10 @@ msgid "无法切换模型"
 msgstr "无法切换模型"
 
 #: src/app/terminal/NativeSession.tsx
+msgid "无法切换模式"
+msgstr "无法切换模式"
+
+#: src/app/terminal/NativeSession.tsx
 msgid "无法另开会话"
 msgstr "无法另开会话"
 

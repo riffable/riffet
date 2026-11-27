@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- For agents whose mode is a setting apart from their permissions (Antigravity, Droid, TRAE), the permission button now lists the modes above the permissions, on the new-session page and in an open conversation, so an Antigravity conversation in Sandbox can switch to Accept edits instead of confirming every edit. Antigravity's options now say what each covers: Sandbox runs terminal commands without asking, file edits follow the mode (Web, Mac).
 - Team members running on Cursor or Antigravity now execute background tasks such as memory consolidation without failing permission validation before launch; failed background runs that never created a conversation can now be clicked in the sidebar and session info panel to view and copy the full error details (Web).
 - The conversation sidebar's Outputs list now tracks net file changes across the whole conversation (including nested subagents, deleted and binary files, and Claude `MultiEdit` / `NotebookEdit`) on the server instead of summing truncated rows in the loaded window; net-zero edits cancel out, duplicate file names show parent folders, and clicking an output on Web opens this conversation's own net diff by default with a toggle to compare against the current working tree (Web, Mac).
 - A message replaced with Send now before the agent recorded it now stays in the conversation, shown as interrupted, instead of disappearing from it. Applies to messages sent after the update.

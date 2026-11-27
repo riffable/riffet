@@ -1153,3 +1153,10 @@
 - **原因**：原先由客户端在当前分页窗口（默认 300 行）内扫经过 16KB/64KB 截断的 diff 块做简单累加，导致长会话漏掉早期产出、大文件行数失真或丢文件、来回修改虚高、覆写文件或多 hunk 插入误标「新建」、未审批编辑提前入账、嵌套子 Agent 漏算，且点击后看到的当前 Git 工作区 diff 与列表统计经常对不上。
 - **否决**：继续在客户端逐行跑 LCS 累加；为产出另建独立于 `journal` 的文件存储引擎；强制所有会话都用当前 Git 状态替代会话归属（无法区分同工作区并发会话，commit 后也无法回看）。
 - **规则**：[SESSION-OUTPUTS.md](../SESSION-OUTPUTS.md)；代码 `packages/contracts/src/sync.ts`、`apps/server/src/backends/shared/file-snapshots.ts`、`apps/server/src/timeline/outputs.ts`、`apps/web/src/app/session/SessionAside.tsx`、`apps/web/src/app/panels/FileDiffDialog.tsx`。
+
+## 2026-11-28 · 模式回到 Web 与 Mac 的权限菜单
+
+- **决定**：Agent 给出多于一个模式（`capabilities.modes`）时，Web 与 Mac 输入框的权限按钮打开的菜单分两组：上面「模式」，分隔线下「权限模式」。新会话页和会话里都这样；会话里切换模式和切换权限一样，在 CLI 下一次空闲时重启生效。按钮图标仍只表示权限档位，模式写进悬停提示，不加角标。手机已在「更多设置」里分别提供模式与权限，不变。agy 的模式和权限选项补上说明，写明 Sandbox 只放行终端命令、文件编辑看模式。推翻 2026-10-27 起会话输入框不再提供模式选择的做法（当时没有记录决定）。
+- **原因**：当时以为模式是过时的设计、不会有 Agent 在用，但 agy、Droid、TRAE 都把它和权限分成两个设置。agy 的 `proceed-in-sandbox` 只自动放行沙箱里的终端命令，文件编辑由模式决定，默认的 Agent 模式每次编辑都问；Codex、DSH、Droid 的「沙箱 / 工作区写」档位却同时放行工作区编辑。模式藏起来以后，选了 Sandbox 的 agy 会话改项目文件仍逐个确认，用户找不到 Accept edits。两者都回答「Agent 先做多少再问」，Claude Code 本来就把 Accept edits、Plan 放在权限模式里，放进同一个菜单最贴近读者的理解。
+- **否决**：在适配层把 agy 的模式和权限合成一个设置（4×4 种组合里多数没有意义，也和 agy 自己的 Shift+Tab、`/settings` 对不上）；选 Sandbox 时自动带上 Accept edits（悄悄改掉用户选的模式，两个设置的边界不清）；模式单独做成输入框里的一个文字胶囊（工具行左侧只放固定图标）；按钮上给非默认模式加角标。
+- **规则**：[界面](system/surfaces.md) §1.6「权限模式」；代码 `apps/web/src/app/session/ApprovalPicker.tsx`、`apps/macos/Riffet/Features/Composer/ComposerView.swift`、`plugins/riffet/antigravity/metadata.ts`。

@@ -2,7 +2,7 @@ import { memo, useState, type ReactNode } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconCompress, IconInfinity, IconListTodo, IconMessageCircleQuestion } from '@/components/icons';
+import { IconCompress } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -10,12 +10,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadio
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { modeIconOf } from './ApprovalPicker';
 import type { Choice, ContextUsage } from './model';
 
-const modeMeta: Record<string, { icon: typeof IconInfinity; description: MessageDescriptor }> = {
-  agent: { icon: IconInfinity, description: msg`自主读写文件、执行命令` },
-  plan: { icon: IconListTodo, description: msg`先出方案，确认后再动手` },
-  ask: { icon: IconMessageCircleQuestion, description: msg`只读问答，不修改文件` },
+/** For a backend that names a mode without describing it. */
+const modeDescriptions: Record<string, MessageDescriptor> = {
+  agent: msg`自主读写文件、执行命令`,
+  plan: msg`先出方案，确认后再动手`,
+  ask: msg`只读问答，不修改文件`,
 };
 
 export const compactTokens = (value: number) => value >= 1000 ? `${(value / 1000).toFixed(value >= 10_000 ? 0 : 1)}k` : String(Math.round(value));
@@ -163,7 +165,7 @@ export function ModePicker({ modes, value, onChange, disabled, className }: { mo
   const { t } = useLingui();
   const list = modes.length ? modes : fallbackModes;
   const current = list.find((mode) => mode.id === value) ?? list[0];
-  const Icon = modeMeta[current?.id ?? '']?.icon ?? IconInfinity;
+  const Icon = modeIconOf(current?.id ?? '');
   return (
     <DropdownMenu>
       <DropdownMenuTrigger disabled={disabled} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 data-[state=open]:bg-hover data-[state=open]:text-fg", className)}>
@@ -174,14 +176,14 @@ export function ModePicker({ modes, value, onChange, disabled, className }: { mo
         <DropdownMenuLabel>{t`模式`}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={current?.id} onValueChange={onChange}>
           {list.map((mode) => {
-            const meta = modeMeta[mode.id];
-            const ItemIcon = meta?.icon ?? IconInfinity;
+            const fallback = modeDescriptions[mode.id];
+            const ItemIcon = modeIconOf(mode.id);
             return (
               <DropdownMenuRadioItem key={mode.id} value={mode.id} className="h-auto items-start py-2">
                 <ItemIcon className="mt-0.5" />
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="font-medium">{mode.label}</span>
-                  <span className="text-xs text-fg-3">{meta?.description ? i18n._(meta.description) : mode.description ?? mode.id}</span>
+                  <span className="text-xs text-fg-3">{mode.description ?? (fallback ? i18n._(fallback) : mode.id)}</span>
                 </span>
               </DropdownMenuRadioItem>
             );

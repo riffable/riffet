@@ -1683,6 +1683,20 @@ final class Workbench {
             configurationError = String(localized: "审批设置失败：\(error.riffetMessage)")
         }
     }
+
+    func setMode(_ mode: String, for sessionId: String) async {
+        guard let session = selected, session.id == sessionId, let api = host.api else { return }
+        let request = RequestContext { self.selected?.id }
+        do {
+            let updated = try await api.nativeSetMode(id: session.id, mode: mode)
+            guard request.isCurrent else { return }
+            configurationError = nil
+            store.applySession(session: updated)
+        } catch {
+            guard request.isCurrent else { return }
+            configurationError = String(localized: "模式设置失败：\(error.riffetMessage)")
+        }
+    }
 }
 
 extension Project {

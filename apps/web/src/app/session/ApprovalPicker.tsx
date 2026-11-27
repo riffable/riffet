@@ -1,6 +1,7 @@
 import type { ReactNode, SVGProps } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { IconFilePenLine, IconInfinity, IconListTodo, IconMessageCircleQuestion, IconSparkles } from '@/components/icons';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { NativeBackendOption } from '@contracts';
 import { Tip } from '@/components/ui/tooltip';
 import { createStore, useStore } from '@/lib/store';
@@ -166,6 +167,16 @@ export function PermissionIcon({ mode, iconStyle, className, ...props }: SVGProp
   return <PermissionGlyph tier={permissionTierOf(mode)} iconStyle={iconStyle} className={className} {...props} />;
 }
 
+const modeIcons: Record<string, typeof IconInfinity> = {
+  plan: IconListTodo,
+  spec: IconListTodo,
+  ask: IconMessageCircleQuestion,
+  'accept-edits': IconFilePenLine,
+  auto: IconSparkles,
+};
+/** The glyph for an agent mode (`capabilities.modes`): Agent, Plan, Accept edits and the like. */
+export const modeIconOf = (id: string) => modeIcons[id] ?? IconInfinity;
+
 /** The toolbar's name for a mode: the backend's short one where its label would crowd the row. */
 export function approvalShortLabel(options: NativeBackendOption[], mode: string) {
   const option = options.find((item) => item.id === mode);
@@ -186,11 +197,13 @@ export function ApprovalSummary({ mode, options }: { mode: string; options: Nati
 }
 
 /**
- * Chooses how the CLI approves tool calls. Used both when a conversation is created (below the
- * composer) and inside a native conversation, where switching restarts the CLI with the flag —
- * hence the note, and hence the same control in both places.
+ * Chooses how the CLI approves tool calls, and — for an agent whose mode is a separate setting
+ * (agy, Droid, TRAE) — that mode too: both decide how much the agent does before it asks. Used
+ * both when a conversation is created (below the composer) and inside a native conversation,
+ * where switching restarts the CLI with the flag — hence the note, and hence the same control in
+ * both places. The trigger shows the permission alone.
  */
-export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 'top', note, compact, className, options }: {
+export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 'top', note, compact, className, options, modes, mode, onModeChange }: {
   value: string;
   onChange: (value: string) => void;
   /** The backend's own `capabilities.permissions`, in its words. */
@@ -203,18 +216,28 @@ export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 
   /** Show only the mode's icon on the composer toolbar; the full name moves to the tooltip. */
   compact?: boolean;
   className?: string;
+  /** The backend's `capabilities.modes`; listed above the permissions when there is a choice. */
+  modes?: NativeBackendOption[];
+  mode?: string;
+  onModeChange?: (value: string) => void;
 }) {
   const { t } = useLingui();
+  const modeChoices = onModeChange && modes && modes.length > 1 ? modes : undefined;
+  const currentMode = modeChoices && (modeChoices.find((item) => item.id === mode) ?? modeChoices.find((item) => item.id === 'agent') ?? modeChoices[0]);
   const option = options.find((mode) => mode.id === value);
   const current = option ?? { id: value, label: value === 'custom' ? t`自定义` : value || t`权限模式` };
   const name = (compact && option?.shortLabel) || current.label;
   const risky = warned(options, current.id);
   // A mode that will not work here says why without opening the menu.
   const caution = option?.tone === 'warning' ? option.description : undefined;
-  const tip = caution ? <span className="flex flex-col gap-0.5"><span>{t`权限模式：${current.label}`}</span><span>{caution}</span></span> : t`权限模式：${current.label}`;
+  const permissionLine = t`权限模式：${current.label}`;
+  const modeLine = currentMode ? t`模式：${currentMode.label}` : undefined;
+  const tip = caution || modeLine
+    ? <span className="flex flex-col gap-0.5">{modeLine && <span>{modeLine}</span>}<span>{permissionLine}</span>{caution && <span>{caution}</span>}</span>
+    : permissionLine;
   const trigger = (
     <DropdownMenuTrigger
-      aria-label={t`权限模式：${current.label}`}
+      aria-label={modeLine ? `${modeLine} · ${permissionLine}` : permissionLine}
       disabled={disabled || !options.length}
       className={cn(
         'inline-flex shrink-0 items-center gap-1.5 text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent aria-expanded:bg-hover aria-expanded:text-fg',
@@ -235,9 +258,27 @@ export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 
   );
   return (
     <DropdownMenu>
-      <Tip label={tip} disabled={!caution && !compact && name === current.label}>{trigger}</Tip>
-      <DropdownMenuContent side={side} align={size === 'xs' ? 'end' : 'start'} className="max-h-[min(60dvh,420px)] w-[min(22rem,calc(100vw-24px))] overflow-y-auto">
+      <Tip label={tip} disabled={!caution && !modeLine && !compact && name === current.label}>{trigger}</Tip>
+      <DropdownMenuContent side={side} align={size === 'xs' ? 'end' : 'start'} className="max-h-[min(70dvh,560px)] w-[min(22rem,calc(100vw-24px))] overflow-y-auto">
         {note && <div className="px-2 pb-1 pt-1.5 text-xs text-fg-3">{note}</div>}
+        {modeChoices && <>
+          <DropdownMenuLabel>{t`模式`}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={currentMode?.id} onValueChange={onModeChange}>
+            {modeChoices.map((item) => {
+              const ModeIcon = modeIconOf(item.id);
+              return (
+                <DropdownMenuRadioItem key={item.id} value={item.id} textValue={item.label} className="h-auto items-start gap-2.5 py-2.5 md:py-2.5">
+                  <ModeIcon className="mt-0.5 size-4 text-fg-3" />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="break-words font-medium leading-snug">{item.label}</span>
+                    {item.description && <span className="break-words text-xs leading-normal text-fg-3">{item.description}</span>}
+                  </span>
+                </DropdownMenuRadioItem>
+              );
+            })}
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+        </>}
         <DropdownMenuLabel>{t`权限模式`}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={current.id} onValueChange={onChange}>
           {options.map((mode) => {

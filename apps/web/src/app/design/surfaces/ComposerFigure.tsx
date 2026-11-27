@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AgentMark } from '@/components/agent-marks';
 import { IconArrowUp, IconAtSign, IconChevronRight, IconFile, IconPlus, IconSlash, IconSquare } from '@/components/icons';
 import { ApprovalPicker } from '@/app/session/ApprovalPicker';
@@ -21,6 +21,25 @@ const MODES: NativeBackendOption[] = [
   { id: 'default', label: 'Ask before changes', shortLabel: 'Ask' },
   { id: 'acceptEdits', label: 'Accept edits', shortLabel: 'Edits' },
 ];
+
+/** An agent whose mode is a setting apart from its permissions (agy's own wording). */
+const SPLIT_MODES: NativeBackendOption[] = [
+  { id: 'agent', label: 'Agent', description: 'Asks before each file edit' },
+  { id: 'plan', label: 'Plan', description: 'Investigates read-only and proposes a plan before changing anything' },
+  { id: 'accept-edits', label: 'Accept edits', description: 'Edits files in the workspace without asking' },
+];
+const SPLIT_PERMISSIONS: NativeBackendOption[] = [
+  { id: 'request-review', label: 'Ask each time', description: 'Asks before each command' },
+  { id: 'proceed-in-sandbox', label: 'Sandbox', description: 'Runs commands in a sandbox without asking; file edits follow the mode' },
+  { id: 'always-proceed', label: 'Run everything', description: 'Runs edits, commands and MCP tools without asking' },
+];
+
+/** The real permission menu for an agent with modes: the modes above, the permissions below. */
+export function SplitPermissionMenu() {
+  const [mode, setMode] = useState('accept-edits');
+  const [approval, setApproval] = useState('proceed-in-sandbox');
+  return <ApprovalPicker value={approval} options={SPLIT_PERMISSIONS} onChange={setApproval} modes={SPLIT_MODES} mode={mode} onModeChange={setMode} compact size="sm" side="bottom" />;
+}
 
 /** The model button as the toolbar draws it: mark, name, effort. */
 export function ModelPill({ agent = 'claude', label, className }: { agent?: string; label: string; className?: string }) {

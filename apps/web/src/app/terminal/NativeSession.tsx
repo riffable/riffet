@@ -471,7 +471,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // A passage selected in a file preview of the side panel.
   useComposerQuotes(session.id, quote);
   const [pickedApproval, setPickedApproval] = useState<string>();
-  const [switchingApproval, setSwitchingApproval] = useState(false);
+  const [pickedMode, setPickedMode] = useState<string>();
+  const [switchingConfig, setSwitchingConfig] = useState(false);
   const [switchingModel, setSwitchingModel] = useState(false);
   const [configRelaunching, setConfigRelaunching] = useState(false);
   const [configSwitchSeq, setConfigSwitchSeq] = useState(0);
@@ -487,7 +488,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const interaction = native.status.interaction;
   const recognizedInteraction = Boolean(interaction && interaction.actions.length > 0);
   const nativeRunInProgress = native.runs.some((run) => Boolean(run.native) && (run.state === 'queued' || run.state === 'running'));
-  const silentConfigBoot = (configRelaunching || switchingApproval || switchingModel)
+  const silentConfigBoot = (configRelaunching || switchingConfig || switchingModel)
     && !nativeRunInProgress
     && !native.sending
     && !interaction;
@@ -601,6 +602,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // during a restart or deferred switch `native.status.approval` still carries the pre-switch pane.
   const approval = pickedApproval ?? session.approval ?? native.status.approval ?? backendCapabilities?.permissions[0]?.id ?? '';
   useEffect(() => { setPickedApproval(undefined); }, [session.id, session.approval]);
+  const mode = pickedMode ?? session.mode;
+  useEffect(() => { setPickedMode(undefined); }, [session.id, session.mode]);
   useEffect(() => { prevConfigPending.current = Boolean(session.configPending); setConfigRelaunching(false); }, [session.id]);
   useEffect(() => {
     const pending = Boolean(session.configPending);
@@ -616,22 +619,33 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       setConfigRelaunching(false);
       return;
     }
-    if (switchingApproval || switchingModel || session.configPending) return;
+    if (switchingConfig || switchingModel || session.configPending) return;
     const delayMs = phase === 'idle' ? 2_500 : 15_000;
     const timer = window.setTimeout(() => {
       setConfigRelaunching(false);
     }, delayMs);
     return () => window.clearTimeout(timer);
-  }, [configRelaunching, configSwitchSeq, nativeRunInProgress, native.sending, interaction, switchingApproval, switchingModel, session.configPending, phase]);
+  }, [configRelaunching, configSwitchSeq, nativeRunInProgress, native.sending, interaction, switchingConfig, switchingModel, session.configPending, phase]);
   const changeApproval = useCallback((next: string) => {
     setPickedApproval(next);
-    setSwitchingApproval(true);
+    setSwitchingConfig(true);
     setConfigRelaunching(true);
     setConfigSwitchSeq((seq) => seq + 1);
     void api.nativeSetApproval(session.id, next)
       .then(onSessionChanged)
       .catch((error) => { setPickedApproval(undefined); setConfigRelaunching(false); onError(errorMessage(error, t`无法切换权限模式`)); })
-      .finally(() => { setSwitchingApproval(false); });
+      .finally(() => { setSwitchingConfig(false); });
+  }, [session.id, onSessionChanged, onError, t]);
+  // Like the approval, a mode lands through a relaunch of the CLI at its next idle moment.
+  const changeMode = useCallback((next: string) => {
+    setPickedMode(next);
+    setSwitchingConfig(true);
+    setConfigRelaunching(true);
+    setConfigSwitchSeq((seq) => seq + 1);
+    void api.nativeSetMode(session.id, next)
+      .then(onSessionChanged)
+      .catch((error) => { setPickedMode(undefined); setConfigRelaunching(false); onError(errorMessage(error, t`无法切换模式`)); })
+      .finally(() => { setSwitchingConfig(false); });
   }, [session.id, onSessionChanged, onError, t]);
 
   const timeline = native.timeline;
@@ -707,7 +721,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     supportsSteer: native.control ? native.control.activeTurn?.canSteer : backendCapabilities?.supportsSteer,
     activeTurn: native.status.activeTurn,
     writable: native.connected && (!connectionState || connectionState === 'connected'),
-    blocked: Boolean(interaction) || archived || starting || switchingApproval || switchingModel,
+    blocked: Boolean(interaction) || archived || starting || switchingConfig || switchingModel,
     uncertain: native.hasUncertainSubmission,
   });
   const submitIntent = queueOverride === runningTargetKey ? 'queue' : preferredSubmitIntent;
@@ -957,14 +971,14 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     transcriptScrollRef.current?.followSent();
     return native.send(`/${compactCommand}`, [], [], undefined, assistantMain ? workbenchAppearanceConnection : undefined);
   }, []);
-  const compactDisabled = archived || held || starting || sendingInitial || switchingApproval || switchingModel
+  const compactDisabled = archived || held || starting || sendingInitial || switchingConfig || switchingModel
     || working || compacting || Boolean(interaction)
     || !native.connected || Boolean(connectionState && connectionState !== 'connected')
     || native.sending || native.interrupting || native.hasUnknownSubmission;
   const { sending, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer } = native;
   const queuedPending = useCallback((runId: string) => archived || !native.connected || Boolean(connectionState && connectionState !== 'connected') || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId) || handingBack?.run.id === runId,
     [archived, native.connected, connectionState, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer, handingBack]);
-  const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || switchingApproval || switchingModel
+  const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || switchingConfig || switchingModel
     || (native.control ? !native.control.activeTurn?.canSteer || native.hasUncertainSubmission
       : phase !== 'busy' || Boolean(interaction) || native.hasUncertainSubmission);
   const inboxActions = useMemo(() => inboxActionsByRun(native.control, native.runs), [native.control, native.runs]);
@@ -1049,10 +1063,11 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       value={approval}
       options={backendCapabilities.permissions}
       onChange={changeApproval}
+      {...(backendCapabilities.supportsModeSelection ? { modes: backendCapabilities.modes, mode, onModeChange: changeMode } : {})}
       disabled={pickersBlocked || !backendCapabilities.supportsPermissionSelection}
       note={paneAnswers && busy ? t`本轮结束后生效` : undefined}
     />
-  ) : undefined), [backendCapabilities, mobileViewport, approval, changeApproval, pickersBlocked, paneAnswers, busy, t]);
+  ) : undefined), [backendCapabilities, mobileViewport, approval, changeApproval, mode, changeMode, pickersBlocked, paneAnswers, busy, t]);
   const [toolGroupsValue, changeToolGroups] = useSessionPick(session, 'toolGroups', NO_TOOL_GROUPS, onSessionChanged, onError);
   const [extensionsOffValue, changeExtensionsOff] = useSessionPick(session, 'extensionsOff', NO_EXTENSIONS_OFF, onSessionChanged, onError);
   const pluginToolRows = usePluginToolGroups(toolGroupsValue).rows.length;
@@ -1320,7 +1335,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     mobileSettingsPrefix: approvalSummary,
     mobileSettingsLabel: cleanLabel(catalog.find((item) => item.value === parseSelection(backendSelection(backendId, catalog, session.model)).model)?.name ?? t({ message: '选择模型', context: 'terminal-model-picker-label' })),
     disabled: archived,
-    submitDisabled: held || sendingInitial || starting || switchingApproval || switchingModel || native.sending || native.interrupting || native.hasUnknownSubmission,
+    submitDisabled: held || sendingInitial || starting || switchingConfig || switchingModel || native.sending || native.interrupting || native.hasUnknownSubmission,
     placeholder: archived ? t`会话已归档` : busy ? submitIntent === 'steer' ? t`补充当前任务…` : t`输入下一条消息…` : t`输入消息…`,
     pickersDisabled: pickersBlocked,
     ...(pickerBlocked ? { pickersBlockedReason: pickerBlocked } : {}),

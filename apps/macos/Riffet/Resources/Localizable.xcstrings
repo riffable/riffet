@@ -15912,6 +15912,16 @@
         }
       }
     },
+    "模式设置失败：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't change the mode: %@"
+          }
+        }
+      }
+    },
     "橙色": {
       "localizations": {
         "en": {

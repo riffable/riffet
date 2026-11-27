@@ -2068,9 +2068,15 @@ msgstr "Model Chat panel"
 msgid "模型输出速度 · 最近 {0} 秒内{tokens} ÷ {window}"
 msgstr "Model output speed · {tokens} in the last {0} seconds ÷ {window}"
 
+#: src/app/session/ApprovalPicker.tsx
 #: src/app/session/ComposerPickers.tsx
 msgid "模式"
 msgstr "Mode"
+
+#. placeholder {0}: currentMode.label
+#: src/app/session/ApprovalPicker.tsx
+msgid "模式：{0}"
+msgstr "Mode: {0}"
 
 #: src/app/session/Composer.tsx
 msgid "正在停止"

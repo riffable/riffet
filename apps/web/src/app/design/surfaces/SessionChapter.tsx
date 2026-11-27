@@ -15,7 +15,7 @@ import type { ToolRowPresentation } from '@/app/session/toolView';
 import { TurnProcess } from '@/app/session/TurnProcess';
 import { cn } from '@/lib/utils';
 import { Chapter, Frame, Matrix, PaintRevision, Plate, Specimen, useRootValue, Value } from '../specimen';
-import { AttachmentChip, ComposerCard, TriggerMenu } from './ComposerFigure';
+import { AttachmentChip, ComposerCard, SplitPermissionMenu, TriggerMenu } from './ComposerFigure';
 import { DictationBar } from '@/app/session/DictationBar';
 import { HoldBubble, HoldToTalkBar } from '@/app/session/HoldToTalk';
 import type { DictationView } from '@/app/session/useDictation';
@@ -427,6 +427,7 @@ function Composer() {
         <Specimen name="hero" prop="min-h 76"><div className="w-full"><ComposerCard shape="hero" placeholder={t`描述任务…`} /></div></Specimen>
         <Specimen name="embedded" prop="rounded-xl"><div className="w-full"><ComposerCard shape="embedded" placeholder={t`输入消息…`} /></div></Specimen>
         <Specimen name="compact" prop="running"><div className="w-full"><ComposerCard shape="compact" placeholder={t`输入消息…`} running /></div></Specimen>
+        <Specimen name="ApprovalPicker" prop="modes"><SplitPermissionMenu /></Specimen>
       </div>
       <div className="flex flex-col gap-6">
         {DICTATION_STATES.map(({ prop, view }) => (

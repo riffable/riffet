@@ -661,7 +661,7 @@ struct AttachmentChip: View {
     }
 }
 
-/// Approval for the open conversation: how the agent should behave. Its mode is chosen when it starts.
+/// Approval and, for agents that have one, the mode of the open conversation: how the agent should behave.
 struct SessionControls: View {
     let workbench: Workbench
     let session: Session
@@ -672,7 +672,14 @@ struct SessionControls: View {
         HStack(spacing: Space.xxs) {
             if let catalog {
                 if catalog.capabilities.supportsPermissionSelection, !catalog.capabilities.permissions.isEmpty {
-                    OptionMenu(title: String(localized: "审批"), options: catalog.capabilities.permissions, selection: session.approval ?? workbench.status?.approval ?? catalog.capabilities.permissions.first?.id ?? "") { value in
+                    let modes = session.agentID != AgentDirectory.quickChat && catalog.capabilities.supportsModeSelection ? catalog.capabilities.modes : []
+                    OptionMenu(
+                        title: String(localized: "审批"), options: catalog.capabilities.permissions,
+                        selection: session.approval ?? workbench.status?.approval ?? catalog.capabilities.permissions.first?.id ?? "",
+                        modes: modes,
+                        modeSelection: modes.contains { $0.id == session.mode } ? session.mode ?? "" : (modes.first { $0.id == "agent" } ?? modes.first)?.id ?? "",
+                        chooseMode: { value in Task { await workbench.setMode(value, for: session.id) } }
+                    ) { value in
                         Task { await workbench.setApproval(value, for: session.id) }
                     }
                     .equatable()
@@ -1164,19 +1171,23 @@ struct OptionMenu: View, Equatable {
     let title: String
     let options: [NativeBackendOption]
     let selection: String
+    var modes: [NativeBackendOption] = []
+    var modeSelection = ""
+    var chooseMode: ((String) -> Void)?
     let choose: (String) -> Void
     @Environment(\.palette) private var palette
     @State private var anchor = MenuAnchor()
+
+    private var showsModes: Bool { modes.count > 1 && chooseMode != nil }
 
     /// Compare the chip's data; each click builds a separate static AppKit menu so streaming
     /// updates cannot rebuild subtitle rows while AppKit is tracking the open menu.
     static func == (lhs: OptionMenu, rhs: OptionMenu) -> Bool {
         lhs.title == rhs.title && lhs.options == rhs.options && lhs.selection == rhs.selection
+            && lhs.modes == rhs.modes && lhs.modeSelection == rhs.modeSelection
     }
 
     var body: some View {
-        let current = options.first { $0.id == selection }
-        let label = current?.label ?? String(localized: "默认")
         let risky = Self.risky(selection)
         Button { showMenu() } label: {
             PermissionIconView(mode: selection, color: risky ? palette.warning : palette.fg2)
@@ -1184,14 +1195,58 @@ struct OptionMenu: View, Equatable {
         .buttonStyle(ChipButtonStyle())
         .background(MenuAnchorView(anchor: anchor))
         .fixedSize()
-        .help("\(title)：\(label)")
+        .help("\(title)：\(value)")
         .accessibilityLabel(title)
-        .accessibilityValue(label)
+        .accessibilityValue(value)
+    }
+
+    /// The approval, and the mode too when the menu offers one.
+    private var value: String {
+        let label = options.first { $0.id == selection }?.label ?? String(localized: "默认")
+        guard showsModes, let mode = modes.first(where: { $0.id == modeSelection }) else { return label }
+        return "\(label) · \(String(localized: "模式"))：\(mode.label)"
+    }
+
+    /// A mode's symbol on the same 15-point canvas as the permission glyphs, so both groups' titles line up.
+    private static func modeImage(_ id: String) -> NSImage? {
+        guard let symbol = NSImage.icon(modeSymbol(id))?.withSymbolConfiguration(.init(pointSize: 12, weight: .regular)) else { return nil }
+        let side: CGFloat = 15
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            let fit = min(1, side / max(symbol.size.width, symbol.size.height))
+            let size = NSSize(width: symbol.size.width * fit, height: symbol.size.height * fit)
+            symbol.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2, width: size.width, height: size.height))
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    private static func modeSymbol(_ id: String) -> String {
+        switch id {
+        case "plan", "spec": "list.bullet.clipboard"
+        case "ask": "questionmark.bubble"
+        case "accept-edits": "pencil.line"
+        case "auto": "sparkles"
+        default: "infinity"
+        }
     }
 
     private func showMenu() {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        var selectedMode: String?
+        if showsModes {
+            menu.addItem(.sectionHeader(title: String(localized: "模式")))
+            for mode in modes {
+                let id = mode.id
+                let item = MenuAction.item(mode.label) { selectedMode = id }
+                item.subtitle = mode.description_
+                item.state = id == modeSelection ? .on : .off
+                item.image = Self.modeImage(id)
+                menu.addItem(item)
+            }
+            menu.addItem(.separator())
+        }
         menu.addItem(.sectionHeader(title: title))
         let style = DisplayPreferences.shared.permissionIconStyle
         var selected: String?
@@ -1207,7 +1262,9 @@ struct OptionMenu: View, Equatable {
             menu.addItem(item)
         }
         // Apply the choice only after AppKit has finished tracking and closed the menu.
-        if anchor.popUp(menu), let selected, selected != selection { choose(selected) }
+        guard anchor.popUp(menu) else { return }
+        if let selected, selected != selection { choose(selected) }
+        if let selectedMode, selectedMode != modeSelection { chooseMode?(selectedMode) }
     }
 
     private static func risky(_ id: String) -> Bool {

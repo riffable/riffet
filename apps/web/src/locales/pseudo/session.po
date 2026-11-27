@@ -2068,8 +2068,14 @@ msgstr ""
 msgid "模型输出速度 · 最近 {0} 秒内{tokens} ÷ {window}"
 msgstr ""
 
+#: src/app/session/ApprovalPicker.tsx
 #: src/app/session/ComposerPickers.tsx
 msgid "模式"
+msgstr ""
+
+#. placeholder {0}: currentMode.label
+#: src/app/session/ApprovalPicker.tsx
+msgid "模式：{0}"
 msgstr ""
 
 #: src/app/session/Composer.tsx

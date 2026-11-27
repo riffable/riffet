@@ -6,16 +6,17 @@ export const COMMANDS = ['model', 'mode', 'mcp', 'skills', 'plugins', 'hooks', '
 export function capabilities(): AgentCapabilities {
   return {
     modes: [
-      { id: 'agent', label: 'Agent' },
-      { id: 'plan', label: 'Plan' },
-      { id: 'accept-edits', label: 'Accept edits' },
-      { id: 'auto', label: 'Auto' },
+      { id: 'agent', label: 'Agent', description: 'Asks before each file edit' },
+      { id: 'plan', label: 'Plan', description: 'Investigates read-only and proposes a plan before changing anything' },
+      { id: 'accept-edits', label: 'Accept edits', description: 'Edits files in the workspace without asking' },
+      { id: 'auto', label: 'Auto', description: 'Edits without asking; another model reviews commands that leave the sandbox' },
     ],
+    // agy keeps file edits under the mode above; these govern terminal commands and other tools.
     permissions: [
-      { id: 'request-review', label: 'Ask each time' },
+      { id: 'request-review', label: 'Ask each time', description: 'Asks before each command' },
       { id: 'strict', label: 'Strict' },
-      { id: 'proceed-in-sandbox', label: 'Sandbox' },
-      { id: 'always-proceed', label: 'Run everything' },
+      { id: 'proceed-in-sandbox', label: 'Sandbox', description: 'Runs commands in a sandbox without asking; file edits follow the mode' },
+      { id: 'always-proceed', label: 'Run everything', description: 'Runs edits, commands and MCP tools without asking' },
     ],
     interactionTransport: 'both',
     supportsResume: true,
