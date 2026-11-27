@@ -287,7 +287,9 @@ export function recoverInterruptedRuns(port: StorePort): void {
             });
           } else if (!run.native.queueReleasedAt && (restartObservation(run.native.backendId) === 'hook'
             && (delivery === 'observed' || delivery === 'uncertain' && run.native.nativeMessageId && run.native.nativeTurnId
-              && ['runtime_exit', 'turn_outcome_unknown'].includes(run.native.stage ?? ''))
+              && ['runtime_exit', 'turn_outcome_unknown'].includes(run.native.stage ?? '')
+              // Reopened only when a status or hook followed its turn: its end may still be reported.
+              && (run.native.timings?.turnNamedAt !== undefined || run.native.expectsTurnOutcome === true || run.native.intent === 'steer'))
             || restartObservation(run.native.backendId) === 'daemon' && delivery === 'observed' && run.native.nativeTurnId)) {
             port.transitionNativeRun(run.id, [delivery], { delivery: 'observed', stage: 'executing' }, {
               state: 'running', error: undefined,

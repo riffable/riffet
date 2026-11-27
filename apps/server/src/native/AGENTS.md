@@ -24,7 +24,7 @@ verify:
 - 画面空闲不指明回合，不结算任何 Run：完成、失败、取消只来自带 `commandId` 或回合 ID 的结束事件（docs/TURN-LIFECYCLE.md T4）。只能看画面判断结束的后端，在驱动里判断并指明回合后再报。
 - 证据按回合归属（docs/TURN-LIFECYCLE.md T5）：`busyAt`、`firstOutputAt` 只认写入之后、属于本回合的状态和输出（`actor-observations.ts#ownTurn`）；状态点名我们更早一条消息的回合时，它落后于那一回合的结束，不触发「被后续回合取代」（`actor-observations.ts#earlierTurn`）。「直接发送」紧跟在停止之后，前一回合的尾部输出和滞后的状态都会出现。
 - 空闲收敛只有一档 `actor-observations.ts#IDLE_RECONCILE_MS`（60 s），把丢了结束事件的回合记为「结果未确认」，迟到的真实结局仍可更正。它要盖过 Stop hook 链和转写的批量落盘，缩短会先显示「结果未确认」再自我更正。
-- 「状态点名了另一个回合」只对状态点名过本回合的 Run 生效（`actor-observations.ts#ActorObservationDeps` 的 `namedTurns`），否则回合 ID 不属于同一套编号的后端会在一开始就被判为结果未确认。
+- 「状态点名了另一个回合」只对状态点名过本回合的 Run 生效（Run 的 `timings.turnNamedAt`，要持久化：只放内存的话，重启后这条规则对所有 Run 失效），否则回合 ID 不属于同一套编号的后端会在一开始就被判为结果未确认。
 - 回合的 checkpoint 与消息同时发出，不等待它；checkpoint 只保留能证明早于回合认领时间的内容，宁可拒绝恢复也不还原回合自己的改动（`dispatch.ts#NativeDispatcher` 内的 `beforeTurn`）。
 - `SessionActor` 的处理函数不嵌套：处理一条消息期间到达的消息排在它后面。处理函数内部要应用自己读到的观测时调 `apply`，不调 `observe`，否则会被排到当前消息之后。
 - 会话所处阶段（`trace.ts#SessionPhase`）由未完结的 run 与在途操作推导，不单独存储：`runs` 表是跨重启的唯一依据。

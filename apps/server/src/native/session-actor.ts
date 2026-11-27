@@ -99,7 +99,7 @@ export class SessionActor {
   readonly pendingSteerOutcomes = new Map<string, NativeWorkbenchEvent>();
   readonly pendingTurnOutcomes = new Map<string, NativeWorkbenchEvent>();
   readonly turnOutcomeRevisions = new Map<string, number>();
-  readonly namedTurns = new Set<string>();
+  readonly heardEnds = new Set<string>();
   readonly idleSince = new Map<string, number>();
   readonly drainHeldSteers = new Set<string>();
   timer: NodeJS.Timeout | undefined;
@@ -138,7 +138,7 @@ export class SessionActor {
       pendingSteerOutcomes: this.pendingSteerOutcomes,
       pendingTurnOutcomes: this.pendingTurnOutcomes,
       turnOutcomeRevisions: this.turnOutcomeRevisions,
-      namedTurns: this.namedTurns,
+      heardEnds: this.heardEnds,
       isClosed: () => this.host.closed,
       isInterrupting: () => this.interrupting,
       traits: backendId => this.traits(backendId),
@@ -270,7 +270,7 @@ export class SessionActor {
     this.pendingSteerOutcomes.clear();
     this.pendingTurnOutcomes.clear();
     this.turnOutcomeRevisions.clear();
-    this.namedTurns.clear();
+    this.heardEnds.clear();
     this.idleSince.clear();
     this.nextAttempt.clear();
     this.drainHeldSteers.clear();

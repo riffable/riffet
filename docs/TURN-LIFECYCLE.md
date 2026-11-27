@@ -94,14 +94,15 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 - 删除了 `applyObservation` 的通用空闲完成规则：所有后端都按回合结束事件完成。`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome`、`hookedTurns` 不再参与判断；两个特性在插件 API、`expectsTurnOutcome` 在 Run 契约里保留为已废弃字段，旧插件和旧数据照常加载，取值被忽略。
 - 空闲收敛（`reconcileIdleRun`）合并为一档 `IDLE_RECONCILE_MS`（60 s）：Run 等到画面空闲满 60 s 仍没有结束事件，记为结果未确认。期间界面显示进行中（DELIVERY §6 规则 1 的方向不变）。
 - 结果未确认不写进日志。设计时打算写 `meta.turn_ended(outcome_unknown)`，实现时发现两处问题：各后端的转写读取在写结束前都查 `hasTurnEnded`，日志里先有一条「未知」，迟到的真实结束就不会再写，今天能自我更正的情形会变成永久未确认；`LaneFold` 在 `meta.turn_ended` 处丢弃草稿，一个仍在运行、只是画面不显示忙的回合会被截断。日志只记 CLI 做了什么，「未知」是缺少这条记录，所以留在 Run 上；大纲的 `outcome_unknown` 从 Run 的阶段得出（`timeline/fold.ts`），迟到的结局照常更正 Run（`canApplyTurnOutcome`）。
-- 「被后续回合取代」只对状态点名过本回合的 Run 生效（`namedTurns`）：这证明后端状态里的回合 ID 与回显带来的回合 ID 是同一套编号。
+- 「被后续回合取代」只对状态点名过本回合的 Run 生效（Run 上的 `timings.turnNamedAt`，随 Run 持久化，服务重启后仍有效）：这证明后端状态里的回合 ID 与回显带来的回合 ID 是同一套编号。重启时把结果未确认的 Run 重新打开，也只对这类 Run 做（`store/maintenance.ts`）。
 - 后端驱动的契约：每个回合都要报出指明回合或 Run 的结束。来源可以是实时信号（hook、协议事件），也可以是对账（服务重启后读到 store 里该回合已答完）。只能看画面判断结束的后端，在驱动内部完成判断并指明回合，核心不接受无身份的结束。
 
 ### 4.4 证据隔离（P3 已实施）
 
 - 不另设尝试号：一条消息至多写入一次（DELIVERY S1），写入栅栏就标定了它唯一的一次尝试。证据只认写入之后的：`busyAt` 只在 `input_sent`、`observed` 时记，`firstOutputAt` 只认基线序号之后的输出，空闲起点只在 `observed` 后开始计。
-- 证据按回合归属（`actor-observations.ts#ownTurn`）：状态的 `activeTurn`、输出事件的回合 ID 与 Run 的回合不同就不计入；Run 还没有回合 ID 时，指向我们另一条消息的回合也不计入。
-- 状态点名的回合属于更早的消息（`actor-observations.ts#earlierTurn`）时，这条状态落后于那一回合的结束：不据此把较新的消息判为「被后续回合取代」，也不因它推迟空闲收敛。
+- 证据按回合归属（`actor-observations.ts#ownTurn`）：状态的 `activeTurn`、输出事件的回合 ID 与 Run 的回合不同就不计入；Run 还没有回合 ID 时，指向我们另一条消息的回合、或已听到结束的回合，也不计入。
+- 状态点名的回合属于先写入的消息（按写入栅栏的时间 `dispatchAt`，不按创建顺序：「立即发送」和重启后的引导会先写入后创建的 Run），或者这个回合的结束已经听到（`heardEnds`，覆盖停下的消息在 Run 结算后才被 CLI 记下、没有 Run 绑定到该回合的情形）时（`actor-observations.ts#earlierTurn`），这条状态落后于那一回合的结束：不据此把较新的消息判为「被后续回合取代」，也不因它推迟空闲收敛。
+- 结束丢失、又没有 Run 绑定到该回合时，落后的状态无法和下一条消息自己的回合区分。这是结束丢失的问题，由迟到的结束或空闲收敛处理，不在证据隔离里猜。
 - P2 之后这些证据不再决定结局，`busyAt`、`firstOutputAt` 只用于统计（首字耗时）和旧客户端的忙碌判断；隔离的作用是让它们和「被取代」的判断不被前一回合污染。
 - Cursor `interrupt` 结束时对 `paneBusyAt` 的重置保留，只服务没有 live tap 的兜底路径；有 tap 时停下的 run 按它的 request 隔离（§4.6）。
 
@@ -199,8 +200,8 @@ dispatch 日志的 `event=run` 带 `turn`（Run 绑定的回合）和 `source`�
 |---|---|---|---|
 | P0 | 样本故障写成用例，以 `it.fails` 标为已知缺陷：`dispatch.property.test.ts` 的模拟 CLI 加「画面不显示忙」，检查「Run 不早于本回合结束完成」（该性质同时加进原有性质，原有调度下成立）；`timeline/service.test.ts` 检查「写入过栅栏的消息不从时间线消失」 | — | 两个用例在当前代码上失败；修好的阶段把 `it.fails` 改回 `it` |
 | P1（已实施） | `meta.input` 写入与 `inputEntry`；有 `inputEntry` 的 Run 按日志位置放置；客户端占位行键已是 `user:<commandId>`，无需改动 | 对有 `inputEntry` 的 Run 不再使用时间比较；旧规则只服务旧 Run | P0 时间线用例改为 `it` 并通过；`sync/sent-input.test.ts` 检查记录先于回显、只记一次 |
-| P2（已实施） | dispatch 日志加 `source`、`turn`（§4.7）；结局只来自指明回合或 Run 的结束事件；空闲收敛合并为一档，结果未确认留在 Run 上（§4.3）；Claude 转写读不到时按 `commandId` 报 hook 的结束 | 通用空闲完成规则；`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome` 不再参与判断（保留为已废弃字段）；`hookedTurns` 改为只服务「被后续回合取代」的 `namedTurns`；`IDLE_OUTCOME_GRACE_MS` | P0 调度用例改为 `it` 并通过；`dispatch.property.test.ts` 的模拟终端 CLI 按回合报结束；各后端测试 |
-| P3（已实施） | 证据按写入和回合归属（§4.4）；核对 `replaceTurn` 与 §4.5 一致 | 写入前（`dispatching`）的忙碌证据；落后状态对「被取代」的触发 | `dispatch.property.test.ts` 加「停止后立刻发送」：停下的回合仍有输出、状态仍点名它，检查证据不串到下一条、下一条不被判为结果未确认；「回合开始前画面空闲」由 P0 的 `hide` 覆盖 |
+| P2（已实施） | dispatch 日志加 `source`、`turn`（§4.7）；结局只来自指明回合或 Run 的结束事件；空闲收敛合并为一档，结果未确认留在 Run 上（§4.3）；Claude 转写读不到时按 `commandId` 报 hook 的结束 | 通用空闲完成规则；`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome` 不再参与判断（保留为已废弃字段）；`hookedTurns` 改为只服务「被后续回合取代」、随 Run 持久化的 `timings.turnNamedAt`；`IDLE_OUTCOME_GRACE_MS` | P0 调度用例改为 `it` 并通过；`dispatch.property.test.ts` 的模拟终端 CLI 按回合报结束；各后端测试 |
+| P3（已实施） | 证据按写入和回合归属（§4.4）；核对 `replaceTurn` 与 §4.5 一致 | 写入前（`dispatching`）的忙碌证据；落后状态对「被取代」的触发 | `dispatch.property.test.ts` 加「停止后立刻发送」：停下的回合仍有输出、状态仍点名它，检查证据不串到下一条、下一条不被判为结果未确认；「回合开始前画面空闲」由 P0 的 `hide` 覆盖；模拟 CLI 还会丢失结束事件（`loseEnd`、`lateEnd`），终端 CLI 的状态也点名回合 |
 | P4（已实施） | Cursor 按 §4.6 分层；live tap 记录回合结束与流中断；`paneBusyAt` 的时间栅栏换成回合栅栏 | tap 跟着的回合不再由画面判定；`interrupt` 对 `paneBusyAt` 的重置 | `live-tap.test.ts`（结束与中断）、`service-configure.test.ts`（流开着不结算、结束即结算、中断交回画面）；待做：升级并让 CLI 重启后，按 §4.6 的方法重跑对照，目标提前或滞后结算 0 次 |
 
 每个阶段删除对应的旧规则，不与新规则并存。

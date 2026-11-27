@@ -313,10 +313,14 @@ describe('native backend session identity', () => {
     const input = { text: 'continue', attachmentIds: [], context: [] };
     const observed = first.acceptNativeRun(session.id, 'observed', input, { mode: 'agent' });
     const oldUnknown = first.acceptNativeRun(session.id, 'old-outcome-unknown', input, { mode: 'agent' });
+    const unfollowedUnknown = first.acceptNativeRun(session.id, 'unfollowed-outcome-unknown', input, { mode: 'agent' });
     const ambiguous = first.acceptNativeRun(session.id, 'ambiguous-write', input, { mode: 'agent' });
     const unreceipted = first.acceptNativeRun(session.id, 'unreceipted-outcome', input, { mode: 'agent' });
     first.transitionNativeRun(observed.id, ['queued'], { delivery: 'observed', nativeMessageId: 'receipt-one', nativeTurnId: 'turn-one' }, { state: 'running' });
-    first.transitionNativeRun(oldUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', nativeMessageId: 'receipt-two', nativeTurnId: 'turn-two' }, { state: 'interrupted', error: 'old outcome check' });
+    // A status named its turn before the restart, so its end may still be reported: it is watched again.
+    first.transitionNativeRun(oldUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', nativeMessageId: 'receipt-two', nativeTurnId: 'turn-two', timings: { turnNamedAt: 1 } }, { state: 'interrupted', error: 'old outcome check' });
+    // Nothing ever followed this one's turn: it stays unconfirmed instead of reopening on every restart.
+    first.transitionNativeRun(unfollowedUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', nativeMessageId: 'receipt-three', nativeTurnId: 'turn-three' }, { state: 'interrupted', error: 'old outcome check' });
     first.transitionNativeRun(ambiguous.id, ['queued'], { delivery: 'input_sent' });
     first.transitionNativeRun(unreceipted.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown' }, { state: 'interrupted' });
     // Codex keeps its app-server through a restart: its observed turn waits for the daemon's record of the end.
@@ -341,6 +345,7 @@ describe('native backend session identity', () => {
       for (const run of [ambiguous, unreceipted]) expect(restored.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
       expect(restored.getRun(codexObserved.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', nativeTurnId: 'codex-turn' } });
       expect(restored.getRun(codexUnknown.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain', stage: 'turn_outcome_unknown' } });
+      expect(restored.getRun(unfollowedUnknown.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain', stage: 'turn_outcome_unknown' } });
       expect(restored.getRun(droidObserved.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing' } });
     } finally { restored.close(); }
   });

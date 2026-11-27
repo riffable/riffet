@@ -39,6 +39,14 @@ abstract class SimCli {
   loseNextWrite = false;
   /** The running turn's screen shows no busy hint (Cursor after a stop and a send, docs/TURN-LIFECYCLE.md §1); cleared when it ends. */
   hidesTurn = false;
+  /** Command ids whose turn the screen hid at some point: idle reconciliation may close them as unconfirmed. */
+  readonly hidden: Set<string> = new Set();
+  /** The next turn to finish ends without the provider reporting it (a lost hook, a store not read in time). */
+  losesEnd = false;
+  /** Ends that were lost, which may still arrive late. */
+  readonly lostEnds: Array<() => void> = [];
+  /** Turns whose end was lost and has not arrived yet. */
+  protected readonly unreported: Set<string> = new Set();
   /** Command ids whose turn the CLI actually ended. */
   readonly endedTurns: Set<string> = new Set();
   /** Command ids whose own turn the CLI showed busy, and whose own turn wrote output. */
@@ -60,14 +68,27 @@ abstract class SimCli {
   async supportsSendNow(): Promise<boolean> { return false; }
   /** Status reads since the schedule last moved; a dispatcher that never comes to rest shows up here. */
   reads = 0;
+  /** Like Cursor's: a busy status names the running turn (its hooks), an idle one names none. */
   status(): NativeStatus {
     this.spinning();
     const busy = this.turn !== undefined && !this.hidesTurn;
-    if (busy) this.shownBusy.add(this.turn!.ownerCommandId);
-    return { phase: busy ? 'busy' : 'idle' };
+    if (!busy) return { phase: 'idle' };
+    this.shownBusy.add(this.turn!.ownerCommandId);
+    return { phase: 'busy', activeTurn: { nativeSessionId: this.chatId, turnId: this.turn!.id } };
   }
   /** What a status that lags says: the turn that just ended is still the one running. */
-  protected staleStatus(): NativeStatus | undefined { return undefined; }
+  protected staleStatus(): NativeStatus | undefined {
+    const ended = this.lastEnded;
+    return ended ? { phase: 'busy', activeTurn: { nativeSessionId: this.chatId, turnId: ended.id } } : undefined;
+  }
+  /** Whose turn is running now. */
+  running(): string | undefined { return this.turn?.ownerCommandId; }
+  hide(): void {
+    this.hidesTurn = true;
+    if (this.turn) this.hidden.add(this.turn.ownerCommandId);
+  }
+  /** A lost end arrives after all. */
+  lateEnd(): void { this.lostEnds.shift()?.(); }
   protected spinning(): void { if (++this.reads > 20_000) throw new Error('The dispatcher keeps reading the status without coming to rest'); }
   async snapshot() { return { events: [...this.events], status: this.status(), nativeSessionId: this.chatId }; }
   /** Like the journal feed: the log so far and the status, once the subscriber is in place. */
@@ -85,7 +106,7 @@ abstract class SimCli {
 
   async interrupt(): Promise<void> {
     await this.gate('interrupt');
-    this.ended('run_cancelled');
+    if (this.turn) this.ended('run_cancelled', this.turn);
     this.over();
   }
 
@@ -107,7 +128,12 @@ abstract class SimCli {
     if (this.turn === undefined) return;
     this.answered.add(this.turn.ownerCommandId);
     this.push([this.event('agent_message_chunk', { content: { text: 'done' } }, this.turn.id)]);
-    this.ended('run_completed');
+    const turn = this.turn;
+    if (this.losesEnd) {
+      this.losesEnd = false;
+      this.unreported.add(turn.id);
+      this.lostEnds.push(() => { this.unreported.delete(turn.id); this.ended('run_completed', turn); });
+    } else this.ended('run_completed', turn);
     this.over();
   }
 
@@ -123,8 +149,11 @@ abstract class SimCli {
     if (!ended) return;
     this.answered.add(ended.ownerCommandId);
     this.push([this.event('agent_message_chunk', { content: { text: 'late' } }, ended.id)]);
-    const stale = this.staleStatus();
-    if (stale) this.emit({ type: 'status', status: stale });
+    // A status lags behind an end the provider reported. With the end lost and no run bound to the turn, nothing
+    // tells it from the next message's own turn: that is the lost end's failure, not a lagging status.
+    const stale = this.unreported.has(ended.id) ? undefined : this.staleStatus();
+    // It names a turn that did run busy: evidence about that turn, only late.
+    if (stale) { this.shownBusy.add(ended.ownerCommandId); this.emit({ type: 'status', status: stale }); }
   }
 
   /** A restart: the service's side of every operation in flight is gone, the CLI is not. */
@@ -140,13 +169,16 @@ abstract class SimCli {
     if (this.loseNextWrite) { this.loseNextWrite = false; throw new Error('The connection went away'); }
     if (this.writes.includes(run.commandId)) this.violations.push(`wrote ${run.commandId} twice`);
     this.writes.push(run.commandId);
-    if (startsTurn) this.turn = { id: `turn-${++this.turns}`, ownerRunId: startsTurn.id, ownerCommandId: run.commandId };
+    if (startsTurn) {
+      this.turn = { id: `turn-${++this.turns}`, ownerRunId: startsTurn.id, ownerCommandId: run.commandId };
+      if (this.hidesTurn) this.hidden.add(run.commandId);
+    }
     this.unechoed.push({ ...run, turnId: this.turn!.id });
   }
 
   protected abstract receipt(input: { commandId: string; text: string; turnId: string }): NativeWorkbenchEvent[];
   /** What the provider records when a turn ends. */
-  protected abstract ended(type: 'run_completed' | 'run_cancelled'): void;
+  protected abstract ended(type: 'run_completed' | 'run_cancelled', turn: { id: string; ownerRunId: string; ownerCommandId: string }): void;
 
   protected event(type: string, data: Record<string, unknown>, turnId?: string, nativeId?: string): NativeWorkbenchEvent {
     const sequence = ++this.sequence;
@@ -185,8 +217,8 @@ class TerminalCli extends SimCli {
     return [this.event('user_message_chunk', { content: { text: input.text } }, input.turnId)];
   }
 
-  protected ended(type: 'run_completed' | 'run_cancelled'): void {
-    if (this.turn) this.push([this.event(type, { nativeSessionId: this.chatId, outcomeRevision: 1 }, this.turn.id, `end:${this.turn.id}`)]);
+  protected ended(type: 'run_completed' | 'run_cancelled', turn: { id: string }): void {
+    this.push([this.event(type, { nativeSessionId: this.chatId, outcomeRevision: 1 }, turn.id, `end:${turn.id}`)]);
   }
 }
 
@@ -202,8 +234,6 @@ class ProtocolCli extends SimCli {
     const ended = this.lastEnded;
     return ended ? { phase: 'busy', activeTurn: { nativeSessionId: this.chatId, turnId: ended.id, ownerRunId: ended.ownerRunId } } : undefined;
   }
-  /** Whose turn is running now. */
-  running(): string | undefined { return this.turn?.ownerCommandId; }
   async supportsSteer(): Promise<boolean> { return true; }
 
   async sendRun(_session: Session, run: Run, fence: (binding?: NativeDispatchBinding) => Run): Promise<void> {
@@ -227,15 +257,14 @@ class ProtocolCli extends SimCli {
   }
 
   /** As the journal feed reports a turn's end: once for the run that started it, once for the turn itself. */
-  protected override ended(type: 'run_completed' | 'run_cancelled'): void {
-    if (!this.turn) return;
-    const owned = this.event(type, { commandId: this.turn.ownerCommandId, nativeSessionId: this.chatId, outcomeRevision: 1 }, this.turn.id, `end:${this.turn.id}`);
-    this.push([{ ...owned, runId: this.turn.ownerRunId }, { ...owned, data: { nativeSessionId: this.chatId, outcomeRevision: 1 } }]);
+  protected override ended(type: 'run_completed' | 'run_cancelled', turn: { id: string; ownerRunId: string; ownerCommandId: string }): void {
+    const owned = this.event(type, { commandId: turn.ownerCommandId, nativeSessionId: this.chatId, outcomeRevision: 1 }, turn.id, `end:${turn.id}`);
+    this.push([{ ...owned, runId: turn.ownerRunId }, { ...owned, data: { nativeSessionId: this.chatId, outcomeRevision: 1 } }]);
   }
 }
 
 type Command =
-  | { kind: 'send' | 'steer' | 'echo' | 'finish' | 'publish' | 'stop' | 'restart' | 'loseWrite' | 'hide' | 'straggle' }
+  | { kind: 'send' | 'steer' | 'echo' | 'finish' | 'publish' | 'stop' | 'restart' | 'loseWrite' | 'hide' | 'straggle' | 'loseEnd' | 'lateEnd' }
   | { kind: 'open' | 'break' | 'cancel' | 'sendNow' | 'recover'; pick: number }
   | { kind: 'advance'; ms: number };
 
@@ -257,6 +286,8 @@ const commandsWith = (...extra: Array<{ weight: number; arbitrary: fc.Arbitrary<
   { weight: 1, arbitrary: fc.constant<Command>({ kind: 'restart' }) },
   { weight: 1, arbitrary: fc.constant<Command>({ kind: 'loseWrite' }) },
   { weight: 2, arbitrary: fc.constant<Command>({ kind: 'straggle' }) },
+  { weight: 1, arbitrary: fc.constant<Command>({ kind: 'loseEnd' }) },
+  { weight: 1, arbitrary: fc.constant<Command>({ kind: 'lateEnd' }) },
   ...extra,
 );
 const command = commandsWith();
@@ -318,7 +349,9 @@ class World {
     else if (step.kind === 'finish') this.cli.finish();
     else if (step.kind === 'publish') this.cli.publish();
     else if (step.kind === 'loseWrite') this.cli.loseNextWrite = true;
-    else if (step.kind === 'hide') this.cli.hidesTurn = true;
+    else if (step.kind === 'hide') this.cli.hide();
+    else if (step.kind === 'loseEnd') this.cli.losesEnd = true;
+    else if (step.kind === 'lateEnd') this.cli.lateEnd();
     else if (step.kind === 'straggle') this.cli.straggle();
     else if (step.kind === 'advance') await vi.advanceTimersByTimeAsync(step.ms);
     else if (step.kind === 'stop') {
@@ -364,7 +397,8 @@ class World {
       if (!run.native!.intent && timings.firstOutputAt !== undefined && !this.cli.answered.has(run.commandId)) found.push(`${run.commandId} took output from another turn`);
       if (!run.native!.intent && timings.busyAt !== undefined && !this.cli.shownBusy.has(run.commandId)) found.push(`${run.commandId} took a busy status from another turn`);
       // A status that lags behind a stop names a turn that is over: it does not close the next one as superseded.
-      if (this.cli instanceof ProtocolCli && run.native!.stage === 'turn_outcome_unknown' && this.cli.running() === run.commandId) found.push(`${run.commandId} closed as unconfirmed while its turn was still running`);
+      // Only a turn the screen hid may look idle long enough to be reconciled while it runs.
+      if (run.native!.stage === 'turn_outcome_unknown' && this.cli.running() === run.commandId && !this.cli.hidden.has(run.commandId)) found.push(`${run.commandId} closed as unconfirmed while its turn was still running`);
     }
     if (found.length) throw new Error(`after ${JSON.stringify(after)}: ${found.join('; ')}`);
   }
