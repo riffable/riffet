@@ -491,6 +491,14 @@ export const MODEL_PICKER_BUDGET = {
   storedMaxAgeMs: 24 * 60 * 60_000,
 } as const;
 
+/** One conversation's Agent messaging another that is already running (docs/SESSION-MESSAGES.md). */
+export const SESSION_MESSAGE_BUDGET = {
+  /** Longest message. */
+  messageChars: 20_000,
+  /** Messages one conversation may send between two messages of the owner's: two Agents replying to each other stop there. */
+  autonomous: 12,
+} as const;
+
 /** Multi-model discussions: stored list cap, input text caps, and per-speech turn limits. */
 /** One conversation's Agent calling another (docs/AGENT-CALLS.md). */
 export const AGENT_CALL_BUDGET = {

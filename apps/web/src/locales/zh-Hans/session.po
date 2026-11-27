@@ -2372,6 +2372,10 @@ msgstr "结束"
 msgid "结束终端中的进程？"
 msgstr "结束终端中的进程？"
 
+#: src/app/session/ToolsPicker.tsx
+msgid "给其他会话发消息"
+msgstr "给其他会话发消息"
+
 #. placeholder {0}: recovery.queuedRunIds.length
 #: src/app/session/Timeline.tsx
 msgid "继续发送 {0} 条消息"

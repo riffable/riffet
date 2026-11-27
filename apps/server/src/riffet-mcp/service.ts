@@ -21,6 +21,7 @@ import type { NoticeLog } from './notices.js';
 import { isWindowDevice, WINDOW_TOOLS } from './window.js';
 import { isScreenDevice, SCREEN_ERRORS, SCREEN_HELP_TOOL, SCREEN_TOOLS, screenHelp, stoppedLine } from './screen.js';
 import { AGENT_MEMBER_TOOL, callAgentMemberTool, type AgentMemberMcpTeam } from './agent-member.js';
+import { SESSION_LIST_TOOL, SESSION_SEND_TOOL, type SessionMessageTools } from './session-tools.js';
 import { buildRemoteTools, callRemoteTool, REMOTE_TOOL_NAMES, type LinkedServersSource } from './remote.js';
 
 /** The MCP server name every CLI sees; Claude Code names its tools `mcp__riffet__<tool>`. */
@@ -290,14 +291,14 @@ function serverGroupIds(session: Session): string[] {
   return (session.toolGroups ?? []).filter(group => group.startsWith(SERVER_GROUP_PREFIX)).map(group => group.slice(SERVER_GROUP_PREFIX.length));
 }
 
-export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; agentCalls?: () => AgentCallTools | undefined; assistant?: () => AssistantTools | undefined; team?: () => AgentMemberMcpTeam | undefined; links?: () => LinkedServersSource | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined;
+export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; agentCalls?: () => AgentCallTools | undefined; sessionMessages?: () => SessionMessageTools | undefined; assistant?: () => AssistantTools | undefined; team?: () => AgentMemberMcpTeam | undefined; links?: () => LinkedServersSource | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined;
   boundWorkItem?(sessionId: string): string | undefined;
   workbenchAppearance?: Pick<WorkbenchAppearance, 'apply' | 'authorizeSetting'>;
   activeWorkbenchRun?(sessionId: string): string | undefined;
   /** Whether a conversation started from the composer is given a task (`workItems.composerSessions`). */
   composerTasks?: () => boolean }
 
-const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...AGENT_TOOLS, ...WORKBENCH_TOOLS, ...discoveryTools, deviceAppearanceTool].map(tool => tool.name).concat([...REMOTE_TOOL_NAMES]));
+const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...AGENT_TOOLS, SESSION_SEND_TOOL, SESSION_LIST_TOOL, ...WORKBENCH_TOOLS, ...discoveryTools, deviceAppearanceTool].map(tool => tool.name).concat([...REMOTE_TOOL_NAMES]));
 
 /** Read-only snapshot of every tool group Riffet MCP can expose, for inspection in Extensions. */
 export interface RiffetMcpCatalogSnapshot {
@@ -386,7 +387,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     return {
       serverName: RIFFET_MCP_NAME,
       core: TOOLS,
-      agents: AGENT_TOOLS,
+      agents: [...AGENT_TOOLS, SESSION_LIST_TOOL, SESSION_SEND_TOOL],
       task: TASK_TOOLS,
       remote,
       device: [...DEVICE_TOOLS.map(deviceDef), deviceAppearanceTool],
@@ -604,9 +605,13 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     // Expose agent_* tools to every non-call conversation: user-explicit @mentions are always authorized
     // at call time, while autonomous team calls are enforced by AgentCallService against `memberCalls`.
     const allowAgents = Boolean(this.deps.agentCalls && session.origin?.kind !== 'call');
+    // A member that may not read other conversations may not message them either (docs/SESSION-MESSAGES.md §3).
+    const allowMessages = this.deps.sessionMessages?.()?.allowed(session) === true && this.memberAllowsTool(member, SESSION_LIST_TOOL.name);
     const allowExternal = !member || member.capabilities.externalTools;
+    // An assistant with the board already has session_list, listing every conversation; it is not offered twice.
+    const sessionTools = allowMessages ? [...(assistantTools.some(tool => tool.name === SESSION_LIST_TOOL.name) ? [] : [SESSION_LIST_TOOL]), SESSION_SEND_TOOL] : [];
     const core = [...baseTools, ...(session.workItemId ? TASK_TOOLS : []),
-      ...(allowAgents ? AGENT_TOOLS : []), ...assistantTools,
+      ...(allowAgents ? AGENT_TOOLS : []), ...sessionTools, ...assistantTools,
       ...(main && this.deps.workbenchAppearance ? [...WORKBENCH_TOOLS, deviceAppearanceTool] : []), ...(main && this.catalog ? discoveryTools : []),
       ...(main ? Array.from(this.catalog?.commands.values() ?? [], command => command.definition) : []),
       ...(allowExternal ? this.pluginTools(session) : []), ...this.remoteTools(session)];
@@ -738,8 +743,19 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     }
     if (raw.name === 'agent_member' && !this.canManageMember(session)) return errorResult('TOOL_NOT_AVAILABLE', 'agent_member is only available in interactive conversations');
     const boardTool = typeof raw.name === 'string' ? this.deps.assistant?.()?.tools.get(raw.name) : undefined;
+    const boardOffers = Boolean(boardTool && allowsAssistantTool(role, boardTool.audience) && this.memberAllowsTool(member, boardTool.definition.name));
+    if (raw.name === SESSION_SEND_TOOL.name || (raw.name === SESSION_LIST_TOOL.name && !boardOffers)) {
+      const messages = this.deps.sessionMessages?.();
+      if (!messages || !messages.allowed(session) || !this.memberAllowsTool(member, SESSION_LIST_TOOL.name)) return errorResult('TOOL_NOT_AVAILABLE', `${raw.name} is not available in this conversation`);
+      try {
+        return textResult(raw.name === SESSION_SEND_TOOL.name ? await messages.send(session, args) : messages.list(session, args));
+      } catch (error) {
+        if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
+        throw error;
+      }
+    }
     if (boardTool) {
-      if (!allowsAssistantTool(role, boardTool.audience) || !this.memberAllowsTool(member, boardTool.definition.name)) return errorResult('TOOL_NOT_AVAILABLE', `${raw.name} is unavailable in this member role`);
+      if (!boardOffers) return errorResult('TOOL_NOT_AVAILABLE', `${raw.name} is unavailable in this member role`);
       const restricted = boardTool.audience === 'task-read' && (role === 'supervise' || role === 'task-watch');
       const taskScope = restricted ? this.deps.boundWorkItem?.(session.id) : undefined;
       if (restricted && !taskScope) return errorResult('TOOL_NOT_AVAILABLE', 'This run has no bound task.');

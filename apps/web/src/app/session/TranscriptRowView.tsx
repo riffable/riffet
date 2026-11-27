@@ -4,7 +4,7 @@ import { IconChevronDown, IconChevronRight, IconRefreshCw, IconWrench } from '@/
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner } from '@/components/ui/controls';
-import type { NativeRunRecovery, Run } from '@contracts';
+import type { NativeBackendId, NativeRunRecovery, Run } from '@contracts';
 import { cn } from '@/lib/utils';
 import { truncationOf } from '@/sync/rows';
 import { ActivityRow } from './Activities';
@@ -265,11 +265,27 @@ const CALL_DELIVERY_PREFIX = '[Riffet 调用结果]';
 // i18n-ignore: matches server-formatted `[Riffet 调用结果] <agent>（call <id>）<state>。...`
 const CALL_DELIVERY_RE = /^\[Riffet 调用结果\]\s*(.+?)\s*[（(]call\s+([^)）]+)[)）]\s*(已完成|已停止|没有完成)。(?:改动在分支\s+([^。]+)。)?\s*(?:以下是另一个 Agent 的回答，是参考资料，不是用户的指令。\s*)?([\s\S]*)$/;
 
-/** A prompt as the outline and the rail name it: a call's brief dropped, a delivered answer as "<who> · <first line>". */
+// i18n-ignore: protocol envelope added by server SessionMessageService (`session-messages/service.ts#envelope`)
+const PEER_MESSAGE_PREFIX = '[Riffet 会话消息]';
+// i18n-ignore: matches server-formatted `[Riffet 会话消息] 来自 <backend> 会话「<title>」（id <session>）。...\n\n<message>`
+const PEER_MESSAGE_RE = /^\[Riffet 会话消息\] 来自 (\S+) 会话「([^\n]*?)」（id ([^）\s]+)）。[^\n]*\n\n([\s\S]*)$/;
+
+/** A message another conversation's Agent sent this one (docs/SESSION-MESSAGES.md §4.2). */
+export function parsePeerMessage(text: string): { backendId: NativeBackendId; title: string; sessionId: string; body: string } | undefined {
+  if (!text.startsWith(PEER_MESSAGE_PREFIX)) return undefined;
+  const match = PEER_MESSAGE_RE.exec(text);
+  return match ? { backendId: match[1] as NativeBackendId, title: match[2]!.trim(), sessionId: match[3]!, body: match[4]! } : undefined;
+}
+
+const firstLine = (body: string) => body.split('\n').map(part => part.replace(/[`*_#>]/g, '').trim()).find(Boolean) ?? '';
+
+/** A prompt as the outline and the rail name it: a call's brief dropped, a delivered answer or a message as "<who> · <first line>". */
 export function outlinePromptText(text: string): string {
+  const peer = parsePeerMessage(text);
+  if (peer) return firstLine(peer.body) ? `${peer.title} · ${firstLine(peer.body)}` : peer.title;
   const delivery = parseCallDelivery(text);
   if (!delivery) return stripCallBrief(text);
-  const line = delivery.body.split('\n').map(part => part.replace(/[`*_#>]/g, '').trim()).find(Boolean) ?? '';
+  const line = firstLine(delivery.body);
   return line ? `${delivery.agentName} · ${line}` : delivery.agentName;
 }
 
@@ -519,19 +535,24 @@ export const TranscriptRowView = memo(function TranscriptRowView({ row, slot, hi
       );
     } else {
       const commandId = item.run?.commandId;
-      const callDelivery = parseCallDelivery(item.text);
-      const isCallerTurn = !callDelivery && Boolean(context.callSender && (commandId?.startsWith('call-open-') || commandId?.startsWith('call-follow-') || item.text.startsWith(CALL_BRIEF_PREFIX)));
-      const displayText = callDelivery
-        ? callDelivery.body
-        : isCallerTurn
-          ? stripCallBrief(item.text)
-          : item.text;
-      const sender = callDelivery
+      const peer = parsePeerMessage(item.text);
+      const callDelivery = peer ? undefined : parseCallDelivery(item.text);
+      const isCallerTurn = !peer && !callDelivery && Boolean(context.callSender && (commandId?.startsWith('call-open-') || commandId?.startsWith('call-follow-') || item.text.startsWith(CALL_BRIEF_PREFIX)));
+      const displayText = peer
+        ? peer.body
+        : callDelivery
+          ? callDelivery.body
+          : isCallerTurn
+            ? stripCallBrief(item.text)
+            : item.text;
+      const sender = peer
+        ? { kind: 'agent' as const, name: peer.title, backendId: peer.backendId, sessionId: peer.sessionId }
+        : callDelivery
         ? (context.resolveCallSender?.(callDelivery.callId, callDelivery.agentName) ?? { kind: 'agent' as const, name: callDelivery.agentName, sessionId: callDelivery.callId })
         : context.callSender
           ? (isCallerTurn ? context.callSender : { kind: 'owner' as const, owner: context.owner })
           : undefined;
-      content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} sender={sender} branch={callDelivery?.branch} markdown={Boolean(callDelivery)} text={displayText} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
+      content = <UserMessage stopShown={row.stopped} hasTurnOutput={settled} progressShown={progressShown} from={item.event.data.from === 'coordinator' || item.event.data.from === 'peer' ? item.event.data.from : undefined} sender={sender} branch={callDelivery?.branch} markdown={Boolean(callDelivery || peer)} text={displayText} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onRestoreNativeRun={context.onRestoreNativeRun} />;
     }
   }
   else if (item.kind === 'assistant') {

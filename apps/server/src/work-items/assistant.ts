@@ -266,14 +266,30 @@ export class AssistantBoard {
     return value;
   }
 
-  private sessionList(args: Args): Record<string, unknown> {
+  /**
+   * `session_list` for a conversation that may message other conversations (docs/SESSION-MESSAGES.md §4): the same
+   * reading, narrowed to the ones `keep` allows.
+   */
+  messageList(args: Args, keep: (session: Session) => boolean): Record<string, unknown> {
+    return this.sessionList(args, keep);
+  }
+
+  /** A conversation `session_list` shows, else undefined: what may receive a session message (docs/SESSION-MESSAGES.md §3). */
+  listedConversation(id: string): Session | undefined {
+    try {
+      const session = this.deps.store.getSession(id);
+      return this.canReadSession(session, this.hiddenProjects()) ? session : undefined;
+    } catch { return undefined; }
+  }
+
+  private sessionList(args: Args, keep?: (session: Session) => boolean): Record<string, unknown> {
     const state = optionalText(args, 'state') ?? 'all';
     if (state !== 'all' && !STATES.includes(state as ConversationState)) throw invalid(`state must be one of ${[...STATES, 'all'].join(', ')}`);
     const project = optionalText(args, 'project');
     const projectId = project ? this.projects().find(item => item.id === project || item.name === project)?.id : undefined;
     if (project && !projectId) throw invalid(`There is no project ${project}; call list_projects`);
     const limit = this.limit(args, 30, 100);
-    const sessions = this.conversations().filter(session => (!projectId || session.projectId === projectId) && (state === 'all' || this.stateOf(session) === state));
+    const sessions = this.conversations().filter(session => (!keep || keep(session)) && (!projectId || session.projectId === projectId) && (state === 'all' || this.stateOf(session) === state));
     return { sessions: sessions.slice(0, limit).map(session => this.conversation(session)), total: sessions.length };
   }
 

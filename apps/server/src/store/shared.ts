@@ -26,7 +26,7 @@ export const DELETED_PREFIX = 'session-deleted:';
 export const PENDING_FORK_BRIEF_PREFIX = 'pending-fork-brief:';
 export interface PendingForkBrief { brief: string; language: 'zh' | 'en'; }
 /** Settings a conversation owns outright, by key; removed with it. */
-export const SESSION_SETTING_PREFIXES = ['native-context:', 'native-interactions:', 'native-stops:', PENDING_FORK_BRIEF_PREFIX, 'riffet-mcp:binding:', 'session-reference-creation:', 'task-workspace-creation:', 'terminal-hold:'];
+export const SESSION_SETTING_PREFIXES = ['native-context:', 'native-interactions:', 'native-stops:', PENDING_FORK_BRIEF_PREFIX, 'riffet-mcp:binding:', 'session-reference-creation:', 'task-workspace-creation:', 'terminal-hold:', 'session-messages:'];
 export const ACTIVE_SESSION_STATES: ReadonlySet<Session['state']> = new Set(['starting', 'running', 'waiting', 'cancelling']);
 
 /** What remains of a deleted conversation: no title, message or transcript, only enough to refuse its id. */

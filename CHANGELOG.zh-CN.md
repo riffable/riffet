@@ -7,6 +7,7 @@
 ### 工作台
 
 - Riffet 现在能识别 Claude Code 2.1.332 的后台任务列表，可从会话中停止后台 shell。
+- Agent 现在可以给已在运行的其他会话发消息，不论对方是哪种 Agent：你在会话里 @ 引用过的、给它发过消息的，或在「技能与工具」里打开「给其他会话发消息」后的任意会话。对方的 Agent 能接受引导时，消息送进正在进行的这一轮，否则作为下一条消息，并标出是哪个会话发来的。你两次发消息之间，Agent 最多发 12 条（Web；Mac、Android、iPhone 显示为普通消息）。
 - 回答 Claude Code 审批卡的同时点了停止，会话顶部不再一直挂着「Claude was interrupted before the web interaction completed.」；Claude 没有确认回答的提示在下一轮开始时消失。
 
 - Antigravity 的技能列表现在也显示 `~/.agents/skills` 里的共享技能。Codex 或 TRAE CLI 启动探测超时时，Riffet 会先重试再报告可用状态。

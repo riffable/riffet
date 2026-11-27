@@ -169,6 +169,7 @@ import { registerChannelRoutes } from './channels/routes.js';
 import { RIFFET_MCP_HTTP_ROUTE, RIFFET_MCP_ROUTE, registerRiffetMcpRoutes } from './routes/riffet-mcp.js';
 import { CouncilService } from './council/service.js';
 import { AgentCallService } from './agent-calls/service.js';
+import { SessionMessageService } from './session-messages/service.js';
 import { registerAgentCallRoutes } from './routes/agent-calls.js';
 import { AgentSeats, councilProject } from './council/seats.js';
 import { registerCouncilRoutes } from './routes/council.js';
@@ -277,9 +278,10 @@ export async function createApp(options: AppOptions = {}) {
   });
   // Agent calls (docs/AGENT-CALLS.md) need the orchestration and the timeline made further down; the MCP tools and delivery reach them through this.
   let agentCallsRef:AgentCallService|undefined;
+  let sessionMessagesRef:SessionMessageService|undefined;
   let teamRef:AgentTeamService|undefined;
   let pluginAgentsRef:((pluginId:import('@riffet/plugin-api').PluginManifest['id'])=>import('@riffet/plugin-api').PluginAgentHost)|undefined;
-  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,team:()=>teamRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:createActiveWorkbenchRunResolver({store,nativeBackends:()=>nativeBackends,team:()=>teamRef}),workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
+  const riffetMcp=new RiffetMcpService({agentCalls:()=>agentCallsRef,sessionMessages:()=>sessionMessagesRef,team:()=>teamRef,links:()=>linksRef,boundWorkItem:id=>assistantWork?.boundWorkItem?.(id),workbenchAppearance,activeWorkbenchRun:createActiveWorkbenchRunResolver({store,nativeBackends:()=>nativeBackends,team:()=>teamRef}),workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins,composerTasks:()=>settings.getSettings().workItems?.composerSessions===true});
   // A state directory in the system temp directory is a test's, a probe's or a demo's: its tmux server goes with it.
   const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),shellSettings:()=>settings.getSettings().terminal,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   // Warm CLIs a previous process reserved have no page left to renew them.
@@ -693,6 +695,8 @@ export async function createApp(options: AppOptions = {}) {
   agentCallsRef=agentCalls;
   app.addHook('onClose',async()=>agentCalls.close());
   registerAgentCallRoutes(app,{store,agentCalls});
+  // One conversation's Agent messaging another that is already running (docs/SESSION-MESSAGES.md).
+  sessionMessagesRef=new SessionMessageService({store,directory:()=>assistantRef,deliver:(sessionId,text,commandId)=>orchestration.deliver(sessionId,text,commandId),takesTools:async session=>Boolean((await nativeBackends.capabilities(session)).supportsRiffetTools)});
   const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,agentCalls,riffetMcp,planFiles,
     onCleanupError:(sessionId,error)=>app.log.warn({err:error,sessionId},'deleted conversation file cleanup failed; retrying on next start')});
   deletionRef=deletion;

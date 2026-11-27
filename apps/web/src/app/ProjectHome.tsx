@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconCheck, IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconLaptop, IconLink, IconServer, IconSettings2, IconSquareTerminal, IconTerminal } from '@/components/icons';
-import { AGENT_CALL_TOOL_GROUP, MODEL_CHAT_DEFAULT_CONFIG, PREWARM_BUDGET, type AgentMember, type AppSettings, type Attachment, type AttemptGroup, type ModelChatConfig, type ModelChatConfigPatch, type ModelChatEffort, type ModelChatPinnedDoc, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
+import { AGENT_CALL_TOOL_GROUP, MODEL_CHAT_DEFAULT_CONFIG, SESSION_MESSAGE_TOOL_GROUP, PREWARM_BUDGET, type AgentMember, type AppSettings, type Attachment, type AttemptGroup, type ModelChatConfig, type ModelChatConfigPatch, type ModelChatEffort, type ModelChatPinnedDoc, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
 import { RunnerGame } from '@/components/runner/RunnerGame';
@@ -197,7 +197,7 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
   // A remembered phone that is offline now (or a plugin that is off) is left out of this conversation and kept for the next.
   // The new conversation's Agent may call other Agents (docs/AGENT-CALLS.md).
   const callsOffered = !quickChat && offersRiffetTools(capabilities);
-  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id) || linkedServerTools.available.includes(id) || (callsOffered && id === AGENT_CALL_TOOL_GROUP));
+  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id) || linkedServerTools.available.includes(id) || (callsOffered && (id === AGENT_CALL_TOOL_GROUP || id === SESSION_MESSAGE_TOOL_GROUP)));
   const toolsOffered = callsOffered || (!quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0 || linkedServerTools.offered));
   const teamMembers = useLists((state) => state.teamMembers);
   const agentMentions = useMemo<AgentMentionSource | undefined>(

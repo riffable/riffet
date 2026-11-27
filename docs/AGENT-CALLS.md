@@ -15,6 +15,8 @@
 
 采用的是「Agent 作为工具」（OpenAI Agents SDK 的 agent-as-tool；Anthropic 2026-10《When to fold subagents into your main agent loop》里保留子 Agent 时的写法）：调用方保持主导，被调用方只收到调用方写的请求。状态用词借 A2A 的任务生命周期。和 Claude Code 子 Agent 一样有深度与并发上限，回传内容标为参考资料。
 
+给已经在运行的会话递话不开新会话，见 [会话消息](SESSION-MESSAGES.md)。
+
 `@Agent` 是读者明确发起的动作。Riffet 不让 Agent 自己决定拆分任务：多数编码任务共享上下文，拆开只会多花数倍 token（Anthropic《multi-agent research system》）。适合的是换一个模型做独立核验、要第二意见、用对方特有的能力。
 
 ## 2. 概念

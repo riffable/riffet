@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { AGENT_CALL_TOOL_GROUP, type DeviceInfo, type LoadedExtensions, type NativeBackendId, type ServerInfo, type ToolGroupId } from '@contracts';
+import { AGENT_CALL_TOOL_GROUP, SESSION_MESSAGE_TOOL_GROUP, type DeviceInfo, type LoadedExtensions, type NativeBackendId, type ServerInfo, type ToolGroupId } from '@contracts';
 import { IconPuzzle } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
@@ -29,8 +29,8 @@ export const serverGroups = (groups: readonly string[]): ToolGroupId[] => groups
 
 /** A plugin's agent tools, `<pluginId>/<name>` (docs/BROWSER.md §2). */
 const isPluginGroup = (id: string) => /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]*$/.test(id);
-/** What a pick may name: phones, explicitly mounted linked servers, plugin tool groups, and calling any Agent. */
-const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || id.startsWith(SERVER_PREFIX) || isPluginGroup(id) || id === AGENT_CALL_TOOL_GROUP);
+/** What a pick may name: phones, explicitly mounted linked servers, plugin tool groups, calling any Agent and messaging any conversation. */
+const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || id.startsWith(SERVER_PREFIX) || isPluginGroup(id) || id === AGENT_CALL_TOOL_GROUP || id === SESSION_MESSAGE_TOOL_GROUP);
 
 /**
  * Linked servers this conversation may mount for remote command execution: online, compatible peers that
@@ -267,7 +267,7 @@ export function ToolsPicker({ value, onChange, extensions, agents, servers: allo
   const toggle = (group: ToolGroupId, on: boolean) => {
     // A phone, server or plugin group that is gone is dropped with the change.
     const kept = picked.filter((id) => id !== group && (
-      id === AGENT_CALL_TOOL_GROUP
+      id === AGENT_CALL_TOOL_GROUP || id === SESSION_MESSAGE_TOOL_GROUP
       || phones.some((device) => phoneGroup(device.id) === id)
       || linkedServers.servers.some((server) => serverGroup(server.id) === id)
       || pluginGroups.rows.some((row) => row.id === id)
@@ -297,7 +297,7 @@ export function ToolsPicker({ value, onChange, extensions, agents, servers: allo
   const serverPicks = serverGroups(picked);
   const count = (phones.length ? phonePicks.filter((id) => rows.some((row) => row.id === id)).length : phonePicks.length)
     + serverPicks.filter((id) => serverRows.some((row) => row.id === id)).length
-    + picked.filter((id) => pluginGroups.available.includes(id) || (agents && id === AGENT_CALL_TOOL_GROUP)).length;
+    + picked.filter((id) => pluginGroups.available.includes(id) || (agents && (id === AGENT_CALL_TOOL_GROUP || id === SESSION_MESSAGE_TOOL_GROUP))).length;
   const n = offCount;
   // With switches and nothing changed, everything installed is on: 默认, not 未开启.
   const summary = [count ? t`${count} 项` : '', offCount ? t`已关 ${n}` : ''].filter(Boolean).join(' · ') || (extensions ? t`默认` : t`未开启`);
@@ -310,6 +310,7 @@ export function ToolsPicker({ value, onChange, extensions, agents, servers: allo
   const items = (
     <>
       {agents && checkboxRow(AGENT_CALL_TOOL_GROUP, picked.includes(AGENT_CALL_TOOL_GROUP), t`调用其他 Agent`, (on) => toggle(AGENT_CALL_TOOL_GROUP, on))}
+      {agents && checkboxRow(SESSION_MESSAGE_TOOL_GROUP, picked.includes(SESSION_MESSAGE_TOOL_GROUP), t`给其他会话发消息`, (on) => toggle(SESSION_MESSAGE_TOOL_GROUP, on))}
       {pluginGroups.rows.map((row) => checkboxRow(
         row.id,
         picked.includes(row.id),

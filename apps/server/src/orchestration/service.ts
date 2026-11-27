@@ -231,6 +231,31 @@ export class OrchestrationService {
   }
 
   /**
+   * A message from another conversation's Agent (docs/SESSION-MESSAGES.md §4.1): into the turn running now when its
+   * backend takes guidance and nothing waits on the owner, else queued like a typed message. A steer the turn ends
+   * before is sent on as the next message by the dispatcher, as the owner's own steer is.
+   */
+  async deliver(sessionId: string, text: string, commandId: string): Promise<{ run: Run; steered: boolean }> {
+    const session = this.deps.store.getSession(sessionId);
+    if (session.kind !== 'native') throw new AppError('NOT_NATIVE', 'Only native conversations accept text input', 409);
+    const existing = this.deps.store.findRunByCommand(session.id, commandId);
+    if (existing) return { run: existing, steered: existing.native?.intent === 'steer' };
+    const status = this.deps.nativeBackends.status(session.id);
+    const active = status.activeTurn;
+    if (active && !status.interaction && await this.deps.nativeBackends.supportsSteer(session)) {
+      this.deps.sessionCommands.admit(session, 'steer');
+      this.deps.nativeBackends.assertAvailable(session);
+      const owner = active.ownerRunId ? this.deps.store.listRuns(session.id).find(run => run.id === active.ownerRunId && run.native?.intent !== 'steer') : undefined;
+      const current = this.deps.store.getSession(session.id);
+      const config = owner?.native?.resolvedConfig ?? owner?.native?.config ?? { model: current.model, mode: current.mode, approval: current.approval };
+      const run = this.deps.store.acceptNativeRun(session.id, commandId, textInput(text), config, undefined,
+        { target: { nativeSessionId: active.nativeSessionId, turnId: active.turnId }, ownerRunId: owner?.id });
+      return { run: await this.deps.dispatch.steer(session.id, run.id), steered: true };
+    }
+    return { run: this.send(sessionId, text, commandId), steered: false };
+  }
+
+  /**
    * A new conversation in [projectId] on [backendId] (else the owner's default) with the owner's saved
    * defaults, opened with [text], as the composer would. [attach] runs in the same write, before the
    * conversation's CLI can start, so whatever it records is there from its first turn.
