@@ -20,8 +20,8 @@ extension Workbench {
         guard member.scope.kind == "project" else { return nil }
         return project(member.scope.projectIds?.first ?? member.projectId)?.name
     }
-    /// The Agents a member may run on, whatever its scope: the assistant's set (the server refuses the others).
-    var memberBackends: [NativeBackendCatalogEntry] { backends.filter { AssistantKt.isAssistantBackend(id: $0.backendId) } }
+    /// The Agents a member may run on, whatever its scope: the standing-member set (the server refuses the others).
+    var memberBackends: [NativeBackendCatalogEntry] { backends.filter { AssistantKt.isStandingMemberBackend(entry: $0) } }
     func backend(wire: String?) -> NativeBackendId? {
         guard let wire else { return nil }
         return backends.first { $0.backendId.name.lowercased() == wire.lowercased() }?.backendId
@@ -172,7 +172,7 @@ struct MentionOptions {
     @MainActor static func make(workbench: Workbench, session: Session) -> MentionOptions? {
         guard let members = workbench.teamMembers, session.backendId != .chat else { return nil }
         let own = workbench.member(of: session)?.id
-        let fallback = workbench.backends.first { AssistantKt.isAssistantBackend(id: $0.backendId) && $0.available }?.backendId ?? .claude
+        let fallback = workbench.backends.first { AssistantKt.isStandingMemberBackend(entry: $0) && $0.available }?.backendId ?? .claude
         return MentionOptions(members: sortTeamMembers(members: members).filter { $0.id != own },
                               agents: workbench.backends.filter { $0.available && $0.backendId != .chat }, fallback: fallback)
     }

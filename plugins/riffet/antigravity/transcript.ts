@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
-import type { NativeJob, NativeWorkbenchEvent, TaskNotificationStatus } from '@riffet/contracts';
-import { activityEvent, clipDetail, toolImageContent } from '@riffet/plugin-api/kit';
+import type { NativeJob, NativeWorkbenchEvent, ShareModelInfo, ShareSelection, ShareTurn, TaskNotificationStatus } from '@riffet/contracts';
+import { AppError, activityEvent, clipDetail, toolImageContent } from '@riffet/plugin-api/kit';
 import {
-  type AgentHistory, type AgentHost, type AgentLaneWriter, type AgentTranscriptSource, type AgentTurnStatus, type AgentUsageRecord,
+  type AgentHistory, type AgentHistoryOptions, type AgentHost, type AgentLaneWriter, type AgentTranscriptSource, type AgentTurnStatus, type AgentUsageRecord,
 } from '@riffet/plugin-api/experimental/agent';
 import { AGY_ID, agyRecord, type AgyRecord, type AgySnapshot } from './protocol.js';
 import { readAgySnapshot } from './storage.js';
@@ -168,7 +168,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
       if (final) out.events.push(value);
       else out.drafts.push({ finalId: nativeId, event: value });
     };
-    const call = (raw: AgyRecord) => {
+    const call = (raw: AgyRecord, final = true) => {
       const id = text(raw.id),
         name = text(raw.name);
       if (!id || !name || calls.has(id)) return;
@@ -198,7 +198,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
           rawInput,
           ...(subagent ? { subagent } : {}),
         },
-        true,
+        final,
         `agy:tool:${id}:call`,
       );
     };
@@ -259,7 +259,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
     } else if (agyRecord(step.plannerResponse)) {
       const response = step.plannerResponse,
         messageId = text(response.messageId),
-        prefix = messageId ? `agy:message:${turnId ?? baseId}:${messageId}` : `agy:${baseId}`;
+        prefix = `agy:${baseId}`;
       if (text(response.thinking)?.trim())
         event(
           'thinking',
@@ -271,7 +271,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
       const body = text(response.modifiedResponse) ?? text(response.response);
       if (body?.trim())
         event('answer', 'agent_message_chunk', { content: { type: 'text', text: display(body) } }, settled(step), `${prefix}:answer`);
-      if (Array.isArray(response.toolCalls)) response.toolCalls.forEach(c => call(record(c)));
+      if (Array.isArray(response.toolCalls)) response.toolCalls.forEach(c => call(record(c), settled(step)));
       const u = record(md.modelUsage),
         input = number(u.inputTokens),
         cache = number(u.cacheReadTokens),
@@ -287,9 +287,7 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
             nativeMessageId: messageId,
             startedAt: Date.parse(at(md.startedAt, createdAt)),
             ...(md.finishedGeneratingAt || md.completedAt ? { endedAt: Date.parse(at(md.finishedGeneratingAt ?? md.completedAt)) } : {}),
-            // Cache inclusion differs by gateway. Keep input unreported when cached
-            // tokens exist until that gateway's native accounting has been verified.
-            ...(input !== undefined && !cache ? { inputTokens: input } : {}),
+            ...(input !== undefined ? { inputTokens: input } : {}),
             ...(cache !== undefined ? { cacheReadTokens: cache } : {}),
             ...(number(u.cacheWriteTokens) !== undefined ? { cacheWriteTokens: number(u.cacheWriteTokens) } : {}),
             ...(output !== undefined ? { outputTokens: output } : {}),
@@ -335,12 +333,16 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
             ? [{ conversationId: invoke.conversationId }]
             : [];
         const specs = Array.isArray(invoke.subagents) ? invoke.subagents : [];
-        if (results.length === 1) {
-          const childId = text(record(results[0]).conversationId),
-            spec = record(specs[0]);
-          if (childId && AGY_ID.test(childId) && childId !== snapshot.conversationId) {
+        if (results.length >= 1) {
+          const ev =
+            out.events.findLast(e => e.nativeId === `agy:tool:${id}:result`) ??
+            out.drafts.findLast(e => e.finalId === `agy:tool:${id}:result`)?.event;
+          results.forEach((rawResult, idx) => {
+            const childId = text(record(rawResult).conversationId),
+              spec = record(specs[idx]);
+            if (!childId || !AGY_ID.test(childId) || childId === snapshot.conversationId) return;
             const child = {
-              toolCallId: id,
+              toolCallId: idx === 0 ? id : `${id}:${idx}`,
               agentId: childId,
               ...(text(spec.role) ? { title: spec.role } : {}),
               ...(text(spec.initialPrompt) ? { prompt: spec.initialPrompt } : {}),
@@ -348,13 +350,9 @@ export function mapAgySnapshot(snapshot: AgySnapshot, sessionId = ''): MappedAgy
               ...(text(spec.modelOption) ? { model: spec.modelOption } : {}),
             };
             out.children.push(child);
-            const ev =
-              out.events.findLast(e => e.nativeId === `agy:tool:${id}:result`) ??
-              out.drafts.findLast(e => e.finalId === `agy:tool:${id}:result`)?.event;
-            if (ev) ev.data.subagentResult = { agentId: childId };
-          }
-        } else if (results.length > 1)
-          out.warnings.push('Antigravity returned multiple subagents for one tool call; nested history is unavailable.');
+            if (ev && !ev.data.subagentResult) ev.data.subagentResult = { agentId: childId };
+          });
+        }
         const command = record(step.runCommand),
           commandLine = text(command.commandLine);
         if (commandLine && (!settled(step) || command.blocking === false || text(command.commandId)))
@@ -439,9 +437,24 @@ interface Cursor {
   children: Array<[string, string]>;
   order?: string[];
   retired?: string[];
+  settled?: Array<[string, string]>;
+}
+interface ExternalTurnEnd {
+  turnId: string;
+  status: AgentTurnStatus;
+  at: string;
+  error?: string;
 }
 function stringList(value: unknown): boolean {
   return value === undefined || (Array.isArray(value) && value.length <= 400_000 && value.every(i => typeof i === 'string'));
+}
+function pairList(value: unknown, optional = false): boolean {
+  if (optional && value === undefined) return true;
+  return (
+    Array.isArray(value) &&
+    value.length <= 400_000 &&
+    value.every((entry: unknown) => Array.isArray(entry) && entry.length === 2 && entry.every(i => typeof i === 'string'))
+  );
 }
 function cursor(raw: string | null): Cursor | undefined {
   if (!raw) return undefined;
@@ -456,50 +469,117 @@ function cursor(raw: string | null): Cursor | undefined {
   if (
     c.version !== 1 ||
     !AGY_ID.test(c.conversationId) ||
-    !['events', 'drafts', 'turns', 'children'].every(
-      key =>
-        Array.isArray(c[key]) &&
-        c[key].length <= 400_000 &&
-        c[key].every((entry: unknown) => Array.isArray(entry) && entry.length === 2 && entry.every(i => typeof i === 'string')),
-    ) ||
+    !['events', 'drafts', 'turns', 'children'].every(key => pairList(c[key])) ||
+    !pairList(c.settled, true) ||
     !stringList(c.order) ||
     !stringList(c.retired)
   )
     throw new Error('Invalid Antigravity transcript cursor');
   return c as Cursor;
 }
-function needsIdentityRebuild(previous: Cursor, nextOrder: readonly string[]): boolean {
-  const prevOrder = previous.order ?? [...previous.events.map(([id]) => id), ...previous.drafts.map(([id]) => id)];
-  const prevIndex = new Map(prevOrder.map((id, index) => [id, index]));
+function turnFingerprint(turnId: string, mapped: MappedAgyTranscript): string {
+  const turn = mapped.turns.find(t => t.id === turnId);
+  const events = mapped.events.filter(e => e.nativeTurnId === turnId);
+  const drafts = mapped.drafts.filter(d => d.event.nativeTurnId === turnId);
+  return digest({ turn, events, drafts });
+}
+function needsIdentityRebuild(
+  previous: Cursor,
+  order: readonly string[],
+  effectiveEventIds: ReadonlySet<string>,
+): boolean {
+  const prevCommittedOrder = (previous.order ?? previous.events.map(([id]) => id)).filter(id =>
+    previous.events.some(([evId]) => evId === id),
+  );
+  const prevCommittedIndex = new Map(prevCommittedOrder.map((id, index) => [id, index]));
   const prevRetired = new Set(previous.retired);
-  let lastExisting = -1;
-  let seenNew = false;
-  for (const id of nextOrder) {
+  let lastCommitted = -1;
+  let seenNewCommitted = false;
+  for (const id of order) {
     if (prevRetired.has(id)) return true;
-    const idx = prevIndex.get(id);
+    if (!effectiveEventIds.has(id)) continue;
+    const idx = prevCommittedIndex.get(id);
     if (idx === undefined) {
-      seenNew = true;
+      // A newly committed row (including a former draft or late-arriving sibling) is safe at the tail;
+      // if an already-committed row follows it, Journal rev=1 order would diverge without a rebuild.
+      seenNewCommitted = true;
     } else {
-      if (seenNew || idx < lastExisting) return true;
-      lastExisting = idx;
+      if (seenNewCommitted || idx < lastCommitted) return true;
+      lastCommitted = idx;
     }
   }
   return false;
 }
-function apply(w: AgentLaneWriter, snapshot: AgySnapshot, mapped: MappedAgyTranscript): void {
+function apply(w: AgentLaneWriter, snapshot: AgySnapshot, mapped: MappedAgyTranscript, externalEnd?: ExternalTurnEnd): boolean {
   let previous = cursor(w.cursor);
-  if (previous && (previous.conversationId !== snapshot.conversationId || needsIdentityRebuild(previous, mapped.order))) {
+  if (previous && previous.conversationId !== snapshot.conversationId) {
     w.rebuild('identity-changed');
     previous = undefined;
   }
-  const events = mapped.events.map(e => [e.nativeId, digest(e)] as [string, string]),
-    drafts = mapped.drafts.map(e => [e.finalId, digest(e.event)] as [string, string]),
-    turns = mapped.turns.map(t => [t.id, digest(t)] as [string, string]),
-    children = mapped.children.map(c => [c.toolCallId, c.agentId] as [string, string]);
+  const buildEffective = (prev: Cursor | undefined) => {
+    const oldTurns = new Map(prev?.turns),
+      oldSettled = new Map(prev?.settled);
+    const retainedSettled = new Map<string, string>();
+    const nextSettled: Array<[string, string]> = [];
+    const effectiveTurns: MappedTurn[] = mapped.turns.map(t => {
+      if (externalEnd && externalEnd.turnId === t.id && !t.status) {
+        nextSettled.push([t.id, turnFingerprint(t.id, mapped)]);
+        return {
+          ...t,
+          status: externalEnd.status,
+          endedAt: externalEnd.at,
+          ...(externalEnd.error ? { error: externalEnd.error } : {}),
+        };
+      }
+      if (!t.status && oldSettled.has(t.id) && oldTurns.has(t.id)) {
+        const savedFp = oldSettled.get(t.id)!;
+        if (turnFingerprint(t.id, mapped) === savedFp) {
+          retainedSettled.set(t.id, savedFp);
+          nextSettled.push([t.id, savedFp]);
+        }
+      }
+      return t;
+    });
+    // D1: promote any remaining drafts of an ending turn before turnEnded so partial output is never dropped.
+    const endedTurnIds = new Set<string>(retainedSettled.keys());
+    for (const t of effectiveTurns) if (t.status !== undefined) endedTurnIds.add(t.id);
+    const effectiveEvents: NativeWorkbenchEvent[] = [...mapped.events];
+    const effectiveDrafts: MappedAgyTranscript['drafts'] = [];
+    for (const d of mapped.drafts) {
+      if (d.event.nativeTurnId && endedTurnIds.has(d.event.nativeTurnId)) effectiveEvents.push(d.event);
+      else effectiveDrafts.push(d);
+    }
+    return { oldTurns, retainedSettled, nextSettled, effectiveTurns, effectiveEvents, effectiveDrafts };
+  };
+  let state = buildEffective(previous);
+  if (previous && needsIdentityRebuild(previous, mapped.order, new Set(state.effectiveEvents.map(e => e.nativeId)))) {
+    w.rebuild('identity-changed');
+    previous = undefined;
+    state = buildEffective(undefined);
+  }
   const oldEvents = new Map(previous?.events),
-    oldDrafts = new Map(previous?.drafts),
-    oldTurns = new Map(previous?.turns),
-    currentIds = new Set([...events, ...drafts].map(([id]) => id)),
+    oldDrafts = new Map(previous?.drafts);
+  const { oldTurns, retainedSettled, nextSettled, effectiveTurns, effectiveEvents, effectiveDrafts } = state;
+  const eventDigests = new Map<string, string>();
+  const events: Array<[string, string]> = effectiveEvents.map(e => {
+    const hash = digest(e);
+    eventDigests.set(e.nativeId, hash);
+    return [e.nativeId, hash];
+  });
+  const draftDigests = new Map<string, string>();
+  const drafts: Array<[string, string]> = effectiveDrafts.map(d => {
+    const hash = digest(d.event);
+    draftDigests.set(d.finalId, hash);
+    return [d.finalId, hash];
+  });
+  const turnDigests = new Map<string, string>();
+  const turns: Array<[string, string]> = effectiveTurns.map(t => {
+    const hash = retainedSettled.has(t.id) ? oldTurns.get(t.id)! : digest(t);
+    turnDigests.set(t.id, hash);
+    return [t.id, hash];
+  });
+  const children = mapped.children.map(c => [c.toolCallId, c.agentId] as [string, string]);
+  const currentIds = new Set([...events, ...drafts].map(([id]) => id)),
     turnIds = new Set(turns.map(([id]) => id));
   const retire: string[] = [];
   const retiredContent = new Set(previous?.retired);
@@ -519,68 +599,74 @@ function apply(w: AgentLaneWriter, snapshot: AgySnapshot, mapped: MappedAgyTrans
       children,
       order: mapped.order,
       ...(retiredContent.size ? { retired: [...retiredContent] } : {}),
+      ...(nextSettled.length ? { settled: nextSettled } : {}),
     },
     encoded = JSON.stringify(next);
-  if (previous && encoded === w.cursor) return;
-  for (const [id, child] of previous?.children ?? [])
-    if (!children.some(([call, agent]) => call === id && agent === child)) w.retireSubagent(id);
-  // Retire first; retain end-before-start ordering for wholly removed turns.
-  if (retire.length) w.commit({ events: [], retire: [...new Set(retire)], cursor: w.cursor });
-  const changedEvents = new Map(mapped.events.filter(e => oldEvents.get(e.nativeId) !== digest(e)).map(e => [e.nativeId, e]));
-  const changedDrafts = new Map(mapped.drafts.filter(e => oldDrafts.get(e.finalId) !== digest(e.event)).map(e => [e.finalId, e]));
-  const turnById = new Map(mapped.turns.map(t => [t.id, t]));
+  if (previous && encoded === w.cursor) return false;
+  const changedEvents = new Map(effectiveEvents.filter(e => oldEvents.get(e.nativeId) !== eventDigests.get(e.nativeId)).map(e => [e.nativeId, e]));
+  const changedDrafts = new Map(effectiveDrafts.filter(d => oldDrafts.get(d.finalId) !== draftDigests.get(d.finalId)).map(d => [d.finalId, d]));
+  const turnById = new Map(effectiveTurns.map(t => [t.id, t]));
   const lastIndexByTurn = new Map<string, number>();
   mapped.order.forEach((id, index) => {
     const turnId = (changedEvents.get(id) ?? changedDrafts.get(id)?.event)?.nativeTurnId;
     if (turnId && turnById.has(turnId)) lastIndexByTurn.set(turnId, index);
   });
-  const startedTurns = new Set<string>(),
-    endedTurns = new Set<string>();
-  let pendingEvents: NativeWorkbenchEvent[] = [],
-    pendingDrafts: MappedAgyTranscript['drafts'] = [];
-  const flushPending = () => {
-    if (!pendingEvents.length && !pendingDrafts.length) return;
-    w.commit({ events: pendingEvents, drafts: pendingDrafts, cursor: w.cursor });
-    pendingEvents = [];
-    pendingDrafts = [];
-  };
-  const openTurn = (t: MappedTurn) => {
-    if (startedTurns.has(t.id)) return;
-    startedTurns.add(t.id);
-    if (oldTurns.get(t.id) === digest(t)) return;
-    flushPending();
-    if (!t.status && w.turnEndStatus(t.id)) w.turnReopened(t.id, t.at);
-    w.turnStarted(t.id, t.at);
-  };
-  mapped.order.forEach((id, index) => {
-    const ev = changedEvents.get(id),
-      dr = changedDrafts.get(id);
-    if (!ev && !dr) return;
-    const turnId = (ev ?? dr!.event).nativeTurnId,
-      turn = turnId ? turnById.get(turnId) : undefined;
-    if (turn) openTurn(turn);
-    // Keep events and drafts strictly in snapshot order since commit() appends events before drafts.
-    if (ev) {
-      if (pendingDrafts.length) flushPending();
-      pendingEvents.push(ev);
-    } else if (dr) {
-      if (pendingEvents.length) flushPending();
-      pendingDrafts.push(dr);
-    }
-    if (turn && lastIndexByTurn.get(turn.id) === index && oldTurns.get(turn.id) !== digest(turn) && turn.status) {
+  const run = () => {
+    for (const [id, child] of previous?.children ?? [])
+      if (!children.some(([call, agent]) => call === id && agent === child)) w.retireSubagent(id);
+    // Retire first; retain end-before-start ordering for wholly removed turns.
+    if (retire.length) w.commit({ events: [], retire: [...new Set(retire)], cursor: w.cursor });
+    const startedTurns = new Set<string>(),
+      endedTurns = new Set<string>();
+    let pendingEvents: NativeWorkbenchEvent[] = [],
+      pendingDrafts: MappedAgyTranscript['drafts'] = [];
+    const flushPending = () => {
+      if (!pendingEvents.length && !pendingDrafts.length) return;
+      w.commit({ events: pendingEvents, drafts: pendingDrafts, cursor: w.cursor });
+      pendingEvents = [];
+      pendingDrafts = [];
+    };
+    const openTurn = (t: MappedTurn) => {
+      if (startedTurns.has(t.id)) return;
+      startedTurns.add(t.id);
+      if (oldTurns.get(t.id) === turnDigests.get(t.id)) return;
       flushPending();
-      w.turnEnded(turn.id, turn.status, turn.endedAt ?? turn.at, turn.error);
-      endedTurns.add(turn.id);
+      if (!t.status && w.turnEndStatus(t.id)) w.turnReopened(t.id, t.at);
+      w.turnStarted(t.id, t.at);
+    };
+    mapped.order.forEach((id, index) => {
+      const ev = changedEvents.get(id),
+        dr = changedDrafts.get(id);
+      if (!ev && !dr) return;
+      const turnId = (ev ?? dr!.event).nativeTurnId,
+        turn = turnId ? turnById.get(turnId) : undefined;
+      if (turn) openTurn(turn);
+      // Keep events and drafts strictly in snapshot order since commit() appends events before drafts.
+      if (ev) {
+        if (pendingDrafts.length) flushPending();
+        pendingEvents.push(ev);
+      } else if (dr) {
+        if (pendingEvents.length) flushPending();
+        pendingDrafts.push(dr);
+      }
+      if (turn && lastIndexByTurn.get(turn.id) === index && oldTurns.get(turn.id) !== turnDigests.get(turn.id) && turn.status) {
+        flushPending();
+        w.turnEnded(turn.id, turn.status, turn.endedAt ?? turn.at, turn.error);
+        endedTurns.add(turn.id);
+      }
+    });
+    flushPending();
+    for (const t of effectiveTurns) {
+      if (oldTurns.get(t.id) === turnDigests.get(t.id)) continue;
+      openTurn(t);
+      if (!endedTurns.has(t.id) && t.status) w.turnEnded(t.id, t.status, t.endedAt ?? t.at, t.error);
     }
-  });
-  flushPending();
-  for (const t of mapped.turns) {
-    if (oldTurns.get(t.id) === digest(t)) continue;
-    openTurn(t);
-    if (!endedTurns.has(t.id) && t.status) w.turnEnded(t.id, t.status, t.endedAt ?? t.at, t.error);
-  }
-  // Persist the cursor after lifecycle marks; a crash before this point replays idempotently.
-  w.commit({ events: [], cursor: encoded });
+    // Persist the cursor after lifecycle marks; a crash before this point replays idempotently.
+    w.commit({ events: [], cursor: encoded });
+  };
+  if (w.transaction) w.transaction(run);
+  else run();
+  return true;
 }
 /** Size and change time of a conversation's database and its WAL: agy writes go through the WAL first. */
 function storeSignature(geminiDir: string, id: string): string {
@@ -602,22 +688,25 @@ export interface AntigravityTranscriptOptions {
 }
 /** The TUI and the conversation view share one native store and one journal lane. */
 export class AntigravityTranscriptSource implements AgentTranscriptSource {
+  private static readonly CACHE_LIMIT = 64;
+  private static readonly CHILD_SIG_LIMIT = 128;
+  private lastStatsId?: string;
+  private readonly cache = new Map<string, { signature: string; snapshot: AgySnapshot | undefined }>();
+  private readonly childSignatures = new Map<
+    string,
+    { signature: string; laneGeneration: string; children: MappedAgyTranscript['children'] }
+  >();
   constructor(private readonly options: AntigravityTranscriptOptions) {}
   identity(): string | undefined {
     const id = this.options.nativeId();
     return id ? `antigravity:${id}` : undefined;
   }
-  async pull(w: AgentLaneWriter, signal: AbortSignal): Promise<{ caughtUp: boolean }> {
-    if (signal.aborted) return { caughtUp: false };
-    const id = this.options.nativeId();
-    // Nothing on disk yet (no native conversation before the first message) is all of it: `caughtUp: false`
-    // has the host pull again at once, which spins the event loop for as long as agy takes to start.
-    if (!id) return { caughtUp: true };
+  private readSnapshot(id: string): AgySnapshot | undefined {
     const live = this.options.live();
     if (live && live.conversationId !== id) throw new Error('Antigravity live snapshot belongs to another conversation');
     const persisted = this.stored(id, Boolean(live));
     let snapshot = live ?? persisted;
-    if (!snapshot) return { caughtUp: true };
+    if (!snapshot) return undefined;
     if (live && persisted) {
       // Stream projection sometimes removes signature-bearing tool-call envelopes.
       // Hydrate only steps whose original source coordinates still match the active branch.
@@ -628,34 +717,65 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
         const p = stored.get(agyStepIdentity(live, s, i));
         return !p || !s.type || p.type === s.type;
       });
-      if (agrees) snapshot = {
-        ...live,
-        steps: live.steps.map((s, i) => {
-          const p = stored.get(agyStepIdentity(live, s, i));
-          if (!p) return s;
-          const md = { ...record(p.metadata), ...record(s.metadata) };
-          return {
-            ...p,
-            ...s,
-            metadata: md,
-            // A partial stream frame must not publish a hidden message or drop persisted renderInfo.
-            ...(agyRecord(p.systemMessage) && agyRecord(s.systemMessage)
-              ? { systemMessage: hiddenSystemMessage(p.systemMessage) ? p.systemMessage : { ...p.systemMessage, ...s.systemMessage } }
-              : hiddenSystemMessage(p.systemMessage)
-              ? { systemMessage: p.systemMessage }
-              : {}),
-            ...(hiddenError(p.errorMessage) ? { errorMessage: p.errorMessage } : {}),
-            ...(agyRecord(s.plannerResponse) ? { plannerResponse: { ...record(p.plannerResponse), ...s.plannerResponse } } : {}),
-          };
-        }),
-      };
+      if (agrees) {
+        snapshot = {
+          ...live,
+          steps: live.steps.map((s, i) => {
+            const p = stored.get(agyStepIdentity(live, s, i));
+            if (!p) return s;
+            const md = { ...record(p.metadata), ...record(s.metadata) };
+            return {
+              ...p,
+              ...s,
+              metadata: md,
+              // A partial stream frame must not publish a hidden message or drop persisted renderInfo.
+              ...(agyRecord(p.systemMessage) && agyRecord(s.systemMessage)
+                ? { systemMessage: hiddenSystemMessage(p.systemMessage) ? p.systemMessage : { ...p.systemMessage, ...s.systemMessage } }
+                : hiddenSystemMessage(p.systemMessage)
+                ? { systemMessage: p.systemMessage }
+                : {}),
+              ...(hiddenError(p.errorMessage) ? { errorMessage: p.errorMessage } : {}),
+              ...(agyRecord(s.plannerResponse) ? { plannerResponse: { ...record(p.plannerResponse), ...s.plannerResponse } } : {}),
+            };
+          }),
+        };
+      }
     }
+    return snapshot;
+  }
+  async pull(w: AgentLaneWriter, signal: AbortSignal): Promise<{ caughtUp: boolean }> {
+    if (signal.aborted) return { caughtUp: false };
+    const id = this.options.nativeId();
+    // Nothing on disk yet (no native conversation before the first message) is all of it: `caughtUp: false`
+    // has the host pull again at once, which spins the event loop for as long as agy takes to start.
+    if (!id) return { caughtUp: true };
+    const snapshot = this.readSnapshot(id);
+    if (!snapshot) return { caughtUp: true };
     const mapped = mapAgySnapshot(snapshot, this.options.sessionId);
-    apply(w, snapshot, mapped);
-    this.stats(mapped);
+    const firstPull = this.lastStatsId !== id;
+    const changed = apply(w, snapshot, mapped);
+    if (changed || firstPull) {
+      this.lastStatsId = id;
+      this.stats(mapped);
+    }
     const seen = new Set<string>([id]);
     await this.children(w, mapped, seen, signal);
     return { caughtUp: !signal.aborted };
+  }
+  async settleTurnEnd(w: AgentLaneWriter, end: ExternalTurnEnd): Promise<boolean> {
+    const id = this.options.nativeId();
+    if (!id) return false;
+    const snapshot = this.readSnapshot(id);
+    if (!snapshot) return false;
+    const target = w.scratch ?? w;
+    const mapped = mapAgySnapshot(snapshot, this.options.sessionId);
+    if (!mapped.turns.some(t => t.id === end.turnId)) return false;
+    const changed = apply(target, snapshot, mapped, end);
+    if (changed) {
+      this.lastStatsId = id;
+      this.stats(mapped);
+    }
+    return true;
   }
   /**
    * The stored conversation, decoded again only when its database files change: while agy streams a step the
@@ -665,7 +785,11 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
   private stored(id: string, hasLive: boolean): AgySnapshot | undefined {
     const signature = storeSignature(this.options.geminiDir(), id);
     const cached = this.cache.get(id);
-    if (cached?.signature === signature) return cached.snapshot;
+    if (cached?.signature === signature) {
+      this.cache.delete(id);
+      this.cache.set(id, cached);
+      return cached.snapshot;
+    }
     let snapshot: AgySnapshot | undefined;
     try {
       snapshot = readAgySnapshot(this.options.geminiDir(), id);
@@ -674,10 +798,14 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
       if (!hasLive) throw error;
       return undefined;
     }
+    this.cache.delete(id);
+    if (this.cache.size >= AntigravityTranscriptSource.CACHE_LIMIT) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) this.cache.delete(oldest);
+    }
     this.cache.set(id, { signature, snapshot });
     return snapshot;
   }
-  private readonly cache = new Map<string, { signature: string; snapshot: AgySnapshot | undefined }>();
   private stats(mapped: MappedAgyTranscript): void {
     const host = this.options.host;
     if (!host) return;
@@ -685,29 +813,63 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
     for (const item of mapped.usage) host.stats.recordUsage(this.options.sessionId, item.runId, item.usage);
     for (const job of mapped.jobs) host.emit(this.options.sessionId, { type: 'job', job });
   }
+  private hasChangedDescendant(generation: string, children: MappedAgyTranscript['children'], seen: Set<string>): boolean {
+    const geminiDir = this.options.geminiDir();
+    for (const child of children) {
+      if (seen.has(child.agentId) || seen.size >= 128) continue;
+      seen.add(child.agentId);
+      const key = `${generation}:${child.toolCallId}:${child.agentId}`;
+      const prev = this.childSignatures.get(key);
+      const sig = storeSignature(geminiDir, child.agentId);
+      if (!prev || prev.signature !== sig) return true;
+      if (prev.children.length && this.hasChangedDescendant(prev.laneGeneration, prev.children, seen)) return true;
+    }
+    return false;
+  }
+  private recordChildSignature(
+    key: string,
+    value: { signature: string; laneGeneration: string; children: MappedAgyTranscript['children'] },
+  ): void {
+    this.childSignatures.delete(key);
+    if (this.childSignatures.size >= AntigravityTranscriptSource.CHILD_SIG_LIMIT) {
+      const oldest = this.childSignatures.keys().next().value;
+      if (oldest !== undefined) this.childSignatures.delete(oldest);
+    }
+    this.childSignatures.set(key, value);
+  }
   private async children(w: AgentLaneWriter, mapped: MappedAgyTranscript, seen: Set<string>, signal: AbortSignal): Promise<void> {
+    const geminiDir = this.options.geminiDir();
+    const parentId = mappedParent(w);
     for (const child of mapped.children) {
       if (signal.aborted || seen.has(child.agentId) || seen.size >= 128) continue;
       seen.add(child.agentId);
-      const snapshot = this.stored(child.agentId, false);
+      const sigKey = `${w.generation}:${child.toolCallId}:${child.agentId}`;
+      const sig = storeSignature(geminiDir, child.agentId);
+      const prev = this.childSignatures.get(sigKey);
+      if (prev && prev.signature === sig) {
+        if (!prev.children.length || !this.hasChangedDescendant(prev.laneGeneration, prev.children, new Set(seen))) continue;
+      }
+      let snapshot: AgySnapshot | undefined;
+      try {
+        snapshot = this.stored(child.agentId, false);
+      } catch {
+        continue;
+      }
       if (!snapshot) continue;
       // Child IDs alone are not authority: verify the native parent linkage in this private root.
-      if (snapshot.metadata?.parentConversationId !== mappedParent(w)) continue;
+      if (snapshot.metadata?.parentConversationId !== parentId) continue;
       const lane = w.child(child.toolCallId, child.agentId, child),
         data = mapAgySnapshot(snapshot, this.options.sessionId);
-      apply(lane, snapshot, data);
-      this.stats({ ...data, usage: data.usage.map(u => ({ ...u, usage: { ...u.usage, agentKind: 'subagent' } })) });
+      const changed = apply(lane, snapshot, data);
+      this.recordChildSignature(sigKey, { signature: sig, laneGeneration: lane.generation, children: data.children });
+      if (changed || !prev) {
+        this.stats({ ...data, usage: data.usage.map(u => ({ ...u, usage: { ...u.usage, agentKind: 'subagent' } })) });
+      }
       await this.children(lane, data, seen, signal);
     }
   }
   watch(_w: AgentLaneWriter, wake: () => void): () => void {
-    const stop = this.options.watch(wake),
-      timer = setInterval(wake, 750);
-    timer.unref();
-    return () => {
-      clearInterval(timer);
-      stop();
-    };
+    return this.options.watch(wake);
   }
   async drain(w: AgentLaneWriter): Promise<void> {
     await this.pull(w, new AbortController().signal);
@@ -716,30 +878,110 @@ export class AntigravityTranscriptSource implements AgentTranscriptSource {
 function mappedParent(w: AgentLaneWriter): string | undefined {
   return cursor(w.cursor)?.conversationId;
 }
+function chooseTurns(turns: ShareTurn[], selection?: ShareSelection): string[] {
+  if (!selection || selection.mode === 'all') return turns.map(turn => turn.id);
+  if (selection.mode === 'recent') {
+    if (!Number.isSafeInteger(selection.count) || selection.count < 1) {
+      throw new AppError('SHARE_SELECTION_INVALID', 'The number of shared turns is invalid', 400, undefined, { reason: 'count' });
+    }
+    return turns.slice(-selection.count).map(turn => turn.id);
+  }
+  const ids = new Set(selection.turnIds),
+    known = new Set(turns.map(turn => turn.id));
+  if (!ids.size || [...ids].some(id => !known.has(id))) {
+    throw new AppError('SHARE_SELECTION_INVALID', 'The selected messages changed; select them again', 409, undefined, { reason: 'changed' });
+  }
+  return turns.filter(turn => ids.has(turn.id)).map(turn => turn.id);
+}
 /** Stored history for search/shares. This path never launches a native runtime. */
-export function readAgyHistory(geminiDir: string, conversationId: string, sessionId = ''): AgentHistory {
+export function readAgyHistory(
+  geminiDir: string,
+  conversationId: string,
+  sessionId = '',
+  options?: AgentHistoryOptions,
+): AgentHistory {
+  options?.signal?.throwIfAborted();
   const snapshot = readAgySnapshot(geminiDir, conversationId);
+  options?.signal?.throwIfAborted();
   if (!snapshot) throw new Error('Antigravity history is unavailable');
-  const mapped = mapAgySnapshot(snapshot, sessionId),
-    seen = new Set([conversationId]);
-  const subagents: AgentHistory['subagents'] = [];
-  const visit = (data: MappedAgyTranscript, parent: string) => {
-    for (const child of data.children) {
-      if (seen.has(child.agentId) || seen.size >= 128) continue;
-      seen.add(child.agentId);
-      const s = readAgySnapshot(geminiDir, child.agentId);
-      if (!s || s.metadata?.parentConversationId !== parent) continue;
-      const m = mapAgySnapshot(s, sessionId);
-      subagents.push({ ...child, events: m.events.map(({ sequence: _sequence, sessionId: _session, raw: _raw, ...event }) => event) });
-      visit(m, child.agentId);
+  const mapped = mapAgySnapshot(snapshot, sessionId);
+  const turns: ShareTurn[] = mapped.turns.filter(t => t.text !== undefined).map(t => ({ id: t.id, text: t.text!, createdAt: t.at }));
+  const selectedTurnIds = chooseTurns(turns, options?.selection);
+  if (options?.catalogOnly) return { events: [], subagents: [], turns, selectedTurnIds };
+  const selectedSet = options?.selection && options.selection.mode !== 'all' ? new Set(selectedTurnIds) : undefined;
+  const filteredEvents = selectedSet
+    ? mapped.events.filter(e => e.nativeTurnId !== undefined && selectedSet.has(e.nativeTurnId))
+    : mapped.events;
+  const keptCalls = selectedSet
+    ? new Set(filteredEvents.map(e => text(e.data.toolCallId)).filter((callId): callId is string => Boolean(callId)))
+    : undefined;
+  const rootChildren = keptCalls
+    ? mapped.children.filter(child => {
+        const baseCallId = child.toolCallId.includes(':') ? child.toolCallId.slice(0, child.toolCallId.lastIndexOf(':')) : child.toolCallId;
+        return keptCalls.has(child.toolCallId) || keptCalls.has(baseCallId);
+      })
+    : mapped.children;
+  const filteredJobs = keptCalls ? mapped.jobs.filter(job => Boolean(job.toolCallId && keptCalls.has(job.toolCallId))) : mapped.jobs;
+  const answerIds = new Set(filteredEvents.filter(e => e.type === 'agent_message_chunk').map(e => e.nativeId));
+  const modelInfo: Record<string, ShareModelInfo> = Object.create(null);
+  const turnModels: Record<string, ShareModelInfo> = Object.create(null);
+  const ambiguousModelTurns = new Set<string>();
+  const noteModel = (stepId: string, turnId: string | undefined, model: string | undefined) => {
+    if (!model) return;
+    if (selectedSet && (!turnId || !selectedSet.has(turnId))) return;
+    const info: ShareModelInfo = { model, source: 'history' };
+    const answerId = `${stepId}:answer`;
+    if (answerIds.has(answerId)) modelInfo[answerId] = info;
+    if (turnId && !ambiguousModelTurns.has(turnId)) {
+      if (turnModels[turnId] && turnModels[turnId].model !== model) {
+        delete turnModels[turnId];
+        ambiguousModelTurns.add(turnId);
+      } else {
+        turnModels[turnId] = info;
+      }
     }
   };
-  visit(mapped, conversationId);
+  for (const item of mapped.usage) noteModel(item.usage.stepId, item.runId, item.usage.model);
+  snapshot.steps.forEach((step, index) => {
+    if (!agyRecord(step.plannerResponse) || !settled(step)) return;
+    const md = record(step.metadata);
+    const model = text(record(md.modelInfo).chatModelName) ?? text(record(md.modelInfo).modelName);
+    noteModel(`agy:${agyStepIdentity(snapshot, step, index)}`, text(md.executionId), model);
+  });
+  const subagents: AgentHistory['subagents'] = [];
+  const warnings = [...mapped.warnings];
+  if (!options?.messagesOnly) {
+    const seen = new Set([conversationId]);
+    const visit = (children: MappedAgyTranscript['children'], parent: string) => {
+      for (const child of children) {
+        options?.signal?.throwIfAborted();
+        if (seen.has(child.agentId) || seen.size >= 128) continue;
+        seen.add(child.agentId);
+        let s: AgySnapshot | undefined;
+        try {
+          s = readAgySnapshot(geminiDir, child.agentId);
+        } catch {
+          options?.signal?.throwIfAborted();
+          warnings.push(`Subagent ${child.agentId} history is unavailable.`);
+          continue;
+        }
+        if (!s || s.metadata?.parentConversationId !== parent) continue;
+        const m = mapAgySnapshot(s, sessionId);
+        subagents.push({ ...child, events: m.events.map(({ sequence: _sequence, sessionId: _session, raw: _raw, ...event }) => event) });
+        visit(m.children, child.agentId);
+      }
+    };
+    visit(rootChildren, conversationId);
+  }
   return {
-    events: mapped.events.map(({ sequence: _sequence, sessionId: _session, raw: _raw, ...event }) => event),
+    events: filteredEvents.map(({ sequence: _sequence, sessionId: _session, raw: _raw, ...event }) => event),
+    ...(Object.keys(modelInfo).length ? { modelInfo } : {}),
+    ...(Object.keys(turnModels).length ? { turnModels } : {}),
+    ...(ambiguousModelTurns.size ? { ambiguousModelTurns: [...ambiguousModelTurns] } : {}),
     subagents,
-    ...(mapped.jobs.length ? { jobs: mapped.jobs } : {}),
-    ...(mapped.warnings.length ? { warnings: [...new Set(mapped.warnings)] } : {}),
-    turns: mapped.turns.filter(t => t.text !== undefined).map(t => ({ id: t.id, text: t.text!, createdAt: t.at })),
+    ...(filteredJobs.length ? { jobs: filteredJobs } : {}),
+    ...(warnings.length ? { warnings: [...new Set(warnings)] } : {}),
+    turns,
+    selectedTurnIds,
   };
 }

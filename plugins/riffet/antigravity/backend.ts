@@ -1,23 +1,52 @@
+import { realpath } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { NativeInteractionResponse, NativeInteractionResult, NativeStatus } from '@contracts';
-import { isCliMissing, resolveCliExecutable, runProcess } from '@riffet/plugin-api/kit';
+import type { NativeInteractionResponse, NativeInteractionResult, NativeSlashItem, NativeStatus } from '@contracts';
 import {
-  AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentDiscussionRequest, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
-  type AgentOpenResult, type AgentProfile, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
+  isCliMissing,
+  redactSensitiveText,
+  resolveCliExecutable,
+  runProcess,
+  scanSkillRoots,
+  stripTerminalSequences,
+} from '@riffet/plugin-api/kit';
+import {
+  AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentDiscussionRequest, type AgentExtensionLayout, type AgentHistoryOptions, type AgentHost, type AgentModelQuery,
+  type AgentOpenResult, type AgentProfile, type AgentProjectView, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
 } from '@riffet/plugin-api/experimental/agent';
+import { emptyComposer, sameInput } from './composer.js';
 import { agyMode, agySelection, agySessionGeminiDir, agyToolPermission, parseAgyProfile } from './config.js';
 import { streamAgyDiscussion } from './discussion.js';
 import { queueConfiguration } from './config-queue.js';
 import { interrupt, runtimeAction } from './control.js';
+import { interactionOf } from './interactions.js';
 import { attach } from './lifecycle.js';
 import { open } from './launch.js';
-import { COMMANDS, capabilities, extensionLayout } from './metadata.js';
+import { capabilities, extensionLayout } from './metadata.js';
 import { listModels } from './models.js';
-import { agyConversationId } from './protocol.js';
+import { agyConversationId, agyRecord, type AgyRecord } from './protocol.js';
 import { interaction, respond } from './respond.js';
-import { detach, loadContext, sessionRoot, type Hub } from './runtime.js';
+import { detach, idle, loadContext, nativeStatus, sessionRoot, waiting, type Hub } from './runtime.js';
 import { send } from './send.js';
-import { AntigravityTranscriptSource, readAgyHistory } from './transcript.js';
+import { scanStandingSkills } from './standing.js';
+import { AntigravityTranscriptSource, agyStepIdentity, mapLiveSnapshot, readAgyHistory } from './transcript.js';
+
+const READY_PATTERN = /\? for shortcuts|Antigravity|Gemini.*Flash/;
+
+function agyStartupError(screen: string): string | undefined {
+  const text = stripTerminalSequences(screen);
+  if (READY_PATTERN.test(text)) return undefined;
+  const line = text
+    .split('\n')
+    .map(entry => entry.trim())
+    .find(entry =>
+      /^(?:Cannot\b|Unable to\b|Failed\b|(?:\w*Error)(?:\s*\[[^\]]+\])?:|error:|Unauthorized\b|Forbidden\b|Not authenticated\b|Authentication (?:failed|required)\b|Login required\b|Please sign in\b|Invalid API key\b|API key\b.*(?:invalid|missing|expired|required))/i.test(
+        entry,
+      ),
+    );
+  if (!line) return undefined;
+  return `Antigravity failed to start: ${redactSensitiveText(line).slice(0, 500)}`;
+}
 
 export class AntigravityBackend implements AgentBackend {
   readonly id = 'antigravity' as const;
@@ -31,6 +60,9 @@ export class AntigravityBackend implements AgentBackend {
     completesOnTurnEvent: true,
     offlineMayBeRunning: true,
     riffetTools: true,
+    relaunchesForPendingConfig: true,
+    startsNewTopic: true,
+    cachesModels: true,
     terminalName: 'Antigravity',
     consumesProtocols: ['google-generative-ai'] as const,
   };
@@ -38,7 +70,11 @@ export class AntigravityBackend implements AgentBackend {
     managed: ['GEMINI_API_KEY', 'GOOGLE_GEMINI_BASE_URL', 'AGY_CLI_DISABLE_AUTO_UPDATE'],
     secrets: ['GEMINI_API_KEY'],
   };
-  readonly terminal = { title: 'Antigravity', ready: (screen: string) => /\? for shortcuts|Antigravity|Gemini.*Flash/.test(screen) };
+  readonly terminal = {
+    title: 'Antigravity',
+    ready: (screen: string) => READY_PATTERN.test(screen),
+    startupError: (screen: string) => agyStartupError(screen),
+  };
   private readonly discussions = new AbortController();
   private readonly hub: Hub;
   private readonly runtimes: Hub['runtimes'];
@@ -108,12 +144,32 @@ export class AntigravityBackend implements AgentBackend {
     return listModels(this.hub, host, query);
   }
 
+  invalidateModels(): void {
+    this.hub.catalogs.clear();
+  }
+
   streamDiscussion(host: AgentHost, profile: AgentProfile, request: AgentDiscussionRequest): Promise<void> {
     return streamAgyDiscussion(this.hub, host, profile, { ...request, signal: AbortSignal.any([request.signal, this.discussions.signal]) });
   }
 
-  async slashItems() {
-    return COMMANDS.map(name => ({ name, kind: 'command' as const }));
+  async slashItems(host: AgentHost, project: AgentProjectView | undefined, profile: AgentProfile): Promise<NativeSlashItem[]> {
+    const standing = project ? host.standing?.launch(project) : undefined;
+    if (standing) {
+      const skills = await scanStandingSkills(standing);
+      return [{ name: 'new', description: 'Start a new topic', kind: 'command' as const }, ...skills];
+    }
+    let sourceDir: string;
+    try {
+      sourceDir = parseAgyProfile(profile.config).sourceDir;
+    } catch {
+      sourceDir = join(homedir(), '.gemini');
+    }
+    return await scanSkillRoots([
+      ...(project ? [join(project.cwd, '.agents', 'skills')] : []),
+      join(sourceDir, 'config', 'skills'),
+      join(sourceDir, 'antigravity-cli', 'skills'),
+      join(sourceDir, 'skills'),
+    ]);
   }
 
   status(_host: AgentHost, context: AgentContext): NativeStatus {
@@ -125,11 +181,15 @@ export class AntigravityBackend implements AgentBackend {
   }
 
   async start(host: AgentHost): Promise<void> {
-    for (const session of host.view.sessions()) {
-      if (session.terminalId && !session.archivedAt) {
-        const context = await loadContext(host, session.id).catch(() => undefined);
-        if (context) await attach(this.hub, host, context).catch(() => undefined);
-      }
+    const targets = host.view.sessions().filter(session => session.terminalId && !session.archivedAt);
+    const BATCH_SIZE = 4;
+    for (let i = 0; i < targets.length; i += BATCH_SIZE) {
+      await Promise.allSettled(
+        targets.slice(i, i + BATCH_SIZE).map(async session => {
+          const context = await loadContext(host, session.id);
+          await attach(this.hub, host, context);
+        }),
+      );
     }
   }
 
@@ -200,9 +260,9 @@ export class AntigravityBackend implements AgentBackend {
     });
   }
 
-  async readHistory(_host: AgentHost, context: AgentContext) {
+  async readHistory(_host: AgentHost, context: AgentContext, options?: AgentHistoryOptions) {
     return context.session.nativeSessionId
-      ? readAgyHistory(this.geminiDir(context.session.id), context.session.nativeSessionId, context.session.id)
+      ? readAgyHistory(this.geminiDir(context.session.id), context.session.nativeSessionId, context.session.id, options)
       : { events: [], subagents: [] };
   }
 
@@ -217,8 +277,141 @@ export class AntigravityBackend implements AgentBackend {
     return recorded;
   }
 
-  async canReleaseInput(_host: AgentHost, _context: AgentContext, _run: AgentRunRef) {
-    return false;
+  canReleaseInput(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean> {
+    return this.checkInputRelease(host, context, run, false);
+  }
+
+  canReleaseAfterLaterTurn(host: AgentHost, context: AgentContext, run: AgentRunRef): Promise<boolean> {
+    return this.checkInputRelease(host, context, run, true);
+  }
+
+  private async checkInputRelease(
+    host: AgentHost,
+    context: AgentContext,
+    run: AgentRunRef,
+    requireLaterTurn: boolean,
+  ): Promise<boolean> {
+    try {
+      if (!run.nativeInputBoundary) return false;
+      let boundary: AgyRecord;
+      try {
+        const parsed: unknown = JSON.parse(run.nativeInputBoundary);
+        if (!agyRecord(parsed)) return false;
+        boundary = parsed;
+      } catch {
+        return false;
+      }
+      if (boundary.version !== 1 || typeof boundary.root !== 'string' || !Array.isArray(boundary.users)) return false;
+
+      const sessionId = context.session.id;
+      const runtime = this.runtimes.get(sessionId);
+      if (
+        !runtime ||
+        runtime.stopped ||
+        runtime.conflict ||
+        runtime.cancelling ||
+        !runtime.rpc ||
+        runtime.status.connection?.state !== 'connected'
+      ) {
+        return false;
+      }
+      await host.transcript.drain?.(sessionId);
+      const session = host.view.session(sessionId);
+      if (!session || session.archivedAt || !session.terminalId || session.terminalId !== runtime.launch.terminalId) return false;
+
+      const [boundRoot, launchRoot] = await Promise.all([
+        realpath(boundary.root).catch(() => boundary.root),
+        realpath(runtime.launch.geminiDir).catch(() => runtime.launch.geminiDir),
+      ]);
+      if (boundRoot !== launchRoot) return false;
+      if (boundary.id && boundary.id !== session.nativeSessionId) return false;
+      if (run.nativeSessionId && run.nativeSessionId !== session.nativeSessionId) return false;
+
+      if (
+        runtime.status.phase !== 'idle' ||
+        runtime.status.activeTurn ||
+        runtime.status.interaction ||
+        runtime.status.activity?.background ||
+        runtime.status.activity?.compacting
+      ) {
+        return false;
+      }
+      const status = await nativeStatus(runtime);
+      if (!idle(runtime, status) || (status?.conversation_id ?? '') !== (session.nativeSessionId ?? '')) return false;
+
+      const snap = runtime.snapshot;
+      if (session.nativeSessionId) {
+        if (!snap || snap.conversationId !== session.nativeSessionId || waiting(snap) || interactionOf(snap)) return false;
+        if (boundary.trajectoryId && snap.trajectoryId !== boundary.trajectoryId) return false;
+        const hasText = Boolean(run.renderedText?.trim());
+        const recorded = snap.steps.some((step, index) => {
+          if (!step.userInput) return false;
+          const identity = agyStepIdentity(snap, step, index);
+          if (boundary.users.includes(identity)) return false;
+          const body = step.userInput.userResponse;
+          if (hasText) {
+            if (sameInput(body, run.renderedText)) return true;
+            if (run.inputText && run.inputText !== run.renderedText && sameInput(body, run.inputText)) return true;
+            return false;
+          }
+          const bodyText = typeof body === 'string' ? body : '';
+          const hasMedia =
+            (Array.isArray(step.userInput.images) && step.userInput.images.length > 0) ||
+            (Array.isArray(step.userInput.media) && step.userInput.media.length > 0);
+          return !bodyText.trim() && hasMedia;
+        });
+        if (recorded) return false;
+        if (requireLaterTurn) {
+          const sentAt = run.inputSentAt ?? run.dispatchAt;
+          if (sentAt === undefined) return false;
+          const turns = mapLiveSnapshot(snap, sessionId).turns;
+          const hasLaterCompleted = turns.some(turn => {
+            if (!turn.status || turn.id === run.nativeTurnId) return false;
+            const startedAt = Date.parse(turn.at);
+            return Number.isFinite(startedAt) && startedAt > sentAt;
+          });
+          if (!hasLaterCompleted) return false;
+        }
+      } else {
+        if (requireLaterTurn || snap) return false;
+      }
+
+      const terminal = await host.terminals.get(session.terminalId);
+      if (!terminal || terminal.state === 'exited' || terminal.epoch !== runtime.launch.epoch || (requireLaterTurn && terminal.ownerId)) {
+        return false;
+      }
+      const screen = await host.terminals.screen(session.terminalId, { fresh: true });
+      if (!screen || !emptyComposer(screen)) return false;
+      if (host.dialogs.isResponding?.(session.terminalId)) return false;
+      if (await host.dialogs.current?.(sessionId)) return false;
+
+      // Re-verify terminal epoch, session binding, and idle state after screen capture.
+      const latestTerminal = await host.terminals.get(session.terminalId);
+      if (
+        !latestTerminal ||
+        latestTerminal.state === 'exited' ||
+        latestTerminal.epoch !== terminal.epoch ||
+        (requireLaterTurn && latestTerminal.ownerId)
+      ) {
+        return false;
+      }
+      const latestSession = host.view.session(sessionId);
+      const latestStatus = await nativeStatus(runtime);
+      return Boolean(
+        latestSession &&
+          !latestSession.archivedAt &&
+          latestSession.terminalId === session.terminalId &&
+          latestSession.nativeSessionId === session.nativeSessionId &&
+          !runtime.stopped &&
+          !runtime.conflict &&
+          runtime.status.phase === 'idle' &&
+          !runtime.status.activeTurn &&
+          !runtime.status.interaction &&
+          idle(runtime, latestStatus),
+      );
+    } catch {
+      return false;
+    }
   }
 
   detach(_host: AgentHost, id: string): void {

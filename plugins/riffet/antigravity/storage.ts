@@ -7,7 +7,7 @@ import { AGY_ID, AGY_STEP_LIMIT, type AgyRecord, type AgySnapshot } from './prot
 // transcript data is decoded: configs, credentials and model signatures never leave the store.
 type Wire = bigint | Uint8Array;
 type Fields = Map<number, Wire[]>;
-const MAX_BYTES = 64 * 1024 * 1024;
+const MAX_BYTES = 256 * 1024 * 1024;
 const utf8 = new TextDecoder('utf-8', { fatal: true });
 function refuse(detail: string): never {
   throw new Error(`Unsupported Antigravity transcript: ${detail}`);
@@ -336,9 +336,10 @@ function payload(kind: number, f: Fields): AgyRecord {
         typed = { invokeSubagent: invoke(fields(bytes), true) };
       if (bytes && typeUrl === 'type.googleapis.com/exa.cortex.core.tools.RunCommand') {
         const r = fields(bytes);
+        const rawExit = uint(r, 1);
         typed = {
           runCommand: compact({
-            exitCode: num(r, 8) ? undefined : Number(BigInt.asIntN(32, BigInt(uint(r, 1) ?? 0))),
+            exitCode: num(r, 8) || rawExit === undefined ? undefined : Number(BigInt.asIntN(32, BigInt(rawExit))),
             commandLine: str(r, 6),
             cwd: str(r, 7),
             shellName: str(r, 5),
@@ -390,15 +391,8 @@ function decodeStep(row: AgyRecord): AgyRecord {
     if (!f.has(kind[1])) refuse('step payload is missing');
     out[kind[2]] = payload(row.step_type, sub(f, kind[1]));
     if (row.step_type === 132)
-      for (const [key, name] of [
-        ['runCommand', 'RUN_COMMAND'],
-        ['askQuestion', 'ASK_QUESTION'],
-        ['invokeSubagent', 'INVOKE_SUBAGENT'],
-      ] as const)
-        if (out.generic[key]) {
-          out[key] = out.generic[key];
-          out.type = `CORTEX_STEP_TYPE_${name}`;
-        }
+      for (const key of ['runCommand', 'askQuestion', 'invokeSubagent'] as const)
+        if (out.generic[key]) out[key] = out.generic[key];
   } else out.unsupportedPayload = true;
   return out;
 }

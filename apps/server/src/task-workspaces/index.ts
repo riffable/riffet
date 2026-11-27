@@ -51,7 +51,7 @@ export class TaskWorkspaceService {
         if (!(await stat(actual)).isDirectory()) throw new AppError('INVALID_TASK_WORKSPACE_ROOT', 'The task workspace location must be a directory');
         const canonical = resolve(actual, target.slice(parent.length).replace(/^\/+/, ''));
         const state = await realpath(this.options.stateDir).catch(() => resolve(this.options.stateDir));
-        const denied = await Promise.all([state, ...['.codex', '.claude', '.cursor', '.factory', '.pi/agent', '.config/cursor'].map(name => join(homedir(), name)), ...(this.options.deniedRoots?.() ?? [])].map(async directory => {
+        const denied = await Promise.all([state, ...['.codex', '.claude', '.cursor', '.factory', '.pi/agent', '.config/cursor', '.gemini'].map(name => join(homedir(), name)), ...(this.options.deniedRoots?.() ?? [])].map(async directory => {
           const target = resolve(directory);
           let parent = target;
           while (true) {

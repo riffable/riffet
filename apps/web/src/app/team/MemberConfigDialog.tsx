@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import {
   DEFAULT_AGENT_MEMBER_ID,
   TEAM_BUDGET,
-  isAssistantBackend,
+  isStandingMemberBackend,
   memberChoice,
   type AgentMember,
   type AgentMemberCapabilities,
@@ -45,7 +45,7 @@ interface Props {
 export function MemberConfigDialog({ open, member, projects, onClose, onUpdated, onDeleted }: Props) {
   const { t } = useLingui();
   const backends = useCatalog((state) => state.backends);
-  const isolatedBackends = useMemo(() => backends.filter((entry) => isAssistantBackend(entry.backendId)), [backends]);
+  const isolatedBackends = useMemo(() => backends.filter((entry) => isStandingMemberBackend(entry)), [backends]);
   const codeProjects = useMemo(() => regularProjects(projects).filter((item) => !item.archivedAt), [projects]);
 
   const [tab, setTab] = useState<Tab>('general');

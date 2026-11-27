@@ -1,6 +1,6 @@
 import { DEFAULT_AGENT_MEMBER_ID, TEAM_MEMBER_ORDER_MAX, type AgentMember, type AppSettings, type AssistantChoice } from '@contracts';
 
-export { assistantChoice, DEFAULT_AGENT_MEMBER_ID, isAssistantBackend, memberChoice, type AssistantChoice } from '@contracts';
+export { assistantChoice, DEFAULT_AGENT_MEMBER_ID, isAssistantBackend, isStandingMemberBackend, memberChoice, type AssistantChoice } from '@contracts';
 
 export const isDefaultMember = (member?: Pick<AgentMember, 'id'>): boolean => member?.id === DEFAULT_AGENT_MEMBER_ID;
 

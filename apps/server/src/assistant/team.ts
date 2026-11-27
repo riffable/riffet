@@ -22,6 +22,7 @@ import {
   type AssistantInstructions,
   type AssistantMemory,
   type AssistantSettings,
+  type NativeBackendId,
   type OwnerAvatarGenerateRequest,
   type OwnerAvatarType,
   type Project,
@@ -78,6 +79,8 @@ export interface AgentTeamDeps {
   onMemberDeleted?: (memberId: string) => void;
   /** Renders a plugin-provided generated avatar PNG (same engine as Settings -> Profile). */
   renderAvatar?: (request: OwnerAvatarGenerateRequest, name?: string) => Promise<{ png: Buffer }>;
+  /** Whether a backend supports isolated standing team members. Defaults to `isAssistantBackend`. */
+  supportsMemberBackend?: (backendId: NativeBackendId) => boolean;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -106,12 +109,15 @@ function normalizeScope(store: Store, raw: AgentMemberScope): AgentMemberScope {
   return { kind: 'project', projectIds: ids };
 }
 
-function normalizeTarget(raw: AgentMemberTarget | undefined): AgentMemberTarget | undefined {
+function normalizeTarget(
+  raw: AgentMemberTarget | undefined,
+  supportsMemberBackend: (backendId: NativeBackendId) => boolean = isAssistantBackend,
+): AgentMemberTarget | undefined {
   if (!raw) return undefined;
   const target: AgentMemberTarget = {};
   if (raw.backendId !== undefined) {
-    if (!isAssistantBackend(raw.backendId)) {
-      throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'Team members run on Claude Code, Codex, or Cursor');
+    if (!supportsMemberBackend(raw.backendId)) {
+      throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'This Agent backend does not support team member isolation');
     }
     target.backendId = raw.backendId;
   }
@@ -192,9 +198,10 @@ export class AgentTeamService {
       return found;
     }
     const savedAssistant = this.deps.assistantSettings?.();
+    const supportsMember = this.deps.supportsMemberBackend ?? isAssistantBackend;
     const target: AgentMemberTarget | undefined = savedAssistant && (savedAssistant.backendId || savedAssistant.profileId || savedAssistant.model)
       ? {
-        ...(isAssistantBackend(savedAssistant.backendId) ? { backendId: savedAssistant.backendId } : {}),
+        ...(savedAssistant.backendId && supportsMember(savedAssistant.backendId) ? { backendId: savedAssistant.backendId } : {}),
         ...(savedAssistant.profileId ? { profileId: savedAssistant.profileId } : {}),
         ...(savedAssistant.model ? { model: savedAssistant.model } : {}),
       }
@@ -312,7 +319,7 @@ export class AgentTeamService {
     const sessionMode: AgentMemberSessionMode = input.sessionMode === 'fresh' || input.sessionMode === 'continuous'
       ? input.sessionMode
       : (scope.kind === 'project' ? 'fresh' : 'continuous');
-    const target = normalizeTarget(input.target);
+    const target = normalizeTarget(input.target, this.deps.supportsMemberBackend);
     const capabilities = normalizeCapabilities(scope.kind, input.capabilities);
     const dailyRuns = normalizeDailyRuns(input.budget?.dailyRuns);
     const id = randomUUID();
@@ -438,7 +445,7 @@ export class AgentTeamService {
         else if (patch.target.model !== undefined) merged.model = patch.target.model;
         if (patch.target.permissionMode === null) delete merged.permissionMode;
         else if (patch.target.permissionMode !== undefined) merged.permissionMode = patch.target.permissionMode;
-        const normalized = normalizeTarget(merged);
+        const normalized = normalizeTarget(merged, this.deps.supportsMemberBackend);
         if (normalized) next.target = normalized;
         else delete next.target;
       }

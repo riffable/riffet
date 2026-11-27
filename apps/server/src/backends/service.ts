@@ -310,6 +310,10 @@ export class NativeBackendService {
     const { driver, profile } = await this.resolve(session);
     return (await this.catalog.driverCapabilities(driver, profile)).supportsInitialPromptArgs === true;
   }
+  async supportsTargetedStop(session: Session): Promise<boolean> {
+    const { driver, profile } = await this.resolve(session);
+    return (await this.catalog.driverCapabilities(driver, profile)).supportsTargetedStop !== false;
+  }
   async supportsSendNow(session: Session): Promise<boolean> {
     const { driver } = await this.resolve(session);
     return driver.sendsNow === true;

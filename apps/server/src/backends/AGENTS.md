@@ -1,7 +1,7 @@
 ---
 module: server.backends
 verify:
-  - npx vitest run apps/server/src/backends/dispatch-feed.test.ts apps/server/src/backends/plugin-backend.test.ts apps/server/src/backends/service-config.test.ts apps/server/src/backends/service-dialogs.test.ts apps/server/src/backends/service-watch.test.ts apps/server/src/backends/stats-observe.test.ts apps/server/src/backends/no-cursor.test.ts
+  - npx vitest run apps/server/src/backends/conformance.test.ts apps/server/src/backends/dispatch-feed.test.ts apps/server/src/backends/plugin-backend.test.ts apps/server/src/backends/service-config.test.ts apps/server/src/backends/service-dialogs.test.ts apps/server/src/backends/service-watch.test.ts apps/server/src/backends/stats-observe.test.ts apps/server/src/backends/no-cursor.test.ts
 ---
 
 ## 职责

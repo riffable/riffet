@@ -307,14 +307,20 @@ struct AgentProviderEditor: View {
         }
     }
 
+    private var backendCapabilities: NativeBackendCapabilities? {
+        workbench.backends.first { $0.agent == backendWire(backend) }?.capabilities
+    }
+
     private var launchBlock: some View {
-        SettingsBlock("高级启动配置") {
+        let caps = backendCapabilities
+        let sourceKind = profileSourceDirKind(backend, capabilities: caps)
+        return SettingsBlock("高级启动配置") {
             SettingsFieldRow("CLI 入口") {
-                TextField(backendWire(backend), text: $draft.executable)
+                TextField(profileExecutablePlaceholder(backend, capabilities: caps), text: $draft.executable)
                     .font(.riffet(size: S(13), design: .monospaced))
                     .formField()
             }
-            if profileAllowsConfigDir(backend) {
+            if profileAllowsConfigDir(backend, capabilities: caps) {
                 SettingsFieldRow("配置目录") {
                     TextField("使用 CLI 默认目录", text: $draft.configDir)
                         .font(.riffet(size: S(13), design: .monospaced))
@@ -322,14 +328,17 @@ struct AgentProviderEditor: View {
                 }
                 SettingsHint("更换后会切换账号与原生历史范围")
             }
-            if profileAllowsSourceDir(backend) {
-                SettingsFieldRow("DSH 源码目录") {
-                    TextField("可选", text: $draft.sourceDir)
+            if let sourceKind {
+                SettingsFieldRow(sourceKind == "config" ? "配置目录" : "DSH 源码目录") {
+                    TextField(sourceKind == "config" ? "使用 CLI 默认目录" : "可选", text: $draft.sourceDir)
                         .font(.riffet(size: S(13), design: .monospaced))
                         .formField()
                 }
+                if sourceKind == "config" {
+                    SettingsHint("更换后会切换账号与原生历史范围")
+                }
             }
-            if profileAllowsAutoUpdate(backend) {
+            if profileAllowsAutoUpdate(backend, capabilities: caps) {
                 Toggle("关闭自动更新", isOn: $draft.disableAutoUpdate)
             }
         }

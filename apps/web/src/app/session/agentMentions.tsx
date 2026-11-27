@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useMemo, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { isAssistantBackend, type AgentMember, type AgentMention, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
+import { isStandingMemberBackend, type AgentMember, type AgentMention, type NativeBackendCatalogEntry, type NativeBackendId } from '@contracts';
 import { api, isAgentReference, isFileReference, isSessionReference, type AgentContextReference, type PromptContextReference } from '@/lib/api';
 import { backendLabel } from '@/lib/backends';
 import { useAgentModelChoice, type AgentModelValue } from './agentModelChoice';
@@ -31,7 +31,7 @@ export function agentMentionCandidates(
   currentMemberId?: string,
 ): AgentMentionCandidate[] {
   const available = backends.filter(entry => entry.backendId !== 'chat' && entry.available);
-  const fallbackBackend: NativeBackendId = available.find(entry => isAssistantBackend(entry.backendId))?.backendId ?? available[0]?.backendId ?? 'claude';
+  const fallbackBackend: NativeBackendId = available.find(entry => isStandingMemberBackend(entry))?.backendId ?? available[0]?.backendId ?? 'claude';
   const memberItems: AgentMentionCandidate[] = members
     .filter(member => !member.archivedAt && member.id !== currentMemberId)
     .map(member => ({

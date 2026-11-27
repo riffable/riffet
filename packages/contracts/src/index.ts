@@ -26,7 +26,7 @@ export { AGENT_ICON_ROUTE, VIEW_ICON_ROUTE, PLUGIN_CHANNEL_ROUTE, PLUGIN_QUERY_R
 export { NATIVE_BACKEND_IDS, compareAgentOrder, PLUGIN_AGENT_ID, PLUGIN_AGENT_ID_MAX, isAgentOfPlugin, isBuiltinBackendId, isNativeBackendId, isPluginAgentId } from './agent-ids.js';
 export type { BuiltinBackendId, NativeBackendId, PluginAgentId } from './agent-ids.js';
 export { isDoneUnseen, isRunningSession, isUnread, needsYou } from './session-attention.js';
-export { ASSISTANT_BACKENDS, assistantChoice, isAssistantBackend, workItemAgentChoice, type AssistantChoice } from './assistant-choice.js';
+export { ASSISTANT_BACKENDS, assistantChoice, isAssistantBackend, isStandingMemberBackend, workItemAgentChoice, type AssistantChoice } from './assistant-choice.js';
 export * from './team.js';
 
 export * from './protocol.js';
@@ -45,6 +45,7 @@ export type * from './workspace.js';
 export type * from './git.js';
 export type * from './orchestration.js';
 export * from './backends.js';
+export type { NativeBackendProfileFields } from './backends.js';
 export * from './settings.js';
 export * from './title-rules.js';
 export * from './shortcuts.js';

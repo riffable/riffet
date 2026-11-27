@@ -31,10 +31,20 @@ async function readSavedLaunch(hub: Hub, context: AgentContext): Promise<Launch 
     return undefined;
   }
   const root = await realpath(sessionRoot(hub, context.session.id));
+  const expectedGeminiDir = agySessionGeminiDir(dirname(dirname(root)), context.session.id);
+  const [savedGeminiReal, expectedGeminiReal] =
+    typeof saved.geminiDir === 'string' && expectedGeminiDir
+      ? await Promise.all([
+          realpath(saved.geminiDir).catch(() => saved.geminiDir),
+          realpath(expectedGeminiDir).catch(() => expectedGeminiDir),
+        ])
+      : [undefined, undefined];
   if (
     saved.root !== root ||
-    // The data root recorded when the session was first prepared, resolved like `root` (layout 1 sits under it).
-    saved.geminiDir !== agySessionGeminiDir(dirname(dirname(root)), context.session.id) ||
+    // The data root recorded when the session was first prepared, compared after symlink resolution.
+    !savedGeminiReal ||
+    !expectedGeminiReal ||
+    savedGeminiReal !== expectedGeminiReal ||
     saved.bridgeDir !== join(root, 'workspace') ||
     typeof saved.command !== 'string' ||
     typeof saved.nonce !== 'string' ||

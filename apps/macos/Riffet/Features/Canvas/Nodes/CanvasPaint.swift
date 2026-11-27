@@ -78,6 +78,7 @@ struct CanvasPaint: Sendable {
         case "droid": "Droid"
         case "traex": "TRAE CLI"
         case "pi": "pi"
+        case "antigravity": "Antigravity"
         case let other?: String(other[(other.lastIndex(of: ".").map { other.index(after: $0) } ?? other.startIndex)...])
         }
     }

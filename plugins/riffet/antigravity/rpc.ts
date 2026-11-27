@@ -1,4 +1,4 @@
-import { request, type IncomingMessage } from 'node:http';
+import { Agent, request, type IncomingMessage } from 'node:http';
 import { agyConversationId, agyRecord, agySnapshot, type AgyRecord, type AgySnapshot } from './protocol.js';
 
 const SERVICE = '/exa.language_server_pb.LanguageServerService/';
@@ -73,6 +73,9 @@ export class AgyFrameDecoder {
       this.onMessage(value);
     }
     this.buffer = offset === this.buffer.length ? Buffer.alloc(0) : this.buffer.subarray(offset);
+    if (this.buffer.length > 0 && this.buffer.buffer.byteLength > Math.max(64 * 1024, this.buffer.length * 4)) {
+      this.buffer = Buffer.from(this.buffer);
+    }
     this.needed = this.buffer.length >= 5 ? 5 + this.buffer.readUInt32BE(1) - this.buffer.length : 5 - this.buffer.length;
   }
   finish(): void {
@@ -83,12 +86,18 @@ export class AgyFrameDecoder {
 export class AgyRpc {
   readonly port: number;
   readonly #token: string;
+  readonly #agent: Agent;
   constructor(options: { port: number; token: string }) {
     if (!Number.isSafeInteger(options.port) || options.port < 1 || options.port > 65535) throw new Error('Invalid Antigravity RPC port');
     if (!options.token || options.token.length > 4096 || /[\r\n\0]/.test(options.token))
       throw new Error('Invalid Antigravity RPC credential');
     this.port = options.port;
     this.#token = options.token;
+    this.#agent = new Agent({ keepAlive: true, maxSockets: 4 });
+    this.#agent.on('free', socket => socket.unref());
+  }
+  close(): void {
+    this.#agent.destroy();
   }
   private response(method: string, body: Uint8Array, contentType: string, signal?: AbortSignal): Promise<IncomingMessage> {
     if (!RPC_METHOD.test(method)) return Promise.reject(new Error('Invalid Antigravity RPC method'));
@@ -100,7 +109,7 @@ export class AgyRpc {
           port: this.port,
           method: 'POST',
           path: SERVICE + method,
-          agent: false,
+          agent: this.#agent,
           signal,
           headers: {
             'Content-Type': contentType,

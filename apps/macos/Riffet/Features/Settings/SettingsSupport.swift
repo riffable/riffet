@@ -79,9 +79,27 @@ func endpointHint(_ id: NativeBackendId) -> (placeholder: String, hint: String)?
 }
 
 func profileAllowsEndpoint(_ id: NativeBackendId) -> Bool { id != .droid && id != .traex }
-func profileAllowsConfigDir(_ id: NativeBackendId) -> Bool { id != .droid && id != .antigravity }
-func profileAllowsSourceDir(_ id: NativeBackendId) -> Bool { id == .dsh }
-func profileAllowsAutoUpdate(_ id: NativeBackendId) -> Bool { id == .claude }
+func profileExecutablePlaceholder(_ id: NativeBackendId, capabilities: NativeBackendCapabilities? = nil) -> String {
+    if let placeholder = capabilities?.profileFields?.executablePlaceholder, !placeholder.isEmpty { return placeholder }
+    return id == .antigravity ? "agy" : backendWire(id)
+}
+func profileAllowsConfigDir(_ id: NativeBackendId, capabilities: NativeBackendCapabilities? = nil) -> Bool {
+    if let fields = capabilities?.profileFields { return fields.configDir?.boolValue == true }
+    return id != .droid && id != .antigravity
+}
+func profileSourceDirKind(_ id: NativeBackendId, capabilities: NativeBackendCapabilities? = nil) -> String? {
+    if let fields = capabilities?.profileFields { return fields.sourceDir }
+    if id == .dsh { return "source" }
+    if id == .antigravity { return "config" }
+    return nil
+}
+func profileAllowsSourceDir(_ id: NativeBackendId, capabilities: NativeBackendCapabilities? = nil) -> Bool {
+    profileSourceDirKind(id, capabilities: capabilities) != nil
+}
+func profileAllowsAutoUpdate(_ id: NativeBackendId, capabilities: NativeBackendCapabilities? = nil) -> Bool {
+    if let fields = capabilities?.profileFields { return fields.disableAutoUpdate?.boolValue == true }
+    return id == .claude || id == .antigravity
+}
 
 /// The wire APIs pi can speak, in the order the editor offers them.
 let nativeModelApiProtocols: [(id: String, label: String)] = [

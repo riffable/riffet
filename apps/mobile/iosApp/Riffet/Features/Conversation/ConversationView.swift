@@ -722,7 +722,7 @@ struct ConversationView: View {
                              supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true,
                              supportsSessionReferences: catalog?.capabilities.supportsSessionReferences == true,
                              menu: $menu, onMenuPicked: { composerFocus += 1 })
-            ConversationComposer(workbench: workbench, session: session, draft: draft, supportsInterrupt: catalog?.capabilities.supportsInterrupt == true && catalog?.capabilities.supportsTargetedStop?.boolValue == true, catalog: catalog,
+            ConversationComposer(workbench: workbench, session: session, draft: draft, supportsInterrupt: catalog?.capabilities.supportsInterrupt == true, catalog: catalog,
                                  catalogLoading: catalogLoading, catalogError: catalogError,
                                  onOptionsClosed: { if catalogError != nil, !catalogLoading { Task { await loadCatalog(session) } } },
                                  focusRequest: composerFocus, menu: $menu) { sendingScroll += 1 }

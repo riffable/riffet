@@ -34,13 +34,19 @@ export async function receipts(runtime: Runtime): Promise<void> {
     ) {
       continue;
     }
+    const hasText = Boolean(run.renderedText?.trim());
     const matches = snapshot.steps.flatMap((step, index) => {
       const identity = step.userInput ? agyStepIdentity(snapshot, step, index) : undefined;
       const body = step.userInput?.userResponse;
+      const bodyText = typeof body === 'string' ? body : '';
+      const hasMedia =
+        (Array.isArray(step.userInput?.images) && step.userInput.images.length > 0) ||
+        (Array.isArray(step.userInput?.media) && step.userInput.media.length > 0);
+      const matchesInput = hasText ? sameInput(body, run.renderedText) : !bodyText.trim() && hasMedia;
       if (
         !identity ||
         boundary.users.includes(identity) ||
-        !sameInput(body, run.renderedText) ||
+        !matchesInput ||
         typeof step.metadata?.executionId !== 'string'
       ) {
         return [];

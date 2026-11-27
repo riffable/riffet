@@ -106,13 +106,13 @@ export function requestedNativeSessionId(body: RequestedNativeSession): string |
  * - `hook`: Claude and Cursor (the legacy default) report a turn's end by hook, which a restart can lose. A run
  *   that was waiting for it keeps waiting; Claude's transcript end rows (`stop_hook_summary`, `turn_duration`)
  *   settle it, otherwise it closes unconfirmed once the CLI is idle.
- * - `daemon`: Codex and Traex keep a detached app-server that holds the thread. The watch the dispatcher opens
+ * - `daemon`: Codex, Traex and Antigravity keep a detached daemon/app-server that holds the thread. The watch the dispatcher opens
  *   for every unfinished run reads the thread back, which yields the ends recorded meanwhile; a run it cannot
  *   settle closes by the same idle rule.
  */
 export function restartObservation(backendId: string): 'hook' | 'daemon' | undefined {
   if (backendId === LEGACY_DEFAULT_BACKEND_ID || backendId === 'claude') return 'hook';
-  return backendId === 'codex' || backendId === 'traex' ? 'daemon' : undefined;
+  return backendId === 'codex' || backendId === 'traex' || backendId === 'antigravity' ? 'daemon' : undefined;
 }
 
 /**

@@ -69,7 +69,7 @@ import { WorkbenchOverlays } from './WorkbenchOverlays';
 import { Onboarding } from './onboarding/Onboarding';
 import { useFirstRun } from './onboarding/useFirstRun';
 import { isAssistantProject, isQuickChatProject, mainSessionIdOf, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
-import { assistantChoice, DEFAULT_AGENT_MEMBER_ID, isAssistantBackend, memberChoice, withAssistantDefaults } from './work-items/assistant';
+import { assistantChoice, DEFAULT_AGENT_MEMBER_ID, isStandingMemberBackend, memberChoice, withAssistantDefaults } from './work-items/assistant';
 import { CreateMemberDialog } from './team/CreateMemberDialog';
 import { MemberConfigDialog } from './team/MemberConfigDialog';
 import { MemberSessionSheet, MemberSessionSidebar } from './team/MemberSessionSidebar';
@@ -287,7 +287,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     return assistantChoice(settings.assistant, backends);
   }, [assistantHome, activeMember, settings.assistant, backends]);
   // The 助理 runs only on the agents that isolate it (docs/ASSISTANT.md §4).
-  const homeBackends = useMemo(() => remoteBackends ?? (assistantHome ? backends.filter((entry) => isAssistantBackend(entry.backendId)) : backends), [remoteBackends, assistantHome, backends]);
+  const homeBackends = useMemo(() => remoteBackends ?? (assistantHome ? backends.filter((entry) => isStandingMemberBackend(entry)) : backends), [remoteBackends, assistantHome, backends]);
   const homeBackendId = remoteHomeServerId ? (remoteHomeChoice?.backendId ?? pickedBackendId) : (assistantPick?.backendId ?? pickedBackendId);
   const homeProfileId = remoteHomeServerId
     ? (remoteHomeChoice?.profileId ?? remoteSettings?.nativeBackendDefaults?.[homeBackendId]?.profileId)

@@ -10,21 +10,26 @@ export interface AssistantChoice { backendId: NativeBackendId; profileId?: strin
  * The agents the 助理 runs on, first the one it starts on: those that launch it isolated from the owner's own
  * configuration (docs/ASSISTANT.md §4). On any other it would run with the owner's instructions, skills and servers.
  */
-export const ASSISTANT_BACKENDS: readonly NativeBackendId[] = ['claude', 'codex', 'cursor'];
+export const ASSISTANT_BACKENDS: readonly NativeBackendId[] = ['claude', 'codex', 'cursor', 'antigravity'];
 
 export function isAssistantBackend(backendId: string | undefined): boolean {
   return ASSISTANT_BACKENDS.includes(backendId as NativeBackendId);
 }
 
+export function isStandingMemberBackend(entry: Pick<NativeBackendCatalogEntry, 'backendId' | 'capabilities'>): boolean {
+  return entry.capabilities.supportsStandingMember ?? isAssistantBackend(entry.backendId);
+}
+
 /**
  * The saved choice while its agent is still offered. A provider since removed falls back to the
  * agent's default one, and its model with it. With nothing saved, or an agent it no longer runs on,
- * it is the first of {@link ASSISTANT_BACKENDS} that can run, rather than whichever agent the
- * composer last used elsewhere.
+ * it is the first of {@link ASSISTANT_BACKENDS} that can run, then any other available standing-member
+ * backend, rather than whichever agent the composer last used elsewhere.
  */
 export function assistantChoice(saved: AssistantSettings | undefined, backends: readonly NativeBackendCatalogEntry[]): AssistantChoice | undefined {
-  const backend = (isAssistantBackend(saved?.backendId) ? backends.find((entry) => entry.backendId === saved!.backendId) : undefined)
-    ?? ASSISTANT_BACKENDS.map((id) => backends.find((entry) => entry.backendId === id && entry.available)).find(Boolean);
+  const backend = (saved?.backendId ? backends.find((entry) => entry.backendId === saved.backendId && isStandingMemberBackend(entry)) : undefined)
+    ?? ASSISTANT_BACKENDS.map((id) => backends.find((entry) => entry.backendId === id && entry.available && isStandingMemberBackend(entry))).find(Boolean)
+    ?? backends.find((entry) => entry.available && isStandingMemberBackend(entry));
   if (!backend) return undefined;
   // A saved provider and model belong to the saved agent only.
   const own = backend.backendId === saved?.backendId;

@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import riffet.contracts.ModelInfo
 import riffet.contracts.NativeBackendId
+import riffet.contracts.NativeBackendProfileFields
 import riffet.ui.app.PageBarAction
 import riffet.ui.app.PageBarProgress
 import riffet.ui.app.PageMoreAction
@@ -266,23 +267,39 @@ internal fun ProviderLaunchPage(
     enabled: Boolean,
     onChange: (BackendProfileDraft) -> Unit,
     onBack: () -> Unit,
+    profileFields: NativeBackendProfileFields? = null,
 ) {
     SettingsPage(stringResource(Res.string.settings_launch_settings), onBack) {
-        ProviderLaunchFields(backendId, draft, enabled, onChange)
+        ProviderLaunchFields(backendId, draft, enabled, profileFields, onChange)
     }
 }
 
 @Composable
-internal fun ProviderLaunchFields(backendId: NativeBackendId, draft: BackendProfileDraft, enabled: Boolean, onChange: (BackendProfileDraft) -> Unit) {
-        SettingsGroup("") {
-            GroupField(draft.executable, { onChange(draft.copy(executable = it)) }, label = stringResource(Res.string.settings_cli_entry), placeholder = backendId.name.lowercase(), enabled = enabled, mono = true)
-            if (hasConfigDir(backendId)) GroupField(draft.configDir, { onChange(draft.copy(configDir = it)) }, label = stringResource(Res.string.settings_config_dir), placeholder = stringResource(Res.string.settings_use_cli_default_dir), enabled = enabled, mono = true)
-            if (backendId == NativeBackendId.DSH) GroupField(draft.sourceDir, { onChange(draft.copy(sourceDir = it)) }, label = stringResource(Res.string.settings_dsh_source_dir), placeholder = stringResource(Res.string.settings_optional_source_checkout), enabled = enabled, mono = true)
-            if (backendId == NativeBackendId.CURSOR) GroupField(draft.agentEndpoint, { onChange(draft.copy(agentEndpoint = it)) }, label = stringResource(Res.string.settings_agent_endpoint), placeholder = stringResource(Res.string.settings_use_cursor_default_endpoint), enabled = enabled, mono = true)
-        }
-        if (backendId == NativeBackendId.CLAUDE) SettingsGroup("") {
-            SettingsSwitchRow(stringResource(Res.string.settings_disable_auto_update), checked = draft.disableAutoUpdate, enabled = enabled) { onChange(draft.copy(disableAutoUpdate = it)) }
-        }
+internal fun ProviderLaunchFields(
+    backendId: NativeBackendId,
+    draft: BackendProfileDraft,
+    enabled: Boolean,
+    profileFields: NativeBackendProfileFields? = null,
+    onChange: (BackendProfileDraft) -> Unit,
+) {
+    val executablePlaceholder = profileFields?.executablePlaceholder ?: if (backendId == NativeBackendId.ANTIGRAVITY) "agy" else backendId.name.lowercase()
+    val showConfigDir = profileFields?.configDir ?: hasConfigDir(backendId)
+    val sourceDirKind = if (profileFields != null) profileFields.sourceDir else when (backendId) {
+        NativeBackendId.DSH -> "source"
+        NativeBackendId.ANTIGRAVITY -> "config"
+        else -> null
+    }
+    val showDisableAutoUpdate = profileFields?.disableAutoUpdate ?: (backendId == NativeBackendId.CLAUDE || backendId == NativeBackendId.ANTIGRAVITY)
+    SettingsGroup("") {
+        GroupField(draft.executable, { onChange(draft.copy(executable = it)) }, label = stringResource(Res.string.settings_cli_entry), placeholder = executablePlaceholder, enabled = enabled, mono = true)
+        if (showConfigDir) GroupField(draft.configDir, { onChange(draft.copy(configDir = it)) }, label = stringResource(Res.string.settings_config_dir), placeholder = stringResource(Res.string.settings_use_cli_default_dir), enabled = enabled, mono = true)
+        if (sourceDirKind == "source") GroupField(draft.sourceDir, { onChange(draft.copy(sourceDir = it)) }, label = stringResource(Res.string.settings_dsh_source_dir), placeholder = stringResource(Res.string.settings_optional_source_checkout), enabled = enabled, mono = true)
+        if (sourceDirKind == "config") GroupField(draft.sourceDir, { onChange(draft.copy(sourceDir = it)) }, label = stringResource(Res.string.settings_config_dir), placeholder = stringResource(Res.string.settings_use_cli_default_dir), enabled = enabled, mono = true)
+        if (backendId == NativeBackendId.CURSOR) GroupField(draft.agentEndpoint, { onChange(draft.copy(agentEndpoint = it)) }, label = stringResource(Res.string.settings_agent_endpoint), placeholder = stringResource(Res.string.settings_use_cursor_default_endpoint), enabled = enabled, mono = true)
+    }
+    if (showDisableAutoUpdate) SettingsGroup("") {
+        SettingsSwitchRow(stringResource(Res.string.settings_disable_auto_update), checked = draft.disableAutoUpdate, enabled = enabled) { onChange(draft.copy(disableAutoUpdate = it)) }
+    }
 }
 
 /** The two types DSH's own model editor offers, in the order it shows them. */

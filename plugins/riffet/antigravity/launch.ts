@@ -11,6 +11,7 @@ import { agyLaunchModel, nativeModels } from './models.js';
 import { agyConversationId, agyRecord } from './protocol.js';
 import { refresh, schedule } from './poll.js';
 import { assertCurrent, epochOf, verifyOwnership, type Hub, type Launch } from './runtime.js';
+import { prepareStandingGeminiDir } from './standing.js';
 
 export function open(hub: Hub, host: AgentHost, context: AgentContext): Promise<AgentOpenResult> {
   const id = context.session.id;
@@ -60,6 +61,16 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
   }
   const config = await agyLaunchConfig(host, context.profile);
   const profile = parseAgyProfile(config);
+  const standing = host.standing?.launch(context.project, context.session);
+  const preparedStanding = standing
+    ? prepareStandingGeminiDir({
+        stateDir: hub.stateDir,
+        cwd: context.project.cwd,
+        launch: standing,
+        sourceDir: profile.sourceDir,
+        isBackgroundRun: Boolean(standing.allow),
+      })
+    : undefined;
   const selection = agySelection(context.session.model ?? (typeof config.defaultModel === 'string' ? config.defaultModel : undefined));
   const model = agyLaunchModel(selection, selection ? await nativeModels(hub, profile) : [], profile);
   const paths = await prepareAgySession({
@@ -67,13 +78,14 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
     sessionId: context.session.id,
     projectCwd: context.project.cwd,
     profile,
+    ...(preparedStanding ? { geminiDirOverride: preparedStanding.standingDir } : {}),
     model: context.session.model,
     ...(model.custom ? { customModel: model.custom } : {}),
     mode: context.session.mode,
     approval: context.session.approval,
   });
   const nonce = randomBytes(24).toString('hex');
-  await prepareBridge(paths, nonce);
+  await prepareBridge(paths, nonce, preparedStanding?.guard);
   await writeMcpConfig(host, context.session.id, paths);
   const token = randomBytes(32).toString('base64url');
   const args = [
@@ -86,6 +98,9 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
     '--log-file',
     paths.logPath,
   ];
+  if (preparedStanding) {
+    for (const dir of preparedStanding.extraDirs) args.push('--add-dir', dir);
+  }
   if (model.model) args.push('--model', model.model);
   if (model.effort) args.push('--effort', model.effort);
   if (context.session.nativeSessionId) args.push('--conversation', agyConversationId(context.session.nativeSessionId));
@@ -93,51 +108,55 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
     JSON.stringify({ root: paths.root, nonce, command: profile.executable, project: await realpath(context.project.cwd) }),
   );
   assertCurrent(hub, context.session.id, epoch);
+  // Keep this temporary startup guard installed until `attach` replaces it with the real `validateMcp`;
+  // `bindRiffetMcp` disposes by validator reference, so `unbind()` in `finally` is a no-op once attached.
   const unbind = host.bindRiffetMcp(context.session.id, async () => {
     throw new Error('Antigravity is starting');
   });
-  const terminal = await host.terminals.launch(context.session.id, {
-    command: profile.executable,
-    args,
-    ...agyProfileEnvironment(profile),
-    cwd: context.project.cwd,
-    launchMarker: marker,
-    title: 'Antigravity',
-    reuseLive: false,
-  });
   try {
-    if (hub.closed || epochOf(hub, context.session.id) !== epoch) {
-      throw host.error('AGENT_BACKEND_CLOSED', 'Antigravity launch was cancelled', 409);
-    }
-    const launch: Launch = {
-      config: { model: context.session.model, mode: context.session.mode, approval: context.session.approval },
-      ...(model.model && model.labels.length ? { requestedModel: { id: model.model, labels: model.labels } } : {}),
-      configRevision: context.session.configRevision,
-      ...paths,
+    const terminal = await host.terminals.launch(context.session.id, {
       command: profile.executable,
       args,
-      nonce,
-      token,
-      marker,
-      terminalId: terminal.id,
-      epoch: terminal.epoch,
-      startedAt: Date.now() - 1000,
-    };
-    await writeJson(join(paths.root, 'launch.json'), launch);
+      ...agyProfileEnvironment(profile),
+      cwd: context.project.cwd,
+      launchMarker: marker,
+      title: 'Antigravity',
+      reuseLive: false,
+    });
+    try {
+      if (hub.closed || epochOf(hub, context.session.id) !== epoch) {
+        throw host.error('AGENT_BACKEND_CLOSED', 'Antigravity launch was cancelled', 409);
+      }
+      const launch: Launch = {
+        config: { model: context.session.model, mode: context.session.mode, approval: context.session.approval },
+        ...(model.model && model.labels.length ? { requestedModel: { id: model.model, labels: model.labels } } : {}),
+        configRevision: context.session.configRevision,
+        ...paths,
+        command: profile.executable,
+        args,
+        nonce,
+        token,
+        marker,
+        terminalId: terminal.id,
+        epoch: terminal.epoch,
+        startedAt: Date.now() - 1000,
+      };
+      await writeJson(join(paths.root, 'launch.json'), launch);
+      assertCurrent(hub, context.session.id, epoch);
+      await host.updateSession(context.session.id, { terminalId: terminal.id });
+    } catch (error) {
+      // A pane nothing records would run agy unowned: no runtime polls it and the next launch starts another.
+      await host.terminals.stop(terminal.id).catch(() => undefined);
+      throw error;
+    }
     assertCurrent(hub, context.session.id, epoch);
-    await host.updateSession(context.session.id, { terminalId: terminal.id });
-  } catch (error) {
-    // A pane nothing records would run agy unowned: no runtime polls it and the next launch starts another.
+    runtime = await attach(hub, host, { ...context, session: await host.session(context.session.id) });
+    return {
+      terminalId: terminal.id,
+      ...(context.session.nativeSessionId ? { nativeSessionId: context.session.nativeSessionId } : {}),
+      status: runtime?.status ?? { phase: 'starting' as const },
+    };
+  } finally {
     unbind();
-    await host.terminals.stop(terminal.id).catch(() => undefined);
-    throw error;
   }
-  unbind();
-  assertCurrent(hub, context.session.id, epoch);
-  runtime = await attach(hub, host, { ...context, session: await host.session(context.session.id) });
-  return {
-    terminalId: terminal.id,
-    ...(context.session.nativeSessionId ? { nativeSessionId: context.session.nativeSessionId } : {}),
-    status: runtime?.status ?? { phase: 'starting' as const },
-  };
 }

@@ -1,7 +1,7 @@
 import { catalogEntry } from '../../../../packages/contracts/src/index.js';
 import { createHash } from 'node:crypto';
 import type {
-  GatewayProtocol, LoadedExtensions, ModelInfo, NativeBackendCatalogEntry, NativeBackendId, NativeBackendUsage,
+  GatewayProtocol, LoadedExtensions, ModelInfo, NativeBackendCatalogEntry, NativeBackendId, NativeBackendProfileFields, NativeBackendUsage,
   NativeBackendProfileSettings, NativeBackendProfilesResponse, NativeModelApiProtocol, NativeModelSource, NativeProfileContinuation, NativeSlashCatalog, NativeSlashItem, Project, Session,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
@@ -147,6 +147,14 @@ export interface BackendCatalogOptions {
     get(backendId: NativeBackendId): NativeBackendProfilesResponse;
     getConfig(backendId: NativeBackendId, profileId: string): Record<string, unknown> | undefined;
   };
+}
+
+function defaultProfileFields(backendId: NativeBackendId): NativeBackendProfileFields | undefined {
+  if (backendId === 'chat') return undefined;
+  if (backendId === 'claude') return { executablePlaceholder: 'claude', configDir: true, disableAutoUpdate: true };
+  if (backendId === 'dsh') return { executablePlaceholder: 'dsh', configDir: true, sourceDir: 'source' };
+  if (backendId === 'droid') return { executablePlaceholder: 'droid', configDir: false };
+  return { executablePlaceholder: backendId, configDir: true };
 }
 
 /** Which backends, profiles and models exist and what they can do, independent of any conversation. */
@@ -314,7 +322,10 @@ export class BackendCatalog {
   /** A driver's capabilities, with whether its launches carry the Riffet MCP server. */
   async driverCapabilities(driver: NativeBackendDriver, profile: NativeBackendProfileConfig) {
     const capabilities = await driver.capabilities(this.host, profile);
-    return { ...capabilities, supportsRecovery: true, supportsTargetedStop: true,
+    const profileFields = capabilities.profileFields ?? defaultProfileFields(driver.id);
+    return { ...capabilities, supportsRecovery: true, supportsTargetedStop: capabilities.supportsTargetedStop ?? true,
+      supportsStandingMember: capabilities.supportsStandingMember ?? Boolean(driver.traits?.startsNewTopic),
+      ...(profileFields ? { profileFields } : {}),
       ...(driver.traits?.riffetTools ? { supportsRiffetTools: true } : {}),
       ...(driver.traits?.extensionToggles ? { extensionToggles: { ...driver.traits.extensionToggles } } : {}),
       consumesProtocols: [...(driver.traits?.consumesProtocols ?? [])] };

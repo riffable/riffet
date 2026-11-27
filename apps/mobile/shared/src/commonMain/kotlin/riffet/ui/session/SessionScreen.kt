@@ -778,6 +778,7 @@ fun SessionScreen(
                             mentions = riffet.ui.composer.rememberMentionTargets(api, store, current),
                             supportsSteer = detail?.capabilities?.supportsSteer == true,
                             supportsSessionReferences = detail?.capabilities?.supportsSessionReferences == true,
+                            supportsInterrupt = detail?.capabilities?.supportsInterrupt != false,
                             supportsTargetedStop = detail?.capabilities?.supportsTargetedStop == true,
                             acceptsMessages = detail?.capabilities?.requiresLiveTerminal != true || conversation.live,
                             settings = ComposerSettings(

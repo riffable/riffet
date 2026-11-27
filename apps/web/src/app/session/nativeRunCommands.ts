@@ -328,9 +328,10 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
     }
   }, [session.id, store, tracking, latest, updateRun, recoveries]);
 
-  const stopTarget = async (): Promise<NativeStopRequest> => {
+  const stopTarget = async (requireTargeted = true): Promise<NativeStopRequest> => {
     const catalog = await api.sessionCatalog(session.id);
-    if (!catalog.capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
+    const supported = requireTargeted ? catalog.capabilities.supportsTargetedStop : catalog.capabilities.supportsInterrupt;
+    if (!supported) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
     const active = store.get().status.activeTurn;
     const nativeSessionId = active?.nativeSessionId ?? session.nativeSessionId;
     if (!nativeSessionId) throw new Error(i18n._(msg`当前任务尚未同步，请检查会话后重试`));
@@ -349,7 +350,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
     const key = `riffet.stop.${session.id}`;
     try {
       const saved = localStorage.getItem(key);
-      if (saved && !(await api.sessionCatalog(session.id)).capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
+      if (saved && !(await api.sessionCatalog(session.id)).capabilities.supportsInterrupt) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
       const stopOnce = async (target: NativeStopRequest) => {
         localStorage.setItem(key, JSON.stringify(target));
         if (localStorage.getItem(key) !== JSON.stringify(target)) throw new Error(i18n._(msg`无法保存待发送消息，请检查浏览器存储空间`));
@@ -358,7 +359,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
         if (result.run) updateRun(result.run);
       };
       try {
-        await stopOnce(saved ? JSON.parse(saved) : await stopTarget());
+        await stopOnce(saved ? JSON.parse(saved) : await stopTarget(false));
       } catch (error) {
         // The server refused because the turn it runs is not the one this request named (a stale status or
         // a replayed target). Nothing was stopped, so aim at the current turn once; a turn that ended needs nothing.
@@ -366,7 +367,7 @@ export function useNativeRunCommands({ session, store, tracking, latest, control
         localStorage.removeItem(key);
         const phase = store.get().status.phase;
         if (tracking.sessionId !== session.id || (phase !== 'busy' && phase !== 'attention')) return;
-        await stopOnce(await stopTarget());
+        await stopOnce(await stopTarget(false));
       }
     }
     catch (error) {

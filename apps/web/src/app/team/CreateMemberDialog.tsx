@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { isAssistantBackend, memberChoice, type AgentMember, type AgentMemberScope, type AgentMemberScopeKind, type AgentMemberSessionMode, type AgentMemberTarget } from '@contracts';
+import { isStandingMemberBackend, memberChoice, type AgentMember, type AgentMemberScope, type AgentMemberScopeKind, type AgentMemberSessionMode, type AgentMemberTarget } from '@contracts';
 import { IconChevronDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Field, fieldClass, Input, Segmented, Select, Textarea } from '@/components/ui/controls';
@@ -32,7 +32,7 @@ export function CreateMemberDialog({ open, projects, onClose, onCreated }: Props
   const { t } = useLingui();
   const instructionsId = useId();
   const backends = useCatalog((state) => state.backends);
-  const isolatedBackends = useMemo(() => backends.filter((entry) => isAssistantBackend(entry.backendId)), [backends]);
+  const isolatedBackends = useMemo(() => backends.filter((entry) => isStandingMemberBackend(entry)), [backends]);
   const codeProjects = useMemo(() => regularProjects(projects).filter((item) => !item.archivedAt), [projects]);
   const fallbackProjectId = useMemo(() => projects.find(isAssistantProject)?.id ?? codeProjects[0]?.id ?? '', [projects, codeProjects]);
 

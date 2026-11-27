@@ -50,6 +50,8 @@ export interface NativeDispatcherBackend {
   steerRun?(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run): Promise<void | { deferred: true }>;
   /** True when this session's backend can take the first user message as a launch argument. */
   supportsInitialPromptArgs?(session: Session): Promise<boolean>;
+  /** True when this session's backend can atomically stop a specified execution; defaults to true when omitted. */
+  supportsTargetedStop?(session: Session): Promise<boolean>;
   /** True when this session's backend replaces its running turn with a message in one step of its own. */
   supportsSendNow?(session: Session): Promise<boolean>;
   commitDispatchFence?(runId: string, binding?: NativeDispatchBinding): Run;

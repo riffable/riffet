@@ -374,7 +374,7 @@ internal class SessionComposer(
             stop = previous ?: stopTarget(opened) ?: error(L10n.uiText("composer.error.stopTargetMissing"))
             if (core.value.epoch != epoch) return@async false
             outbox.persistStop(session.id, stop)
-            requireTargetedStop(session.id)
+            requireInterrupt(session.id)
             if (core.value.epoch != epoch) return@async false
             api.interruptSession(session.id, stop)
             outbox.removeStop(session.id, stop)
@@ -689,6 +689,12 @@ internal class SessionComposer(
     /** A stop that lacks completion evidence remains unknown even when its HTTP status is 409. */
     private fun isUncertain(error: Throwable): Boolean =
         error !is RiffetHttpException || error.status == 0 || error.status >= 500 || error.code == "NATIVE_STOP_UNCONFIRMED"
+
+    private suspend fun requireInterrupt(sessionId: String) {
+        check(api.sessionCatalog(sessionId).capabilities.supportsInterrupt) {
+            L10n.uiText("composer.error.stop")
+        }
+    }
 
     private suspend fun requireTargetedStop(sessionId: String) {
         check(api.sessionCatalog(sessionId).capabilities.supportsTargetedStop == true) {

@@ -165,8 +165,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     this.warm = new WarmPool<CodexWarm>({ label: flavor.id, stop: async warm => { warm.mcp?.revoke(); await warm.transport.dispose(); } });
     // TRAE background children outlive the foreground turn independently. Keep observing them,
     // but their activity alone must not hold the parent session/sidebar in running.
-    // TRAE CLI signs in with its own account and takes no model source (`traexFlavor.unsupportedProfileSetting`), so it consumes no protocol.
-    this.traits = flavor.id === 'traex' ? { ...CODEX_TRAITS, detachedSubagents: true, consumesProtocols: [] } : CODEX_TRAITS;
+    // TRAE CLI signs in with its own account and takes no model source (`traexFlavor.unsupportedProfileSetting`),
+    // and its app-server is not isolated for standing team members (`thread.ts#standing`), so it consumes no protocol and does not start new topics.
+    this.traits = flavor.id === 'traex' ? { ...CODEX_TRAITS, startsNewTopic: false, detachedSubagents: true, consumesProtocols: [] } : CODEX_TRAITS;
     this.cliVersions = flavor.cliVersions;
   }
 

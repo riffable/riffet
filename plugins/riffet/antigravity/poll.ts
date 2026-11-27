@@ -1,12 +1,25 @@
 import { runProcess } from '@riffet/plugin-api/kit';
 import type { AgentHost } from '@riffet/plugin-api/experimental/agent';
+import { agyToolPermission } from './config.js';
 import { queueConfiguration } from './config-queue.js';
 import { launchProfile, nativeModels } from './models.js';
-import { AGY_ID, applyAgyUpdate, type AgyRecord } from './protocol.js';
+import { AGY_ID, agyRecord, applyAgyUpdate, type AgyRecord } from './protocol.js';
 import { receipts } from './receipts.js';
 import { AgyRpc } from './rpc.js';
 import { interactionOf } from './interactions.js';
-import { OWNERSHIP_FAILED, OWNERSHIP_MISSES, changed, detach, idle, nativeStatus, owned, waiting, type Hub, type Runtime } from './runtime.js';
+import {
+  FINISHED_SUBAGENT_STATES,
+  OWNERSHIP_FAILED,
+  OWNERSHIP_MISSES,
+  changed,
+  detach,
+  idle,
+  nativeStatus,
+  owned,
+  waiting,
+  type Hub,
+  type Runtime,
+} from './runtime.js';
 import { mapAgySnapshot, mapLiveSnapshot } from './transcript.js';
 
 type Session = NonNullable<ReturnType<AgentHost['view']['session']>>;
@@ -18,7 +31,7 @@ async function connect(runtime: Runtime): Promise<AgyRpc> {
     timeoutMs: 3000,
     maxOutputBytes: 16384,
   });
-  const ports = [...new Set([...result.stdout.matchAll(/^n127\.0\.0\.1:(\d+)$/gm)].map(match => Number(match[1])))];
+  const ports = [...new Set([...result.stdout.matchAll(/^n(?:127\.0\.0\.1|\[::1\]):(\d+)$/gm)].map(match => Number(match[1])))];
   for (const port of ports) {
     const rpc = new AgyRpc({ port, token: runtime.launch.token });
     try {
@@ -32,13 +45,21 @@ async function connect(runtime: Runtime): Promise<AgyRpc> {
   throw new Error('Antigravity local protocol is unavailable');
 }
 
+const ACTIVE_POLL_MS = 750;
+const IDLE_POLL_MS = 3000;
+
 export function schedule(hub: Hub, runtime: Runtime): void {
   if (runtime.stopped || hub.closed || runtime.failure) return;
   // One loop per runtime: a recovery that reschedules while a tick is still finishing replaces it.
   clearTimeout(runtime.timer);
+  const quiet =
+    runtime.status.phase === 'idle' &&
+    runtime.status.connection?.state === 'connected' &&
+    Boolean(runtime.stream && !runtime.stream.signal.aborted) &&
+    !runtime.host.view.session(runtime.context.session.id)?.configPending;
   runtime.timer = setTimeout(() => {
     void refresh(hub, runtime).finally(() => schedule(hub, runtime));
-  }, 750);
+  }, quiet ? IDLE_POLL_MS : ACTIVE_POLL_MS);
   runtime.timer.unref();
 }
 
@@ -170,6 +191,25 @@ async function settleConfiguration(hub: Hub, runtime: Runtime, session: Session)
   await runtime.host.updateSession(session.id, { configPending: false });
 }
 
+const SETTLED_STEP_STATUS = /_(?:DONE|ERROR|CANCELED|INTERRUPTED|CLEARED|INVALID)$/;
+
+function deriveActivity(runtime: Runtime, status: AgyRecord, sessionId: string) {
+  const compacting = Boolean(
+    runtime.snapshot?.steps.some(step => agyRecord(step.checkpoint) && !SETTLED_STEP_STATUS.test(String(step.status ?? ''))),
+  );
+  const taskCount = Number(status.task_count ?? 0);
+  const runningSubagents = Array.isArray(status.subagents)
+    ? status.subagents.filter(
+        (child: AgyRecord) => !FINISHED_SUBAGENT_STATES.has(String(child.state ?? child.status ?? '').toLowerCase()),
+      ).length
+    : 0;
+  const runningJobs = runtime.snapshot
+    ? mapLiveSnapshot(runtime.snapshot, sessionId).jobs.filter(job => job.status === 'running').length
+    : 0;
+  const background = Math.max(Number.isFinite(taskCount) && taskCount > 0 ? taskCount : 0, runningSubagents + runningJobs);
+  return compacting || background > 0 ? { compacting, background } : undefined;
+}
+
 /**
  * Mirror the model, mode and permission the terminal reports back into the session. agy running the model its launch
  * asked for keeps that launch's selection (its effort, a gateway id); another one - a pick in agy's `/model`, or the
@@ -187,17 +227,28 @@ async function adoptObservedConfig(runtime: Runtime, session: Session, status: A
   const asked = !!label && !!requested?.labels.includes(label);
   // While the session still holds the selection this launch started with, another model is agy's own fallback.
   if (label && requested && !asked && session.model === selected)
-    runtime.modelFallback = `agy 无法使用 ${requested.id}，这个会话改用了 ${label}。`;
+    runtime.modelFallback = `Antigravity could not use ${requested.id}; running ${label} instead.`;
   const model = !label ? undefined : asked ? selected : runtime.models?.find(item => item.name === label)?.value;
   const mode =
-    typeof status.cycle_mode === 'string' && ['plan', 'accept-edits', 'auto', 'agent'].includes(status.cycle_mode)
-      ? status.cycle_mode
-      : runtime.launch.config?.mode ?? session.mode;
-  const approval = runtime.launch.config?.approval;
+    typeof status.cycle_mode === 'string' && status.cycle_mode === ''
+      ? 'agent'
+      : typeof status.cycle_mode === 'string' && ['plan', 'accept-edits', 'auto', 'agent'].includes(status.cycle_mode)
+        ? status.cycle_mode
+        : runtime.launch.config?.mode ?? session.mode;
+  const rawApproval = status.tool_permission ?? status.toolPermission ?? status.approval;
+  let observedApproval: string | undefined;
+  if (typeof rawApproval === 'string' && rawApproval) {
+    try {
+      observedApproval = agyToolPermission(rawApproval);
+    } catch {
+      /* ignore unknown native permission values */
+    }
+  }
+  const approval = observedApproval ?? runtime.launch.config?.approval;
   const patch = { ...(model ? { model } : {}), mode, ...(approval ? { approval } : {}) };
   runtime.status = { ...runtime.status, ...patch };
   if (Object.entries(patch).some(([key, value]) => session[key as keyof typeof session] !== value)) {
-    await runtime.host.updateSession(session.id, patch, { bump: true });
+    await runtime.host.updateSession(session.id, patch);
   }
 }
 
@@ -208,7 +259,7 @@ export async function poll(hub: Hub, runtime: Runtime): Promise<void> {
   const status = await nativeStatus(runtime);
   if (runtime.stopped || hub.closed || runtime.cancelling) return;
   if (!status) {
-    const interaction = await runtime.host.dialogs.current(runtime.context.session.id);
+    const interaction = await runtime.host.dialogs.current?.(runtime.context.session.id).catch(() => null);
     if (interaction) {
       runtime.status = { phase: 'attention', interaction, connection: { state: 'connected' } };
       changed(hub, runtime);
@@ -250,22 +301,27 @@ export async function poll(hub: Hub, runtime: Runtime): Promise<void> {
     if (unconfirmedIdle) runtime.idleResyncAt = runtime.statusAt;
     await resync(hub, runtime, id);
   } else if (id && streamDown) runtime.snapshot = await runtime.rpc.snapshot(id);
-  const interaction = runtime.snapshot && interactionOf(runtime.snapshot)?.view;
+  let interaction = runtime.snapshot && interactionOf(runtime.snapshot)?.view;
+  if (!interaction && (status.tool_confirmation_pending || waiting(runtime.snapshot) || !runtime.snapshot)) {
+    interaction = (await runtime.host.dialogs.current?.(session.id).catch(() => null)) ?? undefined;
+  }
   const phase = derivePhase(runtime, status);
   const turn = runtime.snapshot && mapLiveSnapshot(runtime.snapshot, session.id).turns.findLast(turn => !turn.status);
+  const activity = deriveActivity(runtime, status, session.id);
   runtime.status = {
     phase,
     ...(turn && id ? { activeTurnId: turn.id, activeTurn: { nativeSessionId: id, turnId: turn.id } } : {}),
     connection: { state: 'connected' },
     ...(id ? { history: { state: 'ready' as const } } : {}),
     ...(interaction ? { interaction } : {}),
+    ...(activity ? { activity } : {}),
     // A model agy would not start with is said for as long as this launch runs: the first message usually rides on it.
     // Answering agy's trust gate changes what runs in this directory without review, so it is never silent either;
     // said once, on the launch that recorded it, until the conversation's first input.
     ...(runtime.modelFallback
       ? { notice: runtime.modelFallback, noticeLevel: 'warning' as const }
       : runtime.launch.trustAdded && !runtime.snapshot?.steps.some(step => step.userInput)
-        ? { notice: `已把 ${runtime.context.project.cwd} 记入这个会话的 Antigravity 受信任目录，启动时不再询问。`, noticeLevel: 'info' as const }
+        ? { notice: `Trusted ${runtime.context.project.cwd} for this Antigravity conversation.`, noticeLevel: 'info' as const }
         : {}),
   };
   if (runtime.snapshot) await receipts(runtime);
@@ -273,10 +329,19 @@ export async function poll(hub: Hub, runtime: Runtime): Promise<void> {
   if (!runtime.host.view.session(session.id)?.configPending) await adoptObservedConfig(runtime, session, status);
   const meter = status.context_window;
   if (Number.isFinite(meter?.context_window_size) && meter.context_window_size > 0) {
-    runtime.host.emit(session.id, {
-      type: 'context',
-      context: { used: Number(meter.current_usage?.input_tokens ?? 0), size: meter.context_window_size, breakdown: [] },
-    });
+    const usage = meter.current_usage;
+    const used =
+      Number(usage?.input_tokens ?? 0) +
+      Number(usage?.cache_read_input_tokens ?? 0) +
+      Number(usage?.cache_creation_input_tokens ?? 0);
+    if (usage || used > 0) {
+      const context = { used, size: meter.context_window_size, breakdown: [] };
+      const contextJson = JSON.stringify(context);
+      if (contextJson !== runtime.lastContextJson) {
+        runtime.lastContextJson = contextJson;
+        runtime.host.emit(session.id, { type: 'context', context });
+      }
+    }
   }
   changed(hub, runtime);
 }

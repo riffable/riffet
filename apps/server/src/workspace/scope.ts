@@ -51,7 +51,7 @@ export async function resolveExternalFile(input: string, deniedRoots: readonly s
  * workbench's own access token, a backend API key or an SSH identity.
  */
 const SECRET_HOME_DIRECTORIES = ['.ssh', '.gnupg', '.aws', '.azure', '.kube', '.docker', '.config/gcloud', '.config/gh', '.riffet', '.local/share/riffet', '.trae'];
-const SECRET_HOME_FILES = ['.netrc', '.git-credentials', '.npmrc', '.pypirc', '.claude.json', '.codex/auth.json', '.claude/.credentials.json', '.config/cursor/auth.json', '.factory/auth.json', '.claude/settings.json', '.cursor/cli-config.json', '.traecli.toml'];
+const SECRET_HOME_FILES = ['.netrc', '.git-credentials', '.npmrc', '.pypirc', '.claude.json', '.codex/auth.json', '.claude/.credentials.json', '.config/cursor/auth.json', '.factory/auth.json', '.claude/settings.json', '.cursor/cli-config.json', '.traecli.toml', '.gemini/oauth_creds.json', '.gemini/google_accounts.json', '.gemini/antigravity-cli/settings.json'];
 const SECRET_NAME = /^(?:\.env(?:\..+)?|id_(?:rsa|dsa|ecdsa|ed25519)(?:_sk)?|.+\.(?:pem|key|p12|pfx|keystore|jks))$/i;
 const SESSION_ARTIFACT_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const GENERATED_IMAGE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,191}\.(?:png|jpe?g|gif|webp|bmp|avif)$/i;
@@ -87,15 +87,22 @@ async function readableArtifactRoot(artifactStateDir: string | undefined, real: 
   if (stateRel && !stateRel.startsWith('..') && !path.isAbsolute(stateRel)) {
     const parts = stateRel.split(path.sep);
     // `<stateDir>/plugin-data/riffet.antigravity/sessions/<sessionId>/native/antigravity-cli/brain/<conversationId>/<file...>`
-    if (parts.length >= 9
-      && parts[0] === 'plugin-data'
-      && parts[1] === 'riffet.antigravity'
-      && parts[2] === 'sessions'
-      && SESSION_ARTIFACT_SEGMENT.test(parts[3]!)
-      && parts[4] === 'native'
-      && parts[5] === 'antigravity-cli'
-      && parts[6] === 'brain'
-      && SESSION_ARTIFACT_SEGMENT.test(parts[7]!)) {
+    // `<stateDir>/plugin-data/riffet.antigravity/standing/<memberKey>/antigravity-cli/brain/<conversationId>/<file...>`
+    if (parts[0] === 'plugin-data' && parts[1] === 'riffet.antigravity' && (
+      (parts.length >= 9
+        && parts[2] === 'sessions'
+        && SESSION_ARTIFACT_SEGMENT.test(parts[3]!)
+        && parts[4] === 'native'
+        && parts[5] === 'antigravity-cli'
+        && parts[6] === 'brain'
+        && SESSION_ARTIFACT_SEGMENT.test(parts[7]!))
+      || (parts.length >= 8
+        && parts[2] === 'standing'
+        && SESSION_ARTIFACT_SEGMENT.test(parts[3]!)
+        && parts[4] === 'antigravity-cli'
+        && parts[5] === 'brain'
+        && SESSION_ARTIFACT_SEGMENT.test(parts[6]!))
+    )) {
       return { root: resolvedStateDir, kind: 'state' };
     }
     // `<stateDir>/cursor-standing/plans/<file...>`

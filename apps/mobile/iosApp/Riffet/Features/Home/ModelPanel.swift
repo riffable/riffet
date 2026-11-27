@@ -191,7 +191,7 @@ struct NewTaskModelPanel: View {
     @State private var reader = ProfileCatalogs()
 
     private var agents: [NativeBackendCatalogEntry] {
-        assistant ? workbench.backends.filter { AssistantKt.isAssistantBackend(id: $0.backendId) } : workbench.backends
+        assistant ? workbench.backends.filter { AssistantKt.isStandingMemberBackend(entry: $0) } : workbench.backends
     }
     /// The agent as the app's agent list has it: its providers are known the moment it is picked, before
     /// its own catalog arrives, so the provider row does not appear a moment later.

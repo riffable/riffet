@@ -57,6 +57,10 @@ export interface Runtime {
   statusAt?: number;
   /** The bridge status that last triggered an idle resync; each status record triggers one. */
   idleResyncAt?: number;
+  /** Last emitted status fingerprint so idle ticks do not broadcast identical status frames. */
+  lastStatusJson?: string;
+  /** Last emitted context window fingerprint. */
+  lastContextJson?: string;
   unbind?: () => void;
   verifiedAt?: number;
 }
@@ -105,6 +109,8 @@ export function assertCurrent(hub: Hub, id: string, epoch: number): void {
   if (hub.closed || epochOf(hub, id) !== epoch) throw new Error('Antigravity operation was closed');
 }
 
+export const FINISHED_SUBAGENT_STATES = new Set(['done', 'completed', 'stopped', 'failed', 'cancelled', 'canceled']);
+
 export function detach(hub: Hub, id: string): void {
   hub.lifecycle.set(id, epochOf(hub, id) + 1);
   const runtime = hub.runtimes.get(id);
@@ -113,6 +119,8 @@ export function detach(hub: Hub, id: string): void {
   clearTimeout(runtime.timer);
   clearTimeout(runtime.frameWake);
   runtime.stream?.abort();
+  (runtime.rpc as { close?: () => void } | undefined)?.close?.();
+  runtime.rpc = undefined;
   runtime.unbind?.();
   hub.runtimes.delete(id);
 }
@@ -150,7 +158,11 @@ export function changed(hub: Hub, runtime: Runtime): void {
           ...(stoppable ? { actions: [{ id: 'stop-current', label: STOP_LABEL }] } : {}),
         }
       : undefined;
-  runtime.host.emit(runtime.context.session.id, { type: 'status', status: runtime.status });
+  const statusJson = JSON.stringify(runtime.status);
+  if (statusJson !== runtime.lastStatusJson) {
+    runtime.lastStatusJson = statusJson;
+    runtime.host.emit(runtime.context.session.id, { type: 'status', status: runtime.status });
+  }
 }
 
 export async function nativeStatus(runtime: Runtime): Promise<AgyRecord | undefined> {
@@ -172,7 +184,7 @@ export function idle(runtime: Runtime, status: AgyRecord | undefined): boolean {
   }
   if (
     Array.isArray(status.subagents) &&
-    status.subagents.some((child: AgyRecord) => !['done', 'completed', 'stopped', 'failed'].includes(child.state ?? child.status))
+    status.subagents.some((child: AgyRecord) => !FINISHED_SUBAGENT_STATES.has(String(child.state ?? child.status ?? '').toLowerCase()))
   ) {
     return false;
   }

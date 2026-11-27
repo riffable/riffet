@@ -251,6 +251,14 @@ enum class NativeInteractionTransport {
 }
 
 @Serializable
+data class NativeBackendProfileFields(
+    val executablePlaceholder: String? = null,
+    val configDir: Boolean? = null,
+    val sourceDir: String? = null,
+    val disableAutoUpdate: Boolean? = null,
+)
+
+@Serializable
 data class NativeBackendCapabilities(
     val backendId: NativeBackendId,
     val label: String,
@@ -285,6 +293,10 @@ data class NativeBackendCapabilities(
     val supportsRiffetTools: Boolean = false,
     /** Which installed extensions a conversation can switch off; null when neither. */
     val extensionToggles: ExtensionToggles? = null,
+    /** Whether this backend isolates standing team members; null from an older server -> fall back to `isAssistantBackend`. */
+    val supportsStandingMember: Boolean? = null,
+    /** Advanced launch fields offered by this backend's profile editor; null from an older server -> legacy defaults. */
+    val profileFields: NativeBackendProfileFields? = null,
 ) {
     val agent: String get() = agentId ?: AgentIds.wire(backendId)
 }

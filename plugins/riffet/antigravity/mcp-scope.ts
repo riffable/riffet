@@ -8,7 +8,7 @@ import type { PreparedAgySession } from './config.js';
 import { AGY_ID, type AgyRecord } from './protocol.js';
 import { nativeStatus, owned, type Hub, type Runtime } from './runtime.js';
 import { readAgySnapshot } from './storage.js';
-import { mapAgySnapshot } from './transcript.js';
+import { mapAgySnapshot, mapLiveSnapshot } from './transcript.js';
 
 export const mcpServerName = (sessionId: string) => `riffet_${sha(sessionId).slice(0, 16)}`;
 
@@ -78,11 +78,14 @@ export async function mcpReady(runtime: Runtime, control: Control): Promise<void
     inventory.isLoading === true ||
     server?.status !== 'MCP_SERVER_STATUS_READY' ||
     !Array.isArray(server.tools) ||
-    !['read_context', 'list_wakeups', 'list_devices'].every(name => server.tools.some((tool: AgyRecord) => tool.name === name))
+    server.tools.length === 0 ||
+    !server.tools.some((tool: AgyRecord) => tool.name === 'read_context')
   ) {
     throw runtime.host.error('CLI_BUSY', 'Antigravity is loading its Riffet tools', 409);
   }
 }
+
+const MAX_CHILD_DEPTH = 8;
 
 /** Accepts a Riffet MCP call only when its metadata proves it comes from this session's verified conversation. */
 export async function validateMcp(hub: Hub, runtime: Runtime, metadata: Record<string, unknown>): Promise<void> {
@@ -96,17 +99,37 @@ export async function validateMcp(hub: Hub, runtime: Runtime, metadata: Record<s
   const current = metadata['antigravity.google/conversation_id'];
   if (typeof current !== 'string' || !AGY_ID.test(current)) throw new Error('Antigravity tool conversation is unavailable');
   if (current !== id) {
-    const child = readAgySnapshot(runtime.launch.geminiDir, current);
-    if (
-      metadata['antigravity.google/parent_conversation_id'] !== id ||
-      child?.metadata?.parentConversationId !== id ||
-      child.metadata.rootConversationId !== id
-    ) {
+    let cursor = current;
+    let directChildId: string | undefined;
+    const visited = new Set<string>([current]);
+    for (let depth = 0; depth < MAX_CHILD_DEPTH; depth++) {
+      const snap = readAgySnapshot(runtime.launch.geminiDir, cursor);
+      const parentId = snap?.metadata?.parentConversationId;
+      if (snap?.metadata?.rootConversationId !== id || typeof parentId !== 'string' || !AGY_ID.test(parentId)) {
+        throw new Error('Antigravity child lineage is unavailable');
+      }
+      if (depth === 0 && metadata['antigravity.google/parent_conversation_id'] !== parentId) {
+        throw new Error('Antigravity child lineage is unavailable');
+      }
+      if (parentId === id) {
+        directChildId = cursor;
+        break;
+      }
+      if (visited.has(parentId)) throw new Error('Antigravity child lineage is unavailable');
+      visited.add(parentId);
+      cursor = parentId;
+    }
+    if (!directChildId) {
       throw new Error('Antigravity child lineage is unavailable');
     }
-    const parent = await runtime.rpc!.snapshot(id);
-    if (!mapAgySnapshot(parent).children.some(entry => entry.agentId === current)) {
-      throw new Error('Antigravity child is not active in this parent');
+    const inLive =
+      runtime.snapshot?.conversationId === id &&
+      mapLiveSnapshot(runtime.snapshot, runtime.context.session.id).children.some(entry => entry.agentId === directChildId);
+    if (!inLive) {
+      const parent = await runtime.rpc!.snapshot(id);
+      if (!mapAgySnapshot(parent).children.some(entry => entry.agentId === directChildId)) {
+        throw new Error('Antigravity child is not active in this parent');
+      }
     }
   } else if (metadata['antigravity.google/parent_conversation_id']) {
     throw new Error('Antigravity parent scope is inconsistent');

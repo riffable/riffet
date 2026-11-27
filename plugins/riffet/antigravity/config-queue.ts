@@ -45,7 +45,17 @@ export function queueConfiguration(hub: Hub, runtime: Runtime): void {
           await runtime.host.terminals.stop(runtime.launch.terminalId);
           detach(hub, context.session.id);
         });
-        if (runtime.stopped) await hub.reopen(runtime.host, await loadContext(runtime.host, context.session.id));
+        if (runtime.stopped) {
+          try {
+            await hub.reopen(runtime.host, await loadContext(runtime.host, context.session.id));
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Antigravity could not restart to apply settings';
+            runtime.host.emit(context.session.id, {
+              type: 'status',
+              status: { phase: 'offline', notice: message, noticeLevel: 'error', connection: { state: 'failed', message } },
+            });
+          }
+        }
       },
       { detached: true },
     )

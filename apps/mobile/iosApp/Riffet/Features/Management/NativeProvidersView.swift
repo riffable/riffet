@@ -105,7 +105,7 @@ struct NativeProvidersView: View {
         .task(id: backend) { actionError = nil; await load() }
         .refreshable { if backend == .cursor { workbench.refresh() } else { await load() } }
         .sheet(item: $editing) { target in
-            NativeProfileEditor(workbench: workbench, backend: target.profile?.backendId ?? backend, profile: target.profile, launchOnly: agentSettings) { Task { await load() } }
+            NativeProfileEditor(workbench: workbench, backend: target.profile?.backendId ?? backend, profile: target.profile, capabilities: currentCapabilities, launchOnly: agentSettings) { Task { await load() } }
         }
         .sheet(isPresented: $gateway) { NativeCursorGateway(workbench: workbench, launchOnly: agentSettings) }
     }
@@ -263,6 +263,7 @@ private struct NativeProfileEditor: View {
     let workbench: Workbench
     let backend: NativeBackendId
     let profile: NativeBackendProfileSettings?
+    var capabilities: NativeBackendCapabilities? = nil
     var launchOnly = false
     let saved: () -> Void
     @Environment(\.dismiss) private var dismiss
@@ -298,6 +299,26 @@ private struct NativeProfileEditor: View {
     @State private var confirmClearKey = false
     @State private var initialized = false
     private var allowsEndpoint: Bool { backend != .droid && backend != .traex }
+    private var profileFields: NativeBackendProfileFields? {
+        (capabilities ?? workbench.backends.first { $0.backendId == backend }?.capabilities)?.profileFields
+    }
+    private var executablePlaceholder: String {
+        profileFields?.executablePlaceholder ?? (backend == .antigravity ? "agy" : backend.name.lowercased())
+    }
+    private var showsConfigDir: Bool {
+        if let fields = profileFields { return fields.configDir?.boolValue == true }
+        return backend != .droid && backend != .antigravity
+    }
+    private var sourceDirKind: String? {
+        if let fields = profileFields { return fields.sourceDir }
+        if backend == .dsh { return "source" }
+        if backend == .antigravity { return "config" }
+        return nil
+    }
+    private var showsAutoUpdate: Bool {
+        if let fields = profileFields { return fields.disableAutoUpdate?.boolValue == true }
+        return backend == .claude || backend == .antigravity
+    }
     private var dirty: Bool {
         modelSource != profile?.modelSource || name != (profile?.name ?? "") || endpoint != (profile?.apiEndpoint ?? "") || !key.isEmpty
         || executable != (profile?.executable ?? "") || configDir != (profile?.configDir ?? "") || sourceDir != (profile?.sourceDir ?? "")
@@ -428,10 +449,11 @@ private struct NativeProfileEditor: View {
 
     @ViewBuilder private var launchFields: some View {
         Section {
-            RiffetField(label: String(localized: "CLI 路径", bundle: .riffet), prompt: "", text: $executable, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
-            if backend != .droid && backend != .antigravity { RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $configDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
-            if backend == .dsh { RiffetField(label: String(localized: "DSH 源码目录", bundle: .riffet), prompt: "", text: $sourceDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
-            if backend == .claude { Toggle("关闭自动更新", isOn: $autoUpdateOff).tint(palette.primary) }
+            RiffetField(label: String(localized: "CLI 路径", bundle: .riffet), prompt: executablePlaceholder, text: $executable, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
+            if showsConfigDir { RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $configDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
+            if sourceDirKind == "source" { RiffetField(label: String(localized: "DSH 源码目录", bundle: .riffet), prompt: "", text: $sourceDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
+            if sourceDirKind == "config" { RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $sourceDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
+            if showsAutoUpdate { Toggle("关闭自动更新", isOn: $autoUpdateOff).tint(palette.primary) }
         } footer: { Text("更换配置目录会切换账号与原生历史范围") }
     }
 
@@ -508,12 +530,12 @@ private struct NativeProfileEditor: View {
     private func save() async -> Bool {
         guard let api = workbench.api else { return false }; error = nil
         let body = launchOnly ? NativeBackendProfileSettingsUpdate(
-            name: profile?.name, description: nil, executable: executable, configDir: backend == .droid || backend == .antigravity ? nil : configDir,
-            sourceDir: backend == .dsh ? sourceDir : nil, apiEndpoint: nil, agentEndpoint: nil, disableAutoUpdate: backend == .claude ? KotlinBoolean(bool: autoUpdateOff) : nil,
+            name: profile?.name, description: nil, executable: executable, configDir: showsConfigDir ? configDir : nil,
+            sourceDir: sourceDirKind != nil ? sourceDir : nil, apiEndpoint: nil, agentEndpoint: nil, disableAutoUpdate: showsAutoUpdate ? KotlinBoolean(bool: autoUpdateOff) : nil,
             defaultModel: nil, enabledModels: nil, modelInputModalities: nil, modelContextWindows: nil, apiKey: nil, modelSource: nil, apiProtocol: nil
-        ) : NativeBackendProfileSettingsUpdate(name: name.trimmingCharacters(in: .whitespaces), description: nil, executable: executable, configDir: backend == .droid || backend == .antigravity ? nil : configDir,
-            sourceDir: backend == .dsh ? sourceDir : nil, apiEndpoint: allowsEndpoint ? endpoint.trimmingCharacters(in: .whitespaces) : nil, agentEndpoint: nil,
-            disableAutoUpdate: backend == .claude ? KotlinBoolean(bool: autoUpdateOff) : nil, defaultModel: defaultModel,
+        ) : NativeBackendProfileSettingsUpdate(name: name.trimmingCharacters(in: .whitespaces), description: nil, executable: executable, configDir: showsConfigDir ? configDir : nil,
+            sourceDir: sourceDirKind != nil ? sourceDir : nil, apiEndpoint: allowsEndpoint ? endpoint.trimmingCharacters(in: .whitespaces) : nil, agentEndpoint: nil,
+            disableAutoUpdate: showsAutoUpdate ? KotlinBoolean(bool: autoUpdateOff) : nil, defaultModel: defaultModel,
             enabledModels: PatchValue.shared.list(value: allModels ? nil : enabled.sorted()), modelInputModalities: sourceReplaced ? PatchValue.shared.modalities(value: nil) : nil, modelContextWindows: sourceReplaced ? PatchValue.shared.contextWindows(value: nil) : nil,
             apiKey: key.isEmpty ? (keyCleared ? PatchValue.shared.key(value: nil) : nil) : PatchValue.shared.key(value: key), modelSource: modelSource == profile?.modelSource ? nil : PatchValue.shared.key(value: modelSource),
             apiProtocol: backend == .antigravity ? PatchValue.shared.key(value: endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "google-generative-ai") : backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? PatchValue.shared.key(value: apiProtocol) : nil)

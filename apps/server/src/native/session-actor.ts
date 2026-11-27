@@ -481,7 +481,8 @@ export class SessionActor {
     if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
     const project = this.store.getProject(session.projectId);
     if (project.archivedAt) throw new AppError('ARCHIVED_PROJECT', 'Restore this project before running a conversation', 409);
-    if (project.system === 'assistant' && !isAssistantBackend(session.backendId)) throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'The personal assistant runs on Claude Code, Codex, or Cursor', 409);
+    const supportsMember = isAssistantBackend(session.backendId) || Boolean(this.traits(session.backendId).startsNewTopic);
+    if ((project.system === 'assistant' || Boolean(session.agentMemberId)) && !supportsMember) throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED', 'This Agent backend does not support team member isolation', 409);
     if (armed.checkpoint) void Promise.resolve().then(() => this.options.beforeTurn!(session, run, armed.prepareAt)).catch(() => undefined);
     return session;
   }

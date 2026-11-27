@@ -110,4 +110,20 @@ describe('buildSessionControlSnapshot', () => {
     ]);
     expect(snapshot.capabilities.canSendNow).toBe(false);
   });
+
+  it('allows stopping without send_now when interrupt is supported but targeted stop is not', () => {
+    const run = queued('run-q');
+    const snapshot = snap({
+      status: running,
+      queue: { next: run.id, held: { reason: 'turn_running' } },
+      runs: [run],
+      capabilities: { supportsInterrupt: true, supportsTargetedStop: false },
+    });
+    expect(snapshot.activeTurn).toMatchObject({ phase: 'running', canStop: true });
+    expect(snapshot.capabilities.canStop).toBe(true);
+    expect(snapshot.capabilities.canSendNow).toBe(false);
+    expect(snapshot.inbox[0]).toMatchObject({ placement: 'queued' });
+    expect(snapshot.inbox[0]!.actions).not.toContain('send_now');
+    expect(snapshot.inbox[0]!.actions).toEqual(['edit', 'cancel']);
+  });
 });

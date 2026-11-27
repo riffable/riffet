@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { NativeInteractionResponse, NativeInteractionResult } from '@contracts';
@@ -20,6 +20,22 @@ export async function interaction(hub: Hub, host: AgentHost, context: AgentConte
   const id = host.view.session(context.session.id)?.nativeSessionId;
   const snapshot = runtime?.snapshot?.conversationId === id ? runtime?.snapshot : undefined;
   return (snapshot && interactionOf(snapshot)?.view) || (await host.dialogs.current(context.session.id)) || undefined;
+}
+
+const MAX_RESPONSE_FILES = 20;
+
+async function pruneResponseFiles(dir: string, keepFile: string): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  const files: Array<{ name: string; mtimeMs: number }> = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.json') || entry.name === keepFile) continue;
+    const info = await stat(join(dir, entry.name)).catch(() => undefined);
+    files.push({ name: entry.name, mtimeMs: info?.mtimeMs ?? 0 });
+  }
+  files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const stale of files.slice(MAX_RESPONSE_FILES - 1)) {
+    await rm(join(dir, stale.name), { force: true }).catch(() => undefined);
+  }
 }
 
 export async function respond(
@@ -68,14 +84,16 @@ export async function respond(
   };
   const responses = join(runtime.launch.root, 'responses');
   await mkdir(responses, { recursive: true, mode: 0o700 });
-  await writeJson(join(responses, `${sha(response.requestId)}.json`), { fingerprint: hash, conversationId: id, target, answer });
+  const responseFile = `${sha(response.requestId)}.json`;
+  await writeJson(join(responses, responseFile), { fingerprint: hash, conversationId: id, target, answer });
+  await pruneResponseFiles(responses, responseFile);
   await host.interactionReceipts.save(context.session.id, response.requestId, receipt);
   try {
     await runtime.rpc!.call('HandleCascadeUserInteraction', { cascadeId: id, interaction: answer });
   } catch {
     /* a lost reply still needs its native receipt, never a second RPC */
   }
-  for (let attempt = 0; attempt < 10; attempt++) {
+  for (let attempt = 0; attempt < 8; attempt++) {
     const outcome = answered(await runtime.rpc!.snapshot(id), target, answer);
     if (outcome) {
       const result: NativeInteractionResult =
@@ -84,7 +102,7 @@ export async function respond(
       changed(hub, runtime);
       return result;
     }
-    await delay(100);
+    await delay(150);
   }
   return receipt.result;
 }

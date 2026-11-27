@@ -3,7 +3,7 @@ import type { AgentContext, AgentHost, AgentStopOptions } from '@riffet/plugin-a
 import { required } from './lifecycle.js';
 import { changed, loadContext, owned, type Hub } from './runtime.js';
 import { refresh } from './poll.js';
-import { mapAgySnapshot } from './transcript.js';
+import { mapLiveSnapshot } from './transcript.js';
 
 export async function runtimeAction(
   hub: Hub,
@@ -37,14 +37,14 @@ export async function interrupt(hub: Hub, host: AgentHost, context: AgentContext
     await host.terminals.interact(runtime.launch.terminalId, async control => {
       await owned(runtime);
       runtime.snapshot = await runtime.rpc!.snapshot(id);
-      const execution = mapAgySnapshot(runtime.snapshot).turns.findLast(turn => !turn.status)?.id;
+      const execution = mapLiveSnapshot(runtime.snapshot, context.session.id).turns.findLast(turn => !turn.status)?.id;
       runtime.stream?.abort();
       await runtime.rpc!.call('CancelCascadeInvocation', { cascadeId: id, killBackgroundTasks: true });
       // Cancellation acknowledgement may precede the executor's durable end. The pane stays
       // exclusive until that evidence arrives; no queued Riffet input can start in between.
-      for (let attempt = 0; attempt < 30; attempt++) {
+      for (let attempt = 0; attempt < 15; attempt++) {
         runtime.snapshot = await runtime.rpc!.snapshot(id);
-        const turns = mapAgySnapshot(runtime.snapshot).turns;
+        const turns = mapLiveSnapshot(runtime.snapshot, context.session.id).turns;
         const active = turns.findLast(turn => !turn.status)?.id;
         if (active && active !== execution) break;
         if (!active && runtime.snapshot.status === 'CASCADE_RUN_STATUS_IDLE') {
@@ -52,7 +52,7 @@ export async function interrupt(hub: Hub, host: AgentHost, context: AgentContext
           if (/esc to cancel/i.test(screen ?? '')) await control.keys(['Escape']);
           break;
         }
-        await delay(100);
+        await delay(200);
       }
     });
   } finally {

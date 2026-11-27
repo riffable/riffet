@@ -137,7 +137,7 @@ import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import { registerTraceRoutes } from './routes/trace.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { AGENT_PROCESS_BUDGET, ASSISTANT_BUDGET, CODE_INDEX_BUDGET, DEFAULT_AGENT_MEMBER_ID, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, assistantChoice, memberChoice, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, ASSISTANT_BUDGET, CODE_INDEX_BUDGET, DEFAULT_AGENT_MEMBER_ID, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, SERVER_BUDGET, SETTING_DEFAULTS, STORAGE_BUDGET, assistantChoice, isAssistantBackend, memberChoice, titleTemplateKeepsTitle, workItemAgentChoice, type NativeRunInput, type SecurityActor, type SecurityEventKind } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -366,6 +366,7 @@ export async function createApp(options: AppOptions = {}) {
       assistantDelegationsRef?.endForMember(id,'owner');
       assistantRuns?.clearPending(id);
     },
+    supportsMemberBackend:id=>Boolean(backendRegistry.get(id)?.traits?.startsNewTopic)||isAssistantBackend(id),
     renderAvatar:(request,name)=>owner.renderGeneratedAvatar(request,name),
   });
   teamRef=team;
@@ -401,7 +402,7 @@ export async function createApp(options: AppOptions = {}) {
   // A project outside Git simply has none; checkpoint failure never fails the turn.
   const beforeTurn=async(session:import('../../../packages/contracts/src/index.js').Session,run:import('../../../packages/contracts/src/index.js').Run,since:number)=>
     session.backendId==='chat'?undefined:git.createTurnCheckpoint(store.getProject(session.projectId),{sessionId:session.id,runId:run.id,title:run.prompt.trim().split('\n')[0]!.slice(0,120)||'Turn',since});
-  const dispatch=new NativeDispatcher(store,new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),dispatchRuntime,workspace,{beforeTurn,log:entry=>console.log(`[dispatch] ${JSON.stringify(entry)}`)});
+  const dispatch=new NativeDispatcher(store,{...new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),supportsTargetedStop:session=>nativeBackends.supportsTargetedStop(session)},dispatchRuntime,workspace,{beforeTurn,log:entry=>console.log(`[dispatch] ${JSON.stringify(entry)}`)});
   terminal.onSessionInputAvailable=sessionId=>{dispatch.kick(sessionId);};
   // A provider that keeps names of its own (Codex) is told whenever the workbench or the reader names a conversation.
   const renameNative=(session:import('../../../packages/contracts/src/index.js').Session)=>{void nativeBackends.rename(session).catch(()=>undefined);};

@@ -30,7 +30,8 @@ export function capabilities(): AgentCapabilities {
     supportsRiffetTools: true,
     supportsSessionReferences: true,
     consumesProtocols: ['google-generative-ai'],
-    slashCommands: COMMANDS.map(name => ({ name })),
+    profileFields: { executablePlaceholder: 'agy', configDir: false, sourceDir: 'config', disableAutoUpdate: true },
+    slashCommands: [],
   };
 }
 

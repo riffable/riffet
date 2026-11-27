@@ -700,7 +700,7 @@ struct ConversationState {
         if let control = workbench.control {
             canStop = !status.archived && status.live && control.activeTurn?.canStop == true
         } else {
-            canStop = !status.archived && status.live && (capabilities?.supportsInterrupt == true && capabilities?.supportsTargetedStop?.boolValue == true) && !status.starting
+            canStop = !status.archived && status.live && capabilities?.supportsInterrupt == true && !status.starting
         }
         var historyWarning: String?
         if native?.history?.state == "error" {
@@ -977,7 +977,7 @@ struct ComposerDocks: View {
                 let blocked = workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run, control: workbench.control)
                 let governed = workbench.control != nil
                 let showSteer = governed ? allows("steer", on: run) : (supportsSteer && workbench.status?.activeTurn != nil)
-                let showSendNow = governed ? allows("send_now", on: run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
+                let showSendNow = governed ? allows("send_now", on: run) && workbench.control?.activeTurn?.canStop == true && supportsTargetedStop : supportsTargetedStop
                 let showEdit = !governed || allows("edit", on: run)
                 let showCancel = !governed || allows("cancel", on: run)
                 DockCard {

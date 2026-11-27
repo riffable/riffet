@@ -119,3 +119,33 @@ it('rejects malformed protobuf without returning a partial conversation', () => 
   f.db.prepare('UPDATE steps SET step_payload=? WHERE idx=1').run(Buffer.from([0x0a, 0xff, 0xff]));
   expect(() => readAgySnapshot(f.root, cid)).toThrow('protobuf');
 });
+it('keeps GENERIC step type and leaves missing RunCommand exitCode undefined', () => {
+  const f = fixture();
+  const insert = f.db.prepare('INSERT INTO steps (idx,step_type,status,has_subtrajectory,step_format,step_payload) VALUES(?,132,3,0,0,?)');
+  const genericStep = (typeUrl: string, inner: Buffer, output = 'ok') => {
+    const any = Buffer.concat([bytes(1, typeUrl), bytes(2, inner)]);
+    const result = Buffer.concat([bytes(1, output), bytes(6, any)]);
+    return Buffer.concat([scalar(1, 132), scalar(4, 3), bytes(140, bytes(2, result))]);
+  };
+  // Missing exitCode (field 1 omitted) -> exitCode must be undefined, not 0.
+  insert.run(1, genericStep('type.googleapis.com/exa.cortex.core.tools.RunCommand', Buffer.concat([bytes(6, 'sleep 1'), bytes(7, '/tmp')])));
+  // Explicit exitCode 0 -> exitCode is 0.
+  insert.run(2, genericStep('type.googleapis.com/exa.cortex.core.tools.RunCommand', Buffer.concat([scalar(1, 0), bytes(6, 'true')])));
+  // Field 8 set (running/background) -> exitCode is undefined even if field 1 is present.
+  insert.run(3, genericStep('type.googleapis.com/exa.cortex.core.tools.RunCommand', Buffer.concat([scalar(1, 0), bytes(6, 'bg'), scalar(8, 1)])));
+  // InvokeSubagent inside GENERIC keeps type CORTEX_STEP_TYPE_GENERIC while exposing invokeSubagent.
+  const childId = '44444444-4444-4444-4444-444444444444';
+  const invokeBody = Buffer.concat([bytes(1, bytes(2, 'Explorer')), bytes(2, bytes(1, childId))]);
+  insert.run(4, genericStep('type.googleapis.com/exa.cortex.core.tools.InvokeSubagent', invokeBody));
+
+  const { steps } = readAgySnapshot(f.root, cid)!;
+  expect(steps[1].type).toBe('CORTEX_STEP_TYPE_GENERIC');
+  expect(steps[1].runCommand).toMatchObject({ commandLine: 'sleep 1', cwd: '/tmp', combinedOutput: { full: 'ok' } });
+  expect(steps[1].runCommand.exitCode).toBeUndefined();
+  expect(steps[2].type).toBe('CORTEX_STEP_TYPE_GENERIC');
+  expect(steps[2].runCommand.exitCode).toBe(0);
+  expect(steps[3].type).toBe('CORTEX_STEP_TYPE_GENERIC');
+  expect(steps[3].runCommand.exitCode).toBeUndefined();
+  expect(steps[4].type).toBe('CORTEX_STEP_TYPE_GENERIC');
+  expect(steps[4].invokeSubagent.results).toEqual([{ conversationId: childId, workspaceUris: [] }]);
+});

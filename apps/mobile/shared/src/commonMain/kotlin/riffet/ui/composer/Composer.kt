@@ -223,6 +223,7 @@ fun Composer(
     supportsSteer: Boolean = false,
     supportsSessionReferences: Boolean = false,
     supportsTargetedStop: Boolean = false,
+    supportsInterrupt: Boolean = true,
     acceptsMessages: Boolean = true,
     /** Background subagents running while the main agent is idle ([riffet.ui.timeline.TimelinePresentation.backgroundSubagents]). */
     background: Int = 0,
@@ -391,11 +392,12 @@ fun Composer(
                 queued = queued,
                 running = working && supportsTargetedStop,
                 control = control,
+                canSendNow = supportsTargetedStop && (!governed || control?.capabilities?.canSendNow == true),
                 unconfirmed = (control?.held ?: status?.queue?.held)?.reason == riffet.contracts.NativeQueueHoldReason.UNCONFIRMED,
                 pendingRunIds = sendState.pendingRunIds,
                 enabled = connected && !busy,
                 onSendNow = { run ->
-                    if (governed && turnCanStop || !governed && supportsTargetedStop) scope.launch { store.sendQueuedNow(run) }
+                    if (supportsTargetedStop && (governed && turnCanStop && control?.capabilities?.canSendNow == true || !governed)) scope.launch { store.sendQueuedNow(run) }
                 },
                 onSteer = if (governed && turnCanSteer || !governed && supportsSteer && status?.activeTurn != null) ({ run ->
                     val target = status?.activeTurn?.target() ?: control?.activeTurn?.let { turn ->
@@ -439,9 +441,9 @@ fun Composer(
             settings = settings,
             running = working || (governed && turnCanStop),
             background = background,
-            onStop = if (sendState.interrupting || (governed && (turnCanStop || (background > 0 && supportsTargetedStop))) || (!governed && supportsTargetedStop)) ({ scope.launch { store.interrupt() } }) else null,
+            onStop = if (sendState.interrupting || (governed && (turnCanStop || (background > 0 && supportsInterrupt))) || (!governed && supportsInterrupt)) ({ scope.launch { store.interrupt() } }) else null,
             stopping = sendState.interrupting,
-            stopEnabled = connected && !busy && (if (governed) turnCanStop || (background > 0 && supportsTargetedStop) else working || background > 0),
+            stopEnabled = connected && !busy && (if (governed) turnCanStop || (background > 0 && supportsInterrupt) else (working || background > 0) && supportsInterrupt),
             sendEnabled = connected && text.isNotBlank() && !uploading && !busy && !awaitingSubmission && !dictationState.active,
             sendBusy = sendState.sending,
             onSend = { submit() },
@@ -1155,6 +1157,7 @@ private fun QueueSection(
     running: Boolean,
     /** Authoritative inbox actions. Null keeps the local stop/steer rules. */
     control: SessionControlSnapshot? = null,
+    canSendNow: Boolean = true,
     /** An earlier message whose delivery is unconfirmed holds the queue; it is settled on that message. */
     unconfirmed: Boolean = false,
     pendingRunIds: Set<String>,
@@ -1176,6 +1179,7 @@ private fun QueueSection(
                 runs = queued,
                 running = running,
                 control = control,
+                canSendNow = canSendNow,
                 unconfirmed = unconfirmed,
                 pendingRunIds = pendingRunIds,
                 enabled = enabled,
@@ -1261,6 +1265,7 @@ private fun QueueDock(
     running: Boolean,
     /** When set, each row's buttons are that entry's `actions`. `send_now` stays hidden without it. */
     control: SessionControlSnapshot? = null,
+    canSendNow: Boolean = true,
     /** An earlier message whose delivery is unconfirmed holds the queue; it is settled on that message. */
     unconfirmed: Boolean = false,
     pendingRunIds: Set<String>,
@@ -1329,10 +1334,11 @@ private fun QueueDock(
                     // With one, a missing action is not shown: a direct send never grows "停止并发送".
                     val showSteer = actions?.contains("steer") ?: (onSteer != null && running && steerEnabled)
                     val canStopTurn = actions != null && control.activeTurn?.canStop == true
-                    val showSendNow = if (actions != null) "send_now" in actions && canStopTurn else !showSteer
+                    val allowSendNow = canSendNow && (if (actions != null) "send_now" in actions && canStopTurn else true)
+                    val showSendNow = if (actions != null) allowSendNow else canSendNow && !showSteer
                     val showEdit = actions?.contains("edit") ?: true
                     val showCancel = actions?.contains("cancel") ?: true
-                    val menuSend = showSteer && (if (actions != null) "send_now" in actions && canStopTurn else true)
+                    val menuSend = showSteer && allowSendNow
                     val menuSteer = !showSteer && (actions?.contains("steer") ?: (onSteer != null))
                     val showMenu = menuSend || menuSteer || showEdit || showCancel
                     var menuOpen by remember(run.id) { mutableStateOf(false) }

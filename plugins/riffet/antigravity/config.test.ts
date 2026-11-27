@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { agyProfileEnvironment, agySelection, agySessionGeminiDir, parseAgyProfile, prepareAgySession } from './config.js';
+import { agyProfileEnvironment, agySelection, agySessionGeminiDir, agyToolPermission, parseAgyProfile, prepareAgySession } from './config.js';
 import { agyLaunchModel, parseAgyModels } from './models.js';
 const roots: string[] = [];
 afterEach(async () => {
@@ -154,5 +154,35 @@ describe('Antigravity launch configuration', () => {
     await expect(prepareAgySession({ ...f.input(), projectCwd: other })).rejects.toThrow('another');
     await expect(prepareAgySession({ ...f.input(), sessionId: '../escape' })).rejects.toThrow('identity');
     await expect(prepareAgySession({ ...f.input(), stateDir: join(f.project, 'state') })).rejects.toThrow('outside');
+  });
+  it('maps dontAsk approval, isolates standing geminiDirOverride, and prunes stale launches', async () => {
+    expect(agyToolPermission('dontAsk')).toBe('always-proceed');
+    const f = await fixture();
+    await f.put('antigravity-cli/settings.json', {
+      trustedWorkspaces: ['/owner-only'],
+      statusLine: { command: 'echo owner' },
+      useG1Credits: true,
+    });
+    const standingDir = join(f.root, 'standing-member');
+    await mkdir(join(standingDir, 'antigravity-cli'), { recursive: true });
+    const prepared = await prepareAgySession({
+      ...f.input(),
+      geminiDirOverride: standingDir,
+      approval: 'dontAsk',
+    });
+    expect(prepared.geminiDir).toBe(await realpath(standingDir));
+    const settings = JSON.parse(await readFile(prepared.settingsPath, 'utf8'));
+    expect(settings.toolPermission).toBe('always-proceed');
+    expect(settings.trustedWorkspaces).not.toContain('/owner-only');
+    expect(settings.statusLine).toBeUndefined();
+    expect(settings.useG1Credits).toBe(true);
+    expect(agySessionGeminiDir(f.input().stateDir, 'session-1')).toBe(await realpath(standingDir));
+
+    // Create 10 launches in sequence and verify stale launch dirs are pruned to 8.
+    for (let i = 0; i < 10; i++) {
+      await prepareAgySession({ ...f.input(), geminiDirOverride: standingDir });
+    }
+    const launches = await readdir(join(prepared.root, 'launches'));
+    expect(launches.length).toBeLessThanOrEqual(8);
   });
 });

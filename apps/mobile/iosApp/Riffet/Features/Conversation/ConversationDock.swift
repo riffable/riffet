@@ -278,7 +278,7 @@ private struct QueueDockCard: View {
     private func queuedRun(_ run: Run, showLead: Bool) -> some View {
         let governed = workbench.control != nil
         let showsSteer = governed ? allows("steer", run) : (supportsSteer && workbench.status?.activeTurn != nil)
-        let showSendNow = governed ? allows("send_now", run) && workbench.control?.activeTurn?.canStop == true : supportsTargetedStop
+        let showSendNow = governed ? allows("send_now", run) && workbench.control?.activeTurn?.canStop == true && supportsTargetedStop : supportsTargetedStop
         let showEdit = !governed || allows("edit", run)
         let showCancel = !governed || allows("cancel", run)
         let usesSteer = showsSteer && canSteer

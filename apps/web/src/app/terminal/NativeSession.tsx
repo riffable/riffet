@@ -1167,7 +1167,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ),
     status: statusSlot(),
     menu: [
-      ...(!archived && working && backendCapabilities?.supportsInterrupt && backendCapabilities.supportsTargetedStop ? [{ id: 'stop-task', icon: <IconSquare />, label: native.interrupting ? t`正在停止` : t`停止任务`, disabled: native.interrupting || !native.connected, onSelect: stop }] : []),
+      ...(!archived && working && backendCapabilities?.supportsInterrupt ? [{ id: 'stop-task', icon: <IconSquare />, label: native.interrupting ? t`正在停止` : t`停止任务`, disabled: native.interrupting || !native.connected, onSelect: stop }] : []),
       ...(native.status.profilePending && !archived ? [{
         id: 'apply-profile', icon: <IconRotateCw />, label: t`重启并应用`,
         hint: t`新配置将在后端重启后生效`, disabled: restartingBackend,
@@ -1199,7 +1199,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为自动化…`, onSelect: () => setDialog('automation') },
       ]),
     ],
-  }), [assistant, working, backendCapabilities?.supportsTargetedStop, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
+  }), [assistant, working, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
   const dialogs = (
     <>
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
@@ -1319,7 +1319,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     onReferencesChange: onReferencesChange,
     running: working,
     backgroundCount: backgroundCount,
-    onStop: (native.control ? native.control.activeTurn?.canStop || (backgroundCount > 0 && Boolean(backendCapabilities?.supportsInterrupt)) : backendCapabilities?.supportsTargetedStop) ? stop : undefined,
+    onStop: (native.control ? native.control.activeTurn?.canStop || (backgroundCount > 0 && Boolean(backendCapabilities?.supportsInterrupt)) : backendCapabilities?.supportsInterrupt) ? stop : undefined,
     stopping: native.interrupting,
     stopDisabled: archived || !live || (native.control ? !(native.control.activeTurn?.canStop || (backgroundCount > 0 && Boolean(backendCapabilities?.supportsInterrupt))) : !backendCapabilities?.supportsInterrupt) || starting || native.sending || native.interrupting,
     submitIntent: submitIntent,

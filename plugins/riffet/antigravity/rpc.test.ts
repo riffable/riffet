@@ -14,7 +14,9 @@ function frame(value: unknown, flag = 0): Buffer {
   return result;
 }
 const servers: Server[] = [];
+const clients: AgyRpc[] = [];
 afterEach(async () => {
+  clients.splice(0).forEach(client => client.close());
   await Promise.all(
     servers.splice(0).map(
       server =>
@@ -29,7 +31,9 @@ async function listen(handler: RequestListener): Promise<AgyRpc> {
   const server = createServer(handler);
   servers.push(server);
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  return new AgyRpc({ port: (server.address() as { port: number }).port, token: 'private-csrf' });
+  const rpc = new AgyRpc({ port: (server.address() as { port: number }).port, token: 'private-csrf' });
+  clients.push(rpc);
+  return rpc;
 }
 describe('Antigravity Connect protocol', () => {
   it('reassembles fragmented messages and recognizes both trailer shapes', () => {
@@ -119,6 +123,35 @@ describe('Antigravity Connect protocol', () => {
       message: 'Antigravity RPC rejected the request (permission_denied)',
     });
     await expect(rpc.stream(cid, () => {}, new AbortController().signal)).rejects.toThrow('another conversation');
+  });
+  it('releases oversized backing ArrayBuffers after consuming a large frame with a small trailing fragment', () => {
+    const messages: unknown[] = [];
+    const decoder = new AgyFrameDecoder(message => messages.push(message));
+    const big = frame({ update: { conversationId: cid, text: 'x'.repeat(128 * 1024) } });
+    const next = frame({ update: { conversationId: cid, text: 'tail' } });
+    const trailer = frame({}, 2);
+    // Push the large frame together with only 3 bytes of the next frame's header.
+    decoder.push(Buffer.concat([big, next.subarray(0, 3)]));
+    expect(messages).toHaveLength(1);
+    const retained = (decoder as unknown as { buffer: Buffer }).buffer;
+    expect(retained.length).toBe(3);
+    expect(retained.buffer.byteLength).toBeLessThanOrEqual(64 * 1024);
+    decoder.push(Buffer.concat([next.subarray(3), trailer]));
+    decoder.finish();
+    expect(messages).toHaveLength(2);
+    expect(messages[1]).toEqual({ update: { conversationId: cid, text: 'tail' } });
+  });
+  it('reuses keep-alive sockets across calls and closes its agent cleanly', async () => {
+    const ports = new Set<number | undefined>();
+    const rpc = await listen((req, res) => {
+      ports.add(req.socket.remotePort);
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ ok: true }));
+    });
+    expect(await rpc.call('Ping', {})).toEqual({ ok: true });
+    expect(await rpc.call('Ping', {})).toEqual({ ok: true });
+    expect(ports.size).toBe(1);
+    rpc.close();
   });
 });
 describe('Antigravity trajectory updates', () => {

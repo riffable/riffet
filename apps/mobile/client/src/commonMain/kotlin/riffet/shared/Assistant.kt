@@ -24,18 +24,23 @@ fun assistantMain(project: Project?, sessions: List<Session>): Session? {
  * The agents the assistant runs on, first the one it starts on: those that launch it isolated from the
  * owner's own configuration, `ASSISTANT_BACKENDS` of `packages/contracts`.
  */
-val ASSISTANT_BACKENDS = listOf(NativeBackendId.CLAUDE, NativeBackendId.CODEX, NativeBackendId.CURSOR)
+val ASSISTANT_BACKENDS = listOf(NativeBackendId.CLAUDE, NativeBackendId.CODEX, NativeBackendId.CURSOR, NativeBackendId.ANTIGRAVITY)
 
 fun isAssistantBackend(id: NativeBackendId): Boolean = id in ASSISTANT_BACKENDS
+
+fun isStandingMemberBackend(entry: NativeBackendCatalogEntry): Boolean =
+    entry.capabilities.supportsStandingMember ?: isAssistantBackend(entry.backendId)
 
 /**
  * The agent the assistant's composer starts with, `assistantChoice` of `packages/contracts`: the saved
  * choice while its agent is still offered and one it runs on, else the first of [ASSISTANT_BACKENDS] that
- * can run. A saved provider that is gone falls back to the agent's default one, and its model with it.
+ * can run, then any other available standing-member backend. A saved provider that is gone falls back to
+ * the agent's default one, and its model with it.
  */
 fun assistantChoice(saved: AssistantSettings?, backends: List<NativeBackendCatalogEntry>): AssistantChoice? {
-    val backend = saved?.backendId?.takeIf { it in ASSISTANT_BACKENDS }?.let { id -> backends.firstOrNull { it.backendId == id } }
-        ?: ASSISTANT_BACKENDS.firstNotNullOfOrNull { id -> backends.firstOrNull { it.backendId == id && it.available } }
+    val backend = saved?.backendId?.let { id -> backends.firstOrNull { it.backendId == id && isStandingMemberBackend(it) } }
+        ?: ASSISTANT_BACKENDS.firstNotNullOfOrNull { id -> backends.firstOrNull { it.backendId == id && it.available && isStandingMemberBackend(it) } }
+        ?: backends.firstOrNull { it.available && isStandingMemberBackend(it) }
         ?: return null
     // A saved provider and model belong to the saved agent only.
     val kept = backend.backendId == saved?.backendId && (saved.profileId == null || backend.profiles.any { it.id == saved.profileId })

@@ -138,6 +138,8 @@ export interface AgentTraits {
   resumesByNativeId?: boolean;
   /** Each launch can carry the Riffet MCP server (`host.riffetMcp`). */
   riffetTools?: boolean;
+  /** A session's `configPending` makes the driver relaunch its idle CLI and clear the flag, so a change that only a new launch applies can be recorded that way. Absent: the change waits for the next launch. */
+  relaunchesForPendingConfig?: boolean;
   /** A standing conversation's new topic (`AgentStandingHost.newTopic`) is carried out: the model's context starts over. */
   startsNewTopic?: boolean;
   /** The gateway protocols a profile of this Agent can be pointed at. A model source that serves one is offered to its profiles, whatever this Agent's id. */

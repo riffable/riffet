@@ -37,7 +37,7 @@ export const AGENT_MEMBER_TOOL: ToolDefinition = {
     instructions: { type: 'string', description: 'Full markdown written to the member\'s AGENTS.md (at most 64000 characters). On create, omitted writes a starter template; on update, replaces AGENTS.md.' },
     initialMemory: { type: 'string', description: 'For action="create": distilled baseline facts, conventions, or pitfalls written to memory/initial-notes.md (at most 32000 characters).' },
     emoji: { type: 'string', description: 'Optional emoji avatar, e.g. "🧪", "📦", "📈" (empty string clears on update).' },
-    backendId: { type: 'string', enum: ['claude', 'codex', 'cursor', ''], description: 'Preferred Agent backend (empty string resets to default on update).' },
+    backendId: { type: 'string', description: 'Preferred Agent backend id that supports team members (empty string resets to default on update).' },
     profileId: { type: 'string', description: 'Backend provider/profile id (empty string clears on update).' },
     model: { type: 'string', description: 'Model id for the chosen backend (empty string clears on update).' },
     permissionMode: { type: 'string', description: 'Permission mode id (empty string clears on update).' },

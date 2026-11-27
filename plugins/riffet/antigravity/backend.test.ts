@@ -9,7 +9,7 @@ import { writeJson } from './bridge.js';
 import { interactionOf } from './interactions.js';
 import type { AgyRecord, AgySnapshot } from './protocol.js';
 import { required } from './lifecycle.js';
-import { validateMcp } from './mcp-scope.js';
+import { mcpConfigPath, mcpReady, mcpServerName, validateMcp } from './mcp-scope.js';
 import { poll } from './poll.js';
 import { receipts } from './receipts.js';
 import type { Hub } from './runtime.js';
@@ -329,4 +329,133 @@ it('checks per-call MCP namespace, root and workspace and fences the binding whe
   expect(f.session.nativeSessionId).toBe(conversationId);
   expect(f.runtime.stream.signal.aborted).toBe(true);
   await expect(validateMcp(hub(f.backend), f.runtime, metadata)).rejects.toThrow('offline');
+});
+
+it('accepts Riffet MCP readiness for members with delegations disabled (without list_wakeups)', async () => {
+  const f = await fixture();
+  const name = mcpServerName('session');
+  await writeJson(mcpConfigPath(f.runtime.launch), { mcpServers: { [name]: { command: 'node', args: [] } } });
+  f.runtime.rpc.call.mockResolvedValueOnce({
+    isLoading: false,
+    states: [
+      {
+        spec: { serverName: name },
+        status: 'MCP_SERVER_STATUS_READY',
+        tools: [{ name: 'read_context' }, { name: 'notify_user' }],
+      },
+    ],
+  });
+  await expect(mcpReady(f.runtime, { screen: async () => '', paste: async () => {}, keys: async () => {} } as any)).resolves.toBeUndefined();
+});
+
+it('handles /new topic reset for standing conversations and archives the previous nativeSessionId', async () => {
+  const f = await fixture();
+  const stop = vi.fn(async () => {});
+  const updateSession = vi.fn(async () => f.session);
+  const setNativeSessionId = vi.fn(async () => f.session);
+  f.host.session = vi.fn(async () => f.session) as any;
+  f.host.terminals.stop = stop;
+  f.host.updateSession = updateSession as any;
+  f.host.setNativeSessionId = setNativeSessionId as any;
+  f.host.withSessionLock = (async (_id: string, fn: () => Promise<unknown>) => fn()) as any;
+  f.host.standing = { launch: () => undefined, newTopic: (_id: string, text: string) => text.trim() === '/new' };
+
+  const result = await f.backend.send(f.host, {
+    context: f.context,
+    runId: 'run-new',
+    commandId: 'cmd-new',
+    input: { text: '/new', context: [], attachmentIds: [] },
+    config: { mode: 'agent' },
+  } as AgentSendRequest);
+
+  expect(result).toEqual({ state: 'settled' });
+  expect(f.host.commitDispatchFence).toHaveBeenCalledWith('run-new', {
+    slashCommand: true,
+    renderedText: '/new',
+    nativeSessionId: conversationId,
+  });
+  expect(stop).toHaveBeenCalledWith('terminal');
+  expect(updateSession).toHaveBeenCalledWith('session', { previousNativeSessionIds: [conversationId], terminalId: undefined });
+  expect(setNativeSessionId).toHaveBeenCalledWith('session', undefined);
+});
+
+it('proves passive input release and later-turn release without launching or mutating the runtime', async () => {
+  const f = await fixture();
+  hub(f.backend).runtimes.set('session', f.runtime);
+  f.host.transcript.drain = vi.fn(async () => {});
+  f.host.terminals.screen = vi.fn(async () => '────────\n>\n────────');
+  const boundary = JSON.stringify({
+    version: 1,
+    root: f.geminiDir,
+    nonce: f.runtime.launch.nonce,
+    id: conversationId,
+    trajectoryId,
+    users: [],
+  });
+  const droppedRun: AgentRunRef = {
+    id: 'run-dropped',
+    sessionId: 'session',
+    commandId: 'cmd-dropped',
+    state: 'interrupted',
+    delivery: 'uncertain',
+    nativeSessionId: conversationId,
+    renderedText: 'Dropped prompt',
+    inputSentAt: Date.parse('2026-11-13T00:00:00Z'),
+    nativeInputBoundary: boundary,
+  };
+
+  expect(await f.backend.canReleaseInput(f.host, f.context, droppedRun)).toBe(true);
+  expect(await f.backend.canReleaseAfterLaterTurn(f.host, f.context, droppedRun)).toBe(false);
+
+  // Add a later completed turn with a different prompt: both release checks pass.
+  const laterUser = {
+    ...user('later-exec', 0, 'Later prompt'),
+    metadata: {
+      executionId: 'later-exec',
+      createdAt: '2026-11-13T00:05:00Z',
+      sourceTrajectoryStepInfo: { trajectoryId, stepIndex: 0, cascadeId: conversationId },
+    },
+  };
+  f.runtime.snapshot = {
+    ...snapshot([laterUser]),
+    executors: [{ executionId: 'later-exec', terminationReason: 'TERMINATION_REASON_NO_TOOL_CALL', lastStepIdx: 0 }],
+  };
+  expect(await f.backend.canReleaseAfterLaterTurn(f.host, f.context, droppedRun)).toBe(true);
+
+  // If the dropped prompt itself actually appears in the snapshot, release is refused.
+  f.runtime.snapshot = snapshot([user('recorded-exec', 0, 'Dropped prompt')]);
+  expect(await f.backend.canReleaseInput(f.host, f.context, droppedRun)).toBe(false);
+});
+
+it('matches image-only receipts and extracts sanitized startup errors', async () => {
+  const f = await fixture();
+  const boundary = JSON.stringify({ version: 1, root: f.geminiDir, id: conversationId, trajectoryId, users: [] });
+  f.pending.push({
+    id: 'run-img',
+    sessionId: 'session',
+    commandId: 'cmd-img',
+    state: 'running',
+    renderedText: '',
+    nativeInputBoundary: boundary,
+  });
+  f.runtime.snapshot = snapshot([
+    {
+      type: 'CORTEX_STEP_TYPE_USER_INPUT',
+      status: 'CORTEX_STEP_STATUS_DONE',
+      metadata: {
+        executionId: 'img-exec',
+        createdAt: '2026-11-13T00:00:00Z',
+        sourceTrajectoryStepInfo: { trajectoryId, stepIndex: 0, cascadeId: conversationId },
+      },
+      userInput: { userResponse: '', images: [{ mimeType: 'image/jpeg', base64Data: 'AAAA' }] },
+    },
+  ]);
+  await receipts(f.runtime);
+  expect(f.emitEvent).toHaveBeenCalledWith(
+    'session',
+    expect.objectContaining({ type: 'native_input_receipt', runId: 'run-img', nativeTurnId: 'img-exec' }),
+  );
+
+  expect(f.backend.terminal.startupError('Error: Authentication failed')).toContain('Authentication failed');
+  expect(f.backend.terminal.startupError('Antigravity\n? for shortcuts')).toBeUndefined();
 });

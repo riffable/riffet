@@ -73,7 +73,7 @@ class FakeNative {
   echoOnWrite = false;
   echoDuringDelivery = false;
   interruptCalls = 0;
-  interruptOptions: Array<{ clearPrompt?: boolean } | undefined> = [];
+  interruptOptions: Array<{ clearPrompt?: boolean; expectedStop?: unknown } | undefined> = [];
   interruptOperation?: () => Promise<void>;
   /** Mirrors the Cursor backend, the only one that declares `supportsInitialPromptArgs`. */
   argvInitialPrompt = true;
@@ -119,7 +119,7 @@ class FakeNative {
     return this.statuses.get(sessionId) ?? this.currentStatus;
   }
 
-  async interrupt(_session: Session, options?: { clearPrompt?: boolean }): Promise<void> {
+  async interrupt(_session: Session, options?: { clearPrompt?: boolean; expectedStop?: unknown }): Promise<void> {
     this.interruptCalls++;
     this.interruptOptions.push(options);
     await this.interruptOperation?.();
@@ -2286,6 +2286,59 @@ describe('message recovery and targeted stop', () => {
       expect(store.getRun(queued.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued' } });
       expect(store.getRun(queued.id).state).not.toBe('failed');
       expect(store.getRun(active.id)).toMatchObject({ state: 'running', native: { delivery: 'observed' } });
+    } finally { await send.close(); store.close(); }
+  });
+
+  it('strips expectedStop on plain interrupt and settles when supportsTargetedStop is false', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
+    const active = accept(session.id, 'running-task', 'still running');
+    seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest() } });
+    const bound = store.getSession(session.id);
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'running-turn' });
+    const stop = { requestId: 'non-targeted-stop', nativeSessionId: bound.nativeSessionId!, turnId: 'running-turn', terminalId: bound.terminalId, terminalEpoch: store.getTerminal(bound.terminalId!).epoch };
+    const ended: Array<{ turnId: string; status: string }> = [];
+    const native = Object.assign(new FakeNative(store), {
+      supportsTargetedStop: async () => false,
+      endTurn: async (_sessionId: string, turnId: string, status: string) => { ended.push({ turnId, status }); },
+    });
+    native.setStatus(session.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } });
+    native.interruptOperation = async () => { native.setStatus(session.id, { phase: 'idle' }); };
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      const settled = await send.interrupt(session.id, stop);
+      expect(native.interruptCalls).toBe(1);
+      expect(native.interruptOptions).toEqual([{ clearPrompt: false }]);
+      expect(settled).toMatchObject({ id: active.id, state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
+      expect(ended).toEqual([{ turnId: 'running-turn', status: 'interrupted' }]);
+    } finally { await send.close(); store.close(); }
+  });
+
+  it('surfaces TARGETED_STOP_UNSUPPORTED on interruptAndSend without leaving a pending stop receipt', async () => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const created = createSession();
+    const session = store.updateSession(created.id, { terminalId: `terminal-${created.id}` });
+    const active = accept(session.id, 'running-task', 'still running');
+    seedDeliveredRun(store, session, active.id, 'observed', { timings: { busyAt: nowForTest() } });
+    const bound = store.getSession(session.id);
+    store.transitionNativeRun(active.id, ['observed'], { nativeTurnId: 'running-turn' });
+    const stop = { requestId: 'reject-targeted-stop', nativeSessionId: bound.nativeSessionId!, turnId: 'running-turn', terminalId: bound.terminalId, terminalEpoch: store.getTerminal(bound.terminalId!).epoch };
+    const native = Object.assign(new FakeNative(store), {
+      supportsTargetedStop: async () => false,
+    });
+    native.setStatus(session.id, { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } });
+    native.interruptOperation = async () => { native.setStatus(session.id, { phase: 'idle' }); };
+    const send = dispatcher(store, native, makeRuntime(), workspace);
+    try {
+      await expect(send.interruptAndSend(session.id, 'replacement', () => accept(session.id, 'replacement', 'next'), stop, 'fp-1')).rejects.toMatchObject({ code: 'TARGETED_STOP_UNSUPPORTED' });
+      expect(native.interruptCalls).toBe(0);
+      expect(store.getSetting<Record<string, unknown>>(`native-stops:${session.id}`, {})).toEqual({});
+      expect(store.findRunByCommand(session.id, 'replacement')).toBeUndefined();
+      // A subsequent plain stop (even reusing the same requestId) is not blocked by a stale pending receipt.
+      await send.interrupt(session.id, stop);
+      expect(native.interruptCalls).toBe(1);
+      expect(store.getRun(active.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'cancelled', stage: 'interrupted' } });
     } finally { await send.close(); store.close(); }
   });
 });

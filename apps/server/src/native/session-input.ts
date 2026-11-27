@@ -60,7 +60,11 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   const backendId:NativeBackendId=body.backendId===undefined?defaultBackendId as NativeBackendId:isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
   if(quickChat!==(backendId==='chat'))throw new AppError('INVALID_BACKEND',quickChat?'Only a quick chat runs here':'A quick chat has no project');
   // Standing members run only where isolated (docs/TEAM.md §4.2); on another agent they would inherit the owner's configuration.
-  if((member||(!optOutMember&&project.system==='assistant'))&&!isAssistantBackend(backendId))throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED','Team members run on Claude Code, Codex, or Cursor');
+  const driver=nativeBackends.registry?.get(backendId);
+  const supportsMember=driver!==undefined
+    ?(driver.traits!==undefined?Boolean(driver.traits.startsNewTopic):isAssistantBackend(backendId))
+    :(nativeBackends.catalog?.traits?.(backendId)?.startsNewTopic??isAssistantBackend(backendId));
+  if((member||(!optOutMember&&project.system==='assistant'))&&!supportsMember)throw new AppError('ASSISTANT_BACKEND_UNSUPPORTED','This Agent backend does not support team member isolation');
   const memberUsesBackend=Boolean(member?.target?.backendId&&member.target.backendId===backendId);
   const defaults=savedSettings.nativeBackendDefaults?.[backendId];
   const requestedProfileId=body.backendProfileId===undefined?(memberUsesBackend&&member?.target?.profileId?member.target.profileId:defaults?.profileId):requireString(body.backendProfileId,'backendProfileId',200);

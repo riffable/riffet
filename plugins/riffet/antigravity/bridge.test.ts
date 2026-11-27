@@ -53,7 +53,7 @@ describe('Antigravity observation bridge', () => {
       cycle_mode: 'plan',
       token_count: 42,
       model: { id: 'model', effort: 'medium', secret: 'hidden' },
-      subagents: [{ name: 'child', status: 'running', role: 'private-child-prompt' }],
+      subagents: [{ name: 'child', state: 'running', status: 'working', role: 'private-child-prompt' }],
       prompt: 'private-parent-prompt',
       apiKey: 'secret',
     };
@@ -73,7 +73,7 @@ describe('Antigravity observation bridge', () => {
       task_count: 1,
       token_count: 42,
       cycle_mode: 'plan',
-      subagents: [{ name: 'child', status: 'running' }],
+      subagents: [{ name: 'child', state: 'running', status: 'working' }],
     });
     expect(JSON.stringify(saved)).not.toContain('private-parent-prompt');
     expect(JSON.stringify(saved)).not.toContain('private-child-prompt');
@@ -110,5 +110,46 @@ describe('Antigravity observation bridge', () => {
     expect(result.code).toBe(0);
     expect(Date.now() - start).toBeLessThan(5500);
     expect((await readJson(join(f.paths.root, 'bridge', 'status.json')))?.payload.agent_state).toBe('idle');
+  });
+  it('enforces standing PreToolUse guardrails and always returns explicit decision JSON', async () => {
+    const f = await fixture();
+    const protectedFile = join(f.paths.bridgeDir, 'AGENTS.md');
+    await prepareBridge(f.paths, f.nonce, {
+      memberDir: f.paths.bridgeDir,
+      cwd: f.paths.bridgeDir,
+      protectedFiles: [protectedFile],
+      isBackgroundRun: true,
+    });
+    const hooks = await readJson(join(f.paths.bridgeDir, '.agents', 'plugins', 'riffet-antigravity', 'hooks.json'));
+    expect(hooks?.['riffet-antigravity']?.PreToolUse?.[0]).toMatchObject({ matcher: '*' });
+
+    const denyProtected = await runProcess(process.execPath, [f.script, 'pretool'], {
+      cwd: f.paths.bridgeDir,
+      input: Buffer.from(JSON.stringify({ tool_name: 'write_to_file', tool_input: { TargetFile: protectedFile } })),
+      timeoutMs: 6000,
+    });
+    expect(JSON.parse(denyProtected.stdout)).toMatchObject({ decision: 'deny' });
+
+    const denyShell = await runProcess(process.execPath, [f.script, 'pretool'], {
+      cwd: f.paths.bridgeDir,
+      input: Buffer.from(JSON.stringify({ tool_name: 'run_command', tool_input: { CommandLine: 'ls' } })),
+      timeoutMs: 6000,
+    });
+    expect(JSON.parse(denyShell.stdout)).toMatchObject({ decision: 'deny' });
+
+    const allowRead = await runProcess(process.execPath, [f.script, 'pretool'], {
+      cwd: f.paths.bridgeDir,
+      input: Buffer.from(JSON.stringify({ tool_name: 'view_file', tool_input: { AbsolutePath: protectedFile } })),
+      timeoutMs: 6000,
+    });
+    expect(JSON.parse(allowRead.stdout)).toEqual({ decision: 'allow' });
+
+    // Malformed stdin must still emit {"decision":"allow"}, never {}.
+    const fallback = await runProcess(process.execPath, [f.script, 'pretool'], {
+      cwd: f.paths.bridgeDir,
+      input: Buffer.from('not-json'),
+      timeoutMs: 6000,
+    });
+    expect(JSON.parse(fallback.stdout)).toEqual({ decision: 'allow' });
   });
 });

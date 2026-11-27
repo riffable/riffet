@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { constants, readFileSync } from 'node:fs';
-import { chmod, lstat, mkdir, open, readFile, realpath, rename, rm } from 'node:fs/promises';
+import { chmod, lstat, mkdir, open, readdir, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseSelection } from '@contracts';
@@ -145,7 +145,7 @@ export function agyToolPermission(value: string | undefined): string | undefined
   if (value === undefined) return undefined;
   if (value === 'allowlist') return 'request-review';
   if (value === 'auto-review') return 'proceed-in-sandbox';
-  if (value === 'unrestricted') return 'always-proceed';
+  if (value === 'unrestricted' || value === 'dontAsk') return 'always-proceed';
   if (['request-review', 'proceed-in-sandbox', 'always-proceed', 'strict'].includes(value)) return value;
   return invalid('Antigravity approval mode is unsupported');
 }
@@ -263,6 +263,8 @@ export interface PrepareAgySessionInput {
   sessionId: string;
   projectCwd: string;
   profile: AgyProfile;
+  /** Isolated `--gemini_dir` override (used for standing team members). */
+  geminiDirOverride?: string;
   model?: string;
   /** A gateway model id agy does not know by itself, registered for this launch only. */
   customModel?: string;
@@ -309,6 +311,22 @@ async function userSettings(path: string): Promise<Record<string, unknown> | und
     return undefined;
   }
 }
+const MAX_KEPT_LAUNCHES = 8;
+
+async function pruneOldLaunches(launchesDir: string, keepLaunchId: string): Promise<void> {
+  const entries = await readdir(launchesDir, { withFileTypes: true }).catch(() => []);
+  const others: Array<{ name: string; mtimeMs: number }> = [];
+  for (const entry of entries) {
+    if (entry.name === keepLaunchId || !entry.isDirectory()) continue;
+    const info = await stat(join(launchesDir, entry.name)).catch(() => undefined);
+    others.push({ name: entry.name, mtimeMs: info?.mtimeMs ?? 0 });
+  }
+  others.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const stale of others.slice(MAX_KEPT_LAUNCHES - 1)) {
+    await rm(join(launchesDir, stale.name), { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 const trustedList = (value: unknown) => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []);
 async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySession> {
   const state = absolute(input.stateDir, 'stateDir');
@@ -320,7 +338,8 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
   agySelection(input.model);
   // Resolve the trusted host-provided state root; session-owned descendants must never be links.
   await privateDirectory(state);
-  const base = agySessionPaths(await realpath(state), input.sessionId, randomUUID());
+  const launchId = randomUUID();
+  const base = agySessionPaths(await realpath(state), input.sessionId, launchId);
   const { root } = base;
   if (contained(project, root)) throw new Error('Antigravity private state must be outside the project workspace');
   await privateDirectory(dirname(root));
@@ -328,33 +347,60 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
   const marker = join(root, 'initialized.json');
   const initialized = await json(marker);
   const sourceDir = input.profile.sourceDir;
+  const targetGeminiDir = input.geminiDirOverride
+    ? await realpath(absolute(input.geminiDirOverride, 'geminiDirOverride')).catch(() => absolute(input.geminiDirOverride!, 'geminiDirOverride'))
+    : sourceDir;
   if (initialized && (initialized.projectCwd !== project || initialized.sourceDir !== sourceDir))
     throw new Error('Antigravity session state belongs to another launch profile or workspace');
   const legacy = initialized?.version === 1;
-  if (initialized && !legacy && (initialized.version !== 2 || initialized.geminiDir !== sourceDir))
+  if (initialized && !legacy && (initialized.version !== 2 || initialized.geminiDir !== targetGeminiDir))
     throw new Error('Antigravity session state is unsupported');
-  const paths = legacy ? base : { ...base, geminiDir: sourceDir };
+  const paths = legacy ? base : { ...base, geminiDir: targetGeminiDir };
   const { geminiDir, bridgeDir, settingsPath, logPath } = paths;
   if (legacy) {
     if (!(await stat(geminiDir))?.isDirectory() || (await stat(geminiDir))?.isSymbolicLink())
       throw new Error('Antigravity private native root is unavailable');
   } else if (!initialized) {
     if (await stat(join(root, 'native'))) throw new Error('Antigravity private state initialization is incomplete');
-    // History goes where the CLI keeps it, so the user's own agy and usage tools see these conversations.
-    await write(marker, { version: 2, projectCwd: project, sourceDir, geminiDir: sourceDir });
+    // History goes where the CLI keeps it (or the standing member's isolated root when overridden).
+    await write(marker, { version: 2, projectCwd: project, sourceDir, geminiDir: targetGeminiDir });
   }
   await privateDirectory(bridgeDir);
-  await privateDirectory(join(root, 'launches'));
+  const launchesDir = join(root, 'launches');
+  await privateDirectory(launchesDir);
   await privateDirectory(dirname(settingsPath));
   const nativeSettingsPath = join(geminiDir, 'antigravity-cli', 'settings.json');
   // Layout 1 starts from the whole private copy; layout 2 overlays only what Riffet decides on the user's own
-  // settings, which agy keeps reading: the keys below are read so the overlay extends them instead of hiding them.
+  // settings (or the standing member's own settings when isolated), which agy keeps reading.
   // Custom models are read only when this launch adds one, so a user's own model credentials never stop a launch.
-  const saved = legacy ? await json(nativeSettingsPath) : await userSettings(nativeSettingsPath);
-  const extended = ['trustedWorkspaces', 'statusLine', ...(input.customModel ? ['customModelsConfig'] : [])];
-  const settings = nativeSettings(
-    legacy ? saved : Object.fromEntries(extended.flatMap(key => (saved?.[key] === undefined ? [] : [[key, saved[key]]]))),
-  );
+  let saved: Record<string, unknown> | undefined;
+  let settings: Record<string, unknown>;
+  if (legacy) {
+    saved = await json(nativeSettingsPath);
+    settings = nativeSettings(saved);
+  } else if (input.geminiDirOverride) {
+    const memberSaved = await userSettings(nativeSettingsPath);
+    const ownerSaved = await userSettings(join(sourceDir, 'antigravity-cli', 'settings.json'));
+    const picked: Record<string, unknown> = {};
+    for (const key of ['trustedWorkspaces', 'statusLine', 'useG1Credits', ...(input.customModel ? ['customModelsConfig'] : [])]) {
+      if (memberSaved?.[key] !== undefined) picked[key] = memberSaved[key];
+    }
+    if (picked.useG1Credits === undefined && typeof ownerSaved?.useG1Credits === 'boolean') {
+      picked.useG1Credits = ownerSaved.useG1Credits;
+    }
+    if (input.customModel && picked.customModelsConfig === undefined && ownerSaved?.customModelsConfig !== undefined) {
+      try {
+        picked.customModelsConfig = nativeSettings({ customModelsConfig: ownerSaved.customModelsConfig }).customModelsConfig;
+      } catch {
+        /* ignore credential-bearing owner customModelsConfig for isolated members */
+      }
+    }
+    settings = nativeSettings(picked);
+  } else {
+    saved = await userSettings(nativeSettingsPath);
+    const extended = ['trustedWorkspaces', 'statusLine', ...(input.customModel ? ['customModelsConfig'] : [])];
+    settings = nativeSettings(Object.fromEntries(extended.flatMap(key => (saved?.[key] === undefined ? [] : [[key, saved[key]]]))));
+  }
   // Picking the project for this conversation is the trust decision agy's first-run dialog asks for (as for
   // Claude Code). It goes into this launch's settings only; a legacy private root also keeps it in its own file.
   const trusted = trustedList(settings.trustedWorkspaces);
@@ -374,6 +420,7 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
     permission === 'proceed-in-sandbox' ? { enableTerminalSandbox: true } : {},
   );
   await write(settingsPath, settings);
+  await pruneOldLaunches(launchesDir, launchId);
   return { root, geminiDir, bridgeDir, settingsPath, logPath, ...(trustAdded ? { trustAdded } : {}) };
 }
 export async function prepareAgySession(input: PrepareAgySessionInput): Promise<PreparedAgySession> {

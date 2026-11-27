@@ -42,7 +42,13 @@ export function AgentSettingsSection({ settings, onRefresh, onDirtyChange, onBus
   const sessions = useLists((state) => state.sessions);
   const agentPanelId = useId();
   const [backendId, setBackendId] = useState<NativeBackendId>(settings.defaultBackendId ?? offered[0]?.backendId ?? LEGACY_DEFAULT_BACKEND_ID);
-  const cliVersion = offered.find((entry) => entry.backendId === backendId)?.cliVersion;
+  const currentCatalog = offered.find((entry) => entry.backendId === backendId);
+  const cliVersion = currentCatalog?.cliVersion;
+  const profileFields = currentCatalog?.capabilities.profileFields;
+  const executablePlaceholder = profileFields?.executablePlaceholder ?? (backendId === 'antigravity' ? 'agy' : backendId);
+  const showConfigDir = profileFields ? profileFields.configDir === true : (backendId !== 'droid' && backendId !== 'antigravity');
+  const sourceDirKind = profileFields !== undefined ? profileFields.sourceDir : (backendId === 'dsh' ? 'source' : backendId === 'antigravity' ? 'config' : undefined);
+  const showDisableAutoUpdate = profileFields ? profileFields.disableAutoUpdate === true : (backendId === 'claude' || backendId === 'antigravity');
   const [profileReads, setProfileReads] = useState<Record<string, { profiles?: NativeBackendProfileSettings[]; loading: boolean; error: string }>>({});
   const profileRead = profileReads[backendId];
   const profiles = profileRead?.profiles ?? [];
@@ -210,15 +216,18 @@ export function AgentSettingsSection({ settings, onRefresh, onDirtyChange, onBus
     {ownPages ? <SettingsGroup>{pages.map((page) => <SettingsLinkRow key={page.id} title={page.title} onClick={() => onOpenPage(page.id)} />)}</SettingsGroup> : <SettingsGroup title={t`高级启动配置`} loading={profilesPending}>
       {error ? <SettingsRow title={error}><Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}><Trans>重试</Trans></Button></SettingsRow> : !profile ? <p className="py-4 text-sm text-fg-3"><Trans>还没有提供商</Trans></p> : <>
         <SettingsRow title={t`CLI 入口`} description={t`留空沿用服务器启动环境中的 CLI`}>
-          <Input aria-label={t`CLI 入口`} className="h-8 w-64 font-mono max-md:w-full" value={draft.executable ?? ''} disabled={busy} placeholder={backendId} onChange={(event) => setDraft((current) => ({ ...current, executable: event.target.value }))} />
+          <Input aria-label={t`CLI 入口`} className="h-8 w-64 font-mono max-md:w-full" value={draft.executable ?? ''} disabled={busy} placeholder={executablePlaceholder} onChange={(event) => setDraft((current) => ({ ...current, executable: event.target.value }))} />
         </SettingsRow>
-        {backendId !== 'droid' && backendId !== 'antigravity' && <SettingsRow title={t`配置目录`} description={t`更换后会切换账号与原生历史范围`}>
+        {showConfigDir && <SettingsRow title={t`配置目录`} description={t`更换后会切换账号与原生历史范围`}>
           <Input aria-label={t`配置目录`} className="h-8 w-64 font-mono max-md:w-full" value={draft.configDir ?? ''} disabled={busy} placeholder={t`使用 CLI 默认目录`} onChange={(event) => setDraft((current) => ({ ...current, configDir: event.target.value }))} />
         </SettingsRow>}
-        {backendId === 'dsh' && <SettingsRow title={t`DSH 源码目录`}>
+        {sourceDirKind === 'source' && <SettingsRow title={t`DSH 源码目录`}>
           <Input aria-label={t`DSH 源码目录`} className="h-8 w-64 font-mono max-md:w-full" value={draft.sourceDir ?? ''} disabled={busy} onChange={(event) => setDraft((current) => ({ ...current, sourceDir: event.target.value }))} />
         </SettingsRow>}
-        {backendId === 'claude' && <SettingsRow title={t`关闭自动更新`}><Checkbox aria-label={t`关闭自动更新`} disabled={busy} checked={draft.disableAutoUpdate === true} onCheckedChange={(value) => setDraft((current) => ({ ...current, disableAutoUpdate: value === true }))} /></SettingsRow>}
+        {sourceDirKind === 'config' && <SettingsRow title={t`配置目录`} description={t`更换后会切换账号与原生历史范围`}>
+          <Input aria-label={t`配置目录`} className="h-8 w-64 font-mono max-md:w-full" value={draft.sourceDir ?? ''} disabled={busy} placeholder={t`使用 CLI 默认目录`} onChange={(event) => setDraft((current) => ({ ...current, sourceDir: event.target.value }))} />
+        </SettingsRow>}
+        {showDisableAutoUpdate && <SettingsRow title={t`关闭自动更新`}><Checkbox aria-label={t`关闭自动更新`} disabled={busy} checked={draft.disableAutoUpdate === true} onCheckedChange={(value) => setDraft((current) => ({ ...current, disableAutoUpdate: value === true }))} /></SettingsRow>}
         <div className="flex justify-end py-3"><Button size="sm" busy={saving} disabled={!dirty} onClick={() => void saveLaunch()}><Trans>保存</Trans></Button></div>
       </>}
     </SettingsGroup>}

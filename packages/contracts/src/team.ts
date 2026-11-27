@@ -4,7 +4,7 @@
  */
 import type { NativeBackendId } from './agent-ids.js';
 import type { AssistantChoice } from './assistant-choice.js';
-import { ASSISTANT_BACKENDS, isAssistantBackend } from './assistant-choice.js';
+import { ASSISTANT_BACKENDS, isStandingMemberBackend } from './assistant-choice.js';
 import type { NativeBackendCatalogEntry } from './backends.js';
 import type { OwnerAvatarGenerateRequest, OwnerAvatarType } from './owner.js';
 
@@ -136,8 +136,9 @@ export function defaultMemberCapabilities(scope: AgentMemberScopeKind): AgentMem
 
 /** Resolves a member's effective isolated backend, provider and model against the available backend catalog. */
 export function memberChoice(target: AgentMemberTarget | undefined, backends: readonly NativeBackendCatalogEntry[]): AssistantChoice | undefined {
-  const backend = (isAssistantBackend(target?.backendId) ? backends.find((entry) => entry.backendId === target!.backendId) : undefined)
-    ?? ASSISTANT_BACKENDS.map((id) => backends.find((entry) => entry.backendId === id && entry.available)).find(Boolean);
+  const backend = (target?.backendId ? backends.find((entry) => entry.backendId === target.backendId && isStandingMemberBackend(entry)) : undefined)
+    ?? ASSISTANT_BACKENDS.map((id) => backends.find((entry) => entry.backendId === id && entry.available && isStandingMemberBackend(entry))).find(Boolean)
+    ?? backends.find((entry) => entry.available && isStandingMemberBackend(entry));
   if (!backend) return undefined;
   const own = backend.backendId === target?.backendId;
   const profileKept = own && (!target?.profileId || backend.profiles.some((profile) => profile.id === target.profileId));

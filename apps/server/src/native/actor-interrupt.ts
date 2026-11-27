@@ -12,6 +12,24 @@ import { isSlashCommand, outcomeRevision, turnKey, turnOutcomeScope } from './ac
 
 const now = () => Date.now();
 
+/** 4xx rejections proven before a stop could have reached the provider: drop any pending receipt and surface the error. */
+const STOP_DEFINITE_REJECTIONS = new Set([
+  'NATIVE_STOP_TARGET_CHANGED',
+  'TARGETED_STOP_UNSUPPORTED',
+  'CLEAR_INPUT_UNSUPPORTED',
+  'NOT_NATIVE',
+]);
+
+function deleteStopReceipt(store: Store, sessionId: string, stop: NativeStopRequest): void {
+  const key = `native-stops:${sessionId}`;
+  const receipts = store.getSetting<Record<string, StopReceipt>>(key, {});
+  const entryKey = JSON.stringify(stop.requestId);
+  if (!(entryKey in receipts)) return;
+  const { [entryKey]: _removed, ...rest } = receipts;
+  if (Object.keys(rest).length) store.setSetting(key, rest);
+  else store.deleteSetting(key);
+}
+
 export interface ActorControlDeps {
   readonly store: Store;
   readonly native: NativeDispatcherBackend;
@@ -286,7 +304,11 @@ export function beginInterrupt(deps: ActorControlDeps, sessionId: string, comman
       let run: Run | undefined;
       try { run = await performInterrupt(deps, sessionId, submit, targets, promotedRunId, stop); }
       catch (error) {
-        if (!stop || error instanceof AppError && error.code === 'NATIVE_STOP_TARGET_CHANGED') throw error;
+        if (!stop) throw error;
+        if (error instanceof AppError && STOP_DEFINITE_REJECTIONS.has(error.code)) {
+          deleteStopReceipt(deps.store, sessionId, stop);
+          throw error;
+        }
         saveStopReceipt(deps.store, sessionId, { ...readStopReceipt(deps.store, sessionId, stop)!, error: {
           ...(error instanceof AppError ? { code: error.code } : {}),
           message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
@@ -309,6 +331,10 @@ export function beginInterrupt(deps: ActorControlDeps, sessionId: string, comman
 async function performInterrupt(deps: ActorControlDeps, sessionId: string, submit: (() => Run) | undefined, targets: Map<string, NativeDeliveryState>, promotedRunId?: string, stop?: NativeStopRequest): Promise<Run | undefined> {
   const session = deps.store.getSession(sessionId);
   if (session.kind !== 'native') throw new AppError('NOT_NATIVE', 'Only native conversations can be interrupted', 409);
+  const targetedStop = deps.native.supportsTargetedStop ? await deps.native.supportsTargetedStop(session) : true;
+  if (submit && !targetedStop) {
+    throw new AppError('TARGETED_STOP_UNSUPPORTED', 'This backend cannot atomically stop a specified execution', 409);
+  }
   const activeBefore = deps.readStatus(sessionId)?.activeTurn;
   const activeTurnId = activeBefore && (!session.nativeSessionId || activeBefore.nativeSessionId === session.nativeSessionId)
     ? activeBefore.turnId : undefined;
@@ -351,7 +377,7 @@ async function performInterrupt(deps: ActorControlDeps, sessionId: string, submi
     }
   }
   if (stop) assertStopTarget(deps, sessionId, stop);
-  await deps.adapter.stopTurn(session, { clearPrompt: Boolean(submit), hasTargets: targets.size > 0, ...(stop ? { expectedStop: stop } : {}) });
+  await deps.adapter.stopTurn(session, { clearPrompt: Boolean(submit), hasTargets: targets.size > 0, ...(stop && targetedStop ? { expectedStop: stop } : {}) });
   const interrupted = settleInterrupted(deps, targets, deps.traits(session.backendId));
   await deps.adapter.endInterruptedTurns(sessionId, targets, stop, activeTurnId);
   if (submit) return accepted ? deps.store.getRun(accepted.id) : acceptFollowUp(deps.store, submit, promotedRunId);

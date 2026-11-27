@@ -134,6 +134,16 @@ export interface NativeBackendProfileSettings extends NativeBackendProfile {
 /** `null` clears a field: it drops the stored credential, or restores the uncurated full catalog. */
 export type NativeBackendProfileSettingsUpdate = Partial<Omit<NativeBackendProfileSettings, 'id' | 'backendId' | 'hasApiKey' | 'isDefault' | 'enabledModels' | 'modelInputModalities' | 'modelContextWindows' | 'modelSource' | 'apiProtocol'>> & { apiKey?: string | null; enabledModels?: string[] | null; modelInputModalities?: ModelInputModalities | null; modelContextWindows?: ModelContextWindows | null; modelSource?: NativeModelSource | null; apiProtocol?: NativeModelApiProtocol | null };
 export interface NativeBackendProfilesResponse { profiles: NativeBackendProfileSettings[]; defaultProfileId?: string; }
+export interface NativeBackendProfileFields {
+  /** Placeholder shown in the CLI executable input (e.g. `agy` for Antigravity). */
+  executablePlaceholder?: string;
+  /** Whether the profile editor exposes a separate `configDir` field. */
+  configDir?: boolean;
+  /** Whether the profile editor exposes `sourceDir`: `'config'` for a CLI data/config root (Antigravity), `'source'` for a harness source directory (DSH). */
+  sourceDir?: 'config' | 'source';
+  /** Whether the profile editor exposes `disableAutoUpdate`. */
+  disableAutoUpdate?: boolean;
+}
 export interface NativeBackendCapabilities {
   backendId: NativeBackendId;
   label: string;
@@ -193,6 +203,16 @@ export interface NativeBackendCapabilities {
    * `protocols` intersect these. Missing from a server that predates it: match the source's `backends` then.
    */
   consumesProtocols?: GatewayProtocol[];
+  /**
+   * Whether this backend isolates standing team members and starts new topics via `/new`; derived from
+   * `traits.startsNewTopic`. Absent from older servers -> fall back to `isAssistantBackend(backendId)`.
+   */
+  supportsStandingMember?: boolean;
+  /**
+   * Advanced launch fields offered by this backend's profile editor.
+   * Absent from older servers -> clients fall back to legacy per-backend defaults.
+   */
+  profileFields?: NativeBackendProfileFields;
 }
 /** One entry of the composer's `/` menu. */
 export interface NativeSlashItem {
