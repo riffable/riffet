@@ -294,7 +294,7 @@ function TitleRuleEditor({ rule, rules, timeZone, busy, onClose, onSave }: {
             </Field>
             <div className="flex flex-col gap-2 edge-t pt-5">
               <span className="text-sm font-medium text-fg"><Trans>适用于</Trans></span>
-              <Segmented<Draft['scope']> className="w-full [&>[role=radio]]:flex-1" value={draft.scope} onChange={(scope) => set({ scope })} ariaLabel={t`适用于`} options={[{ value: 'auto', label: t`自动标题` }, { value: 'all', label: t`全部标题` }]} />
+              <Segmented<Draft['scope']> fill value={draft.scope} onChange={(scope) => set({ scope })} ariaLabel={t`适用于`} options={[{ value: 'auto', label: t`自动标题` }, { value: 'all', label: t`全部标题` }]} />
             </div>
           </div>
         </DialogBody>

@@ -19,6 +19,7 @@ export function InputsChapter() {
   const [on, setOn] = useState(true);
   const [off, setOff] = useState(false);
   const [mode, setMode] = useState('light');
+  const [size, setSize] = useState('standard');
   const [search, setSearch] = useState('');
   const [picks, setPicks] = useState<string[]>(['a']);
   const all = picks.length === 2 ? true : picks.length > 0 ? 'indeterminate' : false;
@@ -26,6 +27,7 @@ export function InputsChapter() {
   const [card, setCard] = useState('claude');
   const [margin, setMargin] = useState(12);
   const modes = [{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }];
+  const sizes = [{ value: 'small', label: t`小` }, { value: 'standard', label: t`标准` }, { value: 'large', label: t`大` }];
   const withIcons = AGENTS.map((item) => ({ ...item, icon: <AgentMark backend={item.value} size={14} /> }));
   return (
     <Chapter title={t`输入`} lede={t`取得一个值的控件。字段共用 fieldClass 的外观，聚焦时边框与光晕换成强调色。`} source="apps/web/src/components/ui/controls.tsx">
@@ -164,6 +166,9 @@ export function InputsChapter() {
         </Specimen>
         <Specimen name={t`单项禁用`} prop="option.disabled">
           <Segmented value={mode} onChange={setMode} ariaLabel={t`明暗`} options={modes.map((option) => ({ ...option, disabled: option.value === 'dark' }))} />
+        </Specimen>
+        <Specimen name={t`等宽铺满`} prop="fill" wide>
+          <div className="w-full"><Segmented fill value={size} options={sizes} onChange={setSize} ariaLabel={t`文字大小`} /></div>
         </Specimen>
       </Family>
     </Chapter>

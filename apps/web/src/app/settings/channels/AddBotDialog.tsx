@@ -235,7 +235,7 @@ function ManualStep({ provider, account, expandAdvanced, onClose, onSaved }: {
       const options = field.options.map((option) => ({ value: option.value, label: localizedText(option.label, [i18n.locale]) ?? option.value }));
       return <Field key={field.key} label={label}>
         {options.length <= 3
-          ? <Segmented ariaLabel={label} value={value} onChange={(next) => setValue(field.key, next)} options={options} />
+          ? <Segmented fill ariaLabel={label} value={value} onChange={(next) => setValue(field.key, next)} options={options} />
           : <Select label={label} value={value} disabled={disabled} onChange={(next) => setValue(field.key, next)} options={options} />}
       </Field>;
     }

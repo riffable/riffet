@@ -7,7 +7,7 @@ import { IconCheck, IconChevronDown, IconRotateCw, IconSearch, IconServer } from
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Switch, Spinner, StatusDot } from '@/components/ui/controls';
+import { Segmented, Switch, Spinner, StatusDot } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { contextChoices, isOn, optionLabel, paramHint, paramKind, paramTitle, toggledValue, type ModelParam, type ParamKind } from '@/lib/models';
 import { cn } from '@/lib/utils';
@@ -28,39 +28,8 @@ const mobilePickerTriggerClass = 'inline-flex h-11 w-full min-w-0 items-center j
 const desktopPickerTriggerClass = 'inline-flex h-6 min-w-0 items-center justify-between gap-1 rounded-md border border-line-strong bg-bg px-2 text-xs text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg';
 
 function SlidingSegments({ param, onChange, disabled, options = param.options, value = param.value, label }: { param: ModelParam; onChange: (value: string) => void; disabled?: boolean; options?: ModelParam['options']; value?: string; label?: string }) {
-  const index = Math.max(0, options.findIndex((option) => option.value === value));
-  const count = options.length;
-  return (
-    <div role="radiogroup" aria-label={label ?? paramTitle(param)} className="relative grid rounded-lg bg-muted p-0.5" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
-      <span
-        aria-hidden
-        className="absolute inset-y-0.5 left-0.5 rounded-md bg-elevated ring-[0.5px] ring-line-strong shadow-soft transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)]"
-        style={{ width: `calc((100% - 4px) / ${count})`, transform: `translateX(${index * 100}%)` }}
-      />
-      {options.map((option, optionIndex) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={option.value === value}
-          tabIndex={optionIndex === index ? 0 : -1}
-          disabled={disabled}
-          onClick={() => onChange(option.value)}
-          onKeyDown={(event) => {
-            const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0;
-            const target = event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : step ? (index + step + count) % count : -1;
-            if (target < 0) return;
-            event.preventDefault();
-            onChange(options[target]!.value);
-            (event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role=radio]')[target])?.focus();
-          }}
-          className={cn('relative h-11 min-w-0 truncate rounded-md px-1 text-sm font-medium outline-none transition-colors duration-[var(--duration-fast)] ease-[var(--ease-standard)] focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:h-6 md:text-xs', option.value === value ? 'text-fg' : 'text-fg-3 hover:text-fg')}
-        >
-          {optionLabel(param, option.value)}
-        </button>
-      ))}
-    </div>
-  );
+  const segments = options.map((option) => ({ value: option.value, label: optionLabel(param, option.value), disabled }));
+  return <Segmented size="xs" fill ariaLabel={label ?? paramTitle(param)} value={value} options={segments} onChange={onChange} />;
 }
 
 function ParamControl({ param, onChange, disabled, mobile = false }: { param: ModelParam; onChange: (value: string) => void; disabled?: boolean; mobile?: boolean }) {

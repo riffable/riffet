@@ -15,8 +15,6 @@ import { ModelPicker } from '../session/ModelPicker';
 import { useCatalog } from '../state/stores';
 import { avatarInputFromDraft, MemberAvatarControls, type MemberAvatarDraft } from './MemberAvatar';
 
-const fill = 'w-full [&>[role=radio]]:flex-1';
-
 interface Props {
   open: boolean;
   projects: ProjectRecord[];
@@ -189,7 +187,7 @@ export function CreateMemberDialog({ open, projects, onClose, onCreated }: Props
 
             <div className="flex flex-col gap-2.5 edge-t pt-5">
               <span className="text-sm font-medium text-fg"><Trans>作用范围</Trans></span>
-              <Segmented className={fill} value={scopeKind} options={scopeOptions} ariaLabel={t`作用范围`} onChange={(next) => {
+              <Segmented fill value={scopeKind} options={scopeOptions} ariaLabel={t`作用范围`} onChange={(next) => {
                 setScopeKind(next);
                 if (next === 'project' && !projectId && codeProjects[0]) setProjectId(codeProjects[0].id);
               }} />
@@ -206,7 +204,7 @@ export function CreateMemberDialog({ open, projects, onClose, onCreated }: Props
 
             <div className="flex flex-col gap-2 edge-t pt-5">
               <span className="text-sm font-medium text-fg"><Trans>对话模式</Trans></span>
-              <Segmented className={fill} value={sessionMode} options={modeOptions} ariaLabel={t`对话模式`} onChange={setSessionMode} />
+              <Segmented fill value={sessionMode} options={modeOptions} ariaLabel={t`对话模式`} onChange={setSessionMode} />
               <p className="text-xs text-fg-3">
                 {sessionMode === 'continuous'
                   ? t`一条主对话，/new 换话题`

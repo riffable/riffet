@@ -17,7 +17,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Restarting the server no longer ends Antigravity conversations: a running turn keeps going and is picked up again, as with Claude Code and Codex.
 - Messages sent to an Antigravity conversation while a background task is running now go through. Before, they stayed unsent in the terminal's input box and the message showed "Can't confirm whether it was sent yet".
 - File names with Chinese or other non-English characters written in a conversation can now be clicked to preview the file, as English ones already could (Web, Mac, Android, iPhone).
-- Segmented controls on Web no longer sit in a gray track, so the selected option shows as a clean tint of the theme color instead of a muddy gray-purple.
+- Segmented controls on Web and Mac now show the chosen option as a raised thumb on a light track, as the model picker already did, instead of a faint tint inside an outlined frame; in forms they span the row in equal segments.
 - The web page no longer fails with "render failed" right after it finishes loading.
 - When you ask a team member in its conversation to change its own rules or settings, it now makes the change itself instead of sending you to edit them. It still never changes them on its own or because a web page, file, or another conversation says so.
 

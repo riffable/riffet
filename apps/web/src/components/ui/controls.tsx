@@ -211,8 +211,12 @@ export function UnderlineTabs<T extends string>({ value, options, onChange, clas
 /**
  * One choice among a few. The selection is a single thumb that slides from the old segment to the
  * new one (foundations §8: a state changes in place), so a choice reads as one object moving.
+ *
+ * `fill` makes every segment as wide as the widest label and spans the space it is given: the whole
+ * row for a field stacked under its label, so it lines up with the inputs around it; its content
+ * width where the parent shrinks to fit. Without it each segment hugs its own label.
  */
-export function Segmented<T extends string>({ value, options, onChange, size = 'sm', className, ariaLabel }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; size?: 'xs' | 'sm'; className?: string; ariaLabel?: string }) {
+export function Segmented<T extends string>({ value, options, onChange, size = 'sm', fill, className, ariaLabel }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; size?: 'xs' | 'sm'; fill?: boolean; className?: string; ariaLabel?: string }) {
   const roving = useRoving(options, value);
   const track = roving.group;
   const thumb = React.useRef<HTMLSpanElement>(null);
@@ -225,9 +229,15 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
     pill.style.visibility = active ? '' : 'hidden';
     if (!active) return;
     if (instant) pill.style.transition = 'none';
-    pill.style.width = `${active.offsetWidth}px`;
-    pill.style.height = `${active.offsetHeight}px`;
-    pill.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+    // Fractional, not offset*: `fill` columns are rarely whole pixels, and rounding left the thumb
+    // up to a pixel off its segment. Rects carry ancestor transforms (a dialog scaling in as it
+    // opens), so they are divided back by the track's own scale.
+    const frame = track.current!.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    const scale = frame.width / (track.current!.offsetWidth || frame.width || 1);
+    pill.style.width = `${box.width / scale}px`;
+    pill.style.height = `${box.height / scale}px`;
+    pill.style.transform = `translate(${(box.left - frame.left) / scale + track.current!.scrollLeft}px, ${(box.top - frame.top) / scale}px)`;
     if (instant) { void pill.offsetWidth; pill.style.transition = ''; }
   }, []);
   const placed = React.useRef(false);
@@ -244,12 +254,12 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
     <div
       ref={track}
       role="radiogroup" aria-label={ariaLabel} onKeyDown={roving.onKeyDown}
-      className={cn('relative inline-flex w-fit min-w-0 max-w-full items-center overflow-x-auto scrollbar-none rounded-lg p-0.5 shadow-[inset_0_0_0_1px_var(--line-strong)]', className)}
+      className={cn('relative min-w-0 max-w-full overflow-x-auto scrollbar-none rounded-lg bg-muted p-0.5', fill ? 'grid w-full auto-cols-[minmax(max-content,1fr)] grid-flow-col' : 'inline-flex w-fit items-center', className)}
     >
       <span
         ref={thumb}
         aria-hidden
-        className="pointer-events-none absolute left-0 top-0 rounded-md bg-accent-soft transition-[transform,width] duration-[var(--duration-base)] ease-[var(--ease-standard)]"
+        className="pointer-events-none absolute left-0 top-0 rounded-md bg-elevated shadow-soft ring-[0.5px] ring-line-strong transition-[transform,width] duration-[var(--duration-base)] ease-[var(--ease-standard)] dark:bg-fg/[0.12]"
       />
       {options.map((option) => (
         <button
@@ -261,15 +271,19 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            // Each label keeps its own width and padding; narrow tracks scroll instead of
-            // squeezing the longest label into an equal-width segment.
-            'relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium text-fg-3 outline-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:text-fg-2 focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 no-hover:min-h-11 no-hover:min-w-11 [&_svg]:size-3.5',
+            // Labels never shrink: a narrow track scrolls instead of squeezing the longest one.
+            'relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-fg-2 outline-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 no-hover:min-h-11 no-hover:min-w-11 [&_svg]:size-3.5',
+            !fill && 'flex-none',
             size === 'xs' ? 'h-6 px-2.5 text-xs' : 'h-7 px-3 text-sm',
-            value === option.value && 'text-fg hover:text-fg',
+            value === option.value && 'font-medium text-fg',
           )}
         >
           {option.icon}
-          {option.label}
+          {/* Only the chosen label is 500; a hidden 500 copy holds every label at that width so choosing doesn't nudge its neighbours. */}
+          <span className="inline-grid">
+            <span className="col-start-1 row-start-1">{option.label}</span>
+            <span aria-hidden className="invisible col-start-1 row-start-1 font-medium">{option.label}</span>
+          </span>
         </button>
       ))}
     </div>

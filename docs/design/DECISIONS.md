@@ -1144,5 +1144,5 @@
 - **决定**：`Segmented` 的底槽填 `bg-muted`、不描边；选中块是 `bg-elevated` 底、0.5px `line-strong` 描边、`shadow-soft` 的滑块，文字墨色，只有选中段用 500。新增 `fill`：各段等宽并铺满给它的宽度，用于标签在上方的表单字段。模型选择器里自画的分段（`SlidingSegments`）改用同一个组件。替代 2026-11-26「主题色分三档」中 `accent-soft` 用于分段控件的部分；筛选胶囊、底栏当前项、消息气泡不变。
 - **原因**：原来是 1px 描边的空心底槽配无边的 `accent-soft` 淡底块，两者只隔 2px：底槽像输入框，选中块像悬停，首尾两段时滑块贴着外框形成两层轮廓。模型选择器里的填色底槽加白色滑块是读者认可的写法，选中一眼可辨，Apple、Linear 也都这样画。`accent-soft` 叠在灰底槽上会混成发灰的淡紫（原来改成描边底槽就是为了躲开这一点），所以滑块保持中性。
 - **否决**：保留描边底槽，只换选中块的颜色（仍是两种做法拼在一起）；选中段也描边（框套框）；去掉底槽只留一排胶囊（看不出是一组）；白色滑块上的文字用 `accent`（一处次要设置不需要主题色）。
-- **范围**：Web。Mac 的 `SegmentedTrack`（`apps/macos/Riffet/Theme/FormStyle.swift`）仍是 `bg-muted` 底槽上的 `accentSoft` 选中块，待对齐。
-- **规则**：[输入](system/components/inputs.md)「Segmented」；代码 `apps/web/src/components/ui/controls.tsx`。
+- **范围**：Web 与 Mac 的 `SegmentedTrack`（原来是 `bgSubtle` 底槽上的 `accentSoft` 选中块）。设置窗口里的 `FormSegmented` 仍是系统分段控件。
+- **规则**：[输入](system/components/inputs.md)「Segmented」；代码 `apps/web/src/components/ui/controls.tsx`、`apps/macos/Riffet/Theme/FormStyle.swift`。

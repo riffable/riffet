@@ -52,8 +52,6 @@ function agentOf(target: LaunchTarget | undefined): AgentModelValue | undefined 
 }
 
 const CUSTOM = 'custom';
-/** Segments share the column's width, as the fields above and below them do. */
-const fill = 'w-full [&>[role=radio]]:flex-1';
 
 export function AutomationEditor({ state, projects, backends, defaultProjectId, onClose, onSaved, onError }: {
   state?: AutomationEditorState;
@@ -190,7 +188,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
 
             <div ref={whenRef} className="flex scroll-mt-2 flex-col gap-2 edge-t pt-5">
               <span className="text-sm font-medium text-fg"><Trans>何时运行</Trans></span>
-              <Segmented<When> className={fill} value={fields.when} onChange={(when) => set({ when })} ariaLabel={t`何时运行`} options={[{ value: 'manual', label: t`手动` }, { value: 'once', label: t`一次` }, { value: 'repeat', label: t`重复` }]} />
+              <Segmented<When> fill value={fields.when} onChange={(when) => set({ when })} ariaLabel={t`何时运行`} options={[{ value: 'manual', label: t`手动` }, { value: 'once', label: t`一次` }, { value: 'repeat', label: t`重复` }]} />
               {fields.when === 'once' && <Input type="datetime-local" autoFocus={state?.focus === 'when'} value={fields.onceAt} onChange={(event) => set({ onceAt: event.target.value })} aria-label={t`日期时间`} />}
               {fields.when === 'repeat' && (
                 <Select<string> label={t`重复`} value={fields.preset} onChange={(preset) => set({ preset })}
@@ -204,7 +202,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
 
             <div className="flex flex-col gap-2 edge-t pt-5">
               <span className="text-sm font-medium text-fg"><Trans>运行方式</Trans></span>
-              <Segmented<Automation['delivery']> className={fill} value={fields.delivery} onChange={(delivery) => set({ delivery })} ariaLabel={t`运行方式`} options={[{ value: 'new', label: t`每次开新会话` }, { value: 'same', label: t`在同一会话继续` }]} />
+              <Segmented<Automation['delivery']> fill value={fields.delivery} onChange={(delivery) => set({ delivery })} ariaLabel={t`运行方式`} options={[{ value: 'new', label: t`每次开新会话` }, { value: 'same', label: t`在同一会话继续` }]} />
               {scheduled && (
                 <label className="flex min-h-8 items-center justify-between gap-3 text-sm text-fg">
                   <Trans>错过后补跑</Trans>
