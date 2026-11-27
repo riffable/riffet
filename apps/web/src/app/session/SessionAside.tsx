@@ -208,7 +208,7 @@ function Outputs({ projectId, sessionId, syncOutputs, timeline, timelineVersion,
  * on screen is `useSessionLayout`'s call, never its contents': an empty column stays a column.
  */
 /** Streamed frames only reach `Outputs`: the plan and the work list keep their memo while the timeline moves. */
-export const SessionAside = memo(function SessionAside({ projectId, sessionId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, memberRuns, onOpenSession, syncOutputs, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
+export const SessionAside = memo(function SessionAside({ projectId, sessionId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, memberRuns, onOpenSession, onInspectRun, syncOutputs, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
   projectId: string;
   sessionId?: string;
   outlineRef: Ref<HTMLDivElement>;
@@ -221,6 +221,7 @@ export const SessionAside = memo(function SessionAside({ projectId, sessionId, o
   subagentBriefs?: ReadonlyMap<string, SubagentBrief>;
   memberRuns?: readonly AssistantRunSummary[];
   onOpenSession?: (sessionId: string) => void;
+  onInspectRun?: (run: AssistantRunSummary) => void;
   syncOutputs?: SessionOutputsSummary;
   timeline: readonly TimelineItem[];
   timelineVersion: number;
@@ -238,7 +239,7 @@ export const SessionAside = memo(function SessionAside({ projectId, sessionId, o
     <aside aria-label={t`会话概览`} className={cn('flex w-[248px] shrink-0 flex-col gap-7 overflow-y-auto pt-3.5 pr-4 pb-6 pl-1 scrollbar-none', !switchedIn && 'animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]')}>
       {(goal || entries.length > 0) && <Plan goal={goal} todos={entries} />}
       <div ref={outlineRef} className="contents" />
-      {memberRuns && memberRuns.length > 0 && <AsideMemberRuns runs={memberRuns} onOpenSession={onOpenSession} />}
+      {memberRuns && memberRuns.length > 0 && <AsideMemberRuns runs={memberRuns} onOpenSession={onOpenSession} onInspectRun={onInspectRun} />}
       <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} root={root} />
       {outputs && <Outputs key={sessionId ?? projectId} projectId={projectId} sessionId={sessionId} syncOutputs={syncOutputs} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />}
     </aside>

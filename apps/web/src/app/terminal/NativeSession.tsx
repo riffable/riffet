@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { composerRunningIntent } from '../session/composerRunning';
 import { useComposerQuotes } from '../session/composerQuotes';
 import { IconInfo, IconSquare, IconSquareArrowOutUpRight, IconArrowRightLeft, IconPuzzle, IconBookmarkPlus, IconFileText, IconGitFork, IconMessagesSquare, IconRotateCw, IconSquareTerminal } from '@/components/icons';
-import { DEFAULT_AGENT_MEMBER_ID, type Attachment, type AttemptGroup, type Automation, type DiscussionSource, type InboxAction, type ModelInfo, type NativeBackendCapabilities, type NativeBackendCatalogEntry, type NativeBackendProfile, type NativeProfileContinuation, type NativeRuntimeAction, type Run, type Session, type SessionControlSnapshot, type TerminalInfo, type ToolGroupId } from '@contracts';
+import { DEFAULT_AGENT_MEMBER_ID, type AssistantRunSummary, type Attachment, type AttemptGroup, type Automation, type DiscussionSource, type InboxAction, type ModelInfo, type NativeBackendCapabilities, type NativeBackendCatalogEntry, type NativeBackendProfile, type NativeProfileContinuation, type NativeRuntimeAction, type Run, type Session, type SessionControlSnapshot, type TerminalInfo, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Spinner, StatusDot, StatusPill } from '@/components/ui/controls';
 import { FeedbackNotice, FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-notice';
@@ -37,7 +37,7 @@ import { useSessionTranscript } from '../session/useSessionTranscript';
 import { modelUsageAliases, timelineItemTime, type Choice, type SlashCommand } from '../session/model';
 import { ModelPicker, type ModelProviderChoices } from '../session/ModelPicker';
 import { SessionAside } from '../session/SessionAside';
-import { MemberRunReportsDock, runIsActive, useMemberBackgroundRuns } from '../session/MemberBackgroundRuns';
+import { MemberRunDetailDialog, MemberRunReportsDock, runIsActive, useMemberBackgroundRuns } from '../session/MemberBackgroundRuns';
 import { ASSEMBLY_MS, ContentColumn, useLingering, useSessionLayout } from '../session/sessionLayout';
 import { ShareDialog } from '../shares/ShareDialog';
 import { SessionWorkActions } from '../session/SessionWorkActions';
@@ -405,6 +405,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ? undefined
     : (session.agentMemberId ?? (assistant ? DEFAULT_AGENT_MEMBER_ID : undefined));
   const memberRuns = useMemberBackgroundRuns(memberRunsOwnerId, Boolean(memberRunsOwnerId));
+  const [inspectedMemberRun, setInspectedMemberRun] = useState<AssistantRunSummary>();
   const activeMemberRuns = memberRuns.some(runIsActive);
   const overview = useViewPrefs((state) => state.side === 'overview');
   const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!mobileViewport && overview);
@@ -1165,7 +1166,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             <ActivityContext.Provider value={activityControls}>
               {discussionAllowed && <SessionDiscussions parentId={session.id} onOpen={openDiscussion} />}
               {onOpenSession && <SessionCalls calls={calledSessions} onOpen={onOpenSession} />}
-              {memberRuns.length > 0 && <SessionMemberRuns runs={memberRuns} onOpen={onOpenSession} />}
+              {memberRuns.length > 0 && <SessionMemberRuns runs={memberRuns} onOpen={onOpenSession} onInspect={setInspectedMemberRun} />}
               <SessionWorkActions subagentStore={native.subagents} jobStore={native.jobs} tasks={backgroundActivities} reportedBackground={native.status.activity?.background ?? 0} subagentBriefs={subagentBriefs} onOpenPath={onOpenPath} />
               <SessionMarksSection sessionId={session.id} />
             </ActivityContext.Provider>
@@ -1215,6 +1216,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
       <HandoffDialog open={dialog === 'handoff'} onOpenChange={(open) => setDialog(open ? 'handoff' : undefined)} session={session} backends={backends} working={working} onLaunched={(result) => onLaunched?.(result)} onError={onError} />
       <SaveAutomationDialog open={dialog === 'automation'} onOpenChange={(open) => setDialog(open ? 'automation' : undefined)} session={session} backends={backends} onError={onError} />
+      <MemberRunDetailDialog run={inspectedMemberRun} onClose={() => setInspectedMemberRun(undefined)} onOpenSession={onOpenSession} />
     </>
   );
 
@@ -1609,6 +1611,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             subagentBriefs={subagentBriefs}
             memberRuns={memberRuns}
             onOpenSession={onOpenSession}
+            onInspectRun={setInspectedMemberRun}
             syncOutputs={native.outputs}
             timeline={visibleTimeline}
             timelineVersion={native.timelineVersion}
