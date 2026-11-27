@@ -493,7 +493,8 @@ export class ClaudeInteractions {
 
   /**
    * Closes every open request. A request nobody answered is let go (`{}`: the CLI asks in its own dialog), because the
-   * CLI outlives this runtime; only a stop that interrupted the turn refuses it, as the reader's own decision.
+   * CLI outlives this runtime; only a stop that interrupted the turn refuses it, as the reader's own decision, and with
+   * `interrupt` so the refusal itself ends the turn rather than letting Claude carry on without that tool.
    */
   cancelPending(reason: string, answer: 'release' | 'deny' = 'release'): void {
     for (const pending of [...this.pending.values()]) {
@@ -502,7 +503,7 @@ export class ClaudeInteractions {
         this.removePendingInteraction(pending, false);
         continue;
       }
-      pending.resolveHook(answer === 'deny' ? { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: reason } } } : {});
+      pending.resolveHook(answer === 'deny' ? { hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny', message: reason, interrupt: true } } } : {});
       this.removePendingInteraction(pending, false);
     }
   }

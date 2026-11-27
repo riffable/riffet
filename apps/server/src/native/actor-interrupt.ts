@@ -223,7 +223,7 @@ function stopEnded(deps: ActorControlDeps, sessionId: string, receipt: StopRecei
     || run.native?.stage === 'completed' && run.state === 'completed');
 }
 
-async function recoverStop(deps: ActorControlDeps, sessionId: string, receipt: StopReceipt, submit?: () => Run, promotedRunId?: string): Promise<Run | undefined> {
+async function recoverStop(deps: ActorControlDeps, sessionId: string, receipt: StopReceipt, submit?: () => Run, promotedRunId?: string, unended?: () => Promise<Run | undefined>): Promise<Run | undefined> {
   assertStopBinding(deps.store, sessionId, receipt.request, receipt);
   await deps.native.reconcile?.(sessionId);
   const snapshot = await deps.native.snapshot(sessionId);
@@ -231,6 +231,7 @@ async function recoverStop(deps: ActorControlDeps, sessionId: string, receipt: S
   deps.observe(sessionId, { type: 'status', status: snapshot.status });
   assertStopBinding(deps.store, sessionId, receipt.request, receipt);
   if (!stopEnded(deps, sessionId, receipt, snapshot.events)) {
+    if (unended) return unended();
     throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The previous stop has not been confirmed; check the original task status', 409);
   }
   const session = deps.store.getSession(sessionId);
@@ -289,35 +290,46 @@ export function beginInterrupt(deps: ActorControlDeps, sessionId: string, comman
   deps.setInterrupting(true);
   if (receipt) deps.setRecoveryActive(true);
   const targets = stopTargets(deps.store, sessionId, stop);
+  // Runs under the session lock.
+  const attempt = async (): Promise<Run | undefined> => {
+    if (stop) {
+      assertStopTarget(deps, sessionId, stop);
+      const session = deps.store.getSession(sessionId);
+      const terminal = session.terminalId ? deps.store.getTerminal(session.terminalId) : undefined;
+      saveStopReceipt(deps.store, sessionId, { request: stop, operation, state: 'pending', createdAt: new Date().toISOString(),
+        ...(replacementFingerprint ? { replacementFingerprint } : {}), targets: [...targets],
+        ...(terminal ? { terminalId: terminal.id, terminalEpoch: terminal.epoch } : {}) });
+    }
+    let run: Run | undefined;
+    try { run = await performInterrupt(deps, sessionId, submit, targets, promotedRunId, stop); }
+    catch (error) {
+      if (!stop) throw error;
+      if (error instanceof AppError && STOP_DEFINITE_REJECTIONS.has(error.code)) {
+        deleteStopReceipt(deps.store, sessionId, stop);
+        throw error;
+      }
+      saveStopReceipt(deps.store, sessionId, { ...readStopReceipt(deps.store, sessionId, stop)!, error: {
+        ...(error instanceof AppError ? { code: error.code } : {}),
+        message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
+      } });
+      throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The stop has not been confirmed; check the original task status', 409);
+    }
+    if (stop) saveStopReceipt(deps.store, sessionId, { ...readStopReceipt(deps.store, sessionId, stop)!, state: 'completed', ...(run ? { runId: run.id } : {}) });
+    return run;
+  };
+  // On a backend whose stop is repeatable, a plain stop that already ran and went unconfirmed is tried again when
+  // the client retries it, if its turn has not ended and is still the one running; elsewhere a stop whose outcome is
+  // unknown is never repeated. A stop carrying a message only rechecks, so the message is never sent twice.
+  const pressAgain = receipt?.state === 'pending' && receipt.error !== undefined && !submit
+    && receipt.operation === 'stop' && receipt.replacementFingerprint === undefined
+    && deps.traits(deps.store.getSession(sessionId).backendId).repeatableStop === true;
   const task = Promise.resolve().then(() => {
-    if (receipt) return deps.runtime.withSession(sessionId, () => recoverStop(deps, sessionId, receipt, submit, promotedRunId));
+    if (receipt) {
+      return deps.runtime.withSession(sessionId, () => recoverStop(deps, sessionId, receipt, submit, promotedRunId,
+        pressAgain ? () => { deps.adapter.requestInterrupt(sessionId); return attempt(); } : undefined));
+    }
     deps.adapter.requestInterrupt(sessionId);
-    return deps.runtime.withSession(sessionId, async () => {
-      if (stop) {
-        assertStopTarget(deps, sessionId, stop);
-        const session = deps.store.getSession(sessionId);
-        const terminal = session.terminalId ? deps.store.getTerminal(session.terminalId) : undefined;
-        saveStopReceipt(deps.store, sessionId, { request: stop, operation, state: 'pending', createdAt: new Date().toISOString(),
-          ...(replacementFingerprint ? { replacementFingerprint } : {}), targets: [...targets],
-          ...(terminal ? { terminalId: terminal.id, terminalEpoch: terminal.epoch } : {}) });
-      }
-      let run: Run | undefined;
-      try { run = await performInterrupt(deps, sessionId, submit, targets, promotedRunId, stop); }
-      catch (error) {
-        if (!stop) throw error;
-        if (error instanceof AppError && STOP_DEFINITE_REJECTIONS.has(error.code)) {
-          deleteStopReceipt(deps.store, sessionId, stop);
-          throw error;
-        }
-        saveStopReceipt(deps.store, sessionId, { ...readStopReceipt(deps.store, sessionId, stop)!, error: {
-          ...(error instanceof AppError ? { code: error.code } : {}),
-          message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
-        } });
-        throw new AppError('NATIVE_STOP_UNCONFIRMED', 'The stop has not been confirmed; check the original task status', 409);
-      }
-      if (stop) saveStopReceipt(deps.store, sessionId, { ...readStopReceipt(deps.store, sessionId, stop)!, state: 'completed', ...(run ? { runId: run.id } : {}) });
-      return run;
-    });
+    return deps.runtime.withSession(sessionId, attempt);
   }).finally(() => {
     deps.setInterrupting(false);
     if (receipt) deps.setRecoveryActive(false);

@@ -349,6 +349,11 @@ export interface NativeBackendTraits {
   offlineMayBeRunning?: boolean;
   /** A stop leaves a message held in the CLI's input box or queue; the CLI's own records settle that run. */
   stopKeepsPendingInput?: boolean;
+  /**
+   * A stop that went unconfirmed may be sent again while its turn is still the one running: a second stop can do no
+   * more than end that turn. Without it a retried stop only rechecks whether the first one took effect.
+   */
+  repeatableStop?: boolean;
   /** Subagents run on their own and do not keep the conversation busy. */
   detachedSubagents?: boolean;
   /** Session state, statistics and screen dialogs are kept by the driver's own service, not the backend service. */

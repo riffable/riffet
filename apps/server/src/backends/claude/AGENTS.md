@@ -34,7 +34,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 流式草稿只是转写的占位：`live/drafts.ts` 宁可判为「已写入」而少一会儿流式，也不能让答案出现两份；重启之后不为已开始的回合起草。唯一的例外是以 failed 结束的回合：草稿按原 id 转正为这一回合的正文（`live/drafts.ts#plan`），之后转写里又写出同一段时收回转正的那份。转正的正文只在 journal 里，车道按转写重建后就没有了。
 - 自动压缩的 PreCompact hook 可能先于该 prompt 的转写行到达，要按 hook 的 `prompt_id` 压住，等 prompt 行读到后并入同一回合，否则会写成上一回合的尾巴并开出第二个压缩。
 - 新启动的 CLI 在 SessionStart 之后还要看到输入框才算就绪（`ready-gate.ts#ReadyGate`）；超时只接受 hook，所以不会比只看 hook 更慢。
-- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。实时在本进程开启的回合绝不因屏幕看似空闲（`alreadyIdle`）而跳过发送 `C-c`，只有冷重启回放且屏幕确认非忙碌（`claudeScreenBusy` 为假）的回合才跳过 `C-c`；停止未确认失败且原回合仍在跑时必须恢复已撤下的 `activeTurn` 和正在等的工具调用（`steerTools`），以便重试，进行中的长工具结束时也还能接住引导。`recordings.test.ts` 的 `interrupt` 场景按客户端的方式停止并校验实际发出了 `C-c`。
+- 停止当前回合时，`stops.ts#stopMainTurn` 先撤下发布的回合（`runtime.ts#withdrawPublishedTurn`），此后按键前的复核拿被停的回合与客户端给的 `turnId` 比对，且仅当它仍是在跑的 prompt 时才算数；否则每次带 `turnId` 的停止都会返回 `NATIVE_STOP_TARGET_CHANGED`，不发任何按键。停止键是 Esc（`stops.ts#STOP_KEY`），不是 `C-c`。实时在本进程开启的回合绝不因屏幕看似空闲（`alreadyIdle`）而跳过停止键，只有冷重启回放且屏幕确认非忙碌（`claudeScreenBusy` 为假）的回合才跳过；停止未确认失败且原回合仍在跑时必须恢复已撤下的 `activeTurn` 和正在等的工具调用（`steerTools`），以便重试，进行中的长工具结束时也还能接住引导。`recordings.test.ts` 的 `interrupt`、`approval-stop` 场景按客户端的方式停止，并校验实际发出了停止键。
 - 30 秒内连续退出两次，下一次启动去掉 `--resume` 新开会话（`launch-guard.ts#QUICK_EXIT_LIMIT`）；计数存在会话上，重启服务不清零。
 - 发布新的会话 id（`setNativeSessionId`）会同步重绑服务端已有的监听，所以 `index.ts#ClaudeBackendAdapter` 先登记本次启动的运行时再发布 id，否则监听会另起一个 CLI；启动失败且终端没换时撤回这个 id，重试才不会去 `--resume` 一个从未写下的对话。
 - 恢复会话会启动新的 CLI，此时旧终端的退出观察或在途的状态轮询可能晚到，不能把新进程记成已退出（`binding.ts#refreshTerminalStatus` 用启动计数 `launches` 丢弃启动之前开始的检查，修复 1a06647）。
@@ -49,7 +49,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 屏幕：输入框、页脚 agent 列表与任务入口见 `apps/server/src/adapters/cli/claude-code.ts#claudeComposer`，对话框见 `screen-dialog.ts`。录制在 `fixtures/screens/2.1.302` 与 `2.1.322`，测试 `screen-fixtures.test.ts`。
 - 表格在屏幕上有两种画法（2.1.322 渲染器）：放得下时是框线表，表头居中、单元格按列折行并在行内上下居中；比窗格宽或单元格折行超过 4 行时改成逐条记录，每行 `列名: 值`，续行缩进 2 格，记录间是一行 `─`。流式中途从框线表改成记录时，已滚出的框线行留在上方。`live/markdown.ts#drawnTables` 把两种画法及这种拼接还原成 Markdown 表格，读不出就仍放代码块。
 - 新版本验证：`node --import tsx scripts/probe-claude-e2e.ts --capture apps/server/src/backends/claude/fixtures/screens`，让 `screen-fixtures.test.ts` 在新录制上通过，再提高 `launch.ts#CLAUDE_CLI_VERSIONS` 的 `testedThrough`。多键走屏只在该版本以内进行。
-- 转写 JSONL（`<projects>/<dir>/<sessionId>.jsonl`，子 agent 在 `subagents/agent-<id>.jsonl`）：CLI 成批写入，hook 即时到达，所以 hook 报告的新回合可能早于上一回合的结束行。录制在 `fixtures/transcript-hooks/<版本>`（与 hook 同一条时间线），测试 `recordings.test.ts`，重录用 `pnpm record claude <场景|all>`，漂移检查加 `--check`。场景含 `resume`、`compact`、`clear`、`stop-failure`；`/clear` 之后的新会话转写以 `2:` 为文件名前缀。
+- 转写 JSONL（`<projects>/<dir>/<sessionId>.jsonl`，子 agent 在 `subagents/agent-<id>.jsonl`）：CLI 成批写入，hook 即时到达，所以 hook 报告的新回合可能早于上一回合的结束行。录制在 `fixtures/transcript-hooks/<版本>`（与 hook 同一条时间线），测试 `recordings.test.ts`，重录用 `pnpm record claude <场景|all>`，漂移检查加 `--check`。场景含 `resume`、`compact`、`clear`、`stop-failure`、`approval-stop`（审批卡等待时停止）；`/clear` 之后的新会话转写以 `2:` 为文件名前缀。
 - hook（UserPromptSubmit、Stop、StopFailure、PermissionRequest、PreToolUse、PreCompact 等）：入口 `hook-bridge.ts#ClaudeHookBridge`，改变回合状态的 hook 在会话未就绪时要等其运行时拉起。录制与转写同在 `fixtures/transcript-hooks/<版本>`，重录方式同上。
 - 权限对话框先在屏幕上读出（`claude-screen:` 卡），PermissionRequest hook 随后到达并取代它；此时回答屏幕卡返回 `NATIVE_INTERACTION_STALE`，客户端等协议卡到达后再答，自动化脚本要等 `transport === 'protocol'`。
 - 状态描述文件由 `hook-cli.mjs` 每次 hook 时重读，所以比服务活得更久的 CLI 能找到重启后的服务。
@@ -58,6 +58,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - CLI 重启后会补报上一进程遗留的后台任务：先写 `queue-operation` enqueue/dequeue，再写一条 `queueTranscriptOnly: true` 的 task-notification 行，这一行不开回合。回执扫描（`transcript-source.ts#suffixPrompts`）照样要让它消耗队列里取出的那一项，而且通知只配对通知、消息只配对消息；否则紧跟其后发出的消息会被配给这条通知，回执永远找不到，run 一直停在「等待上一条消息确认」。
 - 转写 JSONL 里的异步辅助行（`attachment`、`queue-operation`、`file-history-delta` 等）可能乱序写入、时间戳早于或晚于紧邻的 `assistant` 行；`step-meter.ts#ClaudeStepMeter` 测速时只认 `api-request`、`user`、`assistant` 三类对话边界且优先取紧邻的 `api-request`，忽略辅助行，避免耗时归零、倒挂或虚高。
 - 回合在模型输出前被手动中断后，Claude Code 恢复会话时会在转写里补写一条非 API 错误的合成 `assistant` 占位行（`model: "<synthetic>"`、`isApiErrorMessage: false`、正文 `No response requested.`、`usage` 全为 0）来闭合未答复的 `user` 行；`rows.ts#isClaudeSyntheticPlaceholder` 将其跳过，避免在「已停止」下方多出一条孤立回复或计入测速。
+- 停止键（2.1.322 实测）：Esc 在模型生成、工具执行、工具审批框上都会结束回合，审批框上是拒绝并中断，转写写 `[Request interrupted by user for tool use]`；空闲时按一次 Esc 没有反应，连按两次打开回退列表。`C-c` 在工具审批框上完全没有反应，空闲时连按两次会退出 CLI。后台 agent 仍用 `C-c` 停止，CLI 回 `agents_killed`（`stops.ts#stopBackground`）。停止时挂着的 PermissionRequest hook 以 `deny` 加 `interrupt: true` 作答（`interactions.ts#cancelPending`），不带 `interrupt` 时 CLI 只拒绝这个工具，回合会继续。停止等待确认期间，屏幕上还没关掉的审批框不再发布成卡片（`screen-watch.ts#refreshScreenState`），否则会闪回一次「等你确认」。
 - `AskUserQuestion` 的结果正文只是一句 `The user answered: "问题"="回答", …`；作答在同一行的 `toolUseResult.answers` 里，按问题原文作键，多选用 `, ` 连成一个字符串，没答的问题不出现。`row-mapper.ts#questionAnswers` 从这里生成 `question_answer`，标题取第一个问题的 `header`，和 Codex、Cursor 的提问行一致；只读正文会让提问行既看不出问了什么，也看不出答了什么。
 - 转写里的 `api-request-shape` / `api-request` / `api-request-blob` 是 Claude Code 的私有记录（2.1.322 起见到），没有文档承诺；`api-request` 的消息是上一请求的前 `keep` 条加 `tail` 哈希，`tail` 里只有非对话消息有 blob。格式变了追踪显示 `unrecognized`，改 `request-records.ts` 并补 `../shared/trace-requests.test.ts`。
 
@@ -72,4 +73,5 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 回合进行中重启服务后看不到引导按钮：冷回放打开的回合不发布 `activeTurn`（没收到 hook 的忙碌终端不能当引导目标），要等这一回合的主线程工具 hook 到达，由 `runtime.ts#adoptPublishedTurn` 补发；补发它的 `PreToolUse` 本身就是引导的落点。之后仍没有，查这一回合的 hook 是否带 `prompt_id`、是否到了本服务。
 - 服务重启后引导一直补充不进当前回合、每次都变成下一条消息：引导只看 `runtime.ts#steerTarget`，没有 `started`（本服务没启动这个 CLI）时要求这一回合的工具 hook 已到达本服务（`outputPromptId`）；状态里有 `activeTurn` 而这里不认，就会在 `enqueue` 抛 `STEER_TARGET_CHANGED` 并由 `requeueSteer` 转成排队消息。
 - 屏幕解析在新版 CLI 上失效：`npx vitest run apps/server/src/backends/claude/screen-fixtures.test.ts`，再用 `scripts/probe-claude-e2e.ts --capture` 录制现场。
-- 点停止后界面显示「已停止」但 Claude 仍在跑：查 `journal.db` 是否未发 `C-c` 就写入合成 `turn_ended(cancelled)`，并跑 `screen-fixtures.test.ts` 与 `recordings.test.ts` 核对当前 CLI 版本的忙碌屏识别与 `C-c` 发送。
+- 点停止后提示「暂时无法确认任务是否已停止」，回合照常在跑：先看停止时屏幕是否停在工具审批框上。曾经按的是 `C-c`，它在审批框上没有反应，20 秒后报 `NATIVE_INTERRUPT_UNCONFIRMED`；之后同一个停止请求重试时只做核对、不再按键，于是一直停不下来。现在按 Esc，Claude 声明 `repeatableStop`，重试会对仍在运行的同一回合再按一次（`apps/server/src/native/actor-interrupt.ts#beginInterrupt`）。停止回执在会话设置 `native-stops:<会话 id>` 里，`error` 是上一次失败的原因。
+- 点停止后界面显示「已停止」但 Claude 仍在跑：查 `journal.db` 是否未发停止键就写入合成 `turn_ended(cancelled)`，并跑 `screen-fixtures.test.ts` 与 `recordings.test.ts` 核对当前 CLI 版本的忙碌屏识别与停止键发送。

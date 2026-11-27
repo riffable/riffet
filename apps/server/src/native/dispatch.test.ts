@@ -2134,6 +2134,27 @@ describe('message recovery and targeted stop', () => {
     } finally { await dispatcher.close(); store.close(); }
   });
 
+  it('sends an unconfirmed stop again on a repeatable-stop backend only while its turn still runs', async () => {
+    const { store, createSession, workspace, makeRuntime } = setup();
+    const session = createSession(), backend = new FakeNative(store);
+    backend.traits = () => ({ repeatableStop: true });
+    const stop = { requestId: 'stop-unconfirmed', nativeSessionId: session.cursorSessionId!, turnId: 'original' };
+    backend.currentStatus = { phase: 'busy', activeTurn: { nativeSessionId: stop.nativeSessionId, turnId: stop.turnId } };
+    backend.interruptOperation = async () => { throw new AppError('NATIVE_INTERRUPT_UNCONFIRMED', 'the turn is still running', 409); };
+    const dispatcher = new NativeDispatcher(store, backend, makeRuntime(), workspace as never);
+    try {
+      await expect(dispatcher.interrupt(session.id, stop)).rejects.toMatchObject({ code: 'NATIVE_STOP_UNCONFIRMED' });
+      await expect(dispatcher.interrupt(session.id, stop)).rejects.toMatchObject({ code: 'NATIVE_STOP_UNCONFIRMED' });
+      expect(backend.interruptCalls).toBe(2);
+      backend.interruptOperation = async () => { backend.currentStatus = { phase: 'idle' }; };
+      await dispatcher.interrupt(session.id, stop);
+      expect(backend.interruptCalls).toBe(3);
+      // Completed: a further retry replays the receipt and presses nothing.
+      await dispatcher.interrupt(session.id, stop);
+      expect(backend.interruptCalls).toBe(3);
+    } finally { await dispatcher.close(); store.close(); }
+  });
+
   it('settles a running turn and dispatches the queue when the stop has no turn id and a newer terminal epoch', async () => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const created = createSession();

@@ -138,6 +138,8 @@ export const CLAUDE_TRAITS: NativeBackendTraits = {
   survivesRestart: true,
   offlineMayBeRunning: true,
   stopKeepsPendingInput: true,
+  // Escape ends a running or approval-waiting turn and does nothing at an idle prompt (stops.ts#STOP_KEY).
+  repeatableStop: true,
   detachedSubagents: true,
   cachesModels: true,
   terminalName: 'Claude',

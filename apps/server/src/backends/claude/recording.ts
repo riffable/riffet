@@ -24,6 +24,7 @@ import { Journal, laneKey, type JournalRow } from '../../journal/journal.js';
 import { TranscriptIngest } from '../../sync/ingest.js';
 import { stable, stableRows } from '../shared/recording.js';
 import { ClaudeBackendAdapter } from './index.js';
+import { STOP_KEY } from './stops.js';
 
 export { stable, stableRows };
 
@@ -71,6 +72,8 @@ export interface ClaudeScenario {
   tool?: boolean;
   /** A permission card is answered. */
   approve?: boolean;
+  /** The turn is stopped while its permission card waits, instead of answering it. */
+  stopAtApproval?: boolean;
   /** The scenario starts a subagent. */
   subagent?: boolean;
   /** Before these prompts (by index) the runtime is disposed and the CLI exits, so the send resumes the session. */
@@ -88,6 +91,7 @@ export const CLAUDE_SCENARIOS: Record<string, ClaudeScenario> = {
   answer: { prompts: ['Reply with exactly: ok'], approval: 'bypassPermissions' },
   tool: { prompts: ['Run `ls` with the Bash tool, then reply with only the number of entries it printed.'], approval: 'bypassPermissions', tool: true },
   approval: { prompts: ['Create a file named hello.txt containing the word hello, using the Bash tool (echo hello > hello.txt). Then reply with only: done'], approval: 'manual', tool: true, approve: true },
+  'approval-stop': { prompts: ['Create a file named hello.txt containing the word hello, using the Bash tool (echo hello > hello.txt). Then reply with only: done'], approval: 'manual', tool: true, interrupt: true, stopAtApproval: true },
   interrupt: { prompts: ['Say hello in one short sentence. Then run `sleep 120` with the Bash tool.'], approval: 'bypassPermissions', interrupt: true, tool: true },
   subagent: { prompts: ['Use the Agent tool with a general-purpose subagent to read README.md and report its first line. Then reply with that line only.'], approval: 'bypassPermissions', subagent: true },
   resume: { prompts: ['The secret word is pelican. Reply with exactly: ok', 'What is the secret word? Reply with that word only.'], approval: 'bypassPermissions', restartBefore: [1] },
@@ -125,14 +129,16 @@ export function recordingVocabulary(recording: ClaudeRecording): Set<string> {
 
 export interface ReplayResult {
   rows: JournalRow[]; /** The rows of each subagent lane the main lane names, by lane. */ lanes: Record<string, JournalRow[]>; phases: string[]; stops?: string[];
-  /** Keys sent via `terminal.sendKeys` during replay (e.g. `['C-c']` on stop). */
+  /** Keys sent via `terminal.sendKeys` during replay (e.g. `['Escape']` on stop). */
   sentKeys?: string[][];
+  /** What the driver answered each PermissionRequest hook with. */
+  permissionAnswers?: string[];
   /** The session id the conversation ends on, and how many times the CLI was launched. */
   nativeSessionId?: string; launches?: number;
 }
 
 /** What a scenario has to have produced, from the journal rows of its replay and the phases seen. */
-export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayResult, 'rows' | 'phases' | 'stops' | 'sentKeys' | 'nativeSessionId' | 'launches'> & { responded?: number; stopped?: boolean }): string[] {
+export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayResult, 'rows' | 'phases' | 'stops' | 'sentKeys' | 'permissionAnswers' | 'nativeSessionId' | 'launches'> & { responded?: number; stopped?: boolean }): string[] {
   const { rows, phases } = result;
   const problems: string[] = [];
   const count = (kind: string) => rows.filter(row => row.kind === kind).length;
@@ -154,9 +160,15 @@ export function scenarioProblems(scenario: ClaudeScenario, result: Pick<ReplayRe
   if (scenario.tool && !count('tool_call')) problems.push('no tool call');
   if (scenario.approve && !phases.includes('attention')) problems.push('no permission card (phase attention) was shown');
   if (scenario.approve && !result.responded) problems.push('the permission card was not answered');
+  if (scenario.stopAtApproval && !phases.includes('attention')) problems.push('no permission card (phase attention) was shown before the stop');
+  // A refusal without `interrupt` lets Claude carry on without the tool; the stop has to end the turn.
+  if (scenario.stopAtApproval && result.permissionAnswers !== undefined && !result.permissionAnswers.some(answer => {
+    try { const decision = (JSON.parse(answer) as { hookSpecificOutput?: { decision?: { behavior?: string; interrupt?: boolean } } }).hookSpecificOutput?.decision; return decision?.behavior === 'deny' && decision.interrupt === true; }
+    catch { return false; }
+  })) problems.push('the stop did not refuse the waiting permission request with interrupt');
   for (const stop of result.stops ?? []) if (stop !== 'ok') problems.push(`the stop was refused: ${stop}`);
-  if (scenario.interrupt && result.sentKeys !== undefined && !result.sentKeys.some(keys => keys.includes('C-c'))) {
-    problems.push('the stop sent no C-c key to the CLI');
+  if (scenario.interrupt && result.sentKeys !== undefined && !result.sentKeys.some(keys => keys.includes(STOP_KEY))) {
+    problems.push(`the stop sent no ${STOP_KEY} key to the CLI`);
   }
   if (scenario.restartBefore) {
     if ((result.launches ?? 0) < 2) problems.push(`${result.launches ?? 0} CLI launches, expected a second one after the restart`);
@@ -256,6 +268,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
   const terminals = new FakeTerminals();
   const launches: NativePtyLaunchSpec[] = [];
   const sentKeys: string[][] = [];
+  const permissionAnswers: string[] = [];
   const receipts = new Map<string, NativeInteractionReceipt>();
   const host = {
     getSession: () => structuredClone(session),
@@ -383,7 +396,10 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
         body: JSON.stringify({ deliveryId: `delivery-${deliveries}`, payload }),
       }).then(response => response.text()).catch(() => undefined);
       // The driver holds a permission request until the card is answered; every other hook answers at once.
-      if (payload.hook_event_name === 'PermissionRequest') await new Promise(resolve => setTimeout(resolve, SETTLE_MS));
+      if (payload.hook_event_name === 'PermissionRequest') {
+        void posted.then(answer => { if (answer !== undefined) permissionAnswers.push(answer); });
+        await new Promise(resolve => setTimeout(resolve, SETTLE_MS));
+      }
       else await Promise.race([posted, new Promise(resolve => setTimeout(resolve, HOOK_WAIT_MS))]);
     } else if (event.kind === 'screen') {
       terminals.screen = event.text;
@@ -424,7 +440,7 @@ export async function replayRecording(recording: ClaudeRecording, options: Claud
     if (typeof lane === 'string' && lane.startsWith('sub:')) lanes[lane] = rowsOf(journal, laneKey(id, lane as `sub:${string}`));
   }
   return {
-    rows, lanes, phases, responded, stops, sentKeys, nativeSessionId: session.nativeSessionId, launches: launches.length,
+    rows, lanes, phases, responded, stops, sentKeys, permissionAnswers, nativeSessionId: session.nativeSessionId, launches: launches.length,
     dispose: async () => { release(); ingest.close(); await adapter.close().catch(() => undefined); await rm(root, { recursive: true, force: true }).catch(() => undefined); },
   };
 }

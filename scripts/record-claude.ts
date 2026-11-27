@@ -463,7 +463,7 @@ async function record(name: string): Promise<{ recording: ClaudeRecording; phase
       timeline.push({ kind: 'send', text: prompt });
       sendCounter += 1;
       const run = await ok('POST', `/api/sessions/${id}/native/send`, { commandId: `record-${sendCounter}-${randomUUID()}`, text: prompt });
-      if (scenario.approve) {
+      if (scenario.approve || scenario.stopAtApproval) {
         const shown = await until('the permission card', () => timeline.phase() === 'attention', 120_000);
         if (!shown) throw new Error(`no permission card appeared (phase ${timeline.phase()}; pane tail: ${timeline.screen().split('\n').filter(line => line.trim()).slice(-8).join(' | ')})`);
         // The terminal's own dialog can be read a moment before the PermissionRequest hook arrives; the card to answer is the hook's.
@@ -473,15 +473,19 @@ async function record(name: string): Promise<{ recording: ClaudeRecording; phase
           if (card?.transport === 'protocol') break;
           await sleep(250);
         }
-        const action = (card.actions as Array<{ id: string; tone?: string }>).find(item => item.tone === 'primary')?.id ?? card.actions[0].id;
-        timeline.push({ kind: 'respond', action });
-        const answered = await http('POST', `/api/sessions/${id}/native/interaction`, { interactionId: card.id, revision: card.revision, requestId: randomUUID(), action });
-        log(`[${name}] card ${card.kind}/${card.transport} "${String(card.title).slice(0, 60)}"; answered ${action}: ${answered.code} ${answered.code >= 400 ? JSON.stringify(answered.body).slice(0, 300) : ''}`);
-        if (answered.code >= 400) throw new Error('the permission card could not be answered');
+        // The stop has to meet the hook it refuses, not only the terminal's dialog.
+        if (scenario.stopAtApproval && card?.transport !== 'protocol') throw new Error('the PermissionRequest hook did not arrive');
+        if (scenario.approve) {
+          const action = (card.actions as Array<{ id: string; tone?: string }>).find(item => item.tone === 'primary')?.id ?? card.actions[0].id;
+          timeline.push({ kind: 'respond', action });
+          const answered = await http('POST', `/api/sessions/${id}/native/interaction`, { interactionId: card.id, revision: card.revision, requestId: randomUUID(), action });
+          log(`[${name}] card ${card.kind}/${card.transport} "${String(card.title).slice(0, 60)}"; answered ${action}: ${answered.code} ${answered.code >= 400 ? JSON.stringify(answered.body).slice(0, 300) : ''}`);
+          if (answered.code >= 400) throw new Error('the permission card could not be answered');
+        } else log(`[${name}] card ${card.kind}/${card.transport} "${String(card.title).slice(0, 60)}"; left waiting for the stop`);
       }
       if (scenario.interrupt) {
         // The first assistant text on disk (this route does not stream, so it lands whole, with the tool call behind it) or on the pane.
-        const shown = await until('the first assistant text', () => {
+        const shown = scenario.stopAtApproval || await until('the first assistant text', () => {
           timeline.snapshotTranscript();
           const onDisk = timeline.events.some(event => event.kind === 'transcript' && event.file === 'main' && event.text.split('\n').some(line => /"type":"assistant"/.test(line) && /"type":"text"/.test(line)));
           return onDisk || /^⏺ \S/m.test(timeline.screen());

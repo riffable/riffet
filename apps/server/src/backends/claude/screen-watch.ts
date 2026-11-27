@@ -213,6 +213,9 @@ export class ClaudeScreenWatch {
       }
       const interaction = drawn && this.endorsesDialog(drawn) ? drawn : undefined;
       const observed = shape !== undefined && this.endorsesDialog(shape.interaction);
+      // The dialog a stop is closing (its request refused, the stop key pressed) is not asked again while the stop
+      // waits; if the stop fails, the next look after it shows the dialog that stayed.
+      if ((interaction || observed) && this.deps.stops.interrupting) return;
       if (interaction || observed) {
         this.deps.setScreenAttention(true);
         this.deps.setStatus({ ...this.deps.status(), interaction: interaction ?? (isClaudeScreenInteraction(this.deps.status().interaction) ? undefined : this.deps.status().interaction) });

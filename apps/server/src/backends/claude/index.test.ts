@@ -2226,7 +2226,7 @@ describe('Claude sending while background work is tracked', () => {
   // Stopped before the model produced anything on 2.1.322 (no `esc to interrupt` hint, live spinner above the box):
   // stop must send Ctrl-C rather than treating the turn as already idle, and must not fabricate a cancellation while
   // the spinner remains on screen.
-  it('sends C-c and refuses to fake cancellation for a live turn before first output while Claude 2.1.322 is spinning', async () => {
+  it('sends the stop key and refuses to fake cancellation for a live turn before first output while Claude 2.1.322 is spinning', async () => {
     const h = await makeHarness();
     await h.open();
     await h.deliverSessionStart('default');
@@ -2248,7 +2248,7 @@ describe('Claude sending while background work is tracked', () => {
     let settled = false;
     const stopping = h.adapter.interrupt(h.host, h.getSession(), h.profile).then(() => { settled = true; });
     await waitFor(() => keys.length ? true : undefined);
-    expect(keys).toEqual([['C-c']]);
+    expect(keys).toEqual([['Escape']]);
     await new Promise(resolve => setTimeout(resolve, 1_100));
     expect(settled).toBe(false);
     expect(h.adapter.status(h.host, h.getSession()).phase).toBe('busy');
@@ -2380,7 +2380,7 @@ describe('Claude sending while background work is tracked', () => {
     const stopping = h.adapter.interrupt(h.host, h.getSession(), h.profile).then(() => { settled = true; });
     await waitFor(() => keys.length ? true : undefined);
     await new Promise(resolve => setTimeout(resolve, 1_100));
-    expect(keys).toEqual([['C-c']]);
+    expect(keys).toEqual([['Escape']]);
     expect(settled).toBe(false);
     expect(h.adapter.status(h.host, h.getSession()).phase).toBe('busy');
     await appendRows(h, { type: 'user', promptId: 'running-tool', message: { role: 'user', content: '[Request interrupted by user for tool use]' } });

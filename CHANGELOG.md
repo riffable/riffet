@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Stopping a Claude Code turn that waits on a tool approval now stops it. Before, the key the stop sent did nothing on the approval prompt, the stop reported that it could not confirm the task stopped, and pressing Stop again could not stop it either; now pressing Stop again after an unconfirmed stop stops the turn again.
 - After `/new` in a continuous team member or personal assistant conversation on Web, the right-side turn outline and edge rail now reset numbering from `1` for the current topic (labeled "This topic" and hidden while empty) and keep per-topic numbering with dividers when earlier topics are expanded; `/new` dividers no longer take turn numbers.
 - Continuous team members now list `/new` and only their own isolated skills in the `/` menu across all supported agents, Cursor's `/` menu includes `/new`, and slash matching tightens subsequence matches to segment initials while placing verbatim CLI commands ahead of description-only hits.
 - Settings › Agent on Web now shows the CLI version as a settings row: a version newer than Riffet has verified says which version was verified, instead of an unexplained yellow number; a warning appears only when the version is too old and needs an update.

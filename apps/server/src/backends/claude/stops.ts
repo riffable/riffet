@@ -19,7 +19,10 @@ import { ClaudeSends } from './sends.js';
 /** How long a stop waits for the CLI to write the record that confirms it (turn end, agents killed, input removed). */
 const STOP_CONFIRM_MS = 20_000;
 
-/** Give Ctrl-C a chance to redraw before confirming a recordless stop against two native idle frames. */
+/** Ends the main turn, including one waiting on a tool approval (Claude Code 2.1.322 ignores Ctrl-C there). */
+export const STOP_KEY = 'Escape';
+
+/** Give the stop key a chance to redraw before confirming a recordless stop against two native idle frames. */
 const INTERRUPT_RESTORE_AFTER_MS = 750;
 
 /** How long a stop waits for a freshly pasted message to show whether it was submitted, queued or left in the box. */
@@ -199,17 +202,18 @@ export class ClaudeStops {
     let failure: unknown;
     let succeeded = false;
     try {
+      // Esc, not Ctrl-C: Esc also ends a turn waiting on a tool approval, where Ctrl-C does nothing, and
+      // twice into an idle prompt it opens the rewind list instead of quitting the CLI.
       // After a server restart a cold replay of the JSONL can still name a turn the CLI silently
-      // dropped. Only for that replayed turn may an idle screen skip Ctrl-C (on Claude, pressing
-      // Ctrl-C twice into an idle prompt quits it); a live turn observed by this runtime always
-      // receives Ctrl-C so a screen-format change can never silently skip interrupting it.
+      // dropped. Only for that replayed turn may an idle screen skip the key; a live turn observed by
+      // this runtime always receives it so a screen-format change can never silently skip interrupting it.
       const promptId = activeTurnOf(this.deps.state().mainTurn)?.promptId;
       const hasOutput = () => Boolean(promptId && this.deps.outputPromptId() === promptId) || this.deps.transcript.hasTurnOutput(promptId);
       let alreadyIdle = !hasOutput() && this.deps.replayedTurn() && await this.stopIdleScreen(terminalId);
       if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
       if (!alreadyIdle) {
         if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
-        await this.deps.host.terminal.sendKeys(terminalId, ['C-c']);
+        await this.deps.host.terminal.sendKeys(terminalId, [STOP_KEY]);
       }
       let pressedAt = Date.now();
       const pressedTurn = this.deps.turnSeq();
@@ -229,7 +233,7 @@ export class ClaudeStops {
             alreadyIdle = false;
             try {
               if (expectedStop) await this.assertExpectedStop(expectedStop, terminalId, false, target);
-              await this.deps.host.terminal.sendKeys(terminalId, ['C-c']);
+              await this.deps.host.terminal.sendKeys(terminalId, [STOP_KEY]);
               pressedAt = Date.now();
             } catch (error) {
               failure = error;

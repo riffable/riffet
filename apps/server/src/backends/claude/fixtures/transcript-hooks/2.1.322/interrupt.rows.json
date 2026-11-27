@@ -61,7 +61,7 @@
           "phase": "commentary",
           "content": {
             "type": "text",
-            "text": "Hello! Ready when you are."
+            "text": "Hello! Running the sleep now."
           }
         }
       }
@@ -82,15 +82,14 @@
         "type": "tool_call",
         "data": {
           "sessionUpdate": "tool_call",
-          "toolCallId": "call_00_gdw4u8jsbe11h6dmo6dctchz",
+          "toolCallId": "call_00_2suulc5i79eh3essafsckw5w",
           "toolName": "Bash",
           "status": "in_progress",
           "kind": "execute",
-          "title": "Wait 120 seconds",
+          "title": "Sleep for 120 seconds",
           "rawInput": {
             "command": "sleep 120",
-            "description": "Wait 120 seconds",
-            "timeout": 130000
+            "description": "Sleep for 120 seconds"
           },
           "command": "sleep 120"
         }
@@ -112,7 +111,7 @@
         "type": "tool_call_update",
         "data": {
           "sessionUpdate": "tool_call_update",
-          "toolCallId": "call_00_gdw4u8jsbe11h6dmo6dctchz",
+          "toolCallId": "call_00_2suulc5i79eh3essafsckw5w",
           "status": "failed",
           "toolName": "Bash",
           "content": [
