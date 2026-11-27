@@ -84,9 +84,12 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
       sidebarCollapsed={desktop && sidebarCollapsed}
       onExpandSidebar={() => ui.setSidebarCollapsed(false)}
       onOpenMobileSidebar={() => ui.setMobileSidebar(true)}
-      panelTab={panelOpen ? shownTab : undefined}
-      panelOffered={project?.system !== 'assistant' || sidebarViews.length > 0}
-      onTogglePanel={(tab) => togglePanelTab(ui, tab, shownTab)}
+      panelTab={panelOpen ? (quickChat ? 'model-chat' : shownTab) : undefined}
+      panelOffered={quickChat ? Boolean(session || center) : (project?.system !== 'assistant' || sidebarViews.length > 0)}
+      onTogglePanel={(tab) => {
+        if (quickChat) { ui.setPanelOpen(!ui.get().panelOpen); return; }
+        togglePanelTab(ui, tab, shownTab);
+      }}
       terminalOpen={dockOpen}
       infoOpen={infoOpen}
       onInfoOpenChange={(open) => ui.set({ sessionInfoOpen: open })}

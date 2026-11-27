@@ -1004,6 +1004,7 @@ describe('app route surface after ACP removal', () => {
       await settled('c3');
       expect(request).toHaveBeenCalledTimes(2);
 
+      expect((await call('PATCH', '/api/settings', { quickChat: { retentionDays: 7 } })).statusCode).toBe(200);
       const later = Date.now() + 8 * 86_400_000;
       store.updateSession(sessionId, { pinnedAt: new Date().toISOString() });
       expect(await quickChats.sweep(later)).toEqual([]);

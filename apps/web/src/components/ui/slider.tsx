@@ -6,15 +6,17 @@ import { cn } from '@/lib/utils';
  * One value on a continuous or stepped range. Show the current value beside it as text;
  * the slider itself carries no number.
  */
-export function Slider({ value, onValueChange, className, 'aria-label': ariaLabel, ...props }: Omit<React.ComponentProps<typeof SliderPrimitive.Root>, 'value' | 'defaultValue' | 'onValueChange'> & {
+export function Slider({ value, onValueChange, onValueCommit, className, 'aria-label': ariaLabel, ...props }: Omit<React.ComponentProps<typeof SliderPrimitive.Root>, 'value' | 'defaultValue' | 'onValueChange' | 'onValueCommit'> & {
   value: number;
   onValueChange: (value: number) => void;
+  onValueCommit?: (value: number) => void;
   'aria-label': string;
 }) {
   return (
     <SliderPrimitive.Root
       value={[value]}
       onValueChange={([next]) => { if (next !== undefined) onValueChange(next); }}
+      {...(onValueCommit ? { onValueCommit: ([next]: number[]) => { if (next !== undefined) onValueCommit(next); } } : {})}
       className={cn('relative flex h-5 w-full touch-none select-none items-center no-hover:h-11', className)}
       {...props}
     >

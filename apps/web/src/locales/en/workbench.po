@@ -693,6 +693,17 @@ msgstr "The original session is gone; only the saved favorite is available."
 msgid "原文已找不到，已打开所在会话"
 msgstr "Couldn't find the original text; opened its session."
 
+#: src/app/Header.tsx
+#: src/app/Workbench.tsx
+msgid "参数、上下文与 Wire"
+msgstr "Parameters, context & Wire"
+
+#: src/app/Header.tsx
+#: src/app/ProjectHome.tsx
+#: src/app/Workbench.tsx
+msgid "参数与上下文"
+msgstr "Parameters & context"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "发布者"
 msgstr "Publisher"
@@ -1083,6 +1094,10 @@ msgstr "Completed"
 msgid "已就绪"
 msgstr "Ready"
 
+#: src/app/Workbench.tsx
+msgid "已带入新建任务草稿"
+msgstr "Added to new task draft"
+
 #: src/app/SessionSearchDialog.tsx
 msgid "已归档"
 msgstr "Archived"
@@ -1181,10 +1196,6 @@ msgstr "Pending"
 #: src/app/plugins/PluginsPage.tsx
 msgid "快捷键未生效"
 msgstr "Shortcut not active"
-
-#: src/app/Workbench.tsx
-msgid "快速对话"
-msgstr "Quick chat"
 
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -2100,6 +2111,10 @@ msgstr "Bots"
 msgid "权限"
 msgstr "Permissions"
 
+#: src/app/ProjectHome.tsx
+msgid "材料 {activeDocCount}"
+msgstr "Docs {activeDocCount}"
+
 #: src/app/team/MemberSessionSidebar.tsx
 msgid "来信与调用"
 msgstr "Calls & messages"
@@ -2152,6 +2167,10 @@ msgstr "Models and agents"
 #: src/app/Workbench.tsx
 msgid "模型协作"
 msgstr "Collaboration"
+
+#: src/app/Workbench.tsx
+msgid "模型对话"
+msgstr "Model Chat"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-feature"

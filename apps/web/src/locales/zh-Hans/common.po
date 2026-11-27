@@ -426,10 +426,6 @@ msgstr "微冷纸底与石板蓝。"
 msgid "微绿灰纸底与橄榄苔绿。"
 msgstr "微绿灰纸底与橄榄苔绿。"
 
-#: src/lib/backends.ts
-msgid "快速对话"
-msgstr "快速对话"
-
 #: src/lib/stats-series.ts
 msgid "总 token"
 msgstr "总 token"
@@ -589,6 +585,10 @@ msgstr "标签"
 msgctxt "code-syntax-role-heading"
 msgid "标题"
 msgstr "标题"
+
+#: src/lib/backends.ts
+msgid "模型对话"
+msgstr "模型对话"
 
 #: src/lib/app-icon.ts
 msgid "橙色"

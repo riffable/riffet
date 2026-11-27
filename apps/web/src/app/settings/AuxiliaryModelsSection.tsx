@@ -200,7 +200,7 @@ export function AuxiliaryModelsSection({ settings, onSaved, onError, onOpenTitle
         <SettingsGroup title={t`插件`}>
           {uses.map((use) => {
             const title = localizedText(use.title, [i18n.locale]) ?? use.id;
-            const offLabel = use.fallback === 'default' ? t`跟随默认` : use.fallback === 'chat' ? t`跟随快速对话` : t`不使用`;
+            const offLabel = use.fallback === 'default' ? t`跟随默认` : use.fallback === 'chat' ? t`跟随模型对话` : t`不使用`;
             const current = settings.pluginModels?.[use.id];
             const effective = current ?? (use.fallback === 'default' ? settings.auxiliaryModels?.default : use.fallback === 'chat' ? settings.auxiliaryModels?.chat : undefined);
             return (

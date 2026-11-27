@@ -180,6 +180,9 @@ export class SessionDeletion {
     for (const id of ids) {
       try {
         await rm(join(stateDir, 'chat', `${encodeURIComponent(id)}.jsonl`), { force: true });
+        if (id && id !== '.' && id !== '..') {
+          await rm(join(stateDir, 'chat', 'wire', encodeURIComponent(id)), { recursive: true, force: true });
+        }
         // What its commands were seen to change holds the contents of the files they changed.
         workspaceObserver(stateDir).forget(id);
         // A client-chosen id is only ever a single path segment here; anything else is left to the context sweep.

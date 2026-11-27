@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconCheck, IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconLaptop, IconLink, IconServer, IconSquareTerminal, IconTerminal } from '@/components/icons';
-import { AGENT_CALL_TOOL_GROUP, PREWARM_BUDGET, type AgentMember, type AppSettings, type Attachment, type AttemptGroup, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
+import { IconCheck, IconChevronRight, IconColumns2, IconFolderClosed, IconFolderPlus, IconHistory, IconLaptop, IconLink, IconServer, IconSettings2, IconSquareTerminal, IconTerminal } from '@/components/icons';
+import { AGENT_CALL_TOOL_GROUP, MODEL_CHAT_DEFAULT_CONFIG, PREWARM_BUDGET, type AgentMember, type AppSettings, type Attachment, type AttemptGroup, type ModelChatConfig, type ModelChatConfigPatch, type ModelChatEffort, type ModelChatPinnedDoc, type ModelInfo, type NativeBackendCatalogEntry, type NativeBackendId, type NativeBackendProfile, type Session, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { LiveBrandMark } from '@/components/BrandMark';
 import { RunnerGame } from '@/components/runner/RunnerGame';
@@ -41,6 +41,7 @@ import { isDefaultMember } from './work-items/assistant';
 import { MemberAvatar } from './team/MemberAvatar';
 import { MemberSessionsList } from './team/MemberSessionsList';
 import { formatServerPlatform, type HomeServerOption } from './useServerLabel';
+import { collectNonDefaultChips, inferModelProtocol } from './model-chat/tree';
 
 export interface ProfileCatalog extends Pick<NativeBackendCatalogEntry, 'models' | 'available' | 'reason'> { profile: NativeBackendProfile }
 
@@ -128,13 +129,19 @@ export interface NewSessionComposerProps {
   referenceSessions?: Session[];
   onOpenReferenceSession?: (id: string) => void;
   onReferencesChange: (references: PromptContextReference[]) => void;
-  onCreate: (input: { projectId?: string; projectless?: boolean; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; agentMemberId?: string }) => Promise<boolean>;
+  onCreate: (input: { projectId?: string; projectless?: boolean; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; agentMemberId?: string; chatConfig?: ModelChatConfigPatch }) => Promise<boolean>;
   onError: (message: string) => void;
   /** Called when the user picks a model here, so the choice can be remembered globally. */
   onRememberModel?: (model: string) => void;
   /** Fullscreen editing; the host makes the rest of the page inert while it is open. */
   fullscreen?: boolean;
   onFullscreenChange?: (open: boolean) => void;
+  /** Initial Model Chat parameters & pinned docs when composing a new Model Chat. */
+  modelChatConfig?: ModelChatConfig;
+  modelChatDocs?: readonly ModelChatPinnedDoc[];
+  onUpdateModelChatConfig?: (patch: ModelChatConfigPatch) => Promise<void> | void;
+  onOpenModelChatPanel?: (tab: 'params' | 'context') => void;
+  onActiveModelChange?: (selection: string) => void;
 }
 
 interface Props extends NewSessionComposerProps {
@@ -152,7 +159,7 @@ interface Props extends NewSessionComposerProps {
 /**
  * The directory, agent, model and first message of a new conversation: the project page's hero.
  */
-export function NewSessionComposer({ project, member, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onAgentPickerOpen, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange }: NewSessionComposerProps) {
+export function NewSessionComposer({ project, member, referenceProjectId, recentModel, directories, serverId, serverOptions, onSelectServer, onOpenLinksSettings, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onAgentPickerOpen, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel, fullscreen, onFullscreenChange, modelChatConfig, modelChatDocs, onUpdateModelChatConfig, onOpenModelChatPanel, onActiveModelChange }: NewSessionComposerProps) {
   const { t } = useLingui();
   const quickChat = backendId === 'chat';
   // A standing member or 助理 has its directory fixed by its scope, and keeps its own model selection.
@@ -406,6 +413,10 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
     : effectiveSelection;
 
   useEffect(() => {
+    if (quickChat) onActiveModelChange?.(submitSelection || model);
+  }, [quickChat, submitSelection, model, onActiveModelChange]);
+
+  useEffect(() => {
     if (!selectionEdited) setSelection(defaultModel);
   }, [defaultModel, selectionEdited]);
   useEffect(() => {
@@ -578,6 +589,64 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
           />
         ) : undefined}
         toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} servers={!activeServerId} disabled={busy} onError={onError} /> : undefined}
+        statusChips={quickChat && modelChatConfig ? (() => {
+          const protocol = inferModelProtocol(submitSelection || model);
+          const chips = collectNonDefaultChips(modelChatConfig, protocol, {
+            bareMode: 'Raw',
+            stateless: 'Stateless',
+            window: 'Window',
+            full: 'Full',
+            effortOff: 'Effort off',
+            effortPrefix: 'Effort',
+            webSearch: 'Web Search',
+            fast: 'Fast',
+            cacheOff: 'No Cache',
+            jsonObject: 'JSON',
+            jsonSchema: 'JSON Schema',
+          });
+          const activeDocCount = (modelChatDocs ?? []).filter((doc) => doc.pinned).length;
+          const hasCustomSystem = !modelChatConfig.bareMode && modelChatConfig.systemPrompt.trim().length > 0;
+          if (!chips.length && !activeDocCount && !hasCustomSystem) return undefined;
+          return (
+            <div className="flex flex-wrap items-center gap-1">
+              {hasCustomSystem && (
+                <button
+                  type="button"
+                  onClick={() => onOpenModelChatPanel?.('params')}
+                  className="inline-flex h-6 items-center rounded-md bg-subtle px-2 text-2xs text-fg-2 transition-colors hover:bg-hover hover:text-fg"
+                >
+                  System
+                </button>
+              )}
+              {activeDocCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onOpenModelChatPanel?.('context')}
+                  className="inline-flex h-6 items-center rounded-md bg-subtle px-2 text-2xs text-fg-2 transition-colors hover:bg-hover hover:text-fg"
+                >
+                  {t`材料 ${activeDocCount}`}
+                </button>
+              )}
+              {chips.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => onOpenModelChatPanel?.(chip.id === 'stateless' || chip.id === 'window' || chip.id === 'full' || chip.id === 'cache' ? 'context' : 'params')}
+                  className={cn(
+                    'inline-flex h-6 items-center rounded-md px-2 text-2xs transition-colors',
+                    chip.tone === 'warning'
+                      ? 'bg-warning-soft text-warning hover:opacity-90'
+                      : chip.tone === 'accent'
+                        ? 'bg-accent-soft text-fg hover:opacity-90'
+                        : 'bg-subtle text-fg-2 hover:bg-hover hover:text-fg',
+                  )}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          );
+        })() : undefined}
         mobileSettingsPrefix={quickChat || !capabilities?.permissions.length ? undefined : <ApprovalSummary mode={approval} options={capabilities.permissions} />}
         mobileSettingsLabel={[!quickChat && label(backendId), models.find((item) => item.id === modelChoice)?.label].filter(Boolean).join(' · ')}
         // The model menu picks the agent too where it has a column for them; a phone keeps its own row.
@@ -633,6 +702,15 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
           const next = catalogSelection(activeCatalog, model, { ...parseSelection(effectiveSelection).params, [id]: value }, id);
           setSelectionEdited(true);
           setSelection(next);
+          if (quickChat && onUpdateModelChatConfig) {
+            if (id === 'effort') {
+              void onUpdateModelChatConfig({ effort: (value === 'default' ? MODEL_CHAT_DEFAULT_CONFIG.effort : value) as ModelChatEffort });
+            } else if (id === 'search') {
+              void onUpdateModelChatConfig({ webSearch: value === 'true' });
+            } else if (id === 'fast') {
+              void onUpdateModelChatConfig({ fast: value === 'true' });
+            }
+          }
           if (!quickChat && !catalogLoading) onRememberModel?.(next);
         }}
         references={references}
@@ -643,7 +721,32 @@ export function NewSessionComposer({ project, member, referenceProjectId, recent
         </div>)}</div> : undefined}
         restoreDraft={creationRestore && creationRestore.projectId === project?.id ? creationRestore.draft : undefined}
         onSubmitPersisted={onCreationPersisted}
-        onSubmit={(prompt, attachments, context) => submit({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(submitSelection ? { model: submitSelection } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}), ...(member ? { agentMemberId: member.id } : {}) })}
+        onSubmit={(prompt, attachments, context) => {
+          const chatPatch: ModelChatConfigPatch | undefined = quickChat && modelChatConfig ? (() => {
+            const patch: ModelChatConfigPatch = { ...modelChatConfig };
+            if (modelChatDocs?.length) patch.pinnedDocs = [...modelChatDocs];
+            const isDefault = !patch.pinnedDocs?.length
+              && !patch.bareMode
+              && !patch.systemPrompt
+              && patch.effort === MODEL_CHAT_DEFAULT_CONFIG.effort
+              && patch.temperature === undefined
+              && patch.topP === undefined
+              && patch.maxOutputTokens === MODEL_CHAT_DEFAULT_CONFIG.maxOutputTokens
+              && patch.contextBudget === MODEL_CHAT_DEFAULT_CONFIG.contextBudget
+              && patch.contextStrategy === MODEL_CHAT_DEFAULT_CONFIG.contextStrategy
+              && patch.responseFormat?.type === 'text'
+              && !patch.webSearch
+              && !patch.fast
+              && patch.promptCaching === MODEL_CHAT_DEFAULT_CONFIG.promptCaching
+              && (patch.seed === undefined || patch.seed === null)
+              && !patch.stop?.length;
+            return isDefault ? undefined : patch;
+          })() : undefined;
+          const effectiveModel = quickChat
+            ? parseSelection(submitSelection).model
+            : submitSelection;
+          return submit({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(effectiveModel ? { model: effectiveModel } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null, ...(chatPatch ? { chatConfig: chatPatch } : {}) } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}), ...(member ? { agentMemberId: member.id } : {}) });
+        }}
         onError={onError}
       />
       <FeedbackNotices scope={`${project?.id ?? 'global'}:${backendId}:${activeProfileId ?? ''}`} messages={creationNotices}
@@ -700,7 +803,18 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
           <NewSessionComposer {...composer} onCreateWorktree={noRepository ? undefined : composer.onCreateWorktree} fullscreen={composerFullscreen} onFullscreenChange={setComposerFullscreen} />
 
           <div key={quickChat ? 'chat' : composer.member ? `member:${composer.member.id}` : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]" inert={behind} aria-hidden={behind}>
-            {quickChat && project ? <QuickChatHistory project={project} sessions={sessions} onSelectSession={onSelectSession} onSessionAction={onSessionAction} /> : <>
+            {quickChat && project ? (
+              <>
+                {composer.modelChatConfig && composer.onUpdateModelChatConfig && (
+                  <ModelChatStartBar
+                    config={composer.modelChatConfig}
+                    onUpdate={composer.onUpdateModelChatConfig}
+                    onOpenPanel={composer.onOpenModelChatPanel}
+                  />
+                )}
+                {mobile && <QuickChatHistory project={project} sessions={sessions} onSelectSession={onSelectSession} onSessionAction={onSessionAction} />}
+              </>
+            ) : <>
               {project && (composer.member || isAssistantProject(project)) && (
                 <>
                   <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} member={composer.member} onOpenConfig={composer.onOpenMemberConfig} />
@@ -761,6 +875,81 @@ export function NoProjects({ onAddProject, header }: { onAddProject: () => void;
         </div>
         <Button variant="primary" size="lg" onClick={onAddProject}><IconFolderPlus /><Trans>添加项目</Trans></Button>
       </div>
+    </div>
+  );
+}
+
+function ModelChatStartBar({
+  config,
+  onUpdate,
+  onOpenPanel,
+}: {
+  config: ModelChatConfig;
+  onUpdate: (patch: ModelChatConfigPatch) => Promise<void> | void;
+  onOpenPanel?: (tab: 'params' | 'context') => void;
+}) {
+  const isRaw = config.bareMode;
+  const isStateless = config.contextStrategy === 'stateless';
+  const isJson = config.responseFormat.type !== 'text';
+  const isDeterministic = config.effort === 'off' && config.temperature === 0;
+
+  const pillClass = (active: boolean) => cn(active && 'bg-accent-soft text-fg hover:bg-accent-soft');
+
+  return (
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button
+          variant="secondary"
+          size="xs"
+          aria-pressed={isRaw}
+          className={pillClass(isRaw)}
+          onClick={() => void onUpdate({ bareMode: !isRaw })}
+        >
+          Raw
+        </Button>
+        <Button
+          variant="secondary"
+          size="xs"
+          aria-pressed={isStateless}
+          className={pillClass(isStateless)}
+          onClick={() => void onUpdate({ contextStrategy: isStateless ? 'summary' : 'stateless' })}
+        >
+          Stateless
+        </Button>
+        <Button
+          variant="secondary"
+          size="xs"
+          aria-pressed={isJson}
+          className={pillClass(isJson)}
+          onClick={() => void onUpdate({ responseFormat: isJson ? { type: 'text' } : { type: 'json_object' } })}
+        >
+          JSON
+        </Button>
+        <Button
+          variant="secondary"
+          size="xs"
+          aria-pressed={isDeterministic}
+          className={pillClass(isDeterministic)}
+          onClick={() => void onUpdate(
+            isDeterministic
+              ? { effort: MODEL_CHAT_DEFAULT_CONFIG.effort, temperature: undefined }
+              : { effort: 'off', temperature: 0 },
+          )}
+        >
+          T=0
+        </Button>
+      </div>
+
+      {onOpenPanel && (
+        <Button
+          variant="quiet"
+          size="xs"
+          onClick={() => onOpenPanel('params')}
+        >
+          <IconSettings2 aria-hidden className="size-3.5" />
+          <Trans>参数与上下文</Trans>
+        </Button>
+      )}
     </div>
   );
 }

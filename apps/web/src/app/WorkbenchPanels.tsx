@@ -20,12 +20,20 @@ const TerminalDock = lazy(() => import('./terminal/TerminalDock').then((module) 
 
 export const loadingPanel = <div className="flex min-h-0 flex-1 items-center justify-center p-5"><Spinner /></div>;
 
+export interface CustomPanelChrome {
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  floating?: boolean;
+  onToggleFloating?: () => void;
+  onClose: () => void;
+}
+
 /**
  * The right-hand context panel: docked beside the conversation on wide screens, a sheet elsewhere.
  * It owns its mount/animation state and reads the panel state itself, so opening, resizing or
  * switching tabs re-renders this, not the workbench.
  */
-export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTabStrip = false, onReference, onOpenWorktree, onWorktreeMerged, onError }: {
+export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTabStrip = false, customPanel, onReference, onOpenWorktree, onWorktreeMerged, onError }: {
   project?: ProjectRecord;
   sessionId?: string;
   desktop: boolean;
@@ -33,6 +41,12 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
   pageOpen: boolean;
   /** The 独立一行 tab strip spans the top of the window, so the panel starts below it, level with the conversation. */
   belowTabStrip?: boolean;
+  /** When set, the host renders a portal mount for a conversation's own panel (e.g. Model Chat inspector) inside the same docked/floating/fullscreen frame. */
+  customPanel?: {
+    title: string;
+    onSlot: (element: HTMLDivElement | null) => void;
+    onChrome: (chrome: CustomPanelChrome) => void;
+  };
   onReference: (reference: PromptContextReference) => void;
   onOpenWorktree: (path: string) => void;
   onWorktreeMerged: (info: { originProjectId: string; removedWorktree: boolean }) => void;
@@ -70,7 +84,19 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
   const maximized = fullscreen && desktop;
   // Floating is for the wide desktop layout; a narrower window shows the sheet as before.
   const floating = floatingPref && desktop && wide;
-  const panel = (current: ProjectRecord) => (
+  const customOnChrome = customPanel?.onChrome;
+  const customOnSlot = customPanel?.onSlot;
+  useEffect(() => {
+    if (!customOnChrome) return;
+    customOnChrome({
+      onClose: () => ui.setPanelOpen(false),
+      ...(desktop && !floating ? { fullscreen: maximized, onToggleFullscreen: () => ui.set((state) => ({ panelFullscreen: !state.panelFullscreen, panelFloating: false })) } : {}),
+      ...(desktop && wide ? { floating, onToggleFloating: () => ui.set((state) => ({ panelFloating: !state.panelFloating, panelFullscreen: false })) } : {}),
+    });
+  }, [customOnChrome, desktop, floating, maximized, ui, wide]);
+  const panel = (current: ProjectRecord) => customPanel ? (
+    <div ref={customOnSlot} className="flex h-full min-h-0 min-w-0 w-full flex-col" />
+  ) : (
     <ErrorBoundary resetKey={`${current.id}:${panelTab}`}><Suspense fallback={loadingPanel}><ContextPanel
       project={current} sessionId={sessionId} previewTarget={previewTarget} tab={panelTab} onTabChange={(tab) => ui.set({ panelTab: tab })} onReference={onReference} onError={onError}
       onClose={() => ui.setPanelOpen(false)} onOpenWorktree={onOpenWorktree} onWorktreeMerged={onWorktreeMerged}
@@ -127,7 +153,7 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
       {!wide && project && !pageOpen && (
         <Dialog open={panelOpen} onOpenChange={ui.setPanelOpen}>
           <DialogContent mobileFullscreen hideClose aria-describedby={undefined} className={cn('left-auto right-0 top-0 h-dvh max-h-dvh max-w-none translate-x-0 translate-y-0 rounded-none bg-bg p-0 transition-[width] duration-[var(--duration-slow)] ease-out-soft', !maximized ? 'w-[min(400px,92vw)]' : sidebarCollapsed ? 'w-screen' : 'w-[calc(100vw-var(--sidebar-w))]')}>
-            <DialogTitle className="sr-only"><Trans>变更与文件</Trans></DialogTitle>
+            <DialogTitle className="sr-only">{customPanel ? customPanel.title : <Trans>变更与文件</Trans>}</DialogTitle>
             {panel(project)}
           </DialogContent>
         </Dialog>

@@ -20,7 +20,7 @@ const KIND_LABELS: Record<AuxiliaryJobKind, MessageDescriptor> = {
   summary: msg`画布摘要`,
   handoff: msg`交接摘要`,
   plugin: msg`翻译/插件`,
-  chat: msg`快速对话`,
+  chat: msg`模型对话`,
   probe: msg`接口测速`,
 };
 

@@ -25,7 +25,7 @@ export function quickChatProject(store: Store, stateDir: string): Project {
   if (existing) return existing;
   const cwd = chatProjectCwd(stateDir);
   mkdirSync(cwd, { recursive: true, mode: 0o700 });
-  const project = store.createProject(cwd, '快速对话');
+  const project = store.createProject(cwd, '模型对话');
   return project.system === 'quick-chat' ? project : store.updateProject(project.id, { system: 'quick-chat' });
 }
 

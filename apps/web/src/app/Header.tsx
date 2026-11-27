@@ -251,12 +251,20 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
           </PopoverContent>
         </Popover>
       )}
-      {/* The quick chat home keeps it, unusable: switching 新建任务 / 快速对话 does not move the tab bar. */}
-      {(project || (quickChat && center)) && panelOffered && (
-        <Tip label={panelTab ? t`收起侧板` : ownDirectory ? t`打开侧板` : t`变更与文件`} disabled={!project}>
-          <Button size="icon-sm" variant="quiet" disabled={!project} aria-label={panelTab ? t`收起侧板` : ownDirectory ? t`打开侧板` : t`变更与文件`} aria-pressed={Boolean(panelTab)} className={cn('size-7', panelTab && 'bg-active text-fg')} onClick={() => onTogglePanel(panelTab ?? (changesVisible ? 'changes' : 'files'))}><IconPanelRight /></Button>
-        </Tip>
-      )}
+      {/* The quick chat home and conversation both host the Model Chat inspector in PanelHost. */}
+      {(project || (quickChat && (center || session))) && panelOffered && (() => {
+        const panelReady = Boolean(project || quickChat);
+        const panelLabel = panelTab
+          ? t`收起侧板`
+          : quickChat
+            ? (session ? t`参数、上下文与 Wire` : t`参数与上下文`)
+            : ownDirectory ? t`打开侧板` : t`变更与文件`;
+        return (
+          <Tip label={panelLabel} disabled={!panelReady}>
+            <Button size="icon-sm" variant="quiet" disabled={!panelReady} aria-label={panelLabel} aria-pressed={Boolean(panelTab)} className={cn('size-7', panelTab && 'bg-active text-fg')} onClick={() => onTogglePanel(panelTab ?? (changesVisible ? 'changes' : 'files'))}><IconPanelRight /></Button>
+          </Tip>
+        );
+      })()}
       {desktopGroups.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`} className="size-7"><IconEllipsis /></Button></DropdownMenuTrigger>
@@ -365,6 +373,18 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       {member && onOpenMemberConfig && mobile && (
         <Button size="icon-sm" variant="quiet" aria-label={t`成员设置`} onClick={() => onOpenMemberConfig(member.id)} className="size-11 shrink-0">
           <IconSettings2 />
+        </Button>
+      )}
+      {mobile && quickChat && session && panelOffered && (
+        <Button
+          size="icon-sm"
+          variant="quiet"
+          aria-label={panelTab ? t`收起侧板` : t`参数、上下文与 Wire`}
+          aria-pressed={Boolean(panelTab)}
+          onClick={() => onTogglePanel('model-chat')}
+          className={cn('size-11 shrink-0', panelTab && 'bg-active text-fg')}
+        >
+          <IconPanelRight />
         </Button>
       )}
       {session && mobile && (

@@ -1113,9 +1113,36 @@
 - **否决**：在 `24px` 头像上塞入小于最小字阶（`11px`）的迷你数字角标；继续复用顶部单行 `toast.info` 展示异步收件箱消息。
 - **规则**：`apps/web/src/app/SidebarUserMenu.tsx`、`apps/web/src/app/work-items/InboxAlertDock.tsx`、`apps/web/src/app/Workbench.tsx`。
 
+## 2026-11-27 · 「快速对话」重构为「模型对话」，进主侧栏并拆出独立会话页
+
+- **决定**：将原「快速对话」更名为「模型对话」（英文 `Model Chat`），定位升级为不经过 Agent CLI、直接掌控 LLM 网关参数与上下文的白盒对话工作台：
+  - 模型对话进入主侧栏（按时间视图与 Agent 会话混排，按项目视图归入独立「模型对话」分组），默认自动归档改为永不（`DEFAULT_QUICK_CHAT_RETENTION_DAYS = 0`），保留设置项按需开启。
+  - Web 在 `<SessionFrame>` 处按 `session.backendId === 'chat'` 分流至独立的 `<ModelChatSession />`（`apps/web/src/app/model-chat/`），清理 `NativeSession.tsx` 中全部 `quickChat` 特判；同时 100% 复用 `UserMessage`、`AssistantMessage`、`ThoughtRow`、`MessageFooter`、`MarkLayer`、`Composer`、`ContentColumn`、`ContentWidthHandle`、`ResizeHandle` 与 `@/components/ui/*`，仅对公用组件做向后兼容的可选槽位扩展。
+  - 服务端保留 `backendId: 'chat'` 与 `Project.system: 'quick-chat'` 以兼容旧端；扩展 `<stateDir>/chat/<sessionId>.jsonl` 激活 `parentId` 消息树（编辑分叉、重生成、同轮 1–3 模型并行对比、助手回复编辑、轮次 Pin/Mute）、四策略上下文编排、协议级参数与思考-采样互斥、Prompt Caching 与脱敏 Wire 快照（`/api/sessions/:id/chat/*`）；`Journal` 继续维护当前活动分支的线性投影以保证全局搜索、收藏、统计和旧客户端自动兼容。
+  - 页头提供「转为 Agent 任务」，可将当前分支结论与钉住材料带入新建任务草稿。
+- **原因**：有了无项目任务与个人助理后，仅靠在 `NativeSession` 中用二十余处 `!quickChat` 做减法得到的线性「快速对话」价值偏薄，且强行塞进 append-only 的 `TranscriptView` 与 `TurnProcess` 会破坏 Agent 转录的滚动锚定与过程折叠不变量。拆出独立壳层并复用原子组件，既零回归保护 Agent 会话，又释放了直连网关才具备的白盒上下文、消息树与 Wire 调试能力。
+- **否决**：继续在 `NativeSession` 内堆叠 `quickChat` 条件分支；把模型对话的分支/编辑状态硬塞进线性 `TranscriptView`；另写一套不共用的侧边面板外壳、气泡或 Markdown 渲染组件。
+- **范围**：服务端与 Web 落地完整白盒控制台与消息树；Mac 为 W 类（同步更名并经现有线性投影保持列表与基础会话可用，控制台后续按需补齐）。
+- **规则**：[QUICK-CHAT.md](../QUICK-CHAT.md)；原型 [model-chat-demo.html](model-chat-demo.html)；代码 `packages/contracts/src/chat.ts`、`apps/server/src/routes/chat.ts`、`apps/web/src/app/model-chat/`。
+
 ## 2026-11-27 · Agent 设置的 CLI 版本按是否需要处理着色
 
 - **决定**：Agent 设置在 Agent 导航下方用一行「CLI 版本」显示本机 CLI 的版本，值为中性的元信息色。版本比 Riffet 验证过的新时，只在该行说明里写「Riffet 只验证到 X，会话异常时可先改用这个版本」；只有低于最低版本时才在上方加 `warning` 的 `Notice`，写明需要的版本。
 - **原因**：原来只在异常时显示一个带警示图标的黄色版本号，含义只在悬停提示里，读者看不出它在说什么。「未验证」不需要用户处理，Codex、Cursor 发版快，会长期处于这个状态，用 `warning`（等待处理）会让警示失去意义；插件页同样只把过旧算作警示。
 - **否决**：把含义放在悬停提示里（触屏和键盘看不到）；未验证也用警示色。
 - **规则**：[模式](system/patterns.md) §1.3「Agent 与模型提供商」；代码 `apps/web/src/app/settings/AgentSettingsSection.tsx`。
+
+## 2026-11-27 · 在当前提供商下不能按名称工作的权限模式用 `warning`
+
+- **决定**：权限模式选项可由服务端标 `tone: warning` 并给一句说明，表示在这个提供商下它不能按名称工作。客户端按「全部放行」的样子给它着 `warning` 色，选中时工具行的权限图标也是 `warning`，悬停提示带上说明，菜单与手机列表里说明常显。第一个用处是 Claude Code 的 Auto：CLI 报告过这个提供商的网关不放行安全检查后，再选 Auto 时提前看到。
+- **原因**：新会话按保存的默认权限启动，读者通常不打开权限菜单；只在菜单里写说明，等发现时已经在逐个确认操作。这是读者要处理的状态（换模式或接受逐个确认），符合 `warning` 的用法。只在 CLI 报告过之后才标，不按「是否自定义网关」猜：同样经网关，有的网关放行检查。
+- **否决**：按提供商是否使用自定义网关预先提示（多数网关正常，提示会长期误报）；只在菜单说明里写（默认值不经过菜单）；另起一条输入框上方的提示条。
+- **规则**：[界面](system/surfaces.md) §1.6「权限模式」；代码 `apps/server/src/backends/claude/auto-mode.ts`、`apps/web/src/app/session/ApprovalPicker.tsx`。
+
+## 2026-11-27 · 分段控件用填色底槽和抬起的滑块，不着主题色
+
+- **决定**：`Segmented` 的底槽填 `bg-muted`、不描边；选中块是 `bg-elevated` 底、0.5px `line-strong` 描边、`shadow-soft` 的滑块，文字墨色，只有选中段用 500。新增 `fill`：各段等宽并铺满给它的宽度，用于标签在上方的表单字段。模型选择器里自画的分段（`SlidingSegments`）改用同一个组件。替代 2026-11-26「主题色分三档」中 `accent-soft` 用于分段控件的部分；筛选胶囊、底栏当前项、消息气泡不变。
+- **原因**：原来是 1px 描边的空心底槽配无边的 `accent-soft` 淡底块，两者只隔 2px：底槽像输入框，选中块像悬停，首尾两段时滑块贴着外框形成两层轮廓。模型选择器里的填色底槽加白色滑块是读者认可的写法，选中一眼可辨，Apple、Linear 也都这样画。`accent-soft` 叠在灰底槽上会混成发灰的淡紫（原来改成描边底槽就是为了躲开这一点），所以滑块保持中性。
+- **否决**：保留描边底槽，只换选中块的颜色（仍是两种做法拼在一起）；选中段也描边（框套框）；去掉底槽只留一排胶囊（看不出是一组）；白色滑块上的文字用 `accent`（一处次要设置不需要主题色）。
+- **范围**：Web。Mac 的 `SegmentedTrack`（`apps/macos/Riffet/Theme/FormStyle.swift`）仍是 `bg-muted` 底槽上的 `accentSoft` 选中块，待对齐。
+- **规则**：[输入](system/components/inputs.md)「Segmented」；代码 `apps/web/src/components/ui/controls.tsx`。

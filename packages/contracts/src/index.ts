@@ -58,6 +58,7 @@ export type * from './trace.js';
 export * from './work-items.js';
 
 export { samePromptText } from './prompt-match';
+export * from './chat.js';
 
 export * from './icon-pack.js';
 

@@ -1,7 +1,7 @@
 import { submissionFingerprint } from '../orchestration/session-commands.js';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { AppError, requireString } from '../errors.js';
-import type { SessionKind, SessionListDelta, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import type { ModelChatConfigPatch, SessionKind, SessionListDelta, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { SYNC_BUDGET } from '../../../../packages/contracts/src/sync.js';
 import { recordTerminalAppearance } from '../terminal/appearance.js';
 import { resolveNativeSessionInput } from '../native/session-input.js';
@@ -63,7 +63,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
       return {revision:store.listRevision,sessions,...(removed.length?{removed}:{})};
     });
   });
-  app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;workItemId?:string;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
+  app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;workItemId?:string;chatConfig?:ModelChatConfigPatch;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
     const create=async()=>{
     const body=request.body;
     try {
@@ -110,6 +110,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         reply.code(202);return {session:receipt,run};
       }
       const input=await resolveNativeSessionInput(deps,body,request.headers);
+      if(body.chatConfig!==undefined&&(body.backendId==='chat'||input.backendId==='chat'))deps.chat?.validateConfigPatch(body.chatConfig);
       if(message.references?.length)await nativeBackends.assertSessionReferences(input);
       const prepared=await contextReferences.prepare(clientSessionId,message,request.headers);
       const result=contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
@@ -135,11 +136,19 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         if(workItemId)workItems.attachSession(clientSessionId,workItemId);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));
         // With the project, so the client knows this is the main conversation before it selects it.
         return main?{...accepted,session:main,project:store.getProject(project.id)}:accepted;});
+      if(body.chatConfig!==undefined&&result.session.backendId==='chat'&&deps.chat){
+        deps.chat.updateConfig(result.session.id,body.chatConfig,result.session);
+      }
       deps.bindWorkbench?.(request,result.session,result.run);
       reply.code(202);dispatch.kick();return result;
     }
     const input=await resolveNativeSessionInput(deps,body,request.headers);
-    return store.createSession({...input,kind:body.kind});
+    if(body.chatConfig!==undefined&&(body.backendId==='chat'||input.backendId==='chat'))deps.chat?.validateConfigPatch(body.chatConfig);
+    const created=store.createSession({...input,kind:body.kind});
+    if(body.chatConfig!==undefined&&created.backendId==='chat'&&deps.chat){
+      deps.chat.updateConfig(created.id,body.chatConfig,created);
+    }
+    return created;
     } catch(error) { throw creationRejection(error,store,body?.clientSessionId); }
     };
     const pending=request.body;

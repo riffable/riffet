@@ -1,66 +1,62 @@
-# Riffet 快速对话
+# Riffet 模型对话（原快速对话）
 
-日期：2026-10-31。状态：服务端、Web 与 Mac App 已实现；iPhone 尚无入口，也收不到快速对话的数据（见第 5 节）。Android 曾实现，2026-11-20 移除：手机上新会话只做新建任务。
+日期：2026-10-31；2026-11-27 重构为「模型对话（Model Chat）」。状态：服务端与 Web 已实现完整白盒消息树、参数/上下文/Wire 控制台与多模型并排对比；Mac App 同步兼容线性投影会话；iPhone 与 Android 未声明该特性（见第 6 节）。
 
-快速对话是不绑定项目、不运行 Agent CLI 的多轮对话，用于翻译、解释、查资料这类一问一答。服务端直接调用模型网关，凭据复用已配置的 Claude Code、DeepSeek Harness 或 Codex 接入方，不另存密钥。
+Mac：W 类，会话列表与基础对话经现有线性投影同步；参数/上下文/Wire 控制台先在 Web 实现，后续按需在原生补齐或跳转 Web。
 
-## 1 数据
+模型对话是不绑定项目、不运行 Agent CLI 的直连 LLM 工作台：直接调用模型网关，由用户完全掌控 System Prompt（含零污染裸模式）、思考深度与采样参数、上下文编排（Pin/Mute/摘要/单轮/Prompt Caching）、消息树分叉、同轮多模型并排对比与脱敏 Wire 请求透视；聊透后可一键「转为 Agent 任务」带入新建任务草稿。凭据继续复用已配置的 Claude Code、DeepSeek Harness 或 Codex 接入方，不另存密钥。
+
+## 1 数据与双轨架构
 
 | 概念 | 代码 | 说明 |
 | --- | --- | --- |
-| 后端 | `backendId: 'chat'`，`apps/server/src/backends/chat/` | 与其他后端走同一套会话、运行、journal 与时间线 |
-| 项目 | `Project.system: 'quick-chat'` | 服务端首次启动时创建，目录为 `<数据目录>/quick-chat`，始终为空；不作为普通项目列出 |
-| 记录 | `<数据目录>/chat/<sessionId>.jsonl` | 只追加。每条记录带 `parentId`，文件本身是一棵消息树；目前只沿最新分支继续，分叉另开会话 |
-| 模型 | `<backend>:<profile>:<model>[effort=high,search=true]` | 列表即 `GET /api/auxiliary-models`，显示为「接入方 · 模型」；Web 与 Mac 优先用 `auxiliaryModels.chat` 并恢复该模型最近会话的参数，未设置时沿用最近会话，再回退到第一个可用模型 |
+| 后端 | `backendId: 'chat'`，`apps/server/src/backends/chat/` | 保持既有后端 ID 兼容旧端；同时提供 `/api/sessions/:id/chat/*` 树级与白盒接口 |
+| 项目 | `Project.system: 'quick-chat'`，默认名称「模型对话」 | 服务端首次启动时创建，目录为 `<数据目录>/quick-chat`，始终为空；在主侧栏按项目视图中归为「模型对话」分组 |
+| 记录 | `<数据目录>/chat/<sessionId>.jsonl` | 只追加的消息树。每条记录带 `parentId`，支持 `user`（含 `editedFrom`）、`assistant`（含 `modelSelection`、`compareGroupId`、`wireBlobRef`、`metrics`）、`clear`、`summary`（含 `manual`），以及元记录 `branch_select`、`turn_flag`、`assistant_edit`、`config_patch`、`pinned_docs` |
+| Wire 快照 | `<数据目录>/chat/wire/<sessionId>/<assistantId>.json` | 仅存脱敏后的请求端点、header 名（鉴权头替换为 `[REDACTED]`）、二进制截断后的请求体与指标，受 `MODEL_CHAT_BUDGET.maxWireBytes` 约束并按会话保留最近 50 份，随会话清理 |
+| Journal 投影 | `ChatTranscriptSource` | 只把**当前活动分支**投射进 `Journal`（切换分支或编辑助手回复时重建投影），保证全局消息搜索、收藏夹、统计、分享与旧客户端自动兼容 |
+| 模型 | `<backend>:<profile>:<model>[effort=…,fast=…,search=…]` | 列表即 `GET /api/auxiliary-models`，显示为「接入方 · 模型」；单轮最多同时向 `MODEL_CHAT_BUDGET.maxCompareModels`（3）个模型并行发送 |
 
-记录类型：`user`（含 `attachments`）、`assistant`（含 `status`、`error`、`dropped`）、`clear`（`/clear`，此后上下文从空开始）、`summary`（不属于任何回合，代替 `upTo` 及之前的回合，界面不显示）。
+## 2 一轮对话与网关协议
 
-Web 在新会话页用「新建任务 / 快速会话」两个 Tab 切换，共用一个 Composer 实例及 `new:home` 草稿。文字和附件随 Tab 保留；文件引用保留所属任务项目，快速会话中不显示、不发送。旧的 `quick-chat:home` 草稿在成功合并保存后删除。标题和目录栏保留布局空间，切换时只替换控件及下方工具、历史区域。Mac 使用同样的 Tab 与原生输入框结构，草稿按服务端保存为 `new-session|<baseURL>`，首次打开时合并当前任务配置与旧 `quick-chat` 草稿；其他旧任务草稿保留，再次进入新会话页时迁移当前配置的旧草稿。
+1. `auxiliary/gateway.ts` 的 `streamChat` 统一 Anthropic Messages、OpenAI Chat、OpenAI Responses 三种协议，扩展支持：
+   - 思考控制：`effort`（`off` / `minimal` / `low` / `medium` / `high` / `xhigh` / `max` / `adaptive`）与自定义 `thinkingBudget`；
+   - 采样与预算：`temperature`、`topP`、`maxOutputTokens`（默认 16,384，可调）、`seed`、`stop`；Anthropic 启用思考或 Responses 启用推理时自动省略 `temperature`/`top_p` 避免协议 400；
+   - 结构化输出：`responseFormat`（`text` / `json_object` / `json_schema`）；
+   - Prompt Caching：Anthropic 开启后自动在 `system` 与稳定历史前缀标记 `cache_control: { type: 'ephemeral' }`，三协议统一解析 `cacheReadTokens` / `cacheWriteTokens` / `stopReason`；
+   - Wire 脱敏回调：请求发出前脱敏鉴权头、去除 URL query 凭据、截断大体积 base64 载荷。
+2. 流式文本经 SSE（`GET /api/sessions/:id/chat/stream`）实时推送单路或多路并排 `delta`，回答结束写入 `assistant` 记录与统计；单模型失败或单独中断不影响同轮其他并行模型。
+3. 附件在派发前读取：图片（PNG、JPEG、GIF、WebP）按图片发送；PDF 仅 Anthropic 与 Responses 协议支持；可解码文本内联发送（超 20 万字符截断）；其余类型拒绝。
 
-## 2 一轮对话
+## 3 上下文编排与消息树
 
-1. `send` 先过派发围栏，再写 `user` 记录，然后以流式请求网关；三种协议（Anthropic Messages、OpenAI Chat、OpenAI Responses）由 `auxiliary/gateway.ts` 的 `streamChat` 统一。
-2. 流式文本每 150ms 作为 draft 写入 journal，回答结束写 `assistant` 记录并结束回合；停止生成保留已写出的部分，记为 `cancelled`。
-3. 服务重启时仍未结束的回合，在下次读取时补一条 `interrupted` 记录，不会重发。
-4. 用量写入统计：网关报告 token 时记为 `provider`，否则估算。
-5. 附件在派发前读取：图片（PNG、JPEG、GIF、WebP）按图片发送；PDF 作为文档发送，只有 Anthropic 与 Responses 协议支持；能解码为文本的文件内联发送，超过 20 万字符截断；其他类型拒绝发送并提示。附件只随提出它的那一轮发送，之后的回合只带文件名。
+- **四种策略**：`summary`（默认，超预算后后台压缩并支持手改摘要）、`window`（滑动截断）、`full`（尽量全量保留）、`stateless`（无状态单轮，每轮不带历史）。
+- **逐轮控制**：每轮支持 `Pin`（裁剪时优先保留）与 `Mute`（从后续上下文排除，原记录保留在树中）。
+- **钉住只读材料**：支持附加最多 `MODEL_CHAT_BUDGET.maxPinnedDocs`（16）份文本材料，每轮自动注入上下文并配合 Prompt Caching 复用。
+- **System Prompt 与裸模式**：支持自由编辑、切换预设模板，或开启「裸模式」清空一切系统提示词。
+- **消息树操作**：支持编辑任意用户消息并从该节点分叉、原地重生成、换模型重跑并排对比、收束分支，以及直接编辑助手回复用于 few-shot 或纠偏。
 
-## 3 上下文
+## 4 差异化 Web 会话页与共用组件
 
-- 发给模型的是最近一次 `/clear` 之后的回合，从新到旧放入，直到约 48k token；放不下的旧回合本轮不发，记在 `dropped`。
-- 有回合被丢弃时，回答结束后在后台把旧回合连同上一份摘要压缩成新的 `summary`；之后各轮从摘要开始，摘要放在系统提示里。压缩失败只是少了摘要，不影响对话。
-- Web 与 Mac 新会话固定使用 `agent`，不提供翻译、解释、润色等模式入口或预设管理。后端仍兼容旧会话与其他客户端的 `preset:<id>`：在系统提示后附加 `quickChat.presets` 中对应的提示词；已有会话的模式不自动改写。
-- 联网搜索是模型参数 `search`，只有 Anthropic 与 Responses 协议的网关提供（由网关自己执行搜索），其余模型不显示该参数。
+- Web 在 `<SessionFrame>` 处按 `session.backendId === 'chat'` 分流至独立的 `<ModelChatSession />`（`apps/web/src/app/model-chat/`），`NativeSession.tsx` 保持纯粹的 Agent 运行页。
+- 原子展示与输入能力 100% 复用会话公用组件：`UserMessage`、`AssistantMessage`、`ThoughtRow`、`MessageFooter`、`WorkingIndicator`、`MarkLayer`、`Composer`、`ContentColumn`、`ContentWidthHandle`、`ResizeHandle` 与 `@/components/ui/*`。
+- 右侧直接复用原生侧边面板宿主 `PanelHost` + `FloatingPanelFrame`（同一张独立圆角卡、8px 缝隙、拖拽调宽、悬浮、全屏、窄屏抽屉与页头原生侧板开关），内部展示 **参数 / 上下文 / Wire** 三页签。
+- 页头「转为 Agent 任务」将当前分支结论与钉住材料带入 `new:home` 草稿并切到「新建任务」页签。
 
-## 4 保留
+## 5 保留策略与主侧栏
 
-- 每小时检查一次：最后一条消息超过 `quickChat.retentionDays`（默认 7，0 为永不）天的快速对话被归档。
-- 置顶、含收藏、正在回答的对话不归档。取消置顶或删掉最后一条收藏后，天数从那一刻重新计算。
-- 归档只是隐藏，内容、搜索与收藏都保留，可以恢复。
+- 模型对话进入主侧栏：按时间视图与普通会话混排；按项目视图归入「模型对话」分组。新会话页保留「新建任务 / 模型对话」双 Tab 共用同一输入框草稿。
+- `DEFAULT_QUICK_CHAT_RETENTION_DAYS` 默认改为 `0`（永不自动归档）；用户仍可在「设置 › 模型对话」按需配置自动归档天数（置顶、含收藏、进行中的对话不归档）。
 
-## 5 兼容
+## 6 兼容与多服务器
 
-`chat` 是新增的 `NativeBackendId`，旧版手机解析会话列表会失败，所以按协商下发：
+- **能力协商**：服务端 `ProtocolInfo.features` 含 `quick-chat`；未声明的客户端（旧版或移动端）过滤 `chat` 会话与项目，契约快照仍以 `negotiated: ['chat']` 标记 `chat`。
+- **多服务器（`docs/guide/multi-server.md`）**：
+  - 归类：**A 类（工作对象）**。会话与树历史留在所在服务器；所有 `/api/sessions/:id/chat/*` 挂载在 `/api/sessions` 前缀下，命中 `links/policy.ts` 的 `serve` 与 `capabilities.ts` 的 `read` / `chat` 策略，客户端经 `serverOfObject(sessionId)` 自动路由。
+  - 「设置 › 模型对话」的默认模型、预设与归档天数属 **B 类（环境与配置）**，仅在本机设置页修改。
+  - Wire 快照绝不持久化凭据，跨服只读透视同样脱敏。
 
-- 服务端 `ProtocolInfo.features` 含 `quick-chat`；客户端在请求头 `X-Riffet-Features` 中声明 `quick-chat` 才会看到快速对话会话及其项目。
-- 未声明的客户端，会话列表、项目列表、bootstrap、消息搜索与统计都不含快速对话数据；`GET /api/backends` 对所有客户端都不列出 `chat`。
-- 契约快照用 `negotiated: ['chat']` 标记该枚举值，兼容检查不把它算作破坏。
-- Web 与 Mac App 声明该特性；iPhone 与 Android 未声明。
+## 7 不做
 
-## 6 Android 入口
-
-2026-11-20 移除。新会话页只有新建任务；文字选择、分享、快捷方式、快捷设置磁贴与设置里的「快速对话」一并删除。
-`riffet://new?prompt=` 改为打开新建任务并填入文字。
-
-## 7 Web 与 Mac App 入口
-
-- 侧栏通过新建会话进入「新建任务 / 快速会话」Tab，不再单独提供快速对话入口。快速会话下方按时间分组列出历史，可重命名、置顶、归档和显示已归档；这些记录不出现在普通项目会话列表里。
-- 会话页隐藏审批、终端、文件与 Git、工作树、交接等只属于 Agent 的操作，保留模型及参数、停止、收藏、重命名、置顶、归档。
-- 设置「快速对话」：默认模型、自动归档；Mac App 另有打开方式。
-- Mac App 的全局快速提问（⌃⌥Space）以快速对话为默认目标：`sheet` 在浮窗中显示回答并可继续追问，`page` 打开主窗口。
-
-## 8 不做
-
-- 工具调用循环、文件读写、代码执行：需要这些就用 Agent 会话。
-- 同一会话内切换分支。
+- 工具调用循环、文件写入、代码执行：需要执行操作时点击页头「转为 Agent 任务」交给 Agent 会话。
 - 临时对话（关闭即删除）。

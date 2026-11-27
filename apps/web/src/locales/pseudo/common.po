@@ -426,10 +426,6 @@ msgstr ""
 msgid "微绿灰纸底与橄榄苔绿。"
 msgstr ""
 
-#: src/lib/backends.ts
-msgid "快速对话"
-msgstr ""
-
 #: src/lib/stats-series.ts
 msgid "总 token"
 msgstr ""
@@ -588,6 +584,10 @@ msgstr ""
 #: src/lib/theme-role-labels.ts
 msgctxt "code-syntax-role-heading"
 msgid "标题"
+msgstr ""
+
+#: src/lib/backends.ts
+msgid "模型对话"
 msgstr ""
 
 #: src/lib/app-icon.ts

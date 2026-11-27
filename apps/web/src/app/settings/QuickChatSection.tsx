@@ -60,7 +60,7 @@ export function QuickChatSection({ settings, onSaved, onError }: SaveProps) {
     try {
       const saved = await api.updateSettings({ quickChat: { retentionDays: days } });
       onSaved(saved, { quickChat: saved.quickChat });
-    } catch (error) { onError(errorMessage(error, t`无法保存快速对话设置`)); }
+    } catch (error) { onError(errorMessage(error, t`无法保存模型对话设置`)); }
     finally { setBusy(false); }
   };
 

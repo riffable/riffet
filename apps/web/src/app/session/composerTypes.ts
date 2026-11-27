@@ -59,6 +59,8 @@ export interface ComposerProps {
   onModelPickerOpenChange?: (open: boolean) => void;
   /** Before the model's name on its trigger, e.g. the agent's mark when the menu also picks the agent. */
   modelLeading?: ReactNode;
+  /** Replaces the default `<ModelPicker />` on desktop when provided (e.g. multi-model comparison picker). */
+  modelTrigger?: ReactNode;
   /** Quiet banner at the top of the model menu when agents and models come from a linked server. */
   modelSourceLabel?: string;
   /**
@@ -67,6 +69,8 @@ export interface ComposerProps {
    * run as rather than how it was requested.
    */
   toolbar?: ReactNode;
+  /** Lightweight status chips rendered on the left of the desktop toolbar (after `toolbar` / `toolsPicker`, or after `+`). */
+  statusChips?: ReactNode;
   /** The heading `toolbar` gets in the mobile settings sheet; it is not always a permission. */
   toolbarLabel?: string;
   /** Optional current-value summary for opaque custom pickers shown in the mobile settings sheet. */

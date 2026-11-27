@@ -426,10 +426,6 @@ msgstr "Cool paper and slate blue."
 msgid "微绿灰纸底与橄榄苔绿。"
 msgstr "Grey-green paper and olive moss."
 
-#: src/lib/backends.ts
-msgid "快速对话"
-msgstr "Quick chat"
-
 #: src/lib/stats-series.ts
 msgid "总 token"
 msgstr "Total tokens"
@@ -589,6 +585,10 @@ msgstr "Tag"
 msgctxt "code-syntax-role-heading"
 msgid "标题"
 msgstr "Heading"
+
+#: src/lib/backends.ts
+msgid "模型对话"
+msgstr "Model Chat"
 
 #: src/lib/app-icon.ts
 msgid "橙色"

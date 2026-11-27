@@ -286,8 +286,6 @@ interface Props {
   /** The view to open in, when it is not the transcript. */
   initialView?: SessionView;
   onViewChange?: (view: SessionView) => void;
-  /** A quick chat: presets instead of permissions, no terminal, files, worktree or handoff. */
-  quickChat?: boolean;
 }
 
 const noCommands: SlashCommand[] = [];
@@ -376,7 +374,7 @@ function SessionComposerSlot({ autoFocus, className, onSent }: ComposerSlotProps
 /** Same conversations in the same order, as far as a list of them re-renders. */
 const sameIds = (left: readonly Session[], right: readonly Session[]) => left.length === right.length && left.every((item, index) => item === right[index]);
 
-export function NativeSession({ session, initialRun, catalog, continuations, backendCapabilities, catalogLoading, catalogError, onRetryCatalog, terminal, root, reopening, sendingInitial, onReopen, onTerminalChanged, onSessionChanged, onRememberModel, onError, notificationsEnabled, references, sessionReferences, referenceSessions, referenceProjects, onReferencesChange, onOpenPath, onOpenInEditor, renderHeader, focus, enterBehavior, runningBehavior, sendLaterEnabled, onLaunched, backends = [], findSession, onOpenSession, onAttemptAdopted, onOpenAttemptGroup, initialView, onViewChange, quickChat = false }: Props) {
+export function NativeSession({ session, initialRun, catalog, continuations, backendCapabilities, catalogLoading, catalogError, onRetryCatalog, terminal, root, reopening, sendingInitial, onReopen, onTerminalChanged, onSessionChanged, onRememberModel, onError, notificationsEnabled, references, sessionReferences, referenceSessions, referenceProjects, onReferencesChange, onOpenPath, onOpenInEditor, renderHeader, focus, enterBehavior, runningBehavior, sendLaterEnabled, onLaunched, backends = [], findSession, onOpenSession, onAttemptAdopted, onOpenAttemptGroup, initialView, onViewChange }: Props) {
   const { t } = useLingui();
   const mobileViewport = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const tabChrome = useContext(TabChromeContext);
@@ -406,10 +404,10 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const memberRunsOwnerId = session.origin?.kind === 'assistant'
     ? undefined
     : (session.agentMemberId ?? (assistant ? DEFAULT_AGENT_MEMBER_ID : undefined));
-  const memberRuns = useMemberBackgroundRuns(memberRunsOwnerId, !quickChat && Boolean(memberRunsOwnerId));
+  const memberRuns = useMemberBackgroundRuns(memberRunsOwnerId, Boolean(memberRunsOwnerId));
   const activeMemberRuns = memberRuns.some(runIsActive);
   const overview = useViewPrefs((state) => state.side === 'overview');
-  const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!quickChat && !mobileViewport && overview);
+  const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!mobileViewport && overview);
   // The view dots sit on the reading column's centre line, which an aside pushes left of the
   // session's own centre. The offset is measured in the transcript and kept while another view
   // shows, so switching views never moves them.
@@ -431,19 +429,19 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     const placed = dotsPlaced ? undefined : window.setTimeout(() => setDotsPlaced(true), ASSEMBLY_MS);
     return () => { observer.disconnect(); window.clearTimeout(placed); };
   }, [readingColumn, dotsPlaced]);
-  // Only a session that can show the dots speaks for where they sit; a quick chat or a phone has none.
-  useEffect(() => { if (dotsPlaced && !quickChat && !mobileViewport) lastDotsShift = dotsShift; }, [dotsPlaced, dotsShift, quickChat, mobileViewport]);
+  // Only a session that can show the dots speaks for where they sit; a phone has none.
+  useEffect(() => { if (dotsPlaced && !mobileViewport) lastDotsShift = dotsShift; }, [dotsPlaced, dotsShift, mobileViewport]);
   const [chosenView, setView] = useState<SessionView>(initialView ?? 'chat');
   // A session opened in the terminal or canvas has no column to measure: the centre is its place,
   // and the transcript must not hide them again when the reader turns to it.
   useEffect(() => { if (!dotsPlaced && chosenView !== 'chat') setDotsPlaced(true); }, [dotsPlaced, chosenView]);
-  // A phone or a quick chat has no switcher to leave a plugin's view by, so there it is the transcript.
+  // A phone has no switcher to leave a plugin's view by, so there it is the transcript.
   // On a desktop conversation, a view the reader turned off, or that is not offered now (its plugin
   // is off), is the transcript as well; the choice itself is kept, so the view returns with its plugin.
   const prefs = useViewPrefs((state) => state);
   const offered = useSessionViews({ hasProject: Boolean(session.projectId), hasSession: true, projectSystem, capabilities: NO_CAPABILITIES });
   const hostView = chosenView === 'chat' || chosenView === 'terminal';
-  const view = !hostView && (mobileViewport || quickChat || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && !quickChat && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
+  const view = !hostView && (mobileViewport || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
   const native = useSessionSync(session, { onSessionChanged, onError, notificationsEnabled, initialRun }, view === 'chat');
   const marks = useSessionMarks(session.id, native.history?.generation);
   const discuss = useCallback((source: DiscussionSource) => {
@@ -880,7 +878,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
    * subtrees sit the frames out; the transcript and the side column's output list are what move.
    */
   const paneAnswers = backendCapabilities?.interactionTransport === 'both';
-  const compactCommand = !quickChat && !archived && !held ? backendCapabilities?.compactCommand?.replace(/^\//, '').trim() || undefined : undefined;
+  const compactCommand = !archived && !held ? backendCapabilities?.compactCommand?.replace(/^\//, '').trim() || undefined : undefined;
   const latest = useRef({ native, queuedRuns, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain });
   latest.current = { native, queuedRuns, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, compactCommand, switchNativeView, changeView, assistantMain };
   const queuedRun = (runId: string) => latest.current.native.runs.find((item) => item.id === runId);
@@ -1058,24 +1056,24 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const [extensionsOffValue, changeExtensionsOff] = useSessionPick(session, 'extensionsOff', NO_EXTENSIONS_OFF, onSessionChanged, onError);
   const pluginToolRows = usePluginToolGroups(toolGroupsValue).rows.length;
   const remoteSession = Boolean(serverOfObject(session.id));
-  const linkableServersOffered = useLinkableServers(toolGroupsValue, !quickChat && !archived && !remoteSession).offered;
+  const linkableServersOffered = useLinkableServers(toolGroupsValue, !archived && !remoteSession).offered;
   const phonesOffered = (useControllablePhones(toolGroupsValue).offered || pluginToolRows > 0 || linkableServersOffered) && offersRiffetTools(backendCapabilities);
   const extensionToggles = session.projectId ? offersExtensionToggles(backendCapabilities) : undefined;
   const extensionPick = useMemo(() => (extensionToggles && session.projectId
     ? { backendId, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}), projectId: session.projectId, toggles: extensionToggles, off: extensionsOffValue, onChange: changeExtensionsOff }
     : undefined), [extensionToggles, backendId, session.backendProfileId, session.projectId, extensionsOffValue, changeExtensionsOff]);
-  const extensionsOffered = useExtensionsOffered(quickChat || archived ? undefined : extensionPick);
+  const extensionsOffered = useExtensionsOffered(archived ? undefined : extensionPick);
   // A called conversation cannot call further (docs/AGENT-CALLS.md §3).
-  const callsOffered = !quickChat && session.origin?.kind !== 'call' && offersRiffetTools(backendCapabilities);
+  const callsOffered = session.origin?.kind !== 'call' && offersRiffetTools(backendCapabilities);
   const catalogBackends = useCatalog((state) => state.backends);
   const teamMembers = useLists((state) => state.teamMembers);
   const agentMentions = useMemo<AgentMentionSource | undefined>(
     () => callsOffered ? { projectId: session.projectId, backends: catalogBackends, members: teamMembers, ...(session.agentMemberId ? { currentMemberId: session.agentMemberId } : {}) } : undefined,
     [callsOffered, session.projectId, catalogBackends, teamMembers, session.agentMemberId],
   );
-  const toolsPicker = useMemo(() => (!quickChat && !archived && (phonesOffered || extensionsOffered || callsOffered)
+  const toolsPicker = useMemo(() => (!archived && (phonesOffered || extensionsOffered || callsOffered)
     ? <ToolsPicker value={toolGroupsValue} onChange={changeToolGroups} extensions={extensionPick} agents={callsOffered} servers={!remoteSession} onError={onError} footnote={t`下次启动时生效`} />
-    : undefined), [quickChat, archived, phonesOffered, extensionsOffered, callsOffered, extensionPick, remoteSession, toolGroupsValue, changeToolGroups, onError, t]);
+    : undefined), [archived, phonesOffered, extensionsOffered, callsOffered, extensionPick, remoteSession, toolGroupsValue, changeToolGroups, onError, t]);
   const handleSwitchingModel = useCallback((next: boolean) => {
     setSwitchingModel(next);
     if (next) {
@@ -1138,20 +1136,20 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     : headerStatus === 'busy' ? <span role="status" aria-label={t`运行中`} title={t`运行中`} className="flex"><Spinner className="size-3 text-accent" /></span>
     : headerStatus === 'starting' ? <span role="status" aria-label={t`启动中`} title={t`启动中`} className="flex"><Spinner className="size-3" /></span>
     : headerStatus === 'connecting' ? connectingLong ? <span role="status" aria-label={t`连接中`} title={t`连接中`} className="flex"><Spinner className="size-3" /></span> : undefined
-    : headerStatus === 'offline' ? held ? <Badge><Trans>在终端中</Trans></Badge> : quickChat || live ? <Badge><Trans>待恢复</Trans></Badge>
+    : headerStatus === 'offline' ? held ? <Badge><Trans>在终端中</Trans></Badge> : live ? <Badge><Trans>待恢复</Trans></Badge>
       : <StatusPill label={t`待恢复`} actionLabel={t({ message: '恢复', context: 'terminal-resume-session' })} title={pickerBlocked} disabled={reopenDisabled} busy={repairingNativeModel} onAction={() => void reopen()} />
     : null;
   // A phone switches views from its menu; a subagent's transcript has no views of its own.
   const viewIds = visibleViews(prefs, offered, (id) => id !== 'terminal' || supportsTerminal);
   const views = viewIds.flatMap((id) => offered.filter((entry) => entry.id === id));
-  const switcher = !quickChat && !mobileViewport && !subagentOpen && views.length > 1;
+  const switcher = !mobileViewport && !subagentOpen && views.length > 1;
   const viewsKey = viewIds.join();
   useViewShortcuts(viewIds, changeView, switcher);
   // A different alert is a new arrival; the same one re-rendering is not.
   const alertsKey = `${tabbedAlert ? headerStatus : ''}|${runtimeProgressShown ? 'progress' : runtimeNotice ? `${runtimeNotice.tone}:${runtimeNotice.action?.id ?? ''}` : ''}`;
   const header = useMemo(() => renderHeader({
     views: switcher && prefs.placement === 'header' ? <ViewSwitch views={viewsKey.split(',').flatMap((id) => offered.filter((entry) => entry.id === id))} value={view} onChange={changeView} /> : undefined,
-    usage: quickChat ? undefined : native.context,
+    usage: native.context,
     approval: backendCapabilities?.permissions.find((mode) => mode.id === approval)?.label,
     // Shown in the row only while the route is changing or failing; the route in force is in the ⋯ menu.
     alerts: tabbedAlert ? <>{runtimeAlert()}{statusSlot()}</> : runtimeAlert(),
@@ -1168,7 +1166,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
               {discussionAllowed && <SessionDiscussions parentId={session.id} onOpen={openDiscussion} />}
               {onOpenSession && <SessionCalls calls={calledSessions} onOpen={onOpenSession} />}
               {memberRuns.length > 0 && <SessionMemberRuns runs={memberRuns} onOpen={onOpenSession} />}
-              {!quickChat && <SessionWorkActions subagentStore={native.subagents} jobStore={native.jobs} tasks={backgroundActivities} reportedBackground={native.status.activity?.background ?? 0} subagentBriefs={subagentBriefs} onOpenPath={onOpenPath} />}
+              <SessionWorkActions subagentStore={native.subagents} jobStore={native.jobs} tasks={backgroundActivities} reportedBackground={native.status.activity?.background ?? 0} subagentBriefs={subagentBriefs} onOpenPath={onOpenPath} />
               <SessionMarksSection sessionId={session.id} />
             </ActivityContext.Provider>
           </NativeJobStoreContext.Provider>
@@ -1194,7 +1192,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       }] : []),
       { id: 'share', icon: <IconSquareArrowOutUpRight />, label: t`分享会话…`, onSelect: () => setDialog('share') },
       { id: 'pdf', icon: <IconFileText />, label: t`导出为 PDF…`, onSelect: () => setDialog('pdf') },
-      ...(!quickChat && !archived && !live && !starting && !sendingInitial && native.statusKnown ? [{
+      ...(!archived && !live && !starting && !sendingInitial && native.statusKnown ? [{
         id: 'resume', icon: <IconRotateCw />, label: t({ message: '恢复会话', context: 'terminal-resume-session' }),
         disabled: reopenDisabled, onSelect: () => void reopen(),
       }] : []),
@@ -1206,12 +1204,12 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         }] : [];
       }),
       // Either would start another conversation in the 助理's directory, which has one (docs/ASSISTANT.md §3).
-      ...(quickChat || archived || assistant ? [] : [
+      ...(archived || assistant ? [] : [
         ...(session.handedOffTo ? [] : [{ id: 'handoff', icon: <IconArrowRightLeft />, label: t`交接会话…`, onSelect: () => setDialog('handoff') }]),
         { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为自动化…`, onSelect: () => setDialog('automation') },
       ]),
     ],
-  }), [assistant, working, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, activeMemberRuns, memberRuns, onOpenSession, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
+  }), [assistant, working, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, activeMemberRuns, memberRuns, onOpenSession, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
   const dialogs = (
     <>
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
@@ -1317,25 +1315,25 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     projectId: session.projectId,
     draftKey: session.id,
     enterBehavior: enterBehavior,
-    ...(quickChat ? {} : { mobileSettingsPrefix: approvalSummary }),
+    mobileSettingsPrefix: approvalSummary,
     mobileSettingsLabel: cleanLabel(catalog.find((item) => item.value === parseSelection(backendSelection(backendId, catalog, session.model)).model)?.name ?? t({ message: '选择模型', context: 'terminal-model-picker-label' })),
     disabled: archived,
     submitDisabled: held || sendingInitial || starting || switchingApproval || switchingModel || native.sending || native.interrupting || native.hasUnknownSubmission,
     placeholder: archived ? t`会话已归档` : busy ? submitIntent === 'steer' ? t`补充当前任务…` : t`输入下一条消息…` : t`输入消息…`,
     pickersDisabled: pickersBlocked,
     ...(pickerBlocked ? { pickersBlockedReason: pickerBlocked } : {}),
-    toolbar: quickChat ? undefined : approvalPicker,
+    toolbar: approvalPicker,
     toolsPicker,
     endPickers: modelPicker,
     modelsLoading: catalogLoading && !catalog.length,
     modelsError: catalogError || (!catalogLoading && !catalog.length ? t`没有可用模型` : ''),
-    ...(quickChat ? {} : { usage: native.context }),
+    usage: native.context,
     ...(compactCommand ? { onCompact: compactContext, compacting, compactDisabled } : {}),
     commands: slashCommands,
     inlineSkills: slash.catalog?.inlineSkills ?? backendCapabilities?.inlineSkills,
     onSlashMenuOpen: slash.refresh,
-    fileMentions: !quickChat && !assistant && Boolean(root),
-    sessionMentions: !quickChat && sessionReferences && backendCapabilities?.supportsSessionReferences === true,
+    fileMentions: !assistant && Boolean(root),
+    sessionMentions: sessionReferences && backendCapabilities?.supportsSessionReferences === true,
     agentMentions,
     referenceSessions: referenceSessions,
     referenceProjects: referenceProjects,
@@ -1351,7 +1349,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     stopDisabled: archived || !live || (native.control ? !(native.control.activeTurn?.canStop || (backgroundCount > 0 && Boolean(backendCapabilities?.supportsInterrupt))) : !backendCapabilities?.supportsInterrupt) || starting || native.sending || native.interrupting,
     submitIntent: submitIntent,
     onSubmit: submit,
-    ...(sendLaterEnabled && !quickChat && !archived ? { onSendLater: sendLater } : {}),
+    ...(sendLaterEnabled && !archived ? { onSendLater: sendLater } : {}),
     onError: onError,
   };
 
@@ -1366,8 +1364,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         {header}
         <div className="relative flex min-h-0 flex-1 flex-col">
           {plugin ? (
-            <ComposerSlotContext.Provider value={archived || quickChat ? null : composerProps}>
-              <PluginView entry={plugin} projectId={session.projectId} sessionId={session.id} composer={archived || quickChat ? undefined : SessionComposerSlot} />
+            <ComposerSlotContext.Provider value={archived ? null : composerProps}>
+              <PluginView entry={plugin} projectId={session.projectId} sessionId={session.id} composer={archived ? undefined : SessionComposerSlot} />
             </ComposerSlotContext.Provider>
           ) : pane || (
             <EmptyState className="flex-1 pb-24" icon={<IconSquareTerminal />} title={t`终端未在运行`} description={t`重新打开 ${backendLabel} 后继续原生会话。`}>
@@ -1475,7 +1473,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             if (!draft || !recipientAlive.current) return;
             setRestoreDraft({ text: draft.text, attachments: draft.attachments, context: draft.context, onPersisted: draft.onPersisted, nonce: Date.now() });
           }}
-          onTurnAction={quickChat || archived || assistant ? undefined : turnAction}
+          onTurnAction={archived || assistant ? undefined : turnAction}
           onDiscuss={discussionAllowed && !archived ? discuss : undefined}
           onQuote={archived || held ? undefined : quote}
           lead={lineage}
@@ -1487,7 +1485,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
               ? <BackgroundWorkIndicator
                   agents={delegatedAgents}
                   workflows={delegatedWorkflows}
-                  onOpen={quickChat ? undefined : () => stores.ui.set({ sessionInfoOpen: true })}
+                  onOpen={() => stores.ui.set({ sessionInfoOpen: true })}
                 />
               : undefined}
           empty={!working && (

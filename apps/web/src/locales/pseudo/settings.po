@@ -3579,6 +3579,7 @@ msgstr ""
 msgid "多行中文段落不低于 1.5 倍；单行控件的文字在容器里垂直居中。"
 msgstr ""
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "大"
 msgstr ""
@@ -3940,6 +3941,7 @@ msgstr ""
 msgid "将调用"
 msgstr ""
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "小"
 msgstr ""
@@ -4730,15 +4732,6 @@ msgstr ""
 
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "快捷键录入"
-msgstr ""
-
-#: src/app/settings/AuxiliaryInspectDialog.tsx
-#: src/app/settings/settingsSections.ts
-msgid "快速对话"
-msgstr ""
-
-#: src/app/settings/WorkItemSettingsSection.tsx
-msgid "快速对话和个人助理除外"
 msgstr ""
 
 #: src/app/design/mac/StyleMiniature.tsx
@@ -5658,6 +5651,7 @@ msgstr ""
 msgid "文字"
 msgstr ""
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "文字大小"
 msgstr ""
@@ -5857,10 +5851,6 @@ msgstr ""
 msgid "无法保存头像"
 msgstr ""
 
-#: src/app/settings/QuickChatSection.tsx
-msgid "无法保存快速对话设置"
-msgstr ""
-
 #: src/app/settings/PushKeySection.tsx
 msgid "无法保存推送密钥"
 msgstr ""
@@ -5875,6 +5865,10 @@ msgstr ""
 
 #: src/app/settings/TitleRulesSection.tsx
 msgid "无法保存标题规则"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "无法保存模型对话设置"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -6615,6 +6609,7 @@ msgstr ""
 msgid "标为新增的组件还没有 Mac 实现，迁移时先建组件，再改调用点。"
 msgstr ""
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "标准"
@@ -6870,6 +6865,15 @@ msgstr ""
 #: src/app/design/catalog.tsx
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "模型协作"
+msgstr ""
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+#: src/app/settings/settingsSections.ts
+msgid "模型对话"
+msgstr ""
+
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "模型对话和个人助理除外"
 msgstr ""
 
 #: src/app/settings/ModelProbeDialog.tsx
@@ -8044,6 +8048,10 @@ msgstr ""
 msgid "等宽数字"
 msgstr ""
 
+#: src/app/design/components/InputsChapter.tsx
+msgid "等宽铺满"
+msgstr ""
+
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "等待不产生通知，结束后也不留下「已完成」。"
 msgstr ""
@@ -9199,12 +9207,12 @@ msgstr ""
 msgid "跟进任务"
 msgstr ""
 
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "跟随快速对话"
-msgstr ""
-
 #: src/app/settings/WorkItemSettingsSection.tsx
 msgid "跟随新会话"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "跟随模型对话"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx

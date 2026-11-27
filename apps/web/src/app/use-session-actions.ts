@@ -151,7 +151,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   const selectProject = useCallback((next: ProjectRecord) => {
     return nav.navigate(() => {
       if (next.id !== nav.get().projectId) clearContext(ui);
-      nav.rememberTaskProject(next.system === 'task-workspace' ? null : next.id);
+      if (!next.system) nav.rememberTaskProject(next.id);
       nav.set({ projectId: next.id, memberId: '', sessionId: '', ...NO_PAGE });
       ui.setMobileSidebar(false);
     });
@@ -265,7 +265,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
    * `mode` absent takes the backend's saved default. `workItemId` starts that 任务; `follow: false`
    * keeps the reader where they are (the board) instead of opening the new conversation.
    */
-  const createNative = async ({ projectId, projectless, title, prompt, attachments, context, mode, model, approval, toolGroups, extensionsOff, backendId, backendProfileId, workItemId, agentMemberId, follow = true }: { projectId?: string; projectless?: boolean; title?: string; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode?: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; workItemId?: string; agentMemberId?: string; follow?: boolean }) => {
+  const createNative = async ({ projectId, projectless, title, prompt, attachments, context, mode, model, approval, toolGroups, extensionsOff, backendId, backendProfileId, workItemId, agentMemberId, chatConfig, follow = true }: { projectId?: string; projectless?: boolean; title?: string; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode?: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; workItemId?: string; agentMemberId?: string; chatConfig?: import('@contracts').ModelChatConfigPatch; follow?: boolean }) => {
     const targetProjectId = projectless ? undefined : projectId ?? project?.id;
     if (!targetProjectId && !projectless) return false;
     const targetBackendId = backendId ?? homeBackendId;
@@ -286,6 +286,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         ...(extensionsOff ? { extensionsOff } : {}),
         ...(workItemId ? { workItemId } : {}),
         ...(agentMemberId ? { agentMemberId } : {}),
+        ...(chatConfig ? { chatConfig } : {}),
         initialMessage: {
           commandId: newId(),
           text: prompt.trim(),

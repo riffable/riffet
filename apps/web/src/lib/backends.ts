@@ -11,7 +11,7 @@ import { createStore, useStore } from './store';
 const builtinLabels: Partial<Record<NativeBackendId, string>> = {
   cursor: 'Cursor', codex: 'Codex', claude: 'Claude Code', dsh: 'DeepSeek Harness', droid: 'Droid', traex: 'TRAE CLI', pi: 'pi', antigravity: 'Antigravity',
   // Read through the catalog rather than frozen at import, so a locale switch renames it too.
-  get chat() { return i18n._(msg`快速对话`); },
+  get chat() { return i18n._(msg`模型对话`); },
 };
 
 /** The labels `/api/backends` last answered with, for an Agent a plugin provides. */

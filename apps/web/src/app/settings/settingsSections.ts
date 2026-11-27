@@ -67,7 +67,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'files', label: msg`文件与编辑器`, group: 'behavior', icon: IconFileCog, keywords: 'files editor directory workspace 外部编辑器 无项目目录 工作区' }, // i18n-ignore
   { id: 'assistant', label: msg`个人助理`, group: 'features', icon: IconBot, keywords: 'assistant followup memory packs delegation 跟进 记忆整理 能力包 委托' }, // i18n-ignore
   { id: 'workitems', label: msg`任务看板`, group: 'features', icon: IconSquareKanban, keywords: 'tasks workitems board verify kanban 任务 核验 看板' }, // i18n-ignore
-  { id: 'quickchat', label: msg`快速对话`, group: 'features', icon: IconMessagesSquare, keywords: 'quickchat presets archive 预设 归档' }, // i18n-ignore
+  { id: 'quickchat', label: msg`模型对话`, group: 'features', icon: IconMessagesSquare, keywords: 'model chat quickchat presets archive 快速对话 预设 归档' }, // i18n-ignore
   { id: 'channels', label: msg`机器人`, group: 'features', icon: IconSend, keywords: 'bot channels im feishu lark 飞书 通道 绑定' }, // i18n-ignore
   { id: 'backends', label: msg`Agent`, group: 'models', icon: IconSparkles, keywords: 'agent cli default approval launch 默认 启动设置 审批' }, // i18n-ignore
   { id: 'providers', label: msg`模型提供商`, group: 'models', icon: IconLayers, keywords: 'provider model api key gateway proxy quota endpoint 网关 代理 密钥 额度' }, // i18n-ignore

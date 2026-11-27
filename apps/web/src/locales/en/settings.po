@@ -3579,6 +3579,7 @@ msgstr "Perspectives"
 msgid "多行中文段落不低于 1.5 倍；单行控件的文字在容器里垂直居中。"
 msgstr "Multi-line Chinese paragraphs use at least 1.5; text in a single-line control is vertically centered in its container."
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "大"
 msgstr "Large"
@@ -3940,6 +3941,7 @@ msgstr "Runs at the next service start"
 msgid "将调用"
 msgstr "Will call"
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "小"
 msgstr "Small"
@@ -4731,15 +4733,6 @@ msgstr "Shortcuts, focus order"
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "快捷键录入"
 msgstr "Shortcut recorder"
-
-#: src/app/settings/AuxiliaryInspectDialog.tsx
-#: src/app/settings/settingsSections.ts
-msgid "快速对话"
-msgstr "Quick chat"
-
-#: src/app/settings/WorkItemSettingsSection.tsx
-msgid "快速对话和个人助理除外"
-msgstr "Quick chat and the personal assistant are excluded"
 
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -5658,6 +5651,7 @@ msgstr "File access"
 msgid "文字"
 msgstr "Type"
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "文字大小"
 msgstr "Text size"
@@ -5857,10 +5851,6 @@ msgstr "Couldn't save the name"
 msgid "无法保存头像"
 msgstr "Couldn't save the avatar"
 
-#: src/app/settings/QuickChatSection.tsx
-msgid "无法保存快速对话设置"
-msgstr "Couldn't save the quick chat settings"
-
 #: src/app/settings/PushKeySection.tsx
 msgid "无法保存推送密钥"
 msgstr "Couldn't save the push key"
@@ -5876,6 +5866,10 @@ msgstr "Couldn't save server name"
 #: src/app/settings/TitleRulesSection.tsx
 msgid "无法保存标题规则"
 msgstr "Couldn't save the title rules"
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "无法保存模型对话设置"
+msgstr "Couldn't save Model Chat settings"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存消息输入设置"
@@ -6615,6 +6609,7 @@ msgstr "Components marked new have no Android implementation yet: build the comp
 msgid "标为新增的组件还没有 Mac 实现，迁移时先建组件，再改调用点。"
 msgstr "Components marked New have no Mac implementation yet; when migrating, build the component first, then change the call sites."
 
+#: src/app/design/components/InputsChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "标准"
@@ -6871,6 +6866,15 @@ msgstr "Model and tool names"
 #: src/app/design/surfaces/CouncilChapter.tsx
 msgid "模型协作"
 msgstr "Collaboration"
+
+#: src/app/settings/AuxiliaryInspectDialog.tsx
+#: src/app/settings/settingsSections.ts
+msgid "模型对话"
+msgstr "Model Chat"
+
+#: src/app/settings/WorkItemSettingsSection.tsx
+msgid "模型对话和个人助理除外"
+msgstr "Excludes Model Chat and Assistant"
 
 #: src/app/settings/ModelProbeDialog.tsx
 msgid "模型接口测速"
@@ -8044,6 +8048,10 @@ msgstr "Monospace font"
 msgid "等宽数字"
 msgstr "Tabular figures"
 
+#: src/app/design/components/InputsChapter.tsx
+msgid "等宽铺满"
+msgstr "Equal width, full row"
+
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "等待不产生通知，结束后也不留下「已完成」。"
 msgstr "Waiting produces no toast and leaves no \"Completed\" behind when it ends."
@@ -9199,13 +9207,13 @@ msgstr "Follow the platform, or the shared spec"
 msgid "跟进任务"
 msgstr "Follow up on tasks"
 
-#: src/app/settings/AuxiliaryModelsSection.tsx
-msgid "跟随快速对话"
-msgstr "Same as Quick chat"
-
 #: src/app/settings/WorkItemSettingsSection.tsx
 msgid "跟随新会话"
 msgstr "Same as new conversations"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "跟随模型对话"
+msgstr "Follow Model Chat"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "跟随界面主题"

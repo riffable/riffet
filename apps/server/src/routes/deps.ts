@@ -8,6 +8,7 @@ import type { AssistantDelegations } from '../assistant/delegations.js';
 import type { AssistantRuns } from '../assistant/runs.js';
 import type { AgentTeamService } from '../assistant/team.js';
 import type { NativeBackendService } from '../backends/service.js';
+import type { ChatBackendAdapter } from '../backends/chat/index.js';
 import type { GitService } from '../git/index.js';
 import type { PluginRegistry } from '../plugins/registry.js';
 import type { PluginApprovals } from '../plugins/approvals.js';
@@ -76,6 +77,7 @@ export interface RouteDeps {
   git: GitService;
   sessionLock: SessionLock;
   nativeBackends: NativeBackendService;
+  chat?: ChatBackendAdapter;
   /** Enabled built-in plugins and their contributions (docs/PLUGIN_ARCHITECTURE.md). */
   plugins: PluginRegistry;
   /** Project tasks (docs/TASKS.md). */

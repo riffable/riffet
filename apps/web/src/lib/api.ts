@@ -129,6 +129,10 @@ import type {
   WorktreeInfo,
   ReleaseNotes,
   ClientAccess,
+  ModelChatConfigPatch,
+  ModelChatSendRequest,
+  ModelChatTreeSnapshot,
+  ModelChatWireRecord,
 } from '@contracts';
 import { API, CLIENT_FEATURES_HEADER, PLUGIN_PAGE_KINDS_PARAM, TERMINAL_APPEARANCE_HEADER, TERMINAL_BINARY_PROTOCOL } from '@contracts';
 import { pageTerminalAppearance } from './terminal-theme';
@@ -329,6 +333,8 @@ export interface NativeSessionCreateInput {
   workItemId?: string;
   /** The team member that owns this conversation (docs/TEAM.md). */
   agentMemberId?: string;
+  /** Optional initial Model Chat configuration applied before the first turn dispatches. */
+  chatConfig?: ModelChatConfigPatch;
   initialMessage: NativeMessageInput;
 }
 
@@ -1192,6 +1198,27 @@ export const api = {
   },
   councilSpeechRows: (id: string, speechId: string, signal?: AbortSignal) => request<CouncilSpeechRows>(`/api/council/${encodeURIComponent(id)}/speeches/${encodeURIComponent(speechId)}/rows`, { signal }),
   councilExport: (id: string, body: CouncilExportRequest) => request<CouncilExportResult>(`/api/council/${encodeURIComponent(id)}/export`, { method: 'POST', body: JSON.stringify(body) }),
+
+  modelChatTree: (sessionId: string, signal?: AbortSignal) =>
+    request<ModelChatTreeSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/tree`, { signal }),
+  updateModelChatConfig: (sessionId: string, patch: ModelChatConfigPatch) =>
+    request<ModelChatTreeSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/config`, json('PATCH', patch)),
+  sendModelChat: (sessionId: string, body: ModelChatSendRequest) =>
+    request<{ snapshot: ModelChatTreeSnapshot; assistantIds: string[] }>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/send`, json('POST', body)),
+  stopModelChat: (sessionId: string, assistantId?: string) =>
+    request<{ snapshot: ModelChatTreeSnapshot }>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/stop`, json('POST', { ...(assistantId ? { assistantId } : {}) })),
+  selectModelChatBranch: (sessionId: string, leafId: string) =>
+    request<ModelChatTreeSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/branch`, json('POST', { leafId })),
+  setModelChatTurnFlags: (sessionId: string, userId: string, flags: { pinned?: boolean; muted?: boolean }) =>
+    request<ModelChatTreeSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/turns/${encodeURIComponent(userId)}`, json('PATCH', flags)),
+  editModelChatAssistant: (sessionId: string, assistantId: string, text: string) =>
+    request<ModelChatTreeSnapshot>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/messages/${encodeURIComponent(assistantId)}`, json('PATCH', { text })),
+  modelChatWire: (sessionId: string, assistantId: string, signal?: AbortSignal) =>
+    request<ModelChatWireRecord>(`/api/sessions/${encodeURIComponent(sessionId)}/chat/wire/${encodeURIComponent(assistantId)}`, { signal }),
+  modelChatStreamUrl: (sessionId: string): string =>
+    withClientFeatures(`/api/sessions/${encodeURIComponent(sessionId)}/chat/stream`),
+  openModelChatStream: (sessionId: string): EventSource =>
+    new EventSource(withClientFeatures(`/api/sessions/${encodeURIComponent(sessionId)}/chat/stream`)),
 };
 
 /** `GET /api/stats/export`. The body is a file, so this does not go through `request()`. */

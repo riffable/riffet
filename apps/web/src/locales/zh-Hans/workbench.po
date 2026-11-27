@@ -693,6 +693,17 @@ msgstr "原会话已不存在，只能查看收藏里保存的内容"
 msgid "原文已找不到，已打开所在会话"
 msgstr "原文已找不到，已打开所在会话"
 
+#: src/app/Header.tsx
+#: src/app/Workbench.tsx
+msgid "参数、上下文与 Wire"
+msgstr "参数、上下文与 Wire"
+
+#: src/app/Header.tsx
+#: src/app/ProjectHome.tsx
+#: src/app/Workbench.tsx
+msgid "参数与上下文"
+msgstr "参数与上下文"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "发布者"
 msgstr "发布者"
@@ -1083,6 +1094,10 @@ msgstr "已完成"
 msgid "已就绪"
 msgstr "已就绪"
 
+#: src/app/Workbench.tsx
+msgid "已带入新建任务草稿"
+msgstr "已带入新建任务草稿"
+
 #: src/app/SessionSearchDialog.tsx
 msgid "已归档"
 msgstr "已归档"
@@ -1181,10 +1196,6 @@ msgstr "待确认"
 #: src/app/plugins/PluginsPage.tsx
 msgid "快捷键未生效"
 msgstr "快捷键未生效"
-
-#: src/app/Workbench.tsx
-msgid "快速对话"
-msgstr "快速对话"
 
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -2100,6 +2111,10 @@ msgstr "机器人"
 msgid "权限"
 msgstr "权限"
 
+#: src/app/ProjectHome.tsx
+msgid "材料 {activeDocCount}"
+msgstr "材料 {activeDocCount}"
+
 #: src/app/team/MemberSessionSidebar.tsx
 msgid "来信与调用"
 msgstr "来信与调用"
@@ -2152,6 +2167,10 @@ msgstr "模型与 Agent"
 #: src/app/Workbench.tsx
 msgid "模型协作"
 msgstr "模型协作"
+
+#: src/app/Workbench.tsx
+msgid "模型对话"
+msgstr "模型对话"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-feature"

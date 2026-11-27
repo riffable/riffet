@@ -201,9 +201,9 @@ export function registerSessionVisibilityHook(app: FastifyInstance, getSession: 
     const route = request.routeOptions?.url;
     if (!route) return;
     if (!route.startsWith('/api/sessions/:id') && !route.startsWith('/api/v3/sessions/:id')) return;
-    // Browser EventSource cannot set request headers. Only the two authenticated GET streams
+    // Browser EventSource cannot set request headers. Only the authenticated GET streams
     // accept the same explicit capability declaration in their URL; normal API calls use headers.
-    if (request.method === 'GET' && (route === '/api/v3/sessions/:id/sync' || route === '/api/sessions/:id/stream') &&
+    if (request.method === 'GET' && (route === '/api/v3/sessions/:id/sync' || route === '/api/sessions/:id/stream' || route === '/api/sessions/:id/chat/stream') &&
         request.headers[CLIENT_FEATURES_HEADER] === undefined) {
       const features = (request.query as { features?: unknown }).features;
       if (typeof features === 'string' && features.length <= 1024) request.headers[CLIENT_FEATURES_HEADER] = features;

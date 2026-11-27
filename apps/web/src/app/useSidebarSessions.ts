@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { isDoneUnseen, type Session } from '@contracts';
 import type { ProjectRecord } from '@/lib/api';
-import { sessionBackend } from '@/lib/backends';
 import { isAssistantProject, sidebarProjectMap } from '@/lib/project-family';
 import { serverOfObject } from '@/lib/server-routing';
 import { readStored, writeStored } from '@/lib/utils';
@@ -33,7 +32,7 @@ export function selectSidebarSessions(sessions: readonly Session[], visibleProje
   const tags = new Set<string>();
   let unreadCount = 0;
   for (const session of sessions) {
-    if (!visibleProjects.has(session.projectId) || sessionBackend(session) === 'chat') continue;
+    if (!visibleProjects.has(session.projectId)) continue;
     // Standing team member conversations live under the 团队 section, like the 个人助理's (docs/TEAM.md).
     if (session.agentMemberId) continue;
     const origin = session.origin;
@@ -55,7 +54,7 @@ export function selectSidebarSessions(sessions: readonly Session[], visibleProje
   return { rows, tags: [...tags].sort(), unreadCount };
 }
 
-export function useSidebarSessions(projects: readonly ProjectRecord[], sessions: readonly Session[], selectedSessionId: string, projectlessName: string) {
+export function useSidebarSessions(projects: readonly ProjectRecord[], sessions: readonly Session[], selectedSessionId: string, projectlessName: string, modelChatName = '') {
   const [showArchived, setShowArchived] = useState(false);
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [filterTag, setFilterTag] = useState('');
@@ -69,7 +68,7 @@ export function useSidebarSessions(projects: readonly ProjectRecord[], sessions:
     writeStored(SERVER_FILTER_KEY, value === 'relevant' ? undefined : value);
     setStoredFilter(value);
   };
-  const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, projectlessName), [projects, showArchived, projectlessName]);
+  const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, projectlessName, modelChatName), [projects, showArchived, projectlessName, modelChatName]);
   const result = useMemo(() => selectSidebarSessions(sessions, visibleProjects, {
     selectedSessionId, serverFilter, selfServerId, showArchived, filterTag, unreadOnly,
   }), [sessions, visibleProjects, selectedSessionId, serverFilter, selfServerId, showArchived, filterTag, unreadOnly]);

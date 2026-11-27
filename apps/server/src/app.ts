@@ -72,6 +72,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerBackendRoutes } from './routes/backends.js';
 import { registerProjectRoutes } from './routes/projects.js';
 import { patchSession, registerSessionRoutes } from './routes/sessions.js';
+import { registerChatRoutes } from './routes/chat.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
@@ -322,6 +323,7 @@ export async function createApp(options: AppOptions = {}) {
   const appearance=new AppearanceService(plugins);
   provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source),source=>plugins.modelSourceRole(source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});
+  const chatAdapter=new ChatBackendAdapter({stateDir,get catalog(){return nativeBackends.catalog;},gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS,recordAuxiliaryCall});
   const backendRegistry=new NativeBackendRegistry()
     .register(new CodexBackendAdapter(undefined, undefined, plugins, {stateDir}))
     .register(claudeAdapter)
@@ -329,7 +331,7 @@ export async function createApp(options: AppOptions = {}) {
     .register(new DroidBackendAdapter())
     .register(new PiBackendAdapter({stateDir}))
     .register(new CodexBackendAdapter(undefined, traexFlavor, plugins))
-    .register(new ChatBackendAdapter({stateDir,get catalog(){return nativeBackends.catalog;},gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS,recordAuxiliaryCall}));
+    .register(chatAdapter);
   // The 助理's directory is made on first use, like its project; its files are checked once per server.
   let assistantHome:AssistantHome|undefined;
   // The 助理's background work (docs/ASSISTANT.md §7) is made further down; the standing conversation reaches it through these.
@@ -646,7 +648,8 @@ export async function createApp(options: AppOptions = {}) {
   registerUpdateRoutes(app,stateDir);
   registerServiceRoutes(app,deps);
   registerProjectRoutes(app,deps);
-  registerSessionRoutes(app,deps);
+  registerSessionRoutes(app,{...deps,chat:chatAdapter});
+  registerChatRoutes(app,{...deps,chat:chatAdapter});
   registerExternalSessionRoutes(app,deps);
   registerMarkRoutes(app,deps);
   registerWorkItemRoutes(app,deps);

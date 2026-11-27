@@ -270,7 +270,7 @@ export interface QuickChatSettings {
   presets?: QuickChatPreset[];
 }
 export interface QuickChatPreset { id: string; name: string; prompt: string }
-export const DEFAULT_QUICK_CHAT_RETENTION_DAYS = 7;
+export const DEFAULT_QUICK_CHAT_RETENTION_DAYS = 0;
 export const DEFAULT_QUICK_CHAT_PRESETS: readonly QuickChatPreset[] = [
   { id: 'translate', name: '翻译', prompt: '翻译用户发来的内容：中文译成英文，其他语言译成简体中文。单个词或短语另给读音、词性和一个简短例句。只回复译文，不加评论。' },
   { id: 'explain', name: '解释', prompt: '用用户的语言简明解释用户发来的内容：先说它是什么，再说最要紧的一两点。不要开场白。' },

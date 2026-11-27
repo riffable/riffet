@@ -1,4 +1,4 @@
-import type { NativeBackendId } from '../../../../packages/contracts/src/index.js';
+import { MODEL_CHAT_BUDGET, type ModelChatResponseFormat, type NativeBackendId } from '../../../../packages/contracts/src/index.js';
 
 /**
  * Backends whose profile gateway the workbench can call itself, and the wire format each one
@@ -528,6 +528,14 @@ function wireMessage(protocol: GatewayProtocol, message: ChatMessage): Record<st
     : { type: 'input_file', filename: part.name, file_data: `data:application/pdf;base64,${part.data}` }) };
 }
 
+export interface WirePreparedSnapshot {
+  protocol: GatewayProtocol;
+  endpoint: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+  truncated?: boolean;
+}
+
 export interface ChatStreamRequest extends GatewayEndpoint {
   system?: string;
   /** Oldest first, alternating, ending with the user's turn. */
@@ -540,22 +548,38 @@ export interface ChatStreamRequest extends GatewayEndpoint {
   search?: boolean;
   /** How hard the model thinks before answering; absent leaves the model's own default. */
   effort?: ChatEffort;
+  /** Optional explicit Anthropic thinking token budget when using fixed effort. */
+  thinkingBudget?: number;
   /** Native side chats inherit named effort; older quick chats retain budget-based thinking. */
   adaptiveThinking?: boolean;
+  /** Sampling temperature (omitted when protocol locks sampling under thinking/reasoning). */
+  temperature?: number;
+  /** Nucleus sampling (omitted when protocol locks sampling under thinking/reasoning). */
+  topP?: number;
+  /** Deterministic seed where supported. */
+  seed?: number | null;
+  /** Stop sequences where supported. */
+  stop?: string[];
+  /** Plain text, JSON object, or strict JSON Schema output format. */
+  responseFormat?: ModelChatResponseFormat;
+  /** Explicit prompt caching breakpoints (e.g. Anthropic ephemeral cache_control). */
+  promptCaching?: boolean;
   /** OpenAI's priority tier; only the Responses protocol has one. */
   fast?: boolean;
+  /** Called right before the HTTP request is sent with a strictly redacted Wire snapshot. */
+  onWirePrepared?: (wire: WirePreparedSnapshot) => void;
   /** Called for every piece of answer text or reasoning, as it arrives. */
   onDelta(kind: 'text' | 'reasoning', text: string): void;
   fetchImpl?: typeof fetch;
 }
 
-export type ChatEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+export type ChatEffort = 'default' | 'off' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'adaptive';
 export function gatewayEfforts(protocol: GatewayProtocol): readonly ChatEffort[] {
   return protocol === 'anthropic' ? ['low', 'medium', 'high', 'xhigh', 'max']
     : protocol === 'responses' ? ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] : ['low', 'medium', 'high'];
 }
 /** Anthropic thinks in a token budget rather than a named effort. */
-const THINKING_BUDGETS: Partial<Record<ChatEffort, number>> = { low: 2_048, medium: 8_192, high: 16_384 };
+const THINKING_BUDGETS: Partial<Record<ChatEffort, number>> = { minimal: 1_024, low: 2_048, medium: 8_192, high: 16_384 };
 
 export interface ChatStreamResult {
   text: string;
@@ -565,8 +589,131 @@ export interface ChatStreamResult {
   /** The model that served the request, when the gateway says. */
   model?: string;
   inputTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
   outputTokens?: number;
   reasoningTokens?: number;
+  stopReason?: string;
+}
+
+const SENSITIVE_HEADER_RE = /auth|key|token|cookie|secret|pass|cred|sig|bearer|jwt|session/i;
+const BINARY_VALUE_KEYS = new Set(['data', 'file_data', 'image_url']);
+const BINARY_STRING_LIMIT = 1_024;
+/** Allowance reserved inside Wire snapshots for envelope metadata (`assistantId`, `at`, `metrics`) added at persistence. */
+const WIRE_ENVELOPE_RESERVE_BYTES = 1_024;
+
+/** Strips credentials, tokens, keys, and URL secrets from header values or persisted error text. */
+export function redactSensitiveText(text: string): string {
+  return text
+    .replace(/(https?:\/\/)([^:@\s/]+):([^@\s/]+)@/gi, '$1[REDACTED]@')
+    .replace(/([?&](?:api[-_]?key|access[-_]?token|auth[-_]?token|token|key|secret|password|passwd|sig|signature|jwt)=)[^&\s#'"]+/gi, '$1[REDACTED]')
+    .replace(/\b(Bearer)\s+[^\s,;'"`]+/gi, '$1 [REDACTED]')
+    .replace(/\b(Basic)\s+[A-Za-z0-9+/=]{8,}/gi, '$1 [REDACTED]')
+    .replace(/\bsk-[A-Za-z0-9_-]{4,}/gi, '[REDACTED]')
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}\b/g, '[REDACTED]');
+}
+
+function redactWireHeaders(headers: Record<string, string>): Record<string, string> {
+  const redacted: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    redacted[key] = SENSITIVE_HEADER_RE.test(key) ? '[REDACTED]' : redactSensitiveText(value);
+  }
+  return redacted;
+}
+
+function sanitizeWireValue(value: unknown, key?: string, stringCap?: number): { value: unknown; truncated: boolean } {
+  if (typeof value === 'string') {
+    if (value.length > BINARY_STRING_LIMIT && ((key && BINARY_VALUE_KEYS.has(key)) || (key === 'url' && value.startsWith('data:')))) {
+      return { value: '[binary data omitted]', truncated: false };
+    }
+    if (stringCap !== undefined && value.length > stringCap) {
+      return { value: `${value.slice(0, stringCap)}… [truncated]`, truncated: true };
+    }
+    return { value, truncated: false };
+  }
+  if (Array.isArray(value)) {
+    let truncated = false;
+    const out = value.map(item => {
+      const next = sanitizeWireValue(item, undefined, stringCap);
+      if (next.truncated) truncated = true;
+      return next.value;
+    });
+    return { value: out, truncated };
+  }
+  if (value && typeof value === 'object') {
+    let truncated = false;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const next = sanitizeWireValue(v, k, stringCap);
+      if (next.truncated) truncated = true;
+      out[k] = next.value;
+    }
+    return { value: out, truncated };
+  }
+  return { value, truncated: false };
+}
+
+function prepareWireSnapshot(protocol: GatewayProtocol, url: URL, headers: Record<string, string>, body: Record<string, unknown>): WirePreparedSnapshot {
+  const cleanEndpoint = `${url.origin}${url.pathname}`;
+  const redactedHeaders = redactWireHeaders(headers);
+  const maxBytes = Math.max(512, MODEL_CHAT_BUDGET.maxWireBytes - WIRE_ENVELOPE_RESERVE_BYTES);
+  const build = (nextBody: Record<string, unknown>, isTruncated: boolean): WirePreparedSnapshot => ({
+    protocol,
+    endpoint: cleanEndpoint,
+    headers: redactedHeaders,
+    body: nextBody,
+    ...(isTruncated ? { truncated: true } : {}),
+  });
+  const byteSize = (wire: WirePreparedSnapshot) => Buffer.byteLength(JSON.stringify(wire), 'utf8');
+
+  const initial = sanitizeWireValue(body);
+  let sanitized = initial.value as Record<string, unknown>;
+  let truncated = false;
+  for (const cap of [8_192, 2_048, 512, 128, 32]) {
+    if (byteSize(build(sanitized, truncated)) <= maxBytes) break;
+    const shrunk = sanitizeWireValue(sanitized, undefined, cap);
+    sanitized = shrunk.value as Record<string, unknown>;
+    truncated = true;
+  }
+  if (byteSize(build(sanitized, true)) > maxBytes) {
+    truncated = true;
+    const serialized = JSON.stringify(sanitized);
+    const baseBody: Record<string, unknown> = {
+      ...(typeof body.model === 'string' ? { model: body.model } : {}),
+      truncated: true,
+    };
+    let lo = 0;
+    let hi = serialized.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >>> 1;
+      if (byteSize(build({ ...baseBody, preview: serialized.slice(0, mid) }, true)) <= maxBytes) lo = mid;
+      else hi = mid - 1;
+    }
+    if (lo > 0 && lo < serialized.length) {
+      const code = serialized.charCodeAt(lo - 1);
+      if (code >= 0xd800 && code <= 0xdbff) lo -= 1;
+    }
+    sanitized = { ...baseBody, preview: serialized.slice(0, lo) };
+    if (byteSize(build(sanitized, true)) > maxBytes) {
+      return {
+        protocol,
+        endpoint: cleanEndpoint.slice(0, 1_024),
+        headers: {},
+        body: { truncated: true },
+        truncated: true,
+      };
+    }
+  }
+  return build(sanitized, truncated);
+}
+
+function setStopReason(result: ChatStreamResult, reason: string): void {
+  Object.defineProperty(result, 'stopReason', {
+    value: reason,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  });
 }
 
 /**
@@ -581,27 +728,112 @@ export async function streamChat(request: ChatStreamRequest): Promise<ChatStream
   if (apiKey) headers.authorization = `Bearer ${apiKey}`;
   Object.assign(headers, request.headers);
   let url: URL, body: Record<string, unknown>;
+  const requestedEffort = request.effort === 'default' ? undefined : request.effort;
   if (protocol === 'anthropic') {
     headers['anthropic-version'] = '2023-06-01';
     url = endpoint(baseUrl, 'messages');
-    // The thinking budget is spent out of `max_tokens`, so it is added on top of the answer's own.
-    const adaptive = request.adaptiveThinking || request.effort === 'xhigh' || request.effort === 'max';
-    const budget = request.effort && !adaptive ? THINKING_BUDGETS[request.effort] : undefined;
-    body = { model, max_tokens: maxOutputTokens + (budget ?? 0), ...(system ? { system } : {}), messages: messages.map(message => wireMessage(protocol, message)), stream: true,
-      ...(budget ? { thinking: { type: 'enabled', budget_tokens: budget } } : {}),
-      ...(adaptive && request.effort ? { thinking: { type: 'adaptive' }, output_config: { effort: request.effort } } : {}),
-      ...(request.search ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] } : {}) };
+    let thinking: Record<string, unknown> | undefined;
+    let outputConfig: Record<string, unknown> | undefined;
+    let budget: number | undefined;
+    let thinkingEnabled = false;
+    if (requestedEffort === 'off') {
+      thinking = { type: 'disabled' };
+    } else if (requestedEffort === 'adaptive') {
+      thinking = { type: 'adaptive' };
+      thinkingEnabled = true;
+    } else if (requestedEffort && (request.adaptiveThinking || requestedEffort === 'xhigh' || requestedEffort === 'max')) {
+      thinking = { type: 'adaptive' };
+      if (requestedEffort !== 'none') outputConfig = { effort: requestedEffort };
+      thinkingEnabled = true;
+    } else if (requestedEffort && requestedEffort !== 'none') {
+      // The thinking budget is spent out of `max_tokens`, so it is added on top of the answer's own.
+      const customBudget = typeof request.thinkingBudget === 'number' && Number.isFinite(request.thinkingBudget) && request.thinkingBudget >= 1_024
+        ? Math.floor(request.thinkingBudget)
+        : undefined;
+      budget = customBudget ?? THINKING_BUDGETS[requestedEffort];
+      if (budget && budget >= 1_024) {
+        thinking = { type: 'enabled', budget_tokens: budget };
+        thinkingEnabled = true;
+      }
+    }
+    const wireMessages = messages.map(message => wireMessage(protocol, message));
+    if (request.promptCaching === true && wireMessages.length >= 3) {
+      const target = wireMessages[wireMessages.length - 3]!;
+      if (typeof target.content === 'string') {
+        target.content = [{ type: 'text', text: target.content, cache_control: { type: 'ephemeral' } }];
+      } else if (Array.isArray(target.content) && target.content.length > 0) {
+        const blocks = [...target.content];
+        const last = blocks[blocks.length - 1];
+        if (last && typeof last === 'object') {
+          blocks[blocks.length - 1] = { ...(last as Record<string, unknown>), cache_control: { type: 'ephemeral' } };
+          target.content = blocks;
+        }
+      }
+    }
+    const systemValue = system
+      ? (request.promptCaching === true ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }] : system)
+      : undefined;
+    body = {
+      model,
+      max_tokens: maxOutputTokens + (budget ?? 0),
+      ...(systemValue !== undefined ? { system: systemValue } : {}),
+      messages: wireMessages,
+      stream: true,
+      ...(thinking ? { thinking } : {}),
+      ...(outputConfig ? { output_config: outputConfig } : {}),
+      ...(!thinkingEnabled && typeof request.temperature === 'number' ? { temperature: request.temperature } : {}),
+      ...(!thinkingEnabled && typeof request.topP === 'number' ? { top_p: request.topP } : {}),
+      ...(request.stop?.length ? { stop_sequences: request.stop } : {}),
+      ...(request.search ? { tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }] } : {}),
+    };
   } else if (protocol === 'chat') {
     url = endpoint(baseUrl, 'chat/completions');
-    body = { model, max_tokens: maxOutputTokens, messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages.map(message => wireMessage(protocol, message))], stream: true, stream_options: { include_usage: true },
-      ...(request.effort ? { reasoning_effort: request.effort } : {}) };
+    const responseFormat = request.responseFormat?.type === 'json_object'
+      ? { type: 'json_object' }
+      : request.responseFormat?.type === 'json_schema'
+        ? { type: 'json_schema', json_schema: { name: request.responseFormat.name, schema: request.responseFormat.schema, strict: request.responseFormat.strict ?? true } }
+        : undefined;
+    body = {
+      model,
+      max_tokens: maxOutputTokens,
+      messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages.map(message => wireMessage(protocol, message))],
+      stream: true,
+      stream_options: { include_usage: true },
+      ...(requestedEffort === 'off' ? { thinking: { type: 'disabled' } }
+        : requestedEffort === 'adaptive' ? { reasoning_effort: 'high' }
+        : requestedEffort ? { reasoning_effort: requestedEffort } : {}),
+      ...(typeof request.temperature === 'number' ? { temperature: request.temperature } : {}),
+      ...(typeof request.topP === 'number' ? { top_p: request.topP } : {}),
+      ...(typeof request.seed === 'number' ? { seed: request.seed } : {}),
+      ...(request.stop?.length ? { stop: request.stop } : {}),
+      ...(responseFormat ? { response_format: responseFormat } : {}),
+    };
   } else {
     url = endpoint(baseUrl, 'responses');
-    body = { model, max_output_tokens: maxOutputTokens, ...(system ? { instructions: system } : {}), input: messages.map(message => wireMessage(protocol, message)), stream: true,
-      ...(request.effort ? { reasoning: { effort: request.effort } } : {}),
+    const effort = requestedEffort === 'off' ? 'none'
+      : requestedEffort === 'adaptive' ? 'high'
+      : requestedEffort;
+    const reasoningActive = Boolean(effort && effort !== 'none');
+    const textFormat = request.responseFormat?.type === 'json_object'
+      ? { format: { type: 'json_object' } }
+      : request.responseFormat?.type === 'json_schema'
+        ? { format: { type: 'json_schema', name: request.responseFormat.name, schema: request.responseFormat.schema, strict: request.responseFormat.strict ?? true } }
+        : undefined;
+    body = {
+      model,
+      max_output_tokens: maxOutputTokens,
+      ...(system ? { instructions: system } : {}),
+      input: messages.map(message => wireMessage(protocol, message)),
+      stream: true,
+      ...(effort ? { reasoning: { effort } } : {}),
+      ...(!reasoningActive && typeof request.temperature === 'number' ? { temperature: request.temperature } : {}),
+      ...(!reasoningActive && typeof request.topP === 'number' ? { top_p: request.topP } : {}),
+      ...(textFormat ? { text: textFormat } : {}),
       ...(request.fast ? { service_tier: 'priority' } : {}),
-      ...(request.search ? { tools: [{ type: 'web_search' }] } : {}) };
+      ...(request.search ? { tools: [{ type: 'web_search' }] } : {}),
+    };
   }
+  request.onWirePrepared?.(prepareWireSnapshot(protocol, url, headers, body));
   const idle = new AbortController();
   let timer: NodeJS.Timeout | undefined;
   const touch = () => {
@@ -676,7 +908,12 @@ async function wholeAnswer(request: ChatStreamRequest, url: URL, headers: Record
   const usage = record(answer?.usage);
   result.inputTokens = count(usage?.input_tokens);
   result.outputTokens = count(usage?.output_tokens);
+  const cacheRead = count(usage?.cache_read_input_tokens) ?? count(record(usage?.input_tokens_details)?.cached_tokens);
+  if (cacheRead !== undefined) result.cacheReadTokens = cacheRead;
+  const cacheWrite = count(usage?.cache_creation_input_tokens);
+  if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite;
   if (request.protocol === 'anthropic') {
+    if (typeof answer?.stop_reason === 'string' && answer.stop_reason) setStopReason(result, answer.stop_reason);
     for (const block of Array.isArray(answer?.content) ? answer.content : []) {
       const part = record(block);
       if (part?.type === 'thinking') delta('reasoning', part.thinking);
@@ -687,6 +924,7 @@ async function wholeAnswer(request: ChatStreamRequest, url: URL, headers: Record
       }
     }
   } else {
+    if (typeof answer?.status === 'string' && answer.status) setStopReason(result, answer.status);
     for (const item of Array.isArray(answer?.output) ? answer.output : []) {
       const entry = record(item);
       if (entry?.type === 'reasoning') for (const part of Array.isArray(entry.summary) ? entry.summary : []) delta('reasoning', record(part)?.text);
@@ -703,7 +941,12 @@ function readAnthropic(type: string | undefined, value: Record<string, unknown>,
   if (type === 'message_start') {
     const message = record(value.message);
     if (typeof message?.model === 'string') result.model = message.model;
-    result.inputTokens = count(record(message?.usage)?.input_tokens) ?? result.inputTokens;
+    const usage = record(message?.usage);
+    result.inputTokens = count(usage?.input_tokens) ?? result.inputTokens;
+    const cacheRead = count(usage?.cache_read_input_tokens);
+    if (cacheRead !== undefined) result.cacheReadTokens = cacheRead;
+    const cacheWrite = count(usage?.cache_creation_input_tokens);
+    if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite;
   } else if (type === 'content_block_start') {
     // An answer that searched arrives as several text blocks, between the tool's own blocks.
     if (record(value.content_block)?.type === 'text' && result.text && !result.text.endsWith('\n')) delta('text', '\n\n');
@@ -712,8 +955,15 @@ function readAnthropic(type: string | undefined, value: Record<string, unknown>,
     if (part?.type === 'text_delta') delta('text', part.text);
     else if (part?.type === 'thinking_delta') delta('reasoning', part.thinking);
   } else if (type === 'message_delta') {
-    if (record(value.delta)?.stop_reason === 'max_tokens') result.cutOff = true;
-    result.outputTokens = count(record(value.usage)?.output_tokens) ?? result.outputTokens;
+    const stopReason = record(value.delta)?.stop_reason;
+    if (stopReason === 'max_tokens') result.cutOff = true;
+    if (typeof stopReason === 'string' && stopReason) setStopReason(result, stopReason);
+    const usage = record(value.usage);
+    result.outputTokens = count(usage?.output_tokens) ?? result.outputTokens;
+    const cacheRead = count(usage?.cache_read_input_tokens);
+    if (cacheRead !== undefined) result.cacheReadTokens = cacheRead;
+    const cacheWrite = count(usage?.cache_creation_input_tokens);
+    if (cacheWrite !== undefined) result.cacheWriteTokens = cacheWrite;
   }
 }
 
@@ -724,6 +974,8 @@ function readChat(value: Record<string, unknown>, result: ChatStreamResult, delt
     result.inputTokens = count(usage.prompt_tokens) ?? result.inputTokens;
     result.outputTokens = count(usage.completion_tokens) ?? result.outputTokens;
     result.reasoningTokens = count(record(usage.completion_tokens_details)?.reasoning_tokens) ?? result.reasoningTokens;
+    const cacheRead = count(record(usage.prompt_tokens_details)?.cached_tokens) ?? count(usage.prompt_cache_hit_tokens);
+    if (cacheRead !== undefined) result.cacheReadTokens = cacheRead;
   }
   const choice = record(Array.isArray(value.choices) ? value.choices[0] : undefined);
   const part = record(choice?.delta);
@@ -731,7 +983,10 @@ function readChat(value: Record<string, unknown>, result: ChatStreamResult, delt
   delta('reasoning', part?.reasoning_content ?? part?.reasoning);
   delta('text', part?.content);
   delta('text', part?.refusal);
-  if (choice?.finish_reason === 'length') result.cutOff = true;
+  if (typeof choice?.finish_reason === 'string' && choice.finish_reason) {
+    setStopReason(result, choice.finish_reason);
+    if (choice.finish_reason === 'length') result.cutOff = true;
+  }
 }
 
 function readResponses(type: string | undefined, value: Record<string, unknown>, result: ChatStreamResult, delta: Delta): void {
@@ -744,6 +999,12 @@ function readResponses(type: string | undefined, value: Record<string, unknown>,
     result.inputTokens = count(usage?.input_tokens) ?? result.inputTokens;
     result.outputTokens = count(usage?.output_tokens) ?? result.outputTokens;
     result.reasoningTokens = count(record(usage?.output_tokens_details)?.reasoning_tokens) ?? result.reasoningTokens;
+    const cacheRead = count(record(usage?.input_tokens_details)?.cached_tokens);
+    if (cacheRead !== undefined) result.cacheReadTokens = cacheRead;
+    const stopReason = typeof response?.status === 'string' && response.status
+      ? response.status
+      : (type === 'response.incomplete' ? 'incomplete' : 'completed');
+    setStopReason(result, stopReason);
     if (type === 'response.incomplete') result.cutOff = true;
   } else if (type === 'response.failed') {
     const message = record(record(value.response)?.error)?.message;

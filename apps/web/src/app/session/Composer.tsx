@@ -619,9 +619,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
    * fixed, so the button only tunes the model and stays by the send button.
    */
   const modelLeadsRow = !isMobile && Boolean(props.modelLeading);
-  const renderModelPicker = () => props.onModelChange ? (
+  const renderModelPicker = () => (!isMobile && props.modelTrigger) ? props.modelTrigger : props.onModelChange ? (
     <ModelPicker align={isMobile || modelLeadsRow ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero && !fullscreen ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} onSelectProvider={props.onSelectModelProvider} onOpenChange={props.onModelPickerOpenChange} leading={props.modelLeading} sourceLabel={props.modelSourceLabel} />
   ) : null;
+  const hasDesktopModelPicker = Boolean(props.modelTrigger || props.onModelChange);
   const fullscreenToggle = !isMobile && fullscreenOffered && (text.trim() || fullscreen) ? (
     <Tip label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}>
       <button
@@ -904,13 +905,16 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               toolbar={props.toolbar}
               toolsPicker={props.toolsPicker}
               startPickers={props.startPickers}
-              hasModelPicker={Boolean(props.onModelChange)}
+              hasModelPicker={isMobile ? Boolean(props.onModelChange) : hasDesktopModelPicker}
               renderModelPicker={renderModelPicker}
               endPickers={props.endPickers}
               hasMobileSettings={hasMobileSettings}
               modelLeadsRow={modelLeadsRow}
               fullscreenToggle={fullscreenToggle}
             />
+            {!isMobile && props.statusChips && (
+              <div className="hidden min-w-0 items-center gap-1 md:flex">{props.statusChips}</div>
+            )}
 
             {/*
               Each slot renders only when it has content. The wrappers used to be unconditional, and
@@ -921,7 +925,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 md:flex-nowrap">
               {!isMobile && props.usage && <span className="hidden md:inline-flex"><ContextMeter usage={props.usage} onCompact={props.onCompact} compacting={props.compacting} compactDisabled={props.compactDisabled} /></span>}
               {!isMobile && props.startPickers && <span className="hidden min-w-0 md:inline-flex">{props.startPickers}</span>}
-              {!isMobile && !modelLeadsRow && props.onModelChange && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}
+              {!isMobile && !modelLeadsRow && hasDesktopModelPicker && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}
               {!isMobile && props.endPickers && <span className="hidden min-w-0 md:inline-flex">{props.endPickers}</span>}
               {modelLeadsRow && fullscreenToggle}
               {(!compact || showStop) && (

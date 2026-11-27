@@ -11,6 +11,10 @@ msgstr ""
 msgid "、"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "[历史摘要]"
+msgstr ""
+
 #. placeholder {0}: chips.length + quotes.length
 #: src/app/session/ComposerAttachments.tsx
 msgid "{0} 个引用"
@@ -177,6 +181,30 @@ msgstr ""
 msgid "Esc 拒绝"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Fast 模式"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Input / Cache Read"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "JSON Schema"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "JSON Schema 顶层必须是对象"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "JSON 语法无效，请检查括号与引号"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Max Output Tokens"
+msgstr ""
+
 #: src/app/session/ToolsPicker.tsx
 msgid "MCP"
 msgstr ""
@@ -185,14 +213,79 @@ msgstr ""
 msgid "MCP 与动态工具"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Output / Stop"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Prompt Caching"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Raw 模式不发送 System Prompt"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Raw（不发送系统提示）"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Response Format"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Schema 名称"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Seed"
+msgstr ""
+
 #: src/app/session/ComposerMenus.tsx
 #: src/app/session/ComposerPickers.tsx
 #: src/app/session/ToolsPicker.tsx
 msgid "Skills"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "Stateless · 下一轮不携带上文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Stop 序列"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "System"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Temperature"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Token 构成"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Top P"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "TTFT / Auth"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "Web Search"
+msgstr ""
+
 #: src/app/session/transcriptFind.tsx
 msgid "上一个"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "上一个分支"
 msgstr ""
 
 #: src/app/session/SubagentSession.tsx
@@ -205,6 +298,14 @@ msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
 msgid "上一题"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "上下文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "上下文上限"
 msgstr ""
 
 #: src/app/session/Activities.tsx
@@ -225,6 +326,10 @@ msgstr ""
 
 #: src/app/session/ComposerPickers.tsx
 msgid "上下文用量"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "上下文策略"
 msgstr ""
 
 #: src/app/session/ComposerPickers.tsx
@@ -249,6 +354,10 @@ msgstr ""
 msgid "下一个"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "下一个分支"
+msgstr ""
+
 #: src/app/session/SessionReferences.tsx
 msgid "下一页"
 msgstr ""
@@ -267,6 +376,10 @@ msgstr ""
 
 #: src/app/session/TimelineBlocks.tsx
 msgid "下载文件"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "不入上下文"
 msgstr ""
 
 #: src/app/session/DirectoryMenu.tsx
@@ -327,6 +440,10 @@ msgstr ""
 msgid "产出"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "仅 Responses 协议支持"
+msgstr ""
+
 #: src/app/session/SessionReferences.tsx
 msgid "仅保存提问和回答文字，不含工具记录和附件内容"
 msgstr ""
@@ -360,6 +477,10 @@ msgstr ""
 
 #: src/app/session/ComposerMenus.tsx
 msgid "会话"
+msgstr ""
+
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "会话已归档"
 msgstr ""
 
 #: src/app/session/pickers.ts
@@ -403,6 +524,14 @@ msgstr ""
 msgid "侧边聊天"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "保存修改"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "保存并分叉重跑"
+msgstr ""
+
 #: src/app/session/Attempts.tsx
 msgid "保留"
 msgstr ""
@@ -443,6 +572,14 @@ msgstr ""
 msgid "停止并发送"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "停止此路输出"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "停靠到侧边"
+msgstr ""
+
 #: src/app/session/SessionHandoff.tsx
 msgid "先停止当前任务再交接"
 msgstr ""
@@ -453,6 +590,10 @@ msgstr ""
 
 #: src/app/session/SessionHandoff.tsx
 msgid "先确认现状和未完成的部分，然后继续完成它"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "全屏"
 msgstr ""
 
 #: src/app/session/Composer.tsx
@@ -467,6 +608,7 @@ msgstr ""
 msgid "全部结束"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
 #: src/app/session/ImageViewer.tsx
 #: src/app/session/messageCommands.tsx
 msgid "关闭"
@@ -478,6 +620,10 @@ msgstr ""
 
 #: src/app/session/transcriptFind.tsx
 msgid "关闭查找"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "关闭面板"
 msgstr ""
 
 #: src/app/session/ComposerPickers.tsx
@@ -540,6 +686,11 @@ msgstr ""
 msgid "最近回复节选：{0}"
 msgstr ""
 
+#. placeholder {0}: doc.name
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "切换材料 {0}"
+msgstr ""
+
 #: src/app/session/MarkLayer.tsx
 msgctxt "session-delete-action"
 msgid "删除"
@@ -553,6 +704,11 @@ msgstr ""
 msgid "加入队列"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "加载脱敏报文…"
+msgstr ""
+
+#: src/app/model-chat/ModelChatSession.tsx
 #: src/app/session/SessionReferences.tsx
 msgid "助手"
 msgstr ""
@@ -566,6 +722,15 @@ msgstr ""
 #. placeholder {1}: file.name
 #: src/app/session/composerAttachmentIntake.ts
 msgid "单个附件最大 {0}：{1} 超了"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "历史摘要"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "历史轮次"
 msgstr ""
 
 #: src/app/session/ComposerPickers.tsx
@@ -588,6 +753,14 @@ msgstr ""
 
 #: src/app/session/SessionReferences.tsx
 msgid "原文副本随本会话保存"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "参数"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "参数、上下文与 Wire"
 msgstr ""
 
 #: src/app/session/ContentWidthHandle.tsx
@@ -619,6 +792,8 @@ msgstr ""
 msgid "发送设置"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatTranscript.tsx
 #: src/app/session/DictationBar.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/Timeline.tsx
@@ -637,6 +812,19 @@ msgstr ""
 
 #: src/app/session/Markdown.tsx
 msgid "取消自动换行"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "取消钉住"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "取消钉住本轮"
+msgstr ""
+
+#. placeholder {0}: turn.turnNumber
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "取消钉住第 {0} 轮"
 msgstr ""
 
 #: src/app/session/ComposerDock.tsx
@@ -679,6 +867,10 @@ msgstr ""
 msgid "同步中"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "同轮新增模型对比"
+msgstr ""
+
 #: src/app/session/SessionAside.tsx
 msgid "后台"
 msgstr ""
@@ -708,6 +900,10 @@ msgstr ""
 
 #: src/app/session/useTranscriptFocus.ts
 msgid "向前翻了 {SEEK_PAGES} 页仍未找到这条消息"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "吞吐速度"
 msgstr ""
 
 #: src/app/session/ComposerMenus.tsx
@@ -835,6 +1031,14 @@ msgstr ""
 msgid "复制"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "复制 cURL"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "复制 JSON"
+msgstr ""
+
 #: src/app/session/Markdown.tsx
 msgid "复制代码"
 msgstr ""
@@ -851,6 +1055,11 @@ msgstr ""
 #: src/app/session/TimelineTools.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "复制路径"
+msgstr ""
+
+#. placeholder {0}: turn.compareAnswers.length
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "多模型并排对比 · {0} 路回答"
 msgstr ""
 
 #: src/app/session/Activities.tsx
@@ -906,6 +1115,10 @@ msgstr ""
 msgid "对比"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "对比 {comparingCount} 个模型"
+msgstr ""
+
 #: src/app/session/ComposerPickers.tsx
 msgid "对话"
 msgstr ""
@@ -932,6 +1145,11 @@ msgstr ""
 
 #: src/app/session/SideDiscussion.tsx
 msgid "展开"
+msgstr ""
+
+#. placeholder {0}: turn.compareAnswers.length
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "展开对比 ({0})"
 msgstr ""
 
 #: src/app/session/Activities.tsx
@@ -1007,8 +1225,21 @@ msgstr ""
 msgid "已合并到原项目"
 msgstr ""
 
+#. placeholder {0}: compactTokens(tokenBreakdown.summaryTokens)
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "已启用摘要 · {0} tok"
+msgstr ""
+
 #: src/app/session/TurnProcess.tsx
 msgid "已处理"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "已复制 cURL"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "已复制 JSON"
 msgstr ""
 
 #: src/app/session/VisualizationPreview.tsx
@@ -1063,6 +1294,10 @@ msgstr ""
 msgid "已结束"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "已编辑"
+msgstr ""
+
 #: src/app/session/NativeInteractionCard.tsx
 msgid "已超时，自动拒绝"
 msgstr ""
@@ -1075,8 +1310,17 @@ msgstr ""
 msgid "已采用"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "已钉住"
+msgstr ""
+
 #: src/app/session/Timeline.tsx
 msgid "带回主会话"
+msgstr ""
+
+#. placeholder {0}: MODEL_CHAT_BUDGET.maxCompareModels
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "并排对比（最多 {0} 个）"
 msgstr ""
 
 #: src/app/session/Attempts.tsx
@@ -1089,6 +1333,10 @@ msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
 msgid "延长"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "开启推理时不可调采样"
 msgstr ""
 
 #: src/app/session/Attempts.tsx
@@ -1137,6 +1385,10 @@ msgstr ""
 msgid "当前 Agent 无法调用其他 Agent"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "当前主线"
+msgstr ""
+
 #: src/app/session/nativeRunCommands.ts
 msgid "当前任务尚未同步，请检查会话后重试"
 msgstr ""
@@ -1147,6 +1399,14 @@ msgstr ""
 
 #: src/app/session/VisualizationPreview.tsx
 msgid "当前会话未关联项目，无法预览"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "当前协议不支持"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "当前协议不支持联网检索"
 msgstr ""
 
 #: src/app/session/ComposerDock.tsx
@@ -1173,6 +1433,20 @@ msgstr ""
 
 #: src/app/session/SideDiscussion.tsx
 msgid "恢复大小"
+msgstr ""
+
+#. placeholder {0}: turn.turnNumber
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "恢复第 {0} 轮上下文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "恢复纳入上下文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "悬浮"
 msgstr ""
 
 #: src/app/session/ToolsPicker.tsx
@@ -1212,6 +1486,10 @@ msgstr ""
 
 #: src/app/session/HoldToTalk.tsx
 msgid "按住 说话"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "换模型对比"
 msgstr ""
 
 #: src/app/session/MemberBackgroundRuns.tsx
@@ -1261,12 +1539,21 @@ msgstr ""
 msgid "搜索中…"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "摘要"
+msgstr ""
+
 #: src/app/session/SessionHandoff.tsx
 msgid "摘要模型不可用，已改用对话记录：{reason}"
 msgstr ""
 
 #: src/app/session/TerminalHoldBar.tsx
 msgid "收回"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "收束为此分支"
 msgstr ""
 
 #: src/app/session/marks.tsx
@@ -1285,6 +1572,10 @@ msgstr ""
 #: src/app/session/SessionAside.tsx
 #: src/app/session/SideDiscussion.tsx
 msgid "收起"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "收起对比"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
@@ -1391,6 +1682,10 @@ msgstr ""
 msgid "无法加载模型列表"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "无法加载模型对话"
+msgstr ""
+
 #: src/app/session/transcriptFind.tsx
 msgid "无法加载这处结果所在的历史"
 msgstr ""
@@ -1492,6 +1787,10 @@ msgstr ""
 msgid "无法重试"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "无缓存命中"
+msgstr ""
+
 #: src/app/session/TranscriptRowView.tsx
 msgid "显示全部"
 msgstr ""
@@ -1502,6 +1801,14 @@ msgstr ""
 
 #: src/app/session/Markdown.tsx
 msgid "显示源码"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "暂无 Wire 报文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "暂无常驻参考材料。"
 msgstr ""
 
 #: src/app/session/useTranscriptFocus.ts
@@ -1613,6 +1920,18 @@ msgstr ""
 msgid "权限模式：{0}"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "材料 {activeDocCount}"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "材料名称"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "材料正文"
+msgstr ""
+
 #: src/app/session/HoldToTalk.tsx
 msgid "松开取消"
 msgstr ""
@@ -1623,6 +1942,14 @@ msgstr ""
 
 #: src/app/session/TranscriptView.tsx
 msgid "查看"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "查看 Wire 报文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "查看 Wire 请求"
 msgstr ""
 
 #: src/app/session/Activities.tsx
@@ -1639,6 +1966,10 @@ msgstr ""
 
 #: src/app/session/SessionReferences.tsx
 msgid "查看引用时的记录"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "查看摘要"
 msgstr ""
 
 #: src/app/session/VisualizationPreview.tsx
@@ -1663,6 +1994,7 @@ msgstr ""
 msgid "检查状态"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
 #: src/app/session/Composer.tsx
 msgid "模型"
 msgstr ""
@@ -1677,6 +2009,10 @@ msgstr ""
 
 #: src/app/session/speed.ts
 msgid "模型响应时间（含首字延迟）"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "模型对话面板"
 msgstr ""
 
 #. placeholder {0}: sample.windowSeconds
@@ -1764,12 +2100,20 @@ msgstr ""
 msgid "没有输出"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "沿此分支继续"
+msgstr ""
+
 #: src/app/session/nativeRunCommands.ts
 msgid "消息可能已执行，无法恢复为新消息"
 msgstr ""
 
 #: src/app/session/TurnRail.tsx
 msgid "消息导航"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "添加"
 msgstr ""
 
 #: src/app/session/Composer.tsx
@@ -1801,6 +2145,7 @@ msgstr ""
 msgid "生成"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
 #: src/app/session/SessionReferences.tsx
 msgid "用户"
 msgstr ""
@@ -1815,6 +2160,10 @@ msgstr ""
 
 #: src/app/session/SessionHandoff.tsx
 msgid "由对话记录拼成"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "留空随机"
 msgstr ""
 
 #: src/app/session/Activities.tsx
@@ -1833,6 +2182,16 @@ msgstr ""
 
 #: src/app/session/ToolsPicker.tsx
 msgid "离线"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "移出上下文"
+msgstr ""
+
+#. placeholder {0}: turn.turnNumber
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "移出第 {0} 轮上下文"
 msgstr ""
 
 #: src/app/session/ComposerDock.tsx
@@ -1866,6 +2225,15 @@ msgstr ""
 msgid "移除引用"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "移除材料"
+msgstr ""
+
+#. placeholder {0}: doc.name
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "移除材料 {0}"
+msgstr ""
+
 #: src/app/session/agentCalls.tsx
 msgid "等你确认"
 msgstr ""
@@ -1887,6 +2255,10 @@ msgstr ""
 msgid "等这个尝试完成后再采用"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "粘贴只读参考片段"
+msgstr ""
+
 #: src/app/session/speed.ts
 msgid "精确 token 数"
 msgstr ""
@@ -1897,6 +2269,15 @@ msgstr ""
 
 #: src/app/session/marks.tsx
 msgid "红色"
+msgstr ""
+
+#. placeholder {0}: compactTokens(estimateTextTokens(docText))
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "约 {0} tok"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "纯文本"
 msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
@@ -1937,6 +2318,11 @@ msgstr ""
 msgid "缓存写入"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "缓存命中 {cachePct}%"
+msgstr ""
+
 #: src/app/session/ComposerPickers.tsx
 msgid "缓存读取"
 msgstr ""
@@ -1949,8 +2335,24 @@ msgstr ""
 msgid "编辑"
 msgstr ""
 
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "编辑助手回复"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "编辑回复"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "编辑并分叉"
+msgstr ""
+
 #: src/app/session/Composer.tsx
 msgid "编辑消息"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "编辑用户消息"
 msgstr ""
 
 #: src/app/session/ZoomPanImage.tsx
@@ -2035,6 +2437,10 @@ msgstr ""
 msgid "诊断信息"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "该回复未保留 Wire 快照。仅记录当前服务内发出的脱敏请求报文。"
+msgstr ""
+
 #: src/app/session/FailureDetails.tsx
 msgid "详情"
 msgstr ""
@@ -2084,6 +2490,10 @@ msgstr ""
 msgid "起点"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "超出窗口的历史会自动压缩到此，也可直接改写。"
+msgstr ""
+
 #. placeholder {0}: index + 1
 #: src/app/session/TurnRail.tsx
 msgid "跳到第 {0} 条消息"
@@ -2097,8 +2507,16 @@ msgstr ""
 msgid "跳过这组问题"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "转为 Agent 任务"
+msgstr ""
+
 #: src/app/session/ComposerPickers.tsx
 msgid "输入"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "输入 System Prompt"
 msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
@@ -2126,6 +2544,7 @@ msgstr ""
 msgid "输出过大，只显示末尾"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
 #: src/app/session/Attempts.tsx
 #: src/app/session/MemberBackgroundRuns.tsx
 #: src/app/session/SubagentSession.tsx
@@ -2213,6 +2632,7 @@ msgstr ""
 msgid "追加"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
 #: src/app/session/ComposerFullscreen.tsx
 msgid "退出全屏"
 msgstr ""
@@ -2246,6 +2666,7 @@ msgstr ""
 msgid "选择其他目录…"
 msgstr ""
 
+#: src/app/model-chat/ModelChatSession.tsx
 #: src/app/session/MarkLayer.tsx
 #: src/app/session/messageCommands.tsx
 msgid "选择模型"
@@ -2256,9 +2677,21 @@ msgctxt "session-model-picker-label"
 msgid "选择模型"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "选择要检查的回复轮次"
+msgstr ""
+
 #. placeholder {0}: options.join(listSeparator)
 #: src/app/session/TimelineTools.tsx
 msgid "选项：{0}"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "逐轮编排"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "逗号分隔"
 msgstr ""
 
 #: src/app/session/speed.ts
@@ -2294,6 +2727,11 @@ msgstr ""
 msgid "重新加载模型列表"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "重新拉取报文"
+msgstr ""
+
+#: src/app/model-chat/ModelChatTranscript.tsx
 #: src/app/session/SessionHandoff.tsx
 msgid "重新生成"
 msgstr ""
@@ -2302,6 +2740,11 @@ msgstr ""
 msgid "重新读取附件"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "重置"
+msgstr ""
+
+#: src/app/model-chat/ModelChatSession.tsx
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
 #: src/app/session/DictationBar.tsx
@@ -2330,6 +2773,31 @@ msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
 msgid "重连后提交"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "钉住"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatTranscript.tsx
+msgid "钉住本轮"
+msgstr ""
+
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatSession.tsx
+msgid "钉住材料"
+msgstr ""
+
+#. placeholder {0}: pinnedDocs.length
+#. placeholder {1}: MODEL_CHAT_BUDGET.maxPinnedDocs
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "钉住材料 ({0}/{1})"
+msgstr ""
+
+#. placeholder {0}: turn.turnNumber
+#: src/app/model-chat/ModelChatInspector.tsx
+msgid "钉住第 {0} 轮"
 msgstr ""
 
 #: src/app/session/Composer.tsx
@@ -2431,11 +2899,14 @@ msgstr ""
 msgid "黄色"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
 #: src/app/session/Attempts.tsx
 #: src/app/session/ToolsPicker.tsx
 msgid "默认"
 msgstr ""
 
+#: src/app/model-chat/ModelChatInspector.tsx
+#: src/app/model-chat/ModelChatTranscript.tsx
 #: src/app/session/agentModelChoice.tsx
 #: src/app/session/Composer.tsx
 #: src/app/session/LaunchTargetBar.tsx

@@ -791,3 +791,21 @@ export const TEAM_BUDGET = {
   /** Highest 24-hour background run cap a member may be configured to. */
   maxDailyRuns: 200,
 } as const;
+
+/** Model Chat (direct LLM workbench) limits (docs/QUICK-CHAT.md). */
+export const MODEL_CHAT_BUDGET = {
+  /** Maximum models dispatched in parallel for a single compare turn. */
+  maxCompareModels: 3,
+  /** Maximum serialized bytes for one redacted Wire request snapshot stored in session blobs. */
+  maxWireBytes: 512 * KIB,
+  /** Maximum pinned read-only context documents per Model Chat session. */
+  maxPinnedDocs: 16,
+  /** Maximum characters kept per pinned read-only context document. */
+  maxPinnedDocChars: 200_000,
+  /** Maximum characters kept in a manually edited or generated conversation summary. */
+  maxSummaryChars: 16_000,
+  /** Maximum buffered bytes on a Model Chat SSE response before dropping slow subscribers. */
+  streamBackpressureBytes: 4 * MIB,
+  /** Heartbeat interval for a Model Chat SSE stream. */
+  streamHeartbeatMs: 15_000,
+} as const;

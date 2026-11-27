@@ -165,7 +165,7 @@ export type MessageSender =
   | { kind: 'owner'; owner?: { name?: string; avatar?: { url: string } } }
   | CallSenderInfo;
 
-export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, sender, branch, markdown = false, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurnOutput = false, progressShown = false, from, sender, branch, markdown = false, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, metaSlot, dimmed, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
   /** Same-turn agent output already follows this prompt, proving the CLI received it. */
@@ -187,6 +187,8 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
   onOpenSession?: (id: string) => void;
   time?: string;
   footerPinned?: boolean;
+  metaSlot?: ReactNode;
+  dimmed?: boolean;
   run?: Run;
   failureShown?: boolean;
   runActionPending?: boolean;
@@ -233,11 +235,12 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
           </span>
         );
   return (
-    <div className="flex flex-col items-end gap-1.5">
+    <div className={cn('flex flex-col items-end gap-1.5', dimmed && 'opacity-45 transition-opacity')}>
       <div className={cn(
         'min-w-0 break-words rounded-3xl px-4 py-2.5 text-base text-fg',
         markdown ? 'max-w-[min(88%,640px)]' : 'max-w-[min(82%,560px)] whitespace-pre-wrap',
         peerSender ? 'bg-accent-soft ring-1 ring-inset ring-accent/15' : 'bg-bubble',
+        dimmed && 'line-through decoration-fg-4',
       )}>
         {markdown ? (
           <Markdown text={quoted.body} />
@@ -254,7 +257,7 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {!resources && <MentionedAgents agents={unwrittenMentions(quoted.body, run?.native?.input.agents)} />}
-      {(text || time || delivery || sender) && (
+      {(text || time || delivery || sender || metaSlot) && (
         <div data-slot="message-meta" {...rest} className={cn('message-meta-band flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !sender && !resources && revealOnOwnHover)}>
           {peerSender && (
             peerSender.sessionId && onOpenSession
@@ -274,6 +277,7 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
           {!taskOutcome && continueAction}
           {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}><Trans>取消</Trans></button>}
           {run && canRestoreUnsentRun(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
+          {metaSlot}
           {time && !sending && <time dateTime={time} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}
           {text && <CopyButton text={text} label={t`复制消息`} />}
         </div>
@@ -298,7 +302,7 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, hasTurn
  * [mark] makes an answer markable: its body carries the ids a highlight is resolved against
  * (see `MarkLayer`), and its actions offer 收藏回复.
  */
-export const AssistantMessage = memo(function AssistantMessage({ text, showActions, streaming, time, modelLabel, footerPinned, metrics, runId, onTurnAction, mark, progress, chapters = false, stopped = false }: {
+export const AssistantMessage = memo(function AssistantMessage({ text, showActions, streaming, time, modelLabel, footerPinned, metrics, runId, onTurnAction, mark, progress, chapters = false, stopped = false, leadingSlot, extraActions, metricsExtra }: {
   text: string; showActions: boolean; stopped?: boolean; streaming?: boolean; time?: string; modelLabel?: string; metrics?: RunMetrics; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget;
   footerPinned?: boolean;
   chapters?: boolean;
@@ -308,6 +312,9 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
    * out, an answer that is not settled has no footer.
    */
   progress?: ReactNode;
+  leadingSlot?: ReactNode;
+  extraActions?: ReactNode;
+  metricsExtra?: ReactNode;
 }) {
   const resources = useTranscriptResources();
   const markBody = useCallback((element: HTMLDivElement | null) => { if (element && mark) markBodies.set(element, mark); }, [mark]);
@@ -317,27 +324,33 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
     <div className="group/message flex flex-col gap-2.5">
       {/* Always wrapped, so the body does not remount (and lose its open blocks) when the turn settles. */}
       <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters} /></div>
-      <MessageFooter text={text} showActions={showActions} time={time} modelLabel={modelLabel} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} pluginItems={!resources} />
+      <MessageFooter text={text} showActions={showActions} time={time} modelLabel={modelLabel} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} leadingSlot={leadingSlot} extraActions={extraActions} metricsExtra={metricsExtra} pluginItems={!resources} />
       {showActions && !resources && <MessageCommandResults text={text} {...(runId ? { runId } : {})} />}
     </div>
   );
 });
 
 /** The same turn actions and timestamp belong under an answer or the result that ended it. */
-export function MessageFooter({ text, showActions, time, modelLabel, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false, pluginItems = false }: {
+export function MessageFooter({ text, showActions, time, modelLabel, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false, pluginItems = false, leadingSlot, extraActions, metricsExtra }: {
   text?: string; showActions: boolean; time?: string; modelLabel?: string; footerPinned?: boolean; pluginItems?: boolean;
   /** The answer ends a stopped turn: 已停止 leads the time and keeps the line on screen. */
   stopped?: boolean; metrics?: RunMetrics;
   runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; progress?: ReactNode;
+  leadingSlot?: ReactNode;
+  extraActions?: ReactNode;
+  metricsExtra?: ReactNode;
 }) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const rate = tokensPerSecond(metrics);
   const rest = useRestReveal();
-  if (!showActions && !time && progress === undefined) return null;
-  return <div data-slot="message-meta" {...rest} className={cn('turn-footer -ml-1.5 flex min-h-7 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-5.5 no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
+  if (!showActions && !time && progress === undefined && !leadingSlot && !extraActions && !metricsExtra) return null;
+  const hasSettledFooter = showActions || Boolean(time) || (!progress && Boolean(leadingSlot || extraActions || metricsExtra));
+  return <div data-slot="message-meta" {...rest} className={cn('turn-footer -ml-1.5 flex min-h-7 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-5.5 no-hover:min-h-11', hasSettledFooter && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
     {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
+    {leadingSlot}
     {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} pluginItems={pluginItems} {...(time ? { at: time } : {})} />}
+    {extraActions}
     <MarkedIndicator target={mark} />
     {stopped && <span role="status" className="shrink-0 px-1 text-2xs text-fg-3">{t`已停止`}</span>}
     {time && <time dateTime={time} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}
@@ -347,6 +360,7 @@ export function MessageFooter({ text, showActions, time, modelLabel, footerPinne
         {metrics.tokens === 'provider' ? '' : '~'}{formatTokensPerSecond(rate)} tok/s
       </span>
     )}
+    {metricsExtra}
   </div>;
 }
 

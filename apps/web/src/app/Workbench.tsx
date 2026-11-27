@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { SETTING_DEFAULTS, type AgentMember, type NativeBackendId, type RiffetNotice, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
+import { MODEL_CHAT_DEFAULT_CONFIG, SETTING_DEFAULTS, type AgentMember, type ModelChatConfig, type ModelChatConfigPatch, type ModelChatPinnedDoc, type NativeBackendId, type RiffetNotice, type Session, type StatsRunRow, type Task, type WorkItem } from '@contracts';
 import { focusTask } from '@/lib/tasks';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -35,6 +35,10 @@ import { joinQuotes, splitQuotes } from './session/quotes';
 import { useSidebarSessions } from './useSidebarSessions';
 import { MobileSidebar } from './MobileSidebar';
 import { NativeSession } from './terminal/NativeSession';
+import { ModelChatSession } from './model-chat/ModelChatSession';
+import { ModelChatInspector } from './model-chat/ModelChatInspector';
+import type { InspectorTab } from './model-chat/ModelChatTranscript';
+import { estimateTextTokens, inferModelProtocol } from './model-chat/tree';
 import { AttemptGroupPage } from './session/Attempts';
 import { SessionFrame } from './session/sessionFrame';
 import { SidebarPeekTrigger, useSidebarPeek } from './use-sidebar-peek';
@@ -56,7 +60,7 @@ import { paintPaneWidth, panelDockMinWidth, SIDEBAR_DEFAULT, SIDEBAR_MIN, sideba
 import { togglePanelTab, WorkbenchHeader } from './WorkbenchHeader';
 import { useSessionViews, setViewVisible } from './session/viewPrefs';
 import { shownView, useSidebarViews } from './panels/useSidebarViews';
-import { DockHost, loadingPanel, PanelHost } from './WorkbenchPanels';
+import { DockHost, loadingPanel, PanelHost, type CustomPanelChrome } from './WorkbenchPanels';
 import { PageScaffold } from './PageScaffold';
 import { PluginView } from '@/plugins/PluginView';
 import { viewIcon } from '@/plugins/viewIcons';
@@ -92,9 +96,6 @@ const SettingsDialog = lazy(() => import('./settings/SettingsPage').then((module
 const pushError = (message: string) => toast.error(message);
 
 /** A quick chat has no project files, so it neither reads nor writes the shared reference list. */
-const NO_REFERENCES: PromptContextReference[] = [];
-const noReferences = () => undefined;
-
 function sessionsOfMember(member: AgentMember, sessions: readonly Session[]): Session[] {
   return sessions.filter((item) => !item.archivedAt && (
     item.agentMemberId === member.id
@@ -237,9 +238,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const regular = useMemo(() => regularProjects(projects), [projects]);
   const recentDirectories = useMemo(() => sortProjectsByRecentUse(regular, sessions, projectVisits), [regular, sessions, projectVisits]);
   const lastTaskProject = useMemo(() => recentDirectories.filter((item) => !item.archivedAt).sort((a, b) => (projectVisits[b.id] ?? 0) - (projectVisits[a.id] ?? 0))[0], [recentDirectories, projectVisits]);
-  const quickChatProject = useMemo(() => projects.find((item) => isQuickChatProject(item)), [projects]);
-  // Stable between list updates, so the sidebar's grouping does not rerun on every render of the page.
-  const sidebarProjects = useMemo(() => projects.filter((item) => !isQuickChatProject(item)), [projects]);
+  const quickChatProject = useMemo(
+    () => projects.find((item) => isQuickChatProject(item) && !serverOfObject(item.id))
+      ?? projects.find((item) => isQuickChatProject(item)),
+    [projects],
+  );
+  // Model chats are first-class conversations listed alongside regular projects in the sidebar.
+  const sidebarProjects = projects;
   const assistantProject = useMemo(
     () => projects.find((item) => isAssistantProject(item) && !item.archivedAt && (!item.agentMemberId || item.agentMemberId === DEFAULT_AGENT_MEMBER_ID))
       ?? projects.find((item) => isAssistantProject(item) && !item.archivedAt),
@@ -293,6 +298,51 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [teamMembers, selectedMemberId, session?.agentMemberId, project]);
   const [createMemberOpen, setCreateMemberOpen] = useState(false);
   const [editingMemberId, setEditingMemberId] = useState<string>();
+  const [customPanelSlot, setCustomPanelSlot] = useState<HTMLDivElement | null>(null);
+  const [customPanelChrome, setCustomPanelChrome] = useState<CustomPanelChrome>();
+  const [homeChatConfig, setHomeChatConfig] = useState<ModelChatConfig>(() => ({ ...MODEL_CHAT_DEFAULT_CONFIG }));
+  const [homeChatDocs, setHomeChatDocs] = useState<ModelChatPinnedDoc[]>([]);
+  const [homeChatModel, setHomeChatModel] = useState('');
+  const [homeInspectorTab, setHomeInspectorTab] = useState<InspectorTab>('params');
+  const isModelChatSession = Boolean(
+    session?.kind === 'native'
+    && session.backendId === 'chat'
+    && session.origin?.kind !== 'discussion'
+    && session.origin?.kind !== 'council',
+  );
+  const isModelChatHome = Boolean(quickChat && !session);
+  const usesModelChatPanel = isModelChatSession || isModelChatHome;
+  const updateHomeChatConfig = useCallback(async (patch: ModelChatConfigPatch) => {
+    const { pinnedDocs, summary: _summary, temperature, topP, thinkingBudget, ...rest } = patch;
+    if (pinnedDocs !== undefined) setHomeChatDocs(pinnedDocs);
+    if (Object.keys(rest).length > 0 || 'temperature' in patch || 'topP' in patch || 'thinkingBudget' in patch) {
+      setHomeChatConfig((current) => {
+        const next: ModelChatConfig = { ...current, ...rest };
+        if ('temperature' in patch) {
+          if (temperature === undefined || temperature === null) delete next.temperature;
+          else next.temperature = temperature;
+        }
+        if ('topP' in patch) {
+          if (topP === undefined || topP === null) delete next.topP;
+          else next.topP = topP;
+        }
+        if ('thinkingBudget' in patch) {
+          if (thinkingBudget === undefined || thinkingBudget === null) delete next.thinkingBudget;
+          else next.thinkingBudget = thinkingBudget;
+        }
+        return next;
+      });
+    }
+  }, []);
+  const openHomeChatInspector = useCallback((tab: 'params' | 'context') => {
+    setHomeInspectorTab(tab);
+    ui.setPanelOpen(true);
+  }, [ui]);
+  const modelChatPanelConfig = useMemo(() => (usesModelChatPanel ? {
+    title: isModelChatSession ? t`参数、上下文与 Wire` : t`参数与上下文`,
+    onSlot: setCustomPanelSlot,
+    onChrome: setCustomPanelChrome,
+  } : undefined), [usesModelChatPanel, isModelChatSession, t]);
   const editingMember = useMemo(() => editingMemberId ? teamMembers.find((item) => item.id === editingMemberId) : undefined, [teamMembers, editingMemberId]);
   // Each conversation keeps its own side panel; swapped before paint so the one entered never shows the last one's.
   const panelSession = useRef(selectedSessionId);
@@ -411,12 +461,12 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
   const sidebarSelectedSessionId = anyPageOpen ? '' : session?.id ?? '';
-  const sidebarSessions = useSidebarSessions(sidebarProjects, sessions, sidebarSelectedSessionId, t`未关联项目`);
+  const sidebarSessions = useSidebarSessions(sidebarProjects, sessions, sidebarSelectedSessionId, t`未关联项目`, t`模型对话`);
   /** On the 助理 or a team member's page: with no overlay page open, never tabbed or listed in the sidebar. */
   const assistantPage = Boolean((activeMember || isAssistantProject(project)) && !anyPageOpen);
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? t`设置` : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : inboxOpen ? t`收件箱` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? t`设置` : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : inboxOpen ? t`收件箱` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`模型对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -472,6 +522,22 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     if (!writeDraft(key, { ...draft, text: joinQuotes([...quotes, quote], body) })) pushError(t`草稿无法保存到浏览器，刷新后会丢失`);
     newSession();
   }, [newSession, t]);
+  const promoteModelChatToAgent = useCallback((payload: { prompt: string; title?: string; docs?: ModelChatPinnedDoc[] }) => {
+    const key = 'riffet.draft.new:home';
+    const draft = readDraft(key);
+    const { quotes, body } = splitQuotes(draft.text);
+    const docNotes = (payload.docs ?? [])
+      .filter((doc) => doc.pinned && doc.text.trim())
+      .map((doc) => `[${doc.name}]\n${doc.text.slice(0, 4_000)}`);
+    const nextBody = [body.trim(), payload.prompt.trim(), ...docNotes].filter(Boolean).join('\n\n');
+    if (!writeDraft(key, { ...draft, text: joinQuotes(quotes, nextBody) })) pushError(t`草稿无法保存到浏览器，刷新后会丢失`);
+    const target = projectlessTasks ? regular.find((item) => item.id === taskProjectId && !item.archivedAt) : lastTaskProject;
+    void nav.navigate(() => {
+      nav.set({ projectId: target?.id ?? '', sessionId: '', ...NO_PAGE });
+      ui.set({ previewTarget: undefined, mobileSidebar: false });
+    });
+    toast.success(t`已带入新建任务草稿`);
+  }, [lastTaskProject, nav, projectlessTasks, regular, t, taskProjectId, ui]);
   const pluginCommands = usePluginCommands({ project: quickChat ? undefined : project, sessionId: session?.id, openSession: openSessionById });
   const selectHomeTab = (tab: HomeTab) => {
     if (tab === homeTab) return;
@@ -930,7 +996,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     className="h-9"
     options={[
       { value: 'task' as const, label: t`新建任务` },
-      ...(quickChatProject ? [{ value: 'chat' as const, label: t`快速对话` }] : []),
+      ...(quickChatProject ? [{ value: 'chat' as const, label: t`模型对话` }] : []),
     ]}
   />} />;
 
@@ -1096,6 +1162,25 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     );
   } else if ((!project && !projectlessTasks && !homeServerId) || (selectedSessionId && !project)) {
     content = <NoProjects onAddProject={() => ui.set({ addProjectOpen: true })} header={homeHeader} />;
+  } else if (isModelChatSession && session) {
+    content = (
+      <SessionFrame sessionId={session.id}>
+        <ModelChatSession
+          session={session}
+          catalog={backend}
+          catalogLoading={homeCatalogState.catalogLoading}
+          catalogError={nativeCatalogError}
+          onRetryCatalog={loadCatalog}
+          onSessionChanged={upsertSession}
+          onPromoteToAgent={promoteModelChatToAgent}
+          onError={pushError}
+          renderHeader={renderSessionHeader}
+          enterBehavior={settings.composerEnterBehavior}
+          panelSlot={customPanelSlot}
+          panelChrome={customPanelChrome}
+        />
+      </SessionFrame>
+    );
   } else if (session?.kind === 'native') {
     // The frame stays across conversations; `SessionFrame` mounts each one afresh under its id.
     content = (
@@ -1104,8 +1189,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           session={session}
           {...(focusMessage?.sessionId === session.id ? { focus: focusMessage.focus } : {})}
           initialRun={nativeRunSeed?.sessionId === session.id ? nativeRunSeed.run : undefined}
-          terminal={quickChat ? undefined : nativeTerminal}
-          root={quickChat ? undefined : project?.cwd}
+          terminal={nativeTerminal}
+          root={project?.cwd}
           reopening={startingNativeId === session.id}
           sendingInitial={false}
           catalog={nativeCatalog}
@@ -1117,7 +1202,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           onReopen={() => void reopenNative(session)}
           onTerminalChanged={upsertTerminal}
           onSessionChanged={upsertSession}
-          {...(quickChat || serverOfObject(session.id) ? {} : { onRememberModel: (model: string) => settingsStore.remember(sessionBackend(session), { model, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}) }) })}
+          {...(serverOfObject(session.id) ? {} : { onRememberModel: (model: string) => settingsStore.remember(sessionBackend(session), { model, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}) }) })}
           onError={pushError}
           notificationsEnabled={settings.notifications === true}
           enterBehavior={settings.composerEnterBehavior}
@@ -1126,26 +1211,44 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           sessionReferences={sessionReferences}
           referenceSessions={sessions}
           referenceProjects={projects}
-          references={quickChat ? NO_REFERENCES : references}
-          onReferencesChange={quickChat ? noReferences : ui.setReferences}
+          references={references}
+          onReferencesChange={ui.setReferences}
           // The 个人助理's files are not read through the workspace routes, so a path in its conversation is plain text.
           {...(isAssistantProject(project) ? {} : { onOpenPath: ui.preview })}
           onOpenInEditor={openInEditor}
           renderHeader={renderSessionHeader}
           onLaunched={openLaunched}
-          backends={quickChat ? [] : backends}
+          backends={backends}
           findSession={findSession}
           onOpenSession={openSessionById}
           onAttemptAdopted={onWorktreeMerged}
           onOpenAttemptGroup={(group) => nav.openAttemptsGroup(group.id)}
           {...(sessionView?.sessionId === session.id ? { initialView: sessionView.view } : {})}
           onViewChange={(view) => nav.set({ sessionView: { sessionId: session.id, view } })}
-          quickChat={quickChat}
         />
       </SessionFrame>
     );
   } else {
+    const homeChatTokenBreakdown = {
+      systemTokens: homeChatConfig.bareMode ? 0 : estimateTextTokens(homeChatConfig.systemPrompt),
+      pinnedDocsTokens: homeChatDocs.filter((doc) => doc.pinned).reduce((sum, doc) => sum + (doc.tokens || estimateTextTokens(doc.text)), 0),
+      summaryTokens: 0,
+      historyTokens: 0,
+      totalTokens: (homeChatConfig.bareMode ? 0 : estimateTextTokens(homeChatConfig.systemPrompt))
+        + homeChatDocs.filter((doc) => doc.pinned).reduce((sum, doc) => sum + (doc.tokens || estimateTextTokens(doc.text)), 0),
+      budget: homeChatConfig.contextBudget,
+      includedTurnIds: [],
+      droppedTurnIds: [],
+    };
+    const homeChatProtocol = inferModelProtocol(
+      homeChatModel
+      || recentModel
+      || (settings.auxiliaryModels?.chat
+        ? `${settings.auxiliaryModels.chat.backendId}:${settings.auxiliaryModels.chat.profileId}:${settings.auxiliaryModels.chat.model}`
+        : undefined),
+    );
     content = (
+      <>
       <NewSessionHome
         {...composerProps}
         serverId={homeServerId}
@@ -1172,7 +1275,47 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onSelectSession={selectSession}
         onSessionAction={onSessionAction}
         header={homeHeader}
+        {...(quickChat ? {
+          modelChatConfig: homeChatConfig,
+          modelChatDocs: homeChatDocs,
+          onUpdateModelChatConfig: updateHomeChatConfig,
+          onOpenModelChatPanel: openHomeChatInspector,
+          onActiveModelChange: setHomeChatModel,
+          onCreate: async (input) => {
+            const ok = await createNative(input);
+            if (ok) {
+              setHomeChatConfig({ ...MODEL_CHAT_DEFAULT_CONFIG });
+              setHomeChatDocs([]);
+            }
+            return ok;
+          },
+        } : {})}
       />
+      {isModelChatHome && !anyPageOpen && customPanelSlot && createPortal(
+        <ModelChatInspector
+          hideWire
+          tab={homeInspectorTab}
+          onTabChange={setHomeInspectorTab}
+          chrome={customPanelChrome}
+          config={homeChatConfig}
+          protocol={homeChatProtocol}
+          pinnedDocs={homeChatDocs}
+          summary=""
+          tokenBreakdown={homeChatTokenBreakdown}
+          turns={[]}
+          nodes={[]}
+          models={nativeCatalog}
+          selectedWireId={undefined}
+          onSelectWireId={() => undefined}
+          wireCache={{}}
+          wireLoadingId={undefined}
+          onLoadWire={async () => undefined}
+          onUpdateConfig={updateHomeChatConfig}
+          onSetTurnFlags={async () => undefined}
+        />,
+        customPanelSlot,
+      )}
+      </>
     );
   }
 
@@ -1321,7 +1464,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
                 // have to turn the panel into an overlay.
                 max={() => {
                   const { panelOpen, panelWidth } = ui.get();
-                  const docked = wide && panelOpen && !pageOpen && !quickChat;
+                  const docked = wide && panelOpen && !pageOpen && (!quickChat || usesModelChatPanel);
                   return Math.min(sidebarMaxWidth(), docked ? window.innerWidth - panelDockMinWidth(0, panelWidth) : Infinity);
                 }}
                 label={t`调整侧栏宽度`}
@@ -1392,8 +1535,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         sessionId={session?.id}
         desktop={desktop}
         wide={wide}
-        pageOpen={pageOpen || quickChat}
+        pageOpen={pageOpen || (quickChat && !usesModelChatPanel)}
         belowTabStrip={stripTabs}
+        customPanel={modelChatPanelConfig}
         onReference={addReference}
         onOpenWorktree={(path) => void openWorktreeProject(path)}
         onWorktreeMerged={onWorktreeMerged}

@@ -1,0 +1,2215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 模型对话（原快速会话重构原型）</title>
+<style>
+/*
+ * Riffet · Model Chat (Direct LLM Workbench) Interactive Prototype
+ * Follows docs/design/riffet-style.md, surfaces.md, and DECISIONS.md (2026-11-26 / 27):
+ * - White reading surface (--bg), subtle 3% gray sidebar/panels (--bg-sidebar)
+ * - 3-tier theme color (primary / accent / accent-soft), ink for text only
+ * - 3 text sizes (14/24 reading, 13/20 ui, 12/16 meta), 2 weights (400, 500)
+ * - Single 1px var(--line) divider, flat cards, shadows on floating surfaces only
+ */
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-sidebar: #f7f8fa;
+  --bg-subtle: #f5f6f8;
+  --bg-muted: #eef0f3;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055);
+  --bg-active: rgb(35 45 70 / 0.09);
+  --bg-bubble: #eef3fd;
+  --fg: #2a2c2e;
+  --fg-2: #50555d;
+  --fg-3: #60666e;
+  --fg-4: #9ca2ab;
+  --line: rgb(15 23 42 / 0.08);
+  --line-soft: rgb(15 23 42 / 0.055);
+  --line-strong: rgb(15 23 42 / 0.14);
+  --primary: #2650d8;
+  --primary-hover: #183bc3;
+  --primary-fg: #ffffff;
+  --accent: #3867f0;
+  --accent-soft: rgb(56 103 240 / 0.1);
+  --success: #1f9d55;
+  --success-soft: rgb(31 157 85 / 0.1);
+  --warning: #c77f06;
+  --warning-soft: rgb(245 158 11 / 0.13);
+  --danger: #e0454b;
+  --danger-soft: rgb(224 69 75 / 0.09);
+  --agent-claude: #d97757;
+  --agent-codex: #10a37f;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #3867f0;
+  --chart-2: #15968f;
+  --chart-3: #ba733c;
+  --chart-4: #8566c1;
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, monospace;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #141416;
+  --bg-sidebar: #1a1a1d;
+  --bg-subtle: #1d1d20;
+  --bg-muted: #27272b;
+  --bg-elevated: #1f1f22;
+  --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06);
+  --bg-active: rgb(255 255 255 / 0.1);
+  --bg-bubble: #242938;
+  --fg: #d2d4d7;
+  --fg-2: #b6bac1;
+  --fg-3: #9da2aa;
+  --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075);
+  --line-soft: rgb(255 255 255 / 0.05);
+  --line-strong: rgb(255 255 255 / 0.13);
+  --primary: #739fff;
+  --primary-hover: #5b8cff;
+  --primary-fg: #141416;
+  --accent: #5b8cff;
+  --accent-soft: rgb(91 140 255 / 0.15);
+  --success: #3fb96f;
+  --success-soft: rgb(63 185 111 / 0.14);
+  --warning: #e5a13a;
+  --warning-soft: rgb(229 161 58 / 0.15);
+  --danger: #f0676c;
+  --danger-soft: rgb(240 69 75 / 0.13);
+  --agent-claude: #e8916f;
+  --agent-codex: #2fc79b;
+  --agent-dsh: #7390ff;
+  --chart-1: #5b8cff;
+  --chart-2: #2fb8ad;
+  --chart-3: #d99152;
+  --chart-4: #a58be0;
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.65);
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg-sidebar);
+  color: var(--fg);
+  font: 400 13px/20px var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-align: inherit; }
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 1px; }
+
+svg.i { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; }
+svg.i * { vector-effect: non-scaling-stroke; }
+.i-12 { width: 12px !important; height: 12px !important; }
+.i-14 { width: 14px !important; height: 14px !important; }
+.i-18 { width: 18px !important; height: 18px !important; }
+.mono { font-family: var(--font-mono); }
+.tnum { font-variant-numeric: tabular-nums; }
+.trunc { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Shell layout */
+.app {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr);
+  height: 100%;
+  background: var(--bg-sidebar);
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-right: 1px solid var(--line);
+  background: var(--bg-sidebar);
+  user-select: none;
+  min-width: 0;
+}
+.sb-top {
+  padding: 12px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sb-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 10px;
+}
+.sb-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.sb-logo-mark {
+  width: 20px; height: 20px; border-radius: 6px;
+  background: var(--primary); color: var(--primary-fg);
+  display: grid; place-items: center; font-size: 11px; font-weight: 500;
+}
+.icon-btn {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--fg-3); transition: background 120ms, color 120ms;
+}
+.icon-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.icon-btn.active { background: var(--bg-active); color: var(--fg); }
+.icon-btn.sm { width: 24px; height: 24px; border-radius: 6px; }
+
+.nav-row {
+  height: 30px; padding: 0 8px; border-radius: 8px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--fg-2); transition: background 120ms, color 120ms;
+}
+.nav-row:hover { background: var(--bg-hover); color: var(--fg); }
+.nav-row.active { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+.nav-row .slot { width: 16px; display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--fg-3); }
+.nav-row.active .slot { color: var(--primary); }
+.nav-row .meta { margin-left: auto; font-size: 12px; color: var(--fg-4); }
+
+.sb-divider { height: 1px; background: var(--line); margin: 6px 12px; }
+.sb-section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px 4px; font-size: 12px; color: var(--fg-3);
+}
+.seg-mini {
+  display: inline-flex; background: var(--bg-muted); padding: 2px; border-radius: 7px; gap: 2px;
+}
+.seg-mini button {
+  padding: 1px 7px; font-size: 11px; line-height: 18px; border-radius: 5px; color: var(--fg-3);
+}
+.seg-mini button.active { background: var(--bg-elevated); color: var(--fg); font-weight: 500; }
+
+.sb-list {
+  flex: 1; overflow-y: auto; padding: 2px 10px 12px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sb-group-title {
+  padding: 10px 8px 4px; font-size: 12px; font-weight: 500; color: var(--fg-3);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sb-group-title .count { font-weight: 400; color: var(--fg-4); font-size: 11px; }
+
+.sess-row {
+  min-height: 30px; padding: 5px 8px; border-radius: 8px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--fg-2); transition: background 120ms;
+}
+.sess-row:hover { background: var(--bg-hover); color: var(--fg); }
+.sess-row.active { background: var(--bg-active); color: var(--fg); }
+.sess-row .slot { width: 16px; height: 16px; flex: none; display: grid; place-items: center; }
+.sess-row .body { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+.sess-row .title { font-size: 13px; line-height: 18px; }
+.sess-row.active .title { font-weight: 500; }
+.sess-row .sub { font-size: 11px; line-height: 15px; color: var(--fg-4); display: flex; align-items: center; gap: 5px; }
+.sess-row .time { font-size: 11px; color: var(--fg-4); flex: none; }
+.dot-unread { width: 6px; height: 6px; border-radius: 99px; background: var(--accent); }
+.dot-type { width: 6px; height: 6px; border-radius: 2px; background: var(--fg-4); opacity: 0.55; }
+.dot-type.model { border-radius: 99px; border: 1.25px solid var(--fg-3); background: transparent; opacity: 0.85; }
+
+.sb-foot {
+  padding: 8px 12px; border-top: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.avatar {
+  width: 24px; height: 24px; border-radius: 99px;
+  background: var(--bg-muted); color: var(--fg-2);
+  display: grid; place-items: center; font-size: 11px; font-weight: 500;
+}
+
+/* Main workspace card */
+.main-wrap {
+  padding: 8px 8px 8px 0;
+  height: 100%;
+  min-width: 0;
+}
+.main-card {
+  height: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  height: 50px; flex: none;
+  border-bottom: 1px solid var(--line);
+  padding: 0 12px 0 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.hdr-title-wrap { min-width: 0; flex: 1; display: flex; align-items: center; gap: 8px; }
+.hdr-title { font-size: 14px; font-weight: 500; color: var(--fg); }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 20px; padding: 0 7px; border-radius: 6px;
+  font-size: 11px; line-height: 16px; background: var(--bg-subtle); color: var(--fg-3);
+}
+.badge.accent { background: var(--accent-soft); color: var(--fg); }
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.warning { background: var(--warning-soft); color: var(--warning); }
+
+.hdr-actions { display: flex; align-items: center; gap: 4px; flex: none; }
+.pill-btn {
+  height: 28px; padding: 0 10px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--fg-2); transition: background 120ms, color 120ms;
+}
+.pill-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.pill-btn.secondary { background: var(--bg-subtle); }
+.pill-btn.secondary:hover { background: var(--bg-muted); }
+.pill-btn.active { background: var(--accent-soft); color: var(--fg); font-weight: 500; }
+.pill-btn.primary { background: var(--primary); color: var(--primary-fg); font-weight: 500; }
+.pill-btn.primary:hover { background: var(--primary-hover); }
+
+/* Split body: Reading column + Inspector */
+.workspace {
+  flex: 1; min-height: 0; display: flex; overflow: hidden;
+}
+.stage {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative;
+}
+
+/* Transcript */
+.transcript-scroll {
+  flex: 1; overflow-y: auto; padding: 24px 36px 20px;
+}
+.reading-col {
+  max-width: 820px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px;
+}
+.reading-col.wide { max-width: 980px; }
+
+/* System / Context boundary strip */
+.ctx-banner {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-radius: 10px; background: var(--bg-subtle);
+  font-size: 12px; color: var(--fg-3);
+}
+.ctx-banner .ctx-link { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+.ctx-banner .ctx-link:hover { text-decoration-color: var(--accent); }
+.ctx-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 6px; background: var(--bg-elevated);
+  border: 1px solid var(--line); color: var(--fg-2); font-size: 11px;
+}
+
+.ctx-cut-line {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--fg-4); margin: 4px 0;
+}
+.ctx-cut-line::before, .ctx-cut-line::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.ctx-cut-line button {
+  color: var(--fg-3); font-size: 12px; padding: 2px 8px; border-radius: 6px;
+}
+.ctx-cut-line button:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* Turn */
+.turn { display: flex; flex-direction: column; gap: 14px; transition: opacity 160ms; }
+.turn.muted { opacity: 0.44; }
+.turn.muted .u-bubble { text-decoration: line-through; text-decoration-color: var(--fg-4); }
+
+.u-row { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.u-bubble {
+  max-width: min(82%, 580px);
+  padding: 10px 15px; border-radius: 16px;
+  background: var(--bg-bubble); color: var(--fg);
+  font-size: 14px; line-height: 23px; white-space: pre-wrap;
+}
+.u-edit-box {
+  width: min(86%, 600px); background: var(--bg-elevated);
+  border: 1px solid var(--accent); border-radius: 12px; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.u-edit-box textarea {
+  width: 100%; border: 0; outline: 0; resize: vertical; min-height: 64px;
+  background: transparent; font-size: 14px; line-height: 22px;
+}
+.u-meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--fg-3); min-height: 22px;
+}
+
+/* Assistant answer */
+.a-wrap { display: flex; flex-direction: column; gap: 6px; }
+.a-thought {
+  display: inline-flex; align-items: center; gap: 8px; width: fit-content;
+  padding: 2px 6px; margin-left: -6px; border-radius: 6px;
+  font-size: 12px; color: var(--fg-3);
+}
+.a-thought:hover { background: var(--bg-hover); color: var(--fg-2); }
+.a-thought .verb { font-family: var(--font-mono); font-weight: 500; min-width: 44px; color: var(--fg-3); }
+.a-thought-body {
+  border-left: 1px solid var(--line-strong); margin-left: 6px; padding-left: 14px;
+  font-size: 13px; line-height: 20px; color: var(--fg-3); white-space: pre-wrap;
+}
+.a-md { font-size: 14px; line-height: 25px; color: var(--fg); }
+.a-md p { margin: 0 0 12px; }
+.a-md p:last-child { margin-bottom: 0; }
+.a-md code { font-family: var(--font-mono); font-size: 0.86em; color: var(--fg-2); }
+.a-md pre {
+  margin: 10px 0; border-radius: 10px; background: var(--bg-subtle);
+  border: 1px solid var(--line); overflow: hidden;
+}
+.a-md pre .code-hd {
+  height: 30px; padding: 0 12px; background: var(--bg-muted);
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--fg-3); font-family: var(--font-mono);
+}
+.a-md pre .code-bd {
+  padding: 12px 14px; overflow-x: auto;
+  font-family: var(--font-mono); font-size: 12.5px; line-height: 19px; color: var(--fg-2);
+}
+.a-md ul { margin: 0 0 12px; padding-left: 20px; }
+.a-md li { margin: 3px 0; }
+
+/* Answer footer */
+.a-foot {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  min-height: 26px; font-size: 12px; color: var(--fg-3);
+}
+.foot-btn {
+  height: 24px; padding: 0 6px; border-radius: 6px;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--fg-3); transition: background 120ms, color 120ms;
+}
+.foot-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.foot-btn.on { background: var(--accent-soft); color: var(--fg); }
+.foot-btn.warn-on { background: var(--warning-soft); color: var(--warning); }
+.foot-sep { color: var(--fg-4); margin: 0 2px; }
+.branch-pager {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 0 4px; height: 22px; border-radius: 6px; background: var(--bg-subtle);
+  font-size: 11px; color: var(--fg-2); font-variant-numeric: tabular-nums;
+}
+.branch-pager button {
+  width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: var(--fg-3);
+}
+.branch-pager button:hover { background: var(--bg-active); color: var(--fg); }
+.metrics-inline {
+  margin-left: auto; font-size: 11px; color: var(--fg-4);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+
+/* Multi-model parallel compare cards */
+.compare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+.cmp-card {
+  background: var(--bg-subtle); border: 1px solid var(--line);
+  border-radius: 12px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cmp-card.picked { border-color: var(--primary); background: var(--bg); }
+.cmp-hd {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--line);
+}
+.cmp-model { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+.brand-dot { width: 8px; height: 8px; border-radius: 99px; flex: none; }
+.cmp-body { font-size: 13.5px; line-height: 22px; flex: 1; }
+.cmp-ft {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding-top: 8px; border-top: 1px solid var(--line); font-size: 11px; color: var(--fg-3);
+}
+
+/* Agent comparison view (normal Agent session) */
+.tool-row {
+  display: flex; align-items: center; gap: 8px; min-height: 24px;
+  font-size: 12.5px; color: var(--fg-3);
+}
+.tool-verb { font-family: var(--font-mono); font-weight: 500; min-width: 48px; color: var(--fg-3); }
+.tool-target { font-family: var(--font-mono); color: var(--fg-2); }
+.diff-stat { font-family: var(--font-mono); font-size: 12px; }
+.diff-stat .add { color: var(--success); }
+.diff-stat .del { color: var(--danger); }
+
+/* Composer */
+.composer-dock {
+  flex: none; padding: 8px 36px 18px; background: var(--bg);
+}
+.composer-col { max-width: 844px; margin: 0 auto; }
+.composer-col.wide { max-width: 1004px; }
+.composer-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  box-shadow: var(--shadow-composer);
+  padding: 10px 12px 8px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.composer-refs {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.ref-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 8px; border-radius: 7px;
+  background: var(--bg-subtle); border: 1px solid var(--line);
+  font-size: 12px; color: var(--fg-2);
+}
+.ref-pill .tok { color: var(--fg-4); font-size: 11px; }
+.ref-pill button { color: var(--fg-4); display: grid; place-items: center; }
+.ref-pill button:hover { color: var(--fg); }
+
+.composer-input {
+  width: 100%; border: 0; outline: 0; resize: none;
+  background: transparent; min-height: 44px; max-height: 160px;
+  font-size: 14px; line-height: 22px; color: var(--fg);
+}
+.composer-input::placeholder { color: var(--fg-4); }
+
+.composer-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.bar-group { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.cap-btn {
+  height: 26px; padding: 0 8px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--fg-2); transition: background 120ms, color 120ms;
+}
+.cap-btn:hover { background: var(--bg-hover); color: var(--fg); }
+.cap-btn.active { background: var(--accent-soft); color: var(--fg); font-weight: 500; }
+.cap-btn.subtle { background: var(--bg-subtle); }
+
+.send-btn {
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--primary); color: var(--primary-fg);
+  display: grid; place-items: center; transition: background 120ms, transform 90ms;
+}
+.send-btn:hover { background: var(--primary-hover); }
+.send-btn:active { transform: scale(0.96); }
+
+/* Context Ring */
+.ring-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 7px; border-radius: 8px; font-size: 12px; color: var(--fg-3);
+}
+.ring-btn:hover { background: var(--bg-hover); color: var(--fg); }
+
+/* Right Inspector Panel */
+.inspector {
+  width: 356px; flex: none;
+  border-left: 1px solid var(--line);
+  background: var(--bg-sidebar);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.insp-tabs {
+  height: 44px; flex: none; padding: 0 10px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 4px;
+}
+.insp-tab {
+  height: 28px; padding: 0 10px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--fg-3);
+}
+.insp-tab:hover { background: var(--bg-hover); color: var(--fg); }
+.insp-tab.active { background: var(--bg-active); color: var(--fg); font-weight: 500; }
+
+.insp-body {
+  flex: 1; overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.panel-card {
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.panel-card-hd {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 12px; font-weight: 500; color: var(--fg-2);
+}
+.field-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 12.5px; color: var(--fg-2);
+}
+.field-row.disabled { opacity: 0.48; }
+.field-note { font-size: 11px; color: var(--fg-4); line-height: 15px; }
+.field-col { display: flex; flex-direction: column; gap: 5px; }
+
+.sys-area {
+  width: 100%; min-height: 82px; resize: vertical;
+  border: 1px solid var(--line-strong); border-radius: 8px;
+  background: var(--bg-subtle); padding: 8px 10px;
+  font-size: 12.5px; line-height: 19px; color: var(--fg); outline: none;
+}
+.sys-area:focus { border-color: var(--accent); background: var(--bg); }
+.sys-area.mono-sm { font-family: var(--font-mono); font-size: 11.5px; line-height: 17px; }
+
+.input-sm {
+  height: 28px; border: 1px solid var(--line-strong); border-radius: 7px;
+  background: var(--bg); padding: 0 8px; font-size: 12px; outline: none; width: 110px;
+}
+.input-sm:focus { border-color: var(--accent); }
+.select-sm {
+  height: 28px; border: 1px solid var(--line-strong); border-radius: 7px;
+  background: var(--bg); padding: 0 8px; font-size: 12px; outline: none;
+}
+
+input[type="range"] {
+  width: 100%; accent-color: var(--primary); height: 4px; cursor: pointer;
+}
+
+/* Switch */
+.switch {
+  width: 32px; height: 18px; border-radius: 99px;
+  background: var(--bg-muted); border: 1px solid var(--line-strong);
+  position: relative; transition: background 140ms, border-color 140ms; flex: none;
+}
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 12px; height: 12px; border-radius: 99px;
+  background: var(--bg); transition: transform 140ms;
+}
+.switch.on { background: var(--primary); border-color: var(--primary); }
+.switch.on::after { transform: translateX(14px); background: var(--primary-fg); }
+
+/* Segmented */
+.seg {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+  background: var(--bg-subtle); padding: 2px; border-radius: 8px; gap: 2px;
+}
+.seg button {
+  height: 24px; border-radius: 6px; font-size: 11.5px; color: var(--fg-3); text-align: center;
+}
+.seg button.active { background: var(--bg); color: var(--fg); font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+
+/* Token stacked bar */
+.tok-bar {
+  height: 8px; border-radius: 99px; background: var(--bg-muted);
+  display: flex; overflow: hidden; gap: 1px;
+}
+.tok-seg { height: 100%; transition: width 220ms; }
+.tok-legend {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 11.5px; color: var(--fg-3);
+}
+.tok-item { display: flex; align-items: center; gap: 6px; }
+.tok-dot { width: 7px; height: 7px; border-radius: 2px; flex: none; }
+.tok-val { margin-left: auto; color: var(--fg-2); }
+
+/* Context turn list */
+.ctx-list { display: flex; flex-direction: column; gap: 4px; }
+.ctx-turn-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 7px; border-radius: 7px; background: var(--bg-subtle); font-size: 12px;
+}
+.ctx-turn-row.muted { opacity: 0.45; }
+.ctx-turn-row.pinned { background: var(--accent-soft); }
+
+/* Wire inspector */
+.wire-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.wire-stat {
+  padding: 8px 10px; border-radius: 8px; background: var(--bg-subtle);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.wire-stat .k { font-size: 11px; color: var(--fg-4); }
+.wire-stat .v { font-size: 13px; font-weight: 500; color: var(--fg); }
+.wire-json {
+  margin: 0; padding: 10px; border-radius: 8px; background: var(--bg-subtle);
+  border: 1px solid var(--line); font-family: var(--font-mono);
+  font-size: 11px; line-height: 17px; color: var(--fg-2);
+  overflow-x: auto; max-height: 360px; white-space: pre;
+}
+
+/* New Session View */
+.home-stage {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 28px 24px 48px; gap: 18px; overflow-y: auto;
+}
+.home-tabs {
+  display: inline-flex; background: var(--bg-subtle); padding: 3px; border-radius: 10px; gap: 2px;
+}
+.home-tabs button {
+  height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; color: var(--fg-3);
+}
+.home-tabs button.active { background: var(--bg); color: var(--fg); font-weight: 500; box-shadow: 0 1px 2px rgb(0 0 0 / 0.06); }
+.home-h1 { font-size: 22px; font-weight: 500; margin: 0; letter-spacing: -0.015em; }
+.preset-grid {
+  width: 100%; max-width: 760px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+}
+.preset-card {
+  padding: 10px 12px; border-radius: 10px; background: var(--bg-subtle);
+  border: 1px solid var(--line); text-align: left;
+  display: flex; flex-direction: column; gap: 3px; transition: border-color 120ms, background 120ms;
+}
+.preset-card:hover { background: var(--bg-hover); border-color: var(--line-strong); }
+.preset-card.active { border-color: var(--primary); background: var(--accent-soft); }
+.preset-card .t { font-size: 12.5px; font-weight: 500; color: var(--fg); }
+.preset-card .d { font-size: 11.5px; color: var(--fg-3); }
+
+/* Popover menu */
+.popover {
+  position: fixed; z-index: 60; min-width: 240px; max-width: 320px;
+  background: var(--bg-popover); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--shadow-pop); padding: 4px;
+}
+.pop-hd { padding: 6px 8px 4px; font-size: 11px; font-weight: 500; color: var(--fg-3); }
+.pop-item {
+  width: 100%; min-height: 32px; padding: 4px 8px; border-radius: 8px;
+  display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg-2);
+}
+.pop-item:hover { background: var(--bg-hover); color: var(--fg); }
+.pop-item .right { margin-left: auto; font-size: 11px; color: var(--fg-4); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--bg-popover); border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow-pop); border-radius: 10px;
+  padding: 8px 14px; font-size: 12.5px; color: var(--fg);
+  z-index: 80; display: flex; align-items: center; gap: 8px;
+  animation: fadeUp 160ms ease-out;
+}
+@keyframes fadeUp { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 99px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@media (max-width: 1040px) {
+  .inspector { position: absolute; right: 0; top: 0; bottom: 0; z-index: 30; box-shadow: var(--shadow-pop); }
+  .preset-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sb-top">
+      <div class="sb-brand">
+        <span class="sb-logo">
+          <span class="sb-logo-mark">R</span>
+          <span>Riffet</span>
+        </span>
+        <div style="display:flex;gap:2px;">
+          <button class="icon-btn" id="btnTheme" title="切换深浅色" aria-label="切换深浅色"></button>
+        </div>
+      </div>
+
+      <button class="nav-row" id="navNew">
+        <span class="slot" data-ic="plus"></span>
+        <span>新会话</span>
+      </button>
+      <button class="nav-row" onclick="showToast('原型演示：⌘K 搜索会同时覆盖 Agent 会话与模型对话')">
+        <span class="slot" data-ic="search"></span>
+        <span>搜索内容</span>
+        <span class="meta">⌘K</span>
+      </button>
+      <div class="sb-divider"></div>
+      <button class="nav-row" onclick="showToast('个人助理：长期记忆与跨任务委托')">
+        <span class="slot" data-ic="sparkles"></span>
+        <span>个人助理</span>
+      </button>
+      <button class="nav-row" onclick="showToast('任务看板：多 Agent 前置与核验流程')">
+        <span class="slot" data-ic="board"></span>
+        <span>任务看板</span>
+      </button>
+      <button class="nav-row" onclick="showToast('模型协作：1v1 辩论 / 圆桌 / 审阅')">
+        <span class="slot" data-ic="council"></span>
+        <span>模型协作</span>
+      </button>
+    </div>
+
+    <div class="sb-section-head">
+      <span>会话</span>
+      <div class="seg-mini" role="tablist">
+        <button id="groupTime" class="active">按时间</button>
+        <button id="groupProject">按项目</button>
+      </div>
+    </div>
+
+    <div class="sb-list" id="sidebarList"></div>
+
+    <div class="sb-foot">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span class="avatar">U</span>
+        <span style="font-size:12px;color:var(--fg-2);">本机服务</span>
+      </div>
+      <span class="badge" style="font-size:11px;">原型预览</span>
+    </div>
+  </aside>
+
+  <!-- Main card -->
+  <div class="main-wrap">
+    <main class="main-card" id="mainCard"></main>
+  </div>
+</div>
+
+<!-- Dynamic popover & toast mount -->
+<div id="popoverMount"></div>
+<div id="toastMount"></div>
+
+<script>
+/* ---------------- Icons (Lucide 1.25px stroke) ---------------- */
+const ICONS = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  sparkles: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/>',
+  board: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 4v16"/>',
+  council: '<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/><path d="M3 19c0-2.5 2.2-4 5-4s5 1.5 5 4M14 15.2c.6-.1 1.3-.2 2-.2 2.8 0 5 1.5 5 4"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 14h4M10 8h4M18 16h4"/>',
+  layers: '<path d="m12 2 9 5-9 5-9-5 9-5z"/><path d="m3 12 9 5 9-5"/><path d="m3 17 9 5 9-5"/>',
+  code: '<path d="m8 9-3 3 3 3M16 9l3 3-3 3M13 6l-2 12"/>',
+  arrowUp: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  chevLeft: '<path d="m15 18-6-6 6-6"/>',
+  chevRight: '<path d="m9 18 6-6-6-6"/>',
+  chevDown: '<path d="m6 9 6 6 6-6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/>',
+  columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+  pin: '<path d="M12 17v5"/><path d="M9 10.8V5l-1-1h8l-1 1v5.8l2 2.2H7l2-2.2z"/>',
+  eyeOff: '<path d="M10.6 10.6A2 2 0 0 0 13.4 13.4"/><path d="M9.9 4.2A10.4 10.4 0 0 1 12 4c5 0 9 4 10 8a11.3 11.3 0 0 1-2.4 3.8"/><path d="M6.6 6.6A11.3 11.3 0 0 0 2 12c1 4 5 8 10 8a10 10 0 0 0 5.4-1.6"/><path d="m2 2 20 20"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  git: '<circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><path d="M6 8v8M18 8c0 4-3 5-12 5"/>',
+  terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 10 3 2-3 2M12 14h5"/>',
+  shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3z"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18"/>',
+  zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/>',
+  rocket: '<path d="M5 19c1-3 3-5 6-6l6-6c1.5-1.5 2-4 2-4s-2.5.5-4 2l-6 6c-1 3-3 5-6 6z"/><path d="M9 15l-4 4"/>',
+};
+function ic(name, cls = '') {
+  return `<svg class="i ${cls}" viewBox="0 0 24 24">${ICONS[name] || ''}</svg>`;
+}
+
+/* ---------------- Catalog & Presets ---------------- */
+const MODELS = [
+  { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', provider: 'Anthropic API', protocol: 'anthropic', endpoint: 'https://api.anthropic.com/v1/messages', color: 'var(--agent-claude)', supportsCache: true, supportsSearch: true, supportsFast: false, thinkingLocksTemp: true },
+  { id: 'gpt-5-2', name: 'GPT-5.2', provider: 'OpenAI Responses', protocol: 'responses', endpoint: 'https://api.openai.com/v1/responses', color: 'var(--agent-codex)', supportsCache: true, supportsSearch: true, supportsFast: true, thinkingLocksTemp: true },
+  { id: 'deepseek-r1', name: 'DeepSeek R1', provider: 'DeepSeek API', protocol: 'chat', endpoint: 'https://api.deepseek.com/v1/chat/completions', color: 'var(--agent-dsh)', supportsCache: true, supportsSearch: false, supportsFast: false, thinkingLocksTemp: false },
+];
+const modelById = id => MODELS.find(m => m.id === id) || MODELS[0];
+
+const SYSTEM_PRESETS = [
+  { id: 'default', name: '默认对话', desc: '轻量无包装', text: 'Be concise, direct, and technically precise. Avoid filler.' },
+  { id: 'bare', name: '零污染裸模式', desc: '不发 System Prompt', text: '' },
+  { id: 'json', name: 'JSON 抽取', desc: '严格按 Schema 输出', text: 'Extract structured fields strictly matching the requested JSON Schema. Do not add commentary.' },
+  { id: 'review', name: '方案推演', desc: '先挑漏洞再给建议', text: 'Evaluate the architecture critically. Identify edge cases, hidden assumptions, and failure modes before proposing changes.' },
+];
+
+/* ---------------- Initial State ---------------- */
+const state = {
+  dark: false,
+  sidebarGroup: 'time', // 'time' | 'project'
+  activeView: 'session', // 'home' | 'session'
+  homeTab: 'model', // 'agent' | 'model'
+  homeDraft: '',
+  homePreset: 'default',
+  homeRefs: [],
+  activeSessionId: 'mc-schema',
+  inspectorOpen: true,
+  inspectorTab: 'params', // 'params' | 'context' | 'wire'
+  selectedWireTurnId: 't2',
+  editingNodeId: null,
+  expandedThoughts: {},
+
+  sessions: [
+    {
+      id: 'mc-schema',
+      kind: 'model',
+      title: 'JSON Schema 抽取与多模型对比',
+      time: '刚刚',
+      unread: false,
+      projectName: '模型对话',
+      modelId: 'claude-sonnet-4-5',
+      compareModels: ['claude-sonnet-4-5', 'gpt-5-2'],
+      params: {
+        systemPrompt: 'Extract structured fields strictly matching the requested JSON Schema. Do not add commentary.',
+        bareMode: false,
+        effort: 'medium', // off | low | medium | high | adaptive
+        temperature: 0.2,
+        topP: 1.0,
+        maxOutputTokens: 16384,
+        contextBudget: 128000,
+        contextStrategy: 'summary', // summary | window | full | stateless
+        responseFormat: 'json_schema', // text | json_object | json_schema
+        jsonSchema: '{\n  "type": "object",\n  "properties": {\n    "severity": { "enum": ["p0","p1","p2"] },\n    "owner": { "type": "string" },\n    "actions": { "type": "array", "items": { "type": "string" } }\n  },\n  "required": ["severity", "actions"]\n}',
+        webSearch: false,
+        fast: false,
+        promptCaching: true,
+        seed: '',
+        stop: '',
+      },
+      pinnedDocs: [
+        { id: 'doc1', name: 'incident-postmortem.md', tokens: 1840, pinned: true },
+      ],
+      summary: '第 1–2 轮已约定故障分级口径（P0 为核心链路不可用）并确认优先提取可执行动作项。',
+      turns: [
+        {
+          id: 't1',
+          pinned: true,
+          muted: false,
+          userBranches: [
+            { id: 'u1a', text: '把附带的故障复盘文档拆成结构化 JSON：包含 severity、owner 和 actions，要求动作项可验证。' },
+            { id: 'u1b', text: '仅列出这份故障复盘里的根因链条和三条最紧急的止血动作，用纯文本输出。' },
+          ],
+          activeUserBranch: 0,
+          assistantBranches: [
+            {
+              id: 'a1a', modelId: 'claude-sonnet-4-5',
+              thought: '需要核对 incident-postmortem.md 中的影响面：登录接口 502 持续 18 分钟，属于 P0。owner 归属 auth-gateway 团队。',
+              text: '```json\n{\n  "severity": "p0",\n  "owner": "auth-gateway",\n  "actions": [\n    "为 JWT 公钥缓存增加 stale-while-revalidate 降级",\n    "将上游 JWKS 超时从 10s 收紧至 1.5s 并启用熔断",\n    "在预发环境补充 JWKS 不可达混沌演练"\n  ]\n}\n```',
+              metrics: { ttftMs: 410, tps: 86, inputTokens: 2140, cacheRead: 1840, outputTokens: 118, reasoningTokens: 210, stopReason: 'end_turn', authMs: 8 },
+            },
+            {
+              id: 'a1b', modelId: 'deepseek-r1',
+              thought: '检查文档故障级别定义，登录主链路中断 18 分钟符合 P0。提取三条可直接验收的行动项。',
+              text: '```json\n{\n  "severity": "p0",\n  "owner": "identity-platform",\n  "actions": [\n    "JWKS 拉取增加本地磁盘兜底缓存",\n    "配置 1.5s 超时与快速失败熔断策略",\n    "增加公钥轮换失败告警（1 分钟触发）"\n  ]\n}\n```',
+              metrics: { ttftMs: 920, tps: 54, inputTokens: 2140, cacheRead: 0, outputTokens: 109, reasoningTokens: 480, stopReason: 'stop', authMs: 14 },
+            },
+          ],
+          activeAssistantBranch: 0,
+        },
+        {
+          id: 't2',
+          pinned: false,
+          muted: false,
+          userBranches: [
+            { id: 'u2a', text: '把第一条动作拆细成可落地的验收标准，同时对比 Claude Sonnet 4.5 和 GPT-5.2 的严谨度。' },
+          ],
+          activeUserBranch: 0,
+          compareMode: true,
+          assistantBranches: [
+            {
+              id: 'a2a', modelId: 'claude-sonnet-4-5',
+              thought: '聚焦 stale-while-revalidate 降级：需要覆盖缓存 TTL、过期窗口、并发刷新防击穿以及指标埋点。',
+              text: '将第一条拆为 4 项可自动化验收的标准：\n\n- **缓存分层**：内存缓存 TTL 5m，容忍过期窗口 `stale` 24h；启动时同步预热失败不阻塞，回退到本地快照。\n- **防击穿**：同一 `kid` 仅允许单个后台协程刷新（singleflight），其余请求立即返回旧公钥。\n- **可观测**：暴露 `jwks_cache_state{state="fresh|stale|miss"}`，处于 `stale` 超过 10 分钟触发 P2 告警。\n- **演练断言**：断开 JWKS 出口 15 分钟，登录 P99 延迟增幅 `< 5ms`，错误率为 `0`。',
+              metrics: { ttftMs: 380, tps: 91, inputTokens: 2390, cacheRead: 2010, outputTokens: 196, reasoningTokens: 260, stopReason: 'end_turn', authMs: 6 },
+            },
+            {
+              id: 'a2b', modelId: 'gpt-5-2',
+              thought: 'Define deterministic acceptance criteria for JWKS SWR fallback including signature pinning, rotation grace period, and circuit breaker metrics.',
+              text: '建议按「正常态 / 降级态 / 恢复态」三段验收：\n\n- **正常态**：每 5 分钟异步刷新 JWKS，ETag 未变更返回 `304` 零解析开销。\n- **降级态**：上游 5xx 或超时 `> 1.5s` 时保留内存态上一份有效公钥集合最长 12h，拒绝解析未知 `kid` 但允许已缓存 `kid` 继续验签。\n- **恢复态**：上游恢复后 30s 内完成新公钥合并，保留旧 `kid` 宽限期 15 分钟防止密钥轮换瞬断。\n- **测试门禁**：集成测试注入 `503` + 延迟 3s，连续 500 QPS 压测零 502。',
+              metrics: { ttftMs: 490, tps: 112, inputTokens: 2410, cacheRead: 1920, outputTokens: 214, reasoningTokens: 320, stopReason: 'completed', authMs: 11 },
+            },
+          ],
+          activeAssistantBranch: 0,
+        },
+      ],
+    },
+    {
+      id: 'mc-cache',
+      kind: 'model',
+      title: '长文档 Prompt Cache 协议研读',
+      time: '24 分钟前',
+      unread: false,
+      projectName: '模型对话',
+      modelId: 'claude-sonnet-4-5',
+      compareModels: ['claude-sonnet-4-5'],
+      params: {
+        systemPrompt: 'Answer strictly from the attached RFC and cite section numbers.',
+        bareMode: false,
+        effort: 'low',
+        temperature: 0.0,
+        topP: 1.0,
+        maxOutputTokens: 8192,
+        contextBudget: 200000,
+        contextStrategy: 'full',
+        responseFormat: 'text',
+        jsonSchema: '',
+        webSearch: false,
+        fast: false,
+        promptCaching: true,
+        seed: '',
+        stop: '',
+      },
+      pinnedDocs: [
+        { id: 'doc2', name: 'sync-v3-spec.md', tokens: 18420, pinned: true },
+        { id: 'doc3', name: 'protocol-contracts.ts', tokens: 12900, pinned: true },
+      ],
+      summary: '',
+      turns: [
+        {
+          id: 'c1', pinned: false, muted: false,
+          userBranches: [{ id: 'cu1', text: '列出两份文档里对重连游标（cursor）语义不一致的地方。' }],
+          activeUserBranch: 0,
+          assistantBranches: [{
+            id: 'ca1', modelId: 'claude-sonnet-4-5',
+            thought: '比对 sync-v3-spec.md §4.2 与 protocol-contracts.ts 的 CursorPayload 定义。',
+            text: '共发现 **2 处** 语义漂移：\n\n1. `sync-v3-spec.md §4.2` 规定 `cursor` 为闭区间末尾事件号，而 `protocol-contracts.ts` 的注释写的是「下一条待读偏移量」。\n2. 断线重连超窗回退时，规范要求返回 `410 Gone`，但契约枚举中写的是 `SYNC_CURSOR_EXPIRED`（HTTP 409）。',
+            metrics: { ttftMs: 520, tps: 88, inputTokens: 31680, cacheRead: 31320, outputTokens: 132, reasoningTokens: 180, stopReason: 'end_turn', authMs: 7 },
+          }],
+          activeAssistantBranch: 0,
+        },
+      ],
+    },
+    {
+      id: 'mc-bare',
+      kind: 'model',
+      title: '零污染裸模式 · 批量翻译测试',
+      time: '2 小时前',
+      unread: false,
+      projectName: '模型对话',
+      modelId: 'gpt-5-2',
+      compareModels: ['gpt-5-2'],
+      params: {
+        systemPrompt: '',
+        bareMode: true,
+        effort: 'off',
+        temperature: 0.3,
+        topP: 0.95,
+        maxOutputTokens: 4096,
+        contextBudget: 32000,
+        contextStrategy: 'stateless',
+        responseFormat: 'text',
+        jsonSchema: '',
+        webSearch: false,
+        fast: true,
+        promptCaching: false,
+        seed: '42',
+        stop: '',
+      },
+      pinnedDocs: [],
+      summary: '',
+      turns: [
+        {
+          id: 'b1', pinned: false, muted: false,
+          userBranches: [{ id: 'bu1', text: 'Translate to concise UI English (no punctuation): 仅保存在这台设备，不同步到其他服务器' }],
+          activeUserBranch: 0,
+          assistantBranches: [{
+            id: 'ba1', modelId: 'gpt-5-2',
+            thought: '',
+            text: 'Saved on this device only',
+            metrics: { ttftMs: 165, tps: 148, inputTokens: 28, cacheRead: 0, outputTokens: 6, reasoningTokens: 0, stopReason: 'completed', authMs: 5 },
+          }],
+          activeAssistantBranch: 0,
+        },
+      ],
+    },
+    {
+      id: 'ag-auth',
+      kind: 'agent',
+      title: '修复互联路由鉴权回退',
+      time: '12 分钟前',
+      unread: true,
+      projectName: 'riffet',
+      agentName: 'Claude Code',
+      modelLabel: 'Claude Opus 4.6 · high',
+      approval: '默认护栏',
+    },
+    {
+      id: 'ag-doc',
+      kind: 'agent',
+      title: '整理 Q4 性能基准数据表',
+      time: '昨天',
+      unread: false,
+      projectName: '未关联项目',
+      agentName: 'Codex',
+      modelLabel: 'GPT-5.2 · medium',
+      approval: '工作区自动编辑',
+    },
+  ],
+};
+
+/* ---------------- Helpers ---------------- */
+const getSession = () => state.sessions.find(s => s.id === state.activeSessionId) || state.sessions[0];
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function renderMarkdown(text) {
+  // Lightweight deterministic formatter for prototype
+  const blocks = [];
+  let rest = String(text || '');
+  const codeRe = /```(\w*)\n([\s\S]*?)```/g;
+  let last = 0, m;
+  while ((m = codeRe.exec(rest))) {
+    if (m.index > last) blocks.push({ type: 'text', v: rest.slice(last, m.index) });
+    blocks.push({ type: 'code', lang: m[1] || 'text', v: m[2] });
+    last = m.index + m[0].length;
+  }
+  if (last < rest.length) blocks.push({ type: 'text', v: rest.slice(last) });
+
+  return blocks.map(b => {
+    if (b.type === 'code') {
+      return `<pre><div class="code-hd"><span>${esc(b.lang.toUpperCase())}</span><button class="foot-btn" style="height:20px;font-size:11px;" onclick="copyText(${JSON.stringify(b.v)})">复制</button></div><div class="code-bd">${esc(b.v)}</div></pre>`;
+    }
+    const paras = b.v.trim().split(/\n\n+/);
+    return paras.map(p => {
+      if (/^[-*] /.test(p)) {
+        const items = p.split('\n').map(l => `<li>${inlineMd(l.replace(/^[-*] /, ''))}</li>`).join('');
+        return `<ul>${items}</ul>`;
+      }
+      if (/^\d+\. /.test(p)) {
+        const items = p.split('\n').map(l => `<li>${inlineMd(l.replace(/^\d+\. /, ''))}</li>`).join('');
+        return `<ul>${items}</ul>`;
+      }
+      return `<p>${inlineMd(p).replace(/\n/g, '<br>')}</p>`;
+    }).join('');
+  }).join('');
+}
+function inlineMd(s) {
+  return esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:500;color:var(--fg)">$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+}
+
+function estimateTok(str) {
+  return Math.max(1, Math.round((str || '').length * 0.62));
+}
+
+function computeContextStats(sess) {
+  const p = sess.params;
+  const sysTok = p.bareMode ? 0 : estimateTok(p.systemPrompt);
+  const sumTok = p.contextStrategy === 'summary' && sess.summary ? estimateTok(sess.summary) : 0;
+  const docsTok = (sess.pinnedDocs || []).reduce((acc, d) => acc + (d.pinned ? d.tokens : 0), 0);
+  let histTok = 0;
+  const includedTurns = [];
+  if (p.contextStrategy !== 'stateless') {
+    sess.turns.forEach((t, idx) => {
+      if (t.muted) return;
+      const u = t.userBranches[t.activeUserBranch]?.text || '';
+      const a = t.assistantBranches[t.activeAssistantBranch]?.text || '';
+      const tok = estimateTok(u) + estimateTok(a);
+      histTok += tok;
+      includedTurns.push({ idx: idx + 1, id: t.id, u, a, tok, pinned: t.pinned });
+    });
+  }
+  const total = sysTok + sumTok + docsTok + histTok;
+  const pct = Math.min(100, Math.round((total / p.contextBudget) * 100));
+  return { sysTok, sumTok, docsTok, histTok, total, budget: p.contextBudget, pct, includedTurns };
+}
+
+function buildWirePayload(sess, turnId) {
+  const p = sess.params;
+  const turn = sess.turns.find(t => t.id === turnId) || sess.turns[sess.turns.length - 1];
+  const branch = turn?.assistantBranches[turn.activeAssistantBranch];
+  const model = modelById(branch?.modelId || sess.modelId);
+  const msgs = [];
+  if (p.contextStrategy === 'stateless') {
+    if (turn) msgs.push({ role: 'user', content: turn.userBranches[turn.activeUserBranch]?.text || '' });
+  } else {
+    for (const t of sess.turns) {
+      if (t.muted) continue;
+      const u = t.userBranches[t.activeUserBranch]?.text || '';
+      msgs.push({ role: 'user', content: u });
+      if (t.id === turn?.id) break;
+      const a = t.assistantBranches[t.activeAssistantBranch]?.text || '';
+      if (a) msgs.push({ role: 'assistant', content: a });
+    }
+  }
+
+  const sysParts = [];
+  if (!p.bareMode && p.systemPrompt.trim()) sysParts.push(p.systemPrompt.trim());
+  if (p.contextStrategy === 'summary' && sess.summary.trim()) sysParts.push(`<earlier_conversation>\n${sess.summary.trim()}\n</earlier_conversation>`);
+  const docs = (sess.pinnedDocs || []).filter(d => d.pinned);
+  if (docs.length) sysParts.push(docs.map(d => `<pinned_context name="${d.name}" tokens="${d.tokens}" />`).join('\n'));
+  const sysText = sysParts.join('\n\n');
+
+  const tempLocked = model.thinkingLocksTemp && p.effort !== 'off';
+  const body = { model: model.id, stream: true };
+
+  if (model.protocol === 'anthropic') {
+    body.max_tokens = p.maxOutputTokens;
+    if (sysText) {
+      body.system = p.promptCaching
+        ? [{ type: 'text', text: sysText, cache_control: { type: 'ephemeral' } }]
+        : sysText;
+    }
+    if (p.effort !== 'off') {
+      body.thinking = p.effort === 'adaptive' ? { type: 'adaptive' } : { type: 'enabled', budget_tokens: p.effort === 'low' ? 2048 : p.effort === 'medium' ? 8192 : 16384 };
+    }
+    if (!tempLocked) { body.temperature = p.temperature; if (p.topP < 1) body.top_p = p.topP; }
+    if (p.webSearch) body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+    body.messages = msgs;
+  } else if (model.protocol === 'responses') {
+    body.max_output_tokens = p.maxOutputTokens;
+    if (sysText) body.instructions = sysText;
+    if (p.effort !== 'off') body.reasoning = { effort: p.effort === 'adaptive' ? 'high' : p.effort };
+    if (!tempLocked) { body.temperature = p.temperature; if (p.topP < 1) body.top_p = p.topP; }
+    if (p.fast) body.service_tier = 'priority';
+    if (p.webSearch) body.tools = [{ type: 'web_search' }];
+    if (p.responseFormat === 'json_object') body.text = { format: { type: 'json_object' } };
+    if (p.responseFormat === 'json_schema') {
+      let schema = {}; try { schema = JSON.parse(p.jsonSchema || '{}'); } catch {}
+      body.text = { format: { type: 'json_schema', name: 'output', strict: true, schema } };
+    }
+    body.input = msgs;
+  } else {
+    body.max_tokens = p.maxOutputTokens;
+    if (p.effort !== 'off') body.reasoning_effort = p.effort === 'adaptive' ? 'high' : p.effort;
+    body.temperature = p.temperature;
+    if (p.topP < 1) body.top_p = p.topP;
+    if (p.seed) body.seed = Number(p.seed) || p.seed;
+    if (p.responseFormat === 'json_object') body.response_format = { type: 'json_object' };
+    body.messages = [...(sysText ? [{ role: 'system', content: sysText }] : []), ...msgs];
+  }
+  if (p.stop.trim()) body.stop = p.stop.split(',').map(s => s.trim()).filter(Boolean);
+  return { model, body, metrics: branch?.metrics };
+}
+
+function nonDefaultParamTags(sess) {
+  const p = sess.params;
+  const tags = [];
+  if (p.bareMode) tags.push('裸模式');
+  if (p.contextStrategy === 'stateless') tags.push('单轮无状态');
+  if (p.effort !== 'medium') tags.push(`思考:${p.effort === 'off' ? '关' : p.effort}`);
+  const model = modelById(sess.modelId);
+  if (!(model.thinkingLocksTemp && p.effort !== 'off') && p.temperature !== 0.7) tags.push(`T=${p.temperature}`);
+  if (p.responseFormat === 'json_object') tags.push('JSON');
+  if (p.responseFormat === 'json_schema') tags.push('Schema');
+  if (p.webSearch) tags.push('联网');
+  if (p.fast) tags.push('Fast');
+  if (p.promptCaching) tags.push('Cache');
+  return tags;
+}
+
+/* ---------------- Toast & Popover ---------------- */
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toastMount');
+  el.innerHTML = `<div class="toast">${ic('check', 'i-14')}<span>${esc(msg)}</span></div>`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.innerHTML = ''; }, 2400);
+}
+function copyText(text) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+  showToast('已复制到剪贴板');
+}
+function closePopover() { document.getElementById('popoverMount').innerHTML = ''; }
+document.addEventListener('click', e => {
+  if (!e.target.closest('.popover') && !e.target.closest('[data-pop]')) closePopover();
+});
+
+/* ---------------- Render Sidebar ---------------- */
+function renderSidebar() {
+  document.querySelectorAll('[data-ic]').forEach(el => {
+    el.innerHTML = ic(el.dataset.ic, el.dataset.ic === 'plus' || el.dataset.ic === 'search' ? 'i-16' : 'i-16');
+  });
+  document.getElementById('btnTheme').innerHTML = ic(state.dark ? 'sun' : 'moon', 'i-16');
+  document.getElementById('navNew').classList.toggle('active', state.activeView === 'home');
+  document.getElementById('groupTime').classList.toggle('active', state.sidebarGroup === 'time');
+  document.getElementById('groupProject').classList.toggle('active', state.sidebarGroup === 'project');
+
+  const list = document.getElementById('sidebarList');
+  if (state.sidebarGroup === 'time') {
+    list.innerHTML = `<div class="sb-group-title"><span>今天</span><span class="count">${state.sessions.length}</span></div>` +
+      state.sessions.map(s => renderSessionRow(s, true)).join('');
+  } else {
+    const groups = [
+      { key: '模型对话', items: state.sessions.filter(s => s.kind === 'model') },
+      { key: 'riffet', items: state.sessions.filter(s => s.kind === 'agent' && s.projectName === 'riffet') },
+      { key: '未关联项目', items: state.sessions.filter(s => s.kind === 'agent' && s.projectName === '未关联项目') },
+    ];
+    list.innerHTML = groups.map(g => `
+      <div class="sb-group-title"><span>${esc(g.key)}</span><span class="count">${g.items.length}</span></div>
+      ${g.items.map(s => renderSessionRow(s, false)).join('')}
+    `).join('');
+  }
+}
+
+function renderSessionRow(s, showSub) {
+  const active = state.activeView === 'session' && state.activeSessionId === s.id;
+  const subLabel = s.kind === 'model'
+    ? (s.compareModels.length > 1 ? `模型对话 · ${s.compareModels.length} 模型对比` : `模型对话 · ${modelById(s.modelId).name}`)
+    : `${s.projectName} · ${s.agentName}`;
+  const slotHtml = s.unread
+    ? '<span class="dot-unread" title="未读"></span>'
+    : (s.kind === 'model'
+      ? '<span class="dot-type model" title="模型对话（直连 LLM）"></span>'
+      : '<span class="dot-type" title="Agent 会话"></span>');
+  return `
+    <button class="sess-row ${active ? 'active' : ''}" onclick="selectSession('${s.id}')">
+      <span class="slot">${slotHtml}</span>
+      <span class="body">
+        <span class="title trunc">${esc(s.title)}</span>
+        ${showSub ? `<span class="sub trunc">${esc(subLabel)}</span>` : ''}
+      </span>
+      <span class="time tnum">${esc(s.time)}</span>
+    </button>
+  `;
+}
+
+/* ---------------- Render Main ---------------- */
+function renderMain() {
+  const main = document.getElementById('mainCard');
+  if (state.activeView === 'home') {
+    main.innerHTML = renderHome();
+    return;
+  }
+  const sess = getSession();
+  if (sess.kind === 'agent') {
+    main.innerHTML = renderAgentSession(sess);
+    return;
+  }
+  main.innerHTML = renderModelSession(sess);
+}
+
+/* ---- Home (New Session) ---- */
+function renderHome() {
+  const isModel = state.homeTab === 'model';
+  return `
+    <header class="header">
+      <div class="hdr-title-wrap">
+        <span class="hdr-title">新会话</span>
+      </div>
+      <div class="hdr-actions">
+        <span class="badge">${isModel ? '直连 LLM 网关 · 无 Agent 包装' : 'Agent 执行 · 工具与工作目录'}</span>
+      </div>
+    </header>
+    <div class="home-stage">
+      <div class="home-tabs" role="tablist">
+        <button class="${!isModel ? 'active' : ''}" onclick="setHomeTab('agent')">Agent 任务</button>
+        <button class="${isModel ? 'active' : ''}" onclick="setHomeTab('model')">模型对话</button>
+      </div>
+      <h1 class="home-h1">${isModel ? '直接与模型对话' : '要在 riffet 做什么？'}</h1>
+
+      <div style="width:100%;max-width:760px;">
+        <div class="composer-card">
+          ${state.homeRefs.length ? `<div class="composer-refs">${state.homeRefs.map((r, i) => `
+            <span class="ref-pill">${ic('file', 'i-12')}<span>${esc(r.name)}</span><button onclick="removeHomeRef(${i})">${ic('x', 'i-12')}</button></span>
+          `).join('')}</div>` : ''}
+          <textarea class="composer-input" id="homeInput" placeholder="${isModel ? '输入提示词，或从下方选一个预设起点…' : '描述需要 Agent 执行的任务…'}" oninput="state.homeDraft=this.value">${esc(state.homeDraft)}</textarea>
+          <div class="composer-bar">
+            <div class="bar-group">
+              <button class="icon-btn sm" title="添加附件或只读材料" onclick="showToast('已支持图片、PDF 与文本文件只读注入')">${ic('plus', 'i-14')}</button>
+              ${isModel ? `
+                <button class="cap-btn subtle" onclick="showToast('新建后即可在右侧控制台精细调节参数、上下文与 Wire')">${ic('sliders', 'i-14')}<span>预设：${esc(SYSTEM_PRESETS.find(p => p.id === state.homePreset)?.name)}</span></button>
+                <button class="cap-btn" onclick="toggleHomeBare()">${ic('zap', 'i-14')}<span>${state.homePreset === 'bare' ? '裸模式已开' : '开启裸模式'}</span></button>
+              ` : `
+                <button class="cap-btn subtle">${ic('shield', 'i-14')}<span>默认护栏</span></button>
+                <button class="cap-btn">${ic('file', 'i-14')}<span>riffet</span></button>
+              `}
+            </div>
+            <div class="bar-group">
+              <span class="cap-btn" style="color:var(--fg-3);">${isModel ? 'Claude Sonnet 4.5' : 'Claude Code · Opus 4.6'}</span>
+              <button class="send-btn" onclick="submitHome()" title="发送">${ic('arrowUp', 'i-16')}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      ${isModel ? `
+        <div class="preset-grid">
+          ${SYSTEM_PRESETS.map(pr => `
+            <button class="preset-card ${state.homePreset === pr.id ? 'active' : ''}" onclick="state.homePreset='${pr.id}';renderMain()">
+              <span class="t">${esc(pr.name)}</span>
+              <span class="d">${esc(pr.desc)}</span>
+            </button>
+          `).join('')}
+        </div>
+      ` : `
+        <div style="font-size:12px;color:var(--fg-3);">Agent 任务会启动真实 CLI、读写目录并运行命令；只需直接和模型推演或调 Prompt 时，切到「模型对话」。</div>
+      `}
+    </div>
+  `;
+}
+
+/* ---- Agent Session (Reference Contrast) ---- */
+function renderAgentSession(sess) {
+  return `
+    <header class="header">
+      <div class="hdr-title-wrap">
+        <span class="hdr-title trunc">${esc(sess.title)}</span>
+        <span class="badge">${esc(sess.projectName)}</span>
+        <span class="badge">${esc(sess.agentName)}</span>
+      </div>
+      <div class="hdr-actions">
+        <button class="pill-btn secondary" onclick="showToast('Agent 会话右侧面板：文件 / 变更 / 终端 / Trace')">${ic('file', 'i-14')}<span>文件</span></button>
+        <button class="pill-btn" onclick="showToast('Agent 会话专属：Git diff 与检查点')">${ic('git', 'i-14')}<span>变更</span></button>
+        <button class="pill-btn" onclick="showToast('Agent 会话专属：实时终端')">${ic('terminal', 'i-14')}<span>终端</span></button>
+      </div>
+    </header>
+    <div class="workspace">
+      <div class="stage">
+        <div class="transcript-scroll">
+          <div class="reading-col">
+            <div class="ctx-banner">
+              <span>对照视图：这是普通 <strong>Agent 会话</strong>，侧重文件、终端、权限与工具执行。点击左侧任意「模型对话」对比差异化会话页。</span>
+            </div>
+            <div class="turn">
+              <div class="u-row">
+                <div class="u-bubble">检查互联转发路由里缺省策略是否为 deny，补上对应断言测试。</div>
+              </div>
+              <div class="a-wrap">
+                <div class="panel-card" style="background:var(--bg-subtle);gap:6px;">
+                  <div style="font-size:12px;font-weight:500;color:var(--fg-2);">已处理 · 18s · Read 2 · Edit 1 · Run 1</div>
+                  <div class="tool-row"><span class="tool-verb">Read</span><span class="tool-target">apps/server/src/links/policy.ts</span></div>
+                  <div class="tool-row"><span class="tool-verb">Edit</span><span class="tool-target">apps/server/src/links/policy.test.ts</span><span class="diff-stat" style="margin-left:auto;"><span class="add">+14</span> <span class="del">−2</span></span></div>
+                  <div class="tool-row"><span class="tool-verb">Run</span><span class="tool-target">npx vitest run links/policy.test.ts</span></div>
+                </div>
+                <div class="a-md"><p>已核对 <code>policy.ts</code>：未在策略表登记的路径默认返回 <code>deny</code>，并在 <code>policy.test.ts</code> 补齐了未知路径回归用例（全部通过）。</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="composer-dock">
+          <div class="composer-col">
+            <div class="composer-card">
+              <textarea class="composer-input" placeholder="继续向 Agent 发送指令…" rows="2"></textarea>
+              <div class="composer-bar">
+                <div class="bar-group">
+                  <button class="icon-btn sm">${ic('plus', 'i-14')}</button>
+                  <button class="cap-btn">${ic('shield', 'i-14')}<span>${esc(sess.approval)}</span></button>
+                  <button class="cap-btn">${ic('sliders', 'i-14')}<span>技能与工具</span></button>
+                </div>
+                <div class="bar-group">
+                  <span class="cap-btn" style="color:var(--fg-3);">${esc(sess.modelLabel)}</span>
+                  <button class="send-btn" onclick="showToast('原型聚焦模型对话；点左侧模型对话体验完整交互')">${ic('arrowUp', 'i-16')}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---- Model Chat Session (The Core Differentiated Page) ---- */
+function renderModelSession(sess) {
+  const ctx = computeContextStats(sess);
+  const tags = nonDefaultParamTags(sess);
+  const hasCompare = sess.compareModels.length > 1;
+  const ringColor = ctx.pct >= 90 ? 'var(--danger)' : ctx.pct >= 75 ? 'var(--warning)' : 'var(--primary)';
+  const dash = Math.round((ctx.pct / 100) * 37.7);
+
+  return `
+    <header class="header">
+      <div class="hdr-title-wrap">
+        <span class="hdr-title trunc">${esc(sess.title)}</span>
+        <span class="badge accent">模型对话</span>
+        ${sess.params.bareMode ? '<span class="badge warning">裸模式</span>' : ''}
+        ${sess.params.contextStrategy === 'stateless' ? '<span class="badge">单轮无状态</span>' : ''}
+      </div>
+      <div class="hdr-actions">
+        <button class="pill-btn secondary" onclick="promoteToAgent()" title="携带当前分支结论与钉住材料转为 Agent 任务">
+          ${ic('rocket', 'i-14')}<span>转为 Agent 任务</span>
+        </button>
+        <button class="pill-btn ${state.inspectorOpen && state.inspectorTab === 'params' ? 'active' : ''}" onclick="openInspector('params')">
+          ${ic('sliders', 'i-14')}<span>参数</span>
+        </button>
+        <button class="pill-btn ${state.inspectorOpen && state.inspectorTab === 'context' ? 'active' : ''}" onclick="openInspector('context')">
+          ${ic('layers', 'i-14')}<span>上下文</span>
+        </button>
+        <button class="pill-btn ${state.inspectorOpen && state.inspectorTab === 'wire' ? 'active' : ''}" onclick="openInspector('wire')">
+          ${ic('code', 'i-14')}<span>Wire</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <div class="stage">
+        <div class="transcript-scroll" id="transcriptScroll">
+          <div class="reading-col ${hasCompare ? 'wide' : ''}">
+            <!-- White-box context strip -->
+            <div class="ctx-banner">
+              <span>${sess.params.bareMode
+                ? 'System Prompt 已清空（零污染裸模式）'
+                : `System Prompt · ${ctx.sysTok} tok`}</span>
+              ${(sess.pinnedDocs || []).filter(d => d.pinned).map(d => `
+                <span class="ctx-chip">${ic('pin', 'i-12')}<span>${esc(d.name)}</span><span class="tnum" style="color:var(--fg-4);">${(d.tokens/1000).toFixed(1)}k</span></span>
+              `).join('')}
+              ${sess.params.promptCaching ? '<span class="badge success">Prompt Cache 已启用</span>' : ''}
+              <button class="ctx-link" style="margin-left:auto;" onclick="openInspector('params')">调整配置</button>
+            </div>
+
+            ${sess.params.contextStrategy === 'summary' && sess.summary ? `
+              <div class="ctx-cut-line">
+                <button onclick="openInspector('context')">早期摘要已注入上下文 · 点击查看或编辑</button>
+              </div>
+            ` : ''}
+
+            ${sess.params.contextStrategy === 'stateless' ? `
+              <div class="ctx-cut-line">
+                <button onclick="openInspector('context')">无状态单轮模式 · 每轮独立发送，不携带上文</button>
+              </div>
+            ` : ''}
+
+            ${sess.turns.map((turn, idx) => renderTurn(sess, turn, idx)).join('')}
+          </div>
+        </div>
+
+        <!-- Model Chat Composer -->
+        <div class="composer-dock">
+          <div class="composer-col ${hasCompare ? 'wide' : ''}">
+            <div class="composer-card">
+              ${(sess.pinnedDocs || []).length ? `
+                <div class="composer-refs">
+                  ${sess.pinnedDocs.map(d => `
+                    <span class="ref-pill" title="钉在会话上下文中，每轮随 Prompt Cache 复用">
+                      ${ic(d.pinned ? 'pin' : 'file', 'i-12')}
+                      <span>${esc(d.name)}</span>
+                      <span class="tok tnum">${(d.tokens/1000).toFixed(1)}k tok</span>
+                      <button onclick="togglePinDoc('${d.id}')" title="切换常驻上下文">${ic('x', 'i-12')}</button>
+                    </span>
+                  `).join('')}
+                </div>
+              ` : ''}
+              <textarea class="composer-input" id="chatInput" placeholder="${hasCompare ? `同时发送给 ${sess.compareModels.length} 个模型进行并排对比…` : '输入消息…（⌘↵ 或 Enter 发送）'}" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
+              <div class="composer-bar">
+                <div class="bar-group">
+                  <button class="icon-btn sm" title="注入只读文本/文件/图片" onclick="addSampleDoc()">${ic('plus', 'i-14')}</button>
+                  <button class="cap-btn ${hasCompare ? 'active' : ''}" data-pop="compare" onclick="openComparePopover(this)" title="选择单个或多个模型并行对比">
+                    ${ic('columns', 'i-14')}
+                    <span>${hasCompare ? `对比 ${sess.compareModels.length} 个模型` : modelById(sess.modelId).name}</span>
+                    ${ic('chevDown', 'i-12')}
+                  </button>
+                  ${tags.length ? `
+                    <button class="cap-btn subtle" onclick="openInspector('params')" title="当前生效的非默认参数">
+                      <span>${esc(tags.slice(0, 4).join(' · '))}${tags.length > 4 ? ` +${tags.length - 4}` : ''}</span>
+                    </button>
+                  ` : ''}
+                </div>
+                <div class="bar-group">
+                  <button class="ring-btn tnum" onclick="openInspector('context')" title="上下文构成与预算">
+                    <svg width="16" height="16" viewBox="0 0 16 16">
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="var(--line-strong)" stroke-width="1.6"/>
+                      <circle cx="8" cy="8" r="6" fill="none" stroke="${ringColor}" stroke-width="1.6" stroke-dasharray="${dash} 38" transform="rotate(-90 8 8)" stroke-linecap="round"/>
+                    </svg>
+                    <span>${(ctx.total/1000).toFixed(1)}k / ${(ctx.budget/1000).toFixed(0)}k</span>
+                  </button>
+                  <button class="send-btn" onclick="sendChatMessage()" title="发送">${ic('arrowUp', 'i-16')}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      ${state.inspectorOpen ? renderInspector(sess, ctx) : ''}
+    </div>
+  `;
+}
+
+function renderTurn(sess, turn, idx) {
+  const uBranch = turn.userBranches[turn.activeUserBranch];
+  const isEditingUser = state.editingNodeId === uBranch.id;
+  const isCompare = turn.compareMode && turn.assistantBranches.length > 1;
+  const activeA = turn.assistantBranches[turn.activeAssistantBranch] || turn.assistantBranches[0];
+
+  return `
+    <div class="turn ${turn.muted ? 'muted' : ''}" data-turn="${turn.id}">
+      <!-- User message -->
+      <div class="u-row">
+        ${isEditingUser ? `
+          <div class="u-edit-box">
+            <textarea id="editArea">${esc(uBranch.text)}</textarea>
+            <div style="display:flex;justify-content:flex-end;gap:6px;">
+              <button class="pill-btn" onclick="state.editingNodeId=null;renderMain()">取消</button>
+              <button class="pill-btn primary" onclick="saveUserBranch('${turn.id}')">保存并分叉重跑</button>
+            </div>
+          </div>
+        ` : `<div class="u-bubble">${esc(uBranch.text)}</div>`}
+
+        <div class="u-meta">
+          ${turn.pinned ? '<span class="badge accent">已固定上下文</span>' : ''}
+          ${turn.muted ? '<span class="badge">已排除出上下文</span>' : ''}
+          ${turn.userBranches.length > 1 ? `
+            <span class="branch-pager">
+              <button onclick="switchUserBranch('${turn.id}', -1)">${ic('chevLeft', 'i-12')}</button>
+              <span>${turn.activeUserBranch + 1} / ${turn.userBranches.length}</span>
+              <button onclick="switchUserBranch('${turn.id}', 1)">${ic('chevRight', 'i-12')}</button>
+            </span>
+          ` : ''}
+          <button class="foot-btn" onclick="startEditUser('${uBranch.id}')">${ic('edit', 'i-12')}<span>编辑并分叉</span></button>
+        </div>
+      </div>
+
+      <!-- Assistant message(s) -->
+      ${isCompare ? renderCompareTurn(turn) : renderSingleAnswer(turn, activeA)}
+    </div>
+  `;
+}
+
+function renderSingleAnswer(turn, a) {
+  if (!a) return '';
+  const m = modelById(a.modelId);
+  const thoughtOpen = !!state.expandedThoughts[a.id];
+  const isEditingA = state.editingNodeId === a.id;
+  const cachePct = a.metrics?.inputTokens ? Math.round(((a.metrics.cacheRead || 0) / a.metrics.inputTokens) * 100) : 0;
+
+  return `
+    <div class="a-wrap">
+      ${a.thought ? `
+        <button class="a-thought" onclick="toggleThought('${a.id}')">
+          <span class="verb">Think</span>
+          <span class="trunc" style="max-width:460px;">${thoughtOpen ? '收起思考过程' : esc(a.thought)}</span>
+          <span class="tnum" style="color:var(--fg-4);">${a.metrics?.reasoningTokens || 0} tok</span>
+        </button>
+        ${thoughtOpen ? `<div class="a-thought-body">${esc(a.thought)}</div>` : ''}
+      ` : ''}
+
+      ${isEditingA ? `
+        <div class="u-edit-box" style="width:100%;">
+          <textarea id="editArea" style="min-height:110px;">${esc(a.text)}</textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--fg-3);">编辑助手回复可用于 few-shot 示范或纠偏后续上下文</span>
+            <div style="display:flex;gap:6px;">
+              <button class="pill-btn" onclick="state.editingNodeId=null;renderMain()">取消</button>
+              <button class="pill-btn primary" onclick="saveAssistantEdit('${turn.id}', '${a.id}')">保存修改</button>
+            </div>
+          </div>
+        </div>
+      ` : `<div class="a-md">${renderMarkdown(a.text)}</div>`}
+
+      <div class="a-foot">
+        ${turn.assistantBranches.length > 1 ? `
+          <span class="branch-pager" title="切换该轮不同变体">
+            <button onclick="switchAssistantBranch('${turn.id}', -1)">${ic('chevLeft', 'i-12')}</button>
+            <span>${turn.activeAssistantBranch + 1} / ${turn.assistantBranches.length}</span>
+            <button onclick="switchAssistantBranch('${turn.id}', 1)">${ic('chevRight', 'i-12')}</button>
+          </span>
+        ` : ''}
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:0 4px;color:var(--fg-2);">
+          <span class="brand-dot" style="background:${m.color};"></span>
+          <span>${esc(m.name)}</span>
+        </span>
+        <button class="foot-btn" onclick="rerunTurn('${turn.id}')" title="用当前参数重新生成新分支">${ic('refresh', 'i-12')}<span>重生成</span></button>
+        <button class="foot-btn" data-pop="rerunModel" onclick="openRerunModelPopover(this, '${turn.id}')" title="换一个模型重跑本轮并排对比">${ic('columns', 'i-12')}<span>换模型对比</span></button>
+        <button class="foot-btn" onclick="startEditUser('${a.id}')" title="直接编辑助手回答以构造上下文">${ic('edit', 'i-12')}<span>编辑</span></button>
+        <button class="foot-btn ${turn.pinned ? 'on' : ''}" onclick="toggleTurnPin('${turn.id}')" title="固定在上下文中不被裁剪">${ic('pin', 'i-12')}</button>
+        <button class="foot-btn ${turn.muted ? 'warn-on' : ''}" onclick="toggleTurnMute('${turn.id}')" title="从后续请求上下文中排除此轮">${ic('eyeOff', 'i-12')}</button>
+        <button class="foot-btn" onclick="inspectWireTurn('${turn.id}')" title="查看本轮发给网关的原始请求与指标">${ic('code', 'i-12')}<span>Wire</span></button>
+
+        ${a.metrics ? `
+          <span class="metrics-inline tnum">
+            <span>TTFT ${a.metrics.ttftMs}ms</span>
+            <span>${a.metrics.tps} tok/s</span>
+            ${cachePct > 0 ? `<span style="color:var(--success);">Cache ${cachePct}%</span>` : ''}
+          </span>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderCompareTurn(turn) {
+  return `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--fg-3);">
+        <span>同轮多模型并排对比 · 同一份输入与参数</span>
+        <div style="display:flex;gap:4px;">
+          <button class="foot-btn ${turn.pinned ? 'on' : ''}" onclick="toggleTurnPin('${turn.id}')">${ic('pin', 'i-12')}<span>${turn.pinned ? '已固定' : '固定上下文'}</span></button>
+          <button class="foot-btn" onclick="inspectWireTurn('${turn.id}')">${ic('code', 'i-12')}<span>Wire</span></button>
+        </div>
+      </div>
+      <div class="compare-grid">
+        ${turn.assistantBranches.map((a, i) => {
+          const m = modelById(a.modelId);
+          const picked = i === turn.activeAssistantBranch;
+          const cachePct = a.metrics?.inputTokens ? Math.round(((a.metrics.cacheRead || 0) / a.metrics.inputTokens) * 100) : 0;
+          return `
+            <div class="cmp-card ${picked ? 'picked' : ''}">
+              <div class="cmp-hd">
+                <span class="cmp-model"><span class="brand-dot" style="background:${m.color};"></span>${esc(m.name)}</span>
+                <span class="badge tnum">${a.metrics?.ttftMs || 0}ms · ${a.metrics?.tps || 0} tok/s</span>
+              </div>
+              <div class="cmp-body a-md">${renderMarkdown(a.text)}</div>
+              <div class="cmp-ft tnum">
+                <span>${a.metrics?.outputTokens || 0} out${cachePct ? ` · Cache ${cachePct}%` : ''}</span>
+                <button class="pill-btn ${picked ? 'primary' : 'secondary'}" style="height:24px;padding:0 8px;font-size:11.5px;" onclick="adoptCompareBranch('${turn.id}', ${i})">
+                  ${picked ? '沿此分支继续' : '选择并收束'}
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------- Right Inspector ---------------- */
+function renderInspector(sess, ctx) {
+  const tab = state.inspectorTab;
+  return `
+    <aside class="inspector">
+      <div class="insp-tabs">
+        <button class="insp-tab ${tab === 'params' ? 'active' : ''}" onclick="openInspector('params')">${ic('sliders', 'i-14')}<span>参数</span></button>
+        <button class="insp-tab ${tab === 'context' ? 'active' : ''}" onclick="openInspector('context')">${ic('layers', 'i-14')}<span>上下文</span></button>
+        <button class="insp-tab ${tab === 'wire' ? 'active' : ''}" onclick="openInspector('wire')">${ic('code', 'i-14')}<span>Wire</span></button>
+        <button class="icon-btn sm" style="margin-left:auto;" onclick="state.inspectorOpen=false;renderMain()" title="收起面板">${ic('x', 'i-14')}</button>
+      </div>
+      <div class="insp-body">
+        ${tab === 'params' ? renderParamsPanel(sess) : tab === 'context' ? renderContextPanel(sess, ctx) : renderWirePanel(sess)}
+      </div>
+    </aside>
+  `;
+}
+
+function renderParamsPanel(sess) {
+  const p = sess.params;
+  const model = modelById(sess.modelId);
+  const tempLocked = model.thinkingLocksTemp && p.effort !== 'off';
+
+  return `
+    <!-- System Prompt -->
+    <div class="panel-card">
+      <div class="panel-card-hd">
+        <span>System Prompt</span>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;color:var(--fg-3);cursor:pointer;">
+          <span>裸模式</span>
+          <button class="switch ${p.bareMode ? 'on' : ''}" onclick="toggleParam('bareMode')" aria-label="零污染裸模式"></button>
+        </label>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;">
+        ${SYSTEM_PRESETS.map(pr => `
+          <button class="foot-btn ${(!p.bareMode && p.systemPrompt === pr.text) || (p.bareMode && pr.id === 'bare') ? 'on' : ''}" onclick="applyPreset('${pr.id}')">${esc(pr.name)}</button>
+        `).join('')}
+      </div>
+      <textarea class="sys-area" ${p.bareMode ? 'disabled' : ''} placeholder="${p.bareMode ? '裸模式已开启：不向模型注入任何系统提示词' : '输入系统提示词…'}" oninput="updateParam('systemPrompt', this.value)">${p.bareMode ? '' : esc(p.systemPrompt)}</textarea>
+    </div>
+
+    <!-- Thinking & Effort -->
+    <div class="panel-card">
+      <div class="panel-card-hd">
+        <span>推理深度（Effort）</span>
+        <span class="mono" style="font-size:11px;color:var(--fg-4);">${esc(model.protocol)}</span>
+      </div>
+      <div class="seg">
+        ${['off','low','medium','high','adaptive'].map(lv => `
+          <button class="${p.effort === lv ? 'active' : ''}" onclick="updateParam('effort', '${lv}', true)">${lv === 'off' ? '关' : lv === 'adaptive' ? 'Auto' : lv}</button>
+        `).join('')}
+      </div>
+      ${tempLocked ? `<div class="field-note">${esc(model.name)} 开启思考时，网关协议禁用采样参数；关闭思考后可调 Temperature / Top P。</div>` : ''}
+    </div>
+
+    <!-- Sampling & Budgets -->
+    <div class="panel-card">
+      <div class="panel-card-hd"><span>采样与输出预算</span></div>
+      <div class="field-col ${tempLocked ? 'field-row disabled' : ''}" style="display:flex;flex-direction:column;align-items:stretch;">
+        <div class="field-row"><span>Temperature</span><span class="mono tnum">${p.temperature.toFixed(2)}</span></div>
+        <input type="range" min="0" max="2" step="0.05" value="${p.temperature}" ${tempLocked ? 'disabled' : ''} oninput="updateParam('temperature', parseFloat(this.value))" />
+      </div>
+      <div class="field-col ${tempLocked ? 'field-row disabled' : ''}" style="display:flex;flex-direction:column;align-items:stretch;">
+        <div class="field-row"><span>Top P</span><span class="mono tnum">${p.topP.toFixed(2)}</span></div>
+        <input type="range" min="0.1" max="1" step="0.05" value="${p.topP}" ${tempLocked ? 'disabled' : ''} oninput="updateParam('topP', parseFloat(this.value))" />
+      </div>
+      <div class="field-col">
+        <div class="field-row"><span>Max Output Tokens</span><span class="mono tnum">${p.maxOutputTokens.toLocaleString()}</span></div>
+        <input type="range" min="1024" max="65536" step="1024" value="${p.maxOutputTokens}" oninput="updateParam('maxOutputTokens', parseInt(this.value, 10))" />
+      </div>
+      <div class="field-row">
+        <span>Seed</span>
+        <input class="input-sm mono" placeholder="随机" value="${esc(p.seed)}" oninput="updateParam('seed', this.value)" />
+      </div>
+      <div class="field-row">
+        <span>Stop 序列</span>
+        <input class="input-sm mono" placeholder="逗号分隔" value="${esc(p.stop)}" oninput="updateParam('stop', this.value)" />
+      </div>
+    </div>
+
+    <!-- Structured Output & Protocol switches -->
+    <div class="panel-card">
+      <div class="panel-card-hd"><span>输出格式与网关能力</span></div>
+      <div class="field-row">
+        <span>Response Format</span>
+        <select class="select-sm" onchange="updateParam('responseFormat', this.value, true)">
+          <option value="text" ${p.responseFormat === 'text' ? 'selected' : ''}>纯文本</option>
+          <option value="json_object" ${p.responseFormat === 'json_object' ? 'selected' : ''}>JSON Object</option>
+          <option value="json_schema" ${p.responseFormat === 'json_schema' ? 'selected' : ''}>JSON Schema</option>
+        </select>
+      </div>
+      ${p.responseFormat === 'json_schema' ? `
+        <textarea class="sys-area mono-sm" oninput="updateParam('jsonSchema', this.value)">${esc(p.jsonSchema)}</textarea>
+      ` : ''}
+      <div class="field-row ${!model.supportsSearch ? 'disabled' : ''}">
+        <span>联网搜索（网关原生）</span>
+        <button class="switch ${p.webSearch && model.supportsSearch ? 'on' : ''}" ${!model.supportsSearch ? 'disabled' : ''} onclick="toggleParam('webSearch')"></button>
+      </div>
+      <div class="field-row ${!model.supportsFast ? 'disabled' : ''}">
+        <span>Fast Priority Tier</span>
+        <button class="switch ${p.fast && model.supportsFast ? 'on' : ''}" ${!model.supportsFast ? 'disabled' : ''} onclick="toggleParam('fast')"></button>
+      </div>
+    </div>
+  `;
+}
+
+function renderContextPanel(sess, ctx) {
+  const p = sess.params;
+  const w = v => Math.max(v > 0 ? 2 : 0, Math.min(100, (v / ctx.budget) * 100));
+  return `
+    <div class="panel-card">
+      <div class="panel-card-hd">
+        <span>本轮 Token 构成</span>
+        <span class="mono tnum" style="color:var(--fg);">${ctx.total.toLocaleString()} / ${(ctx.budget/1000).toFixed(0)}k</span>
+      </div>
+      <div class="tok-bar">
+        <div class="tok-seg" style="width:${w(ctx.sysTok)}%;background:var(--chart-1);" title="System"></div>
+        <div class="tok-seg" style="width:${w(ctx.docsTok)}%;background:var(--chart-2);" title="钉住材料"></div>
+        <div class="tok-seg" style="width:${w(ctx.sumTok)}%;background:var(--chart-3);" title="历史摘要"></div>
+        <div class="tok-seg" style="width:${w(ctx.histTok)}%;background:var(--chart-4);" title="对话轮次"></div>
+      </div>
+      <div class="tok-legend tnum">
+        <div class="tok-item"><span class="tok-dot" style="background:var(--chart-1);"></span><span>System</span><span class="tok-val">${ctx.sysTok}</span></div>
+        <div class="tok-item"><span class="tok-dot" style="background:var(--chart-2);"></span><span>钉住材料</span><span class="tok-val">${ctx.docsTok}</span></div>
+        <div class="tok-item"><span class="tok-dot" style="background:var(--chart-3);"></span><span>摘要</span><span class="tok-val">${ctx.sumTok}</span></div>
+        <div class="tok-item"><span class="tok-dot" style="background:var(--chart-4);"></span><span>历史轮次</span><span class="tok-val">${ctx.histTok}</span></div>
+      </div>
+      <div class="field-row" style="padding-top:4px;">
+        <span>上下文上限</span>
+        <select class="select-sm tnum" onchange="updateParam('contextBudget', parseInt(this.value,10), true)">
+          ${[32000, 48000, 128000, 200000].map(v => `<option value="${v}" ${p.contextBudget === v ? 'selected' : ''}>${v/1000}k tokens</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-card-hd"><span>上下文策略与缓存</span></div>
+      <div class="seg">
+        ${[['summary','自动摘要'],['window','滑动截断'],['full','手动全量'],['stateless','单轮']].map(([k, lb]) => `
+          <button class="${p.contextStrategy === k ? 'active' : ''}" onclick="updateParam('contextStrategy', '${k}', true)">${lb}</button>
+        `).join('')}
+      </div>
+      <div class="field-row">
+        <div>
+          <div>Prompt Caching</div>
+          <div class="field-note">自动在 System 与稳定前缀标记缓存断点</div>
+        </div>
+        <button class="switch ${p.promptCaching ? 'on' : ''}" onclick="toggleParam('promptCaching')"></button>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-card-hd">
+        <span>轮次编排</span>
+        <span class="field-note">与阅读列同步</span>
+      </div>
+      <div class="ctx-list">
+        ${sess.turns.map((t, i) => {
+          const u = t.userBranches[t.activeUserBranch]?.text || '';
+          const tok = estimateTok(u) + estimateTok(t.assistantBranches[t.activeAssistantBranch]?.text || '');
+          return `
+            <div class="ctx-turn-row ${t.muted ? 'muted' : ''} ${t.pinned ? 'pinned' : ''}">
+              <span class="mono" style="color:var(--fg-4);">#${i+1}</span>
+              <span class="trunc" style="flex:1;">${esc(u)}</span>
+              <span class="tnum" style="color:var(--fg-4);font-size:11px;">${tok}</span>
+              <button class="icon-btn sm ${t.pinned ? 'active' : ''}" onclick="toggleTurnPin('${t.id}')" title="固定保留">${ic('pin', 'i-12')}</button>
+              <button class="icon-btn sm ${t.muted ? 'active' : ''}" onclick="toggleTurnMute('${t.id}')" title="排除出上下文">${ic('eyeOff', 'i-12')}</button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+
+    ${p.contextStrategy === 'summary' ? `
+      <div class="panel-card">
+        <div class="panel-card-hd">
+          <span>压缩摘要（可编辑）</span>
+          <button class="foot-btn" onclick="regenerateSummary()">重新生成</button>
+        </div>
+        <textarea class="sys-area" style="min-height:66px;" placeholder="尚无摘要…" oninput="getSession().summary=this.value;renderMain()">${esc(sess.summary)}</textarea>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderWirePanel(sess) {
+  const { model, body, metrics } = buildWirePayload(sess, state.selectedWireTurnId);
+  const jsonStr = JSON.stringify(body, null, 2);
+  const curl = `curl -X POST ${model.endpoint} \\\n  -H "Content-Type: application/json" \\\n  -H "Authorization: Bearer $API_KEY" \\\n  -d '${jsonStr.replace(/'/g, "'\\''")}'`;
+
+  return `
+    <div class="panel-card">
+      <div class="panel-card-hd">
+        <span>检查轮次</span>
+        <select class="select-sm" onchange="state.selectedWireTurnId=this.value;renderMain()">
+          ${sess.turns.map((t, i) => `<option value="${t.id}" ${(state.selectedWireTurnId === t.id || (!state.selectedWireTurnId && i === sess.turns.length - 1)) ? 'selected' : ''}>第 ${i+1} 轮 · ${esc(t.userBranches[t.activeUserBranch]?.text.slice(0,14))}…</option>`).join('')}
+        </select>
+      </div>
+      <div class="field-note mono" style="word-break:break-all;">POST ${esc(model.endpoint)}</div>
+      <div class="wire-grid tnum">
+        <div class="wire-stat"><span class="k">TTFT / Auth</span><span class="v">${metrics ? `${metrics.ttftMs}ms / ${metrics.authMs}ms` : '—'}</span></div>
+        <div class="wire-stat"><span class="k">吞吐速度</span><span class="v">${metrics ? `${metrics.tps} tok/s` : '—'}</span></div>
+        <div class="wire-stat"><span class="k">Input / Cache</span><span class="v">${metrics ? `${metrics.inputTokens} / ${metrics.cacheRead}` : '—'}</span></div>
+        <div class="wire-stat"><span class="k">Output / Stop</span><span class="v">${metrics ? `${metrics.outputTokens} · ${metrics.stopReason}` : '—'}</span></div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-card-hd">
+        <span>实际请求体（实时联动）</span>
+        <div style="display:flex;gap:4px;">
+          <button class="foot-btn" onclick="copyText(${JSON.stringify(jsonStr)})">${ic('copy', 'i-12')}<span>JSON</span></button>
+          <button class="foot-btn" onclick="copyText(${JSON.stringify(curl)})">${ic('terminal', 'i-12')}<span>cURL</span></button>
+        </div>
+      </div>
+      <pre class="wire-json">${esc(jsonStr)}</pre>
+    </div>
+  `;
+}
+
+/* ---------------- Interactive Actions ---------------- */
+function selectSession(id) {
+  state.activeView = 'session';
+  state.activeSessionId = id;
+  const s = getSession();
+  s.unread = false;
+  if (s.kind === 'model') state.selectedWireTurnId = s.turns[s.turns.length - 1]?.id || null;
+  state.editingNodeId = null;
+  renderAll();
+}
+
+function setHomeTab(tab) { state.homeTab = tab; renderMain(); }
+function toggleHomeBare() { state.homePreset = state.homePreset === 'bare' ? 'default' : 'bare'; renderMain(); }
+function removeHomeRef(i) { state.homeRefs.splice(i, 1); renderMain(); }
+
+function submitHome() {
+  const text = (state.homeDraft || '').trim() || '对比 Anthropic Prompt Caching 与 OpenAI Prefix Caching 的工程差异';
+  if (state.homeTab === 'agent') {
+    const id = 'ag-' + Date.now();
+    state.sessions.unshift({
+      id, kind: 'agent', title: text.slice(0, 22), time: '刚刚', unread: false,
+      projectName: 'riffet', agentName: 'Claude Code', modelLabel: 'Claude Opus 4.6 · high', approval: '默认护栏',
+    });
+    state.homeDraft = ''; state.homeRefs = [];
+    selectSession(id);
+    showToast('已创建 Agent 任务会话');
+    return;
+  }
+  const preset = SYSTEM_PRESETS.find(p => p.id === state.homePreset) || SYSTEM_PRESETS[0];
+  const id = 'mc-' + Date.now();
+  const sess = {
+    id, kind: 'model', title: text.slice(0, 22), time: '刚刚', unread: false, projectName: '模型对话',
+    modelId: 'claude-sonnet-4-5', compareModels: ['claude-sonnet-4-5'],
+    params: {
+      systemPrompt: preset.text, bareMode: preset.id === 'bare', effort: 'medium', temperature: 0.7, topP: 1,
+      maxOutputTokens: 16384, contextBudget: 128000, contextStrategy: 'summary', responseFormat: preset.id === 'json' ? 'json_schema' : 'text',
+      jsonSchema: '{\n  "type": "object",\n  "properties": { "result": { "type": "string" } }\n}',
+      webSearch: false, fast: false, promptCaching: true, seed: '', stop: '',
+    },
+    pinnedDocs: [], summary: '', turns: [],
+  };
+  state.sessions.unshift(sess);
+  state.homeDraft = ''; state.homeRefs = [];
+  state.activeView = 'session'; state.activeSessionId = id;
+  renderAll();
+  appendSimulatedTurn(sess, text);
+}
+
+function openInspector(tab) {
+  if (state.inspectorOpen && state.inspectorTab === tab) {
+    state.inspectorOpen = false;
+  } else {
+    state.inspectorOpen = true;
+    state.inspectorTab = tab;
+  }
+  renderMain();
+}
+
+function inspectWireTurn(turnId) {
+  state.selectedWireTurnId = turnId;
+  state.inspectorOpen = true;
+  state.inspectorTab = 'wire';
+  renderMain();
+}
+
+function toggleParam(key) {
+  const sess = getSession();
+  sess.params[key] = !sess.params[key];
+  renderMain();
+}
+function updateParam(key, val, rerender = false) {
+  const sess = getSession();
+  sess.params[key] = val;
+  if (rerender) {
+    renderMain();
+  } else {
+    // Re-render smoothly for wire / tags sync without breaking textarea focus
+    const activeEl = document.activeElement;
+    const isText = activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT');
+    if (!isText || activeEl.type === 'range') renderMain();
+  }
+}
+function applyPreset(presetId) {
+  const sess = getSession();
+  const pr = SYSTEM_PRESETS.find(p => p.id === presetId);
+  if (!pr) return;
+  sess.params.bareMode = pr.id === 'bare';
+  if (pr.id !== 'bare') sess.params.systemPrompt = pr.text;
+  if (pr.id === 'json') sess.params.responseFormat = 'json_schema';
+  renderMain();
+  showToast(`已套用「${pr.name}」`);
+}
+
+function toggleThought(id) { state.expandedThoughts[id] = !state.expandedThoughts[id]; renderMain(); }
+function toggleTurnPin(turnId) {
+  const t = getSession().turns.find(x => x.id === turnId);
+  if (!t) return;
+  t.pinned = !t.pinned; if (t.pinned) t.muted = false;
+  renderMain();
+  showToast(t.pinned ? '已固定该轮，裁剪时优先保留' : '已取消固定');
+}
+function toggleTurnMute(turnId) {
+  const t = getSession().turns.find(x => x.id === turnId);
+  if (!t) return;
+  t.muted = !t.muted; if (t.muted) t.pinned = false;
+  renderMain();
+  showToast(t.muted ? '已从后续上下文排除（Wire 请求已同步更新）' : '已恢复进上下文');
+}
+function togglePinDoc(docId) {
+  const sess = getSession();
+  const idx = sess.pinnedDocs.findIndex(d => d.id === docId);
+  if (idx >= 0) sess.pinnedDocs.splice(idx, 1);
+  renderMain();
+}
+function addSampleDoc() {
+  const sess = getSession();
+  const id = 'doc-' + Date.now();
+  sess.pinnedDocs.push({ id, name: 'gateway-trace.json', tokens: 2460, pinned: true });
+  renderMain();
+  showToast('已钉入只读上下文材料（2.5k tok）');
+}
+
+function switchUserBranch(turnId, delta) {
+  const t = getSession().turns.find(x => x.id === turnId);
+  if (!t) return;
+  t.activeUserBranch = (t.activeUserBranch + delta + t.userBranches.length) % t.userBranches.length;
+  t.activeAssistantBranch = Math.min(t.activeUserBranch, t.assistantBranches.length - 1);
+  renderMain();
+}
+function switchAssistantBranch(turnId, delta) {
+  const t = getSession().turns.find(x => x.id === turnId);
+  if (!t) return;
+  t.activeAssistantBranch = (t.activeAssistantBranch + delta + t.assistantBranches.length) % t.assistantBranches.length;
+  renderMain();
+}
+function startEditUser(nodeId) { state.editingNodeId = nodeId; renderMain(); document.getElementById('editArea')?.focus(); }
+function saveUserBranch(turnId) {
+  const val = document.getElementById('editArea')?.value.trim();
+  if (!val) return;
+  const sess = getSession();
+  const t = sess.turns.find(x => x.id === turnId);
+  t.userBranches.push({ id: 'u-' + Date.now(), text: val });
+  t.activeUserBranch = t.userBranches.length - 1;
+  t.compareMode = false;
+  t.assistantBranches.push({
+    id: 'a-' + Date.now(), modelId: sess.modelId,
+    thought: `基于编辑后的分叉问题重新推理（Temperature=${sess.params.temperature}, Effort=${sess.params.effort}）。`,
+    text: `已从编辑后的分支重新生成：\n\n针对「${val.slice(0, 36)}${val.length > 36 ? '…' : ''}」，新分支保留原节点记录，你随时可以用上方 \`${t.userBranches.length} / ${t.userBranches.length}\` 切回上一版对比。`,
+    metrics: { ttftMs: 340, tps: 94, inputTokens: 1680, cacheRead: sess.params.promptCaching ? 1420 : 0, outputTokens: 86, reasoningTokens: 140, stopReason: 'end_turn', authMs: 6 },
+  });
+  t.activeAssistantBranch = t.assistantBranches.length - 1;
+  state.editingNodeId = null;
+  renderMain();
+  showToast('已创建新分支并重新生成');
+}
+function saveAssistantEdit(turnId, aId) {
+  const val = document.getElementById('editArea')?.value;
+  const t = getSession().turns.find(x => x.id === turnId);
+  const a = t?.assistantBranches.find(x => x.id === aId);
+  if (a) a.text = val;
+  state.editingNodeId = null;
+  renderMain();
+  showToast('已更新助手回复，后续轮次将沿用新上下文');
+}
+function rerunTurn(turnId) {
+  const sess = getSession();
+  const t = sess.turns.find(x => x.id === turnId);
+  if (!t) return;
+  t.compareMode = false;
+  t.assistantBranches.push({
+    id: 'a-' + Date.now(), modelId: sess.modelId,
+    thought: `按当前参数（effort=${sess.params.effort}, format=${sess.params.responseFormat}）重新采样生成新变体。`,
+    text: sess.params.responseFormat.startsWith('json')
+      ? '```json\n{\n  "severity": "p0",\n  "owner": "auth-gateway",\n  "actions": ["启用本地只读 JWKS 快照兜底", "单飞刷新防缓存击穿", "补充 503 混沌压测门禁"]\n}\n```'
+      : `这是按当前配置（**${modelById(sess.modelId).name}** · effort \`${sess.params.effort}\`）生成的第 ${t.assistantBranches.length + 1} 个变体，可通过脚注分支器随时来回对照。`,
+    metrics: { ttftMs: 360, tps: 98, inputTokens: 2150, cacheRead: sess.params.promptCaching ? 1840 : 0, outputTokens: 92, reasoningTokens: 165, stopReason: 'end_turn', authMs: 5 },
+  });
+  t.activeAssistantBranch = t.assistantBranches.length - 1;
+  renderMain();
+  showToast('已生成新变体分支');
+}
+function adoptCompareBranch(turnId, idx) {
+  const t = getSession().turns.find(x => x.id === turnId);
+  if (!t) return;
+  t.activeAssistantBranch = idx;
+  t.compareMode = false;
+  renderMain();
+  showToast(`已收束至 ${modelById(t.assistantBranches[idx].modelId).name} 分支（仍可在脚注切换）`);
+}
+function regenerateSummary() {
+  getSession().summary = '已按当前有效轮次重新压缩：保留 P0 定级口径、JWKS 降级验收四项标准与已钉住材料索引。';
+  renderMain();
+  showToast('摘要已更新');
+}
+
+function promoteToAgent() {
+  const sess = getSession();
+  const lastTurn = sess.turns[sess.turns.length - 1];
+  const lastA = lastTurn?.assistantBranches[lastTurn.activeAssistantBranch]?.text || '';
+  state.activeView = 'home';
+  state.homeTab = 'agent';
+  state.homeRefs = [
+    { name: `来自「${sess.title}」当前分支结论` },
+    ...(sess.pinnedDocs || []).filter(d => d.pinned).map(d => ({ name: d.name })),
+  ];
+  state.homeDraft = `根据模型对话中已确认的方案落地实现：\n\n${lastA.slice(0, 140)}…`;
+  renderAll();
+  showToast('已将当前分支结论带入 Agent 任务草稿');
+}
+
+/* ---------------- Popovers ---------------- */
+function openComparePopover(btn) {
+  const sess = getSession();
+  const rect = btn.getBoundingClientRect();
+  const mount = document.getElementById('popoverMount');
+  mount.innerHTML = `
+    <div class="popover" style="left:${Math.min(rect.left, window.innerWidth - 280)}px;bottom:${window.innerHeight - rect.top + 8}px;">
+      <div class="pop-hd">主模型 / 多模型并排对比</div>
+      ${MODELS.map(m => {
+        const checked = sess.compareModels.includes(m.id);
+        return `
+          <button class="pop-item" onclick="toggleCompareModel('${m.id}')">
+            <span class="brand-dot" style="background:${m.color};"></span>
+            <span style="flex:1;">${esc(m.name)}</span>
+            <span class="right">${checked ? ic('check', 'i-14') : esc(m.protocol)}</span>
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+function toggleCompareModel(mId) {
+  const sess = getSession();
+  const idx = sess.compareModels.indexOf(mId);
+  if (idx >= 0) {
+    if (sess.compareModels.length === 1) return;
+    sess.compareModels.splice(idx, 1);
+  } else {
+    sess.compareModels.push(mId);
+  }
+  sess.modelId = sess.compareModels[0];
+  closePopover();
+  renderMain();
+  showToast(sess.compareModels.length > 1 ? `已进入 ${sess.compareModels.length} 模型并排对比模式` : `已切换至 ${modelById(sess.modelId).name}`);
+}
+
+function openRerunModelPopover(btn, turnId) {
+  const rect = btn.getBoundingClientRect();
+  const mount = document.getElementById('popoverMount');
+  mount.innerHTML = `
+    <div class="popover" style="left:${Math.min(rect.left, window.innerWidth - 260)}px;top:${Math.min(rect.bottom + 6, window.innerHeight - 160)}px;">
+      <div class="pop-hd">换一个模型重跑本轮并对比</div>
+      ${MODELS.map(m => `
+        <button class="pop-item" onclick="addModelCompareToTurn('${turnId}', '${m.id}')">
+          <span class="brand-dot" style="background:${m.color};"></span>
+          <span>${esc(m.name)}</span>
+          <span class="right">${esc(m.protocol)}</span>
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+function addModelCompareToTurn(turnId, mId) {
+  const t = getSession().turns.find(x => x.id === turnId);
+  if (!t) return;
+  if (!t.assistantBranches.some(b => b.modelId === mId)) {
+    t.assistantBranches.push({
+      id: 'a-' + Date.now(), modelId: mId,
+      thought: `使用 ${modelById(mId).name} 独立重跑本轮输入，便于和已有分支对照。`,
+      text: `**${modelById(mId).name}** 的独立回答视角：\n\n- 优先将降级逻辑下沉到统一网关拦截器，避免业务服务各自实现 JWKS 缓存。\n- 暴露确定性错误码 \`AUTH_JWKS_STALE\` 便于链路追踪定位。`,
+      metrics: { ttftMs: 430, tps: 104, inputTokens: 2140, cacheRead: 0, outputTokens: 112, reasoningTokens: 240, stopReason: 'completed', authMs: 9 },
+    });
+  }
+  t.compareMode = true;
+  closePopover();
+  renderMain();
+  showToast(`已加入 ${modelById(mId).name} 并排对比`);
+}
+
+/* ---------------- Simulated Streaming Send ---------------- */
+function sendChatMessage() {
+  const input = document.getElementById('chatInput');
+  const text = (input?.value || '').trim();
+  if (!text) return;
+  input.value = '';
+  appendSimulatedTurn(getSession(), text);
+}
+
+function appendSimulatedTurn(sess, text) {
+  const turnId = 't-' + Date.now();
+  const targets = sess.compareModels.length ? sess.compareModels : [sess.modelId];
+  const turn = {
+    id: turnId, pinned: false, muted: false,
+    userBranches: [{ id: 'u-' + Date.now(), text }],
+    activeUserBranch: 0,
+    compareMode: targets.length > 1,
+    assistantBranches: targets.map((mId, i) => ({
+      id: `a-${Date.now()}-${i}`, modelId: mId,
+      thought: sess.params.effort === 'off' ? '' : `直连 ${modelById(mId).protocol} 协议 · effort=${sess.params.effort}`,
+      text: '',
+      metrics: { ttftMs: 280 + i * 110, tps: 92 + i * 18, inputTokens: computeContextStats(sess).total + estimateTok(text), cacheRead: sess.params.promptCaching ? computeContextStats(sess).total : 0, outputTokens: 0, reasoningTokens: sess.params.effort === 'off' ? 0 : 140, stopReason: 'end_turn', authMs: 6 + i * 3 },
+    })),
+    activeAssistantBranch: 0,
+  };
+  sess.turns.push(turn);
+  state.selectedWireTurnId = turnId;
+  renderMain();
+
+  const replies = targets.map((mId, i) => {
+    const m = modelById(mId);
+    if (sess.params.responseFormat.startsWith('json')) {
+      return `\`\`\`json\n{\n  "model": "${m.id}",\n  "bareMode": ${sess.params.bareMode},\n  "strategy": "${sess.params.contextStrategy}",\n  "summary": "已按当前 Schema 与直连参数完成响应"\n}\n\`\`\``;
+    }
+    return i === 0
+      ? `收到你的问题（当前走 **${m.name}** 直连，\`${sess.params.bareMode ? '裸模式' : '自定义 System'}\` / 策略 \`${sess.params.contextStrategy}\`）。\n\n你可以点下方 **Wire** 直接查看刚才拼装好的精确请求体，或在右侧修改参数后点击 **重生成** 对比差异。`
+      : `**${m.name}** 对照视角：在同一份上下文与参数约束下给出另一条独立推理路径，方便直接比较回答密度、首字延迟与输出风格。`;
+  });
+
+  let step = 0;
+  const maxSteps = 22;
+  const timer = setInterval(() => {
+    step += 1;
+    turn.assistantBranches.forEach((b, i) => {
+      const full = replies[i];
+      b.text = full.slice(0, Math.ceil((full.length * step) / maxSteps));
+      b.metrics.outputTokens = estimateTok(b.text);
+    });
+    renderMain();
+    const sc = document.getElementById('transcriptScroll');
+    if (sc) sc.scrollTop = sc.scrollHeight;
+    if (step >= maxSteps) clearInterval(timer);
+  }, 45);
+}
+
+/* ---------------- Wiring & Boot ---------------- */
+document.getElementById('btnTheme').onclick = () => {
+  state.dark = !state.dark;
+  document.documentElement.classList.toggle('dark', state.dark);
+  renderSidebar();
+};
+document.getElementById('navNew').onclick = () => {
+  state.activeView = 'home';
+  renderAll();
+};
+document.getElementById('groupTime').onclick = () => { state.sidebarGroup = 'time'; renderSidebar(); };
+document.getElementById('groupProject').onclick = () => { state.sidebarGroup = 'project'; renderSidebar(); };
+
+function renderAll() {
+  renderSidebar();
+  renderMain();
+}
+renderAll();
+</script>
+</body>
+</html>

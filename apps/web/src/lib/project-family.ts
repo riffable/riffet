@@ -25,13 +25,16 @@ export function sortProjectsByRecentUse(projects: readonly ProjectRecord[], sess
 }
 
 /** Keep each checkout's execution identity while listing its conversations under the original project. */
-export function sidebarProjectMap(projects: readonly ProjectRecord[], showArchived: boolean, projectlessName = ''): Map<string, ProjectRecord> {
+export function sidebarProjectMap(projects: readonly ProjectRecord[], showArchived: boolean, projectlessName = '', modelChatName = ''): Map<string, ProjectRecord> {
   const byId = new Map(projects.map((project) => [project.id, project]));
   const result = new Map<string, ProjectRecord>();
   const managed = projects.find((project) => project.system === 'task-workspace' && (showArchived || !project.archivedAt));
   const projectless = managed && { ...managed, id: 'riffet:projectless', name: projectlessName, cwd: '', archivedAt: undefined };
   for (const project of projects) {
-    if (project.system === 'quick-chat') continue;
+    if (project.system === 'quick-chat') {
+      if (showArchived || !project.archivedAt) result.set(project.id, modelChatName ? { ...project, name: modelChatName } : project);
+      continue;
+    }
     if (project.system === 'assistant') { result.set(project.id, project); continue; }
     if (project.system === 'task-workspace') {
       if (projectless && (showArchived || !project.archivedAt)) result.set(project.id, projectless);

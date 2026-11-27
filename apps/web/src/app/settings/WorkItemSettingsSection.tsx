@@ -36,7 +36,7 @@ export function WorkItemSettingsSection() {
   };
   return <div className="flex flex-col gap-6">
     <SettingsGroup>
-      <SettingsRow title={t`新会话作为任务`} description={t`快速对话和个人助理除外`}>
+      <SettingsRow title={t`新会话作为任务`} description={t`模型对话和个人助理除外`}>
         <Switch aria-label={t`新会话作为任务`} checked={saved?.composerSessions === true} onCheckedChange={(value) => settings.rememberWorkItems({ composerSessions: value })} />
       </SettingsRow>
     </SettingsGroup>
