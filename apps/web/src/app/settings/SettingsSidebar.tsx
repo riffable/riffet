@@ -15,13 +15,15 @@ interface Props {
   onClose: () => void;
   onCollapse?: () => void;
   onPin?: () => void;
+  /** `sidebar` replaces the workspace rail in full-page mode; `dialog` sits inside the workspace settings modal. */
+  variant?: 'sidebar' | 'dialog';
 }
 
 /**
- * Replaces the workspace sidebar while Settings is open on desktop (DECISIONS 2026-11-23):
- * one navigation rail on screen instead of stacking a settings rail beside the session sidebar.
+ * Navigation rail shared by both desktop settings presentations: replaces the workspace sidebar in
+ * full-page mode, or sits on the left side of the workspace dialog in modal mode.
  */
-export function SettingsSidebar({ section, onSelect, onClose, onCollapse, onPin }: Props) {
+export function SettingsSidebar({ section, onSelect, onClose, onCollapse, onPin, variant = 'sidebar' }: Props) {
   const { t } = useLingui();
   const [query, setQuery] = useState('');
   const sidebarHint = shortcutHint('toggleSidebar');
@@ -39,25 +41,37 @@ export function SettingsSidebar({ section, onSelect, onClose, onCollapse, onPin 
   }, [query]);
 
   return (
-    <nav className="flex h-full min-h-0 w-full flex-col bg-transparent" aria-label={t`设置分区`}>
-      <div className="flex h-13 shrink-0 items-center gap-1 pl-2 pr-2">
-        <Button size="sm" variant="quiet" className="gap-1.5 px-2 text-fg" onClick={onClose}>
-          <IconArrowLeft className="size-4" />
-          <Trans>返回</Trans>
-        </Button>
-        <div className="ml-auto flex items-center">
-          {onCollapse && (
-            <Tip label={t`收起侧边栏`} kbd={sidebarHint}>
-              <Button size="icon-sm" variant="quiet" aria-label={t`收起侧边栏`} onClick={onCollapse}><IconPanelLeft /></Button>
-            </Tip>
-          )}
-          {onPin && (
-            <Tip label={t`固定侧边栏`} kbd={sidebarHint}>
-              <Button size="icon-sm" variant="quiet" aria-label={t`固定侧边栏`} onClick={onPin}><IconPanelLeft /></Button>
-            </Tip>
-          )}
+    <nav
+      className={cn(
+        'flex h-full min-h-0 flex-col',
+        variant === 'dialog' ? 'w-56 shrink-0 bg-subtle edge-r' : 'w-full bg-transparent',
+      )}
+      aria-label={t`设置分区`}
+    >
+      {variant === 'dialog' ? (
+        <div className="flex h-13 shrink-0 items-center px-4">
+          <h2 className="text-base font-semibold text-fg"><Trans>设置</Trans></h2>
         </div>
-      </div>
+      ) : (
+        <div className="flex h-13 shrink-0 items-center gap-1 pl-2 pr-2">
+          <Button size="sm" variant="quiet" className="gap-1.5 px-2 text-fg" onClick={onClose}>
+            <IconArrowLeft className="size-4" />
+            <Trans>返回</Trans>
+          </Button>
+          <div className="ml-auto flex items-center">
+            {onCollapse && (
+              <Tip label={t`收起侧边栏`} kbd={sidebarHint}>
+                <Button size="icon-sm" variant="quiet" aria-label={t`收起侧边栏`} onClick={onCollapse}><IconPanelLeft /></Button>
+              </Tip>
+            )}
+            {onPin && (
+              <Tip label={t`固定侧边栏`} kbd={sidebarHint}>
+                <Button size="icon-sm" variant="quiet" aria-label={t`固定侧边栏`} onClick={onPin}><IconPanelLeft /></Button>
+              </Tip>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="px-2 pb-2">
         <SearchField

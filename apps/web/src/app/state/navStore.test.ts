@@ -107,18 +107,19 @@ describe('automatic navigation receipt', () => {
     expect(nav.get()).toMatchObject({ settingsOpen: false, pluginsOpen: true });
   });
 
-  it('opens /design inside settings while preserving platform and chapter state', () => {
+  it('opens /design as its own page while preserving platform, chapter, and settings section state', () => {
     vi.stubGlobal('window', { location: { pathname: '/design/patterns/navigation', search: '?platform=macos', hash: '' } });
     const nav = createNavStore();
     expect(nav.get()).toMatchObject({
-      settingsOpen: true,
-      settingsSection: 'design',
-      settingsMobileDetail: true,
+      designOpen: true,
+      settingsOpen: false,
       designPlatform: 'macos',
       designChapter: 'patterns/navigation',
     });
-    nav.setSettingsSection('appearance');
-    expect(nav.get()).toMatchObject({ settingsOpen: true, settingsSection: 'appearance', designPlatform: 'macos', designChapter: 'patterns/navigation' });
+    nav.openSettings('appearance');
+    expect(nav.get()).toMatchObject({ designOpen: true, settingsOpen: true, settingsSection: 'appearance', designPlatform: 'macos', designChapter: 'patterns/navigation' });
+    nav.closeSettings();
+    expect(nav.get()).toMatchObject({ designOpen: true, settingsOpen: false, designPlatform: 'macos', designChapter: 'patterns/navigation' });
   });
 
   it('defaults settings to the first section and remembers the last visited section across visits and reloads', () => {

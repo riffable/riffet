@@ -1312,6 +1312,14 @@ msgstr "Code highlighting"
 msgid "代码高亮（14 色）"
 msgstr "Code highlighting (14 colours)"
 
+#: src/app/settings/SettingsPage.tsx
+msgid "以弹窗打开"
+msgstr "Open as dialog"
+
+#: src/app/settings/SettingsPage.tsx
+msgid "以整页打开"
+msgstr "Open as full page"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "以本地版本覆盖"
 msgstr "Overwrite with local version"
@@ -4564,6 +4572,11 @@ msgstr "Pop"
 msgid "弹窗"
 msgstr "Dialogs"
 
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-presentation"
+msgid "弹窗"
+msgstr "Dialog"
+
 #: src/app/design/catalog.tsx
 msgid "弹窗、菜单、弹出层"
 msgstr "Dialogs, menus, popovers"
@@ -5607,6 +5620,11 @@ msgstr "Tidy the timeout constants"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
 msgstr "One conversation per group"
+
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-presentation"
+msgid "整页"
+msgstr "Full page"
 
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -6761,8 +6779,12 @@ msgid "桌面 52，手机 48"
 msgstr "Desktop 52, phone 48"
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "桌面：主侧栏切为设置导航，主区取看板档（1200）"
-msgstr "Desktop: sidebar swaps to settings nav; main area uses board (1200)"
+msgid "桌面（整页）：主侧栏切为设置导航，主区取看板档（1200）"
+msgstr "Desktop (full page): main sidebar swaps to settings nav, board column (1200)"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "桌面（默认弹窗）：工作区弹窗 1080，保留底层会话"
+msgstr "Desktop (dialog default): 1080 workspace dialog over the active conversation"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
@@ -6771,6 +6793,10 @@ msgstr "On desktop the agent is part of the model menu; its button opens the too
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "桌面端尺寸写入 Mac 的 InterfaceStyles.swift"
 msgstr "Desktop sizes are written to the Mac's InterfaceStyles.swift"
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "桌面端支持弹窗（默认，1080 工作区弹窗）与整页（侧栏切为设置导航、1200 看板档）两种形式，可在通用设置或右上角切换。"
+msgstr "Desktop supports both a workspace dialog (default, 1080) and a full-page swapped-sidebar layout (1200 board column), switchable in General settings or from the top-right toggle."
 
 #: src/app/design/foundations/RadiusChapter.tsx
 msgid "档位"
@@ -8795,6 +8821,7 @@ msgstr "Devices"
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
 msgid "设置"
 msgstr "Settings"
 
@@ -8815,10 +8842,6 @@ msgstr "Settings sections"
 msgid "设置分组的一行：内边距、图标、间距与行高均取自档位。"
 msgstr "One row of a settings group: padding, icon, gaps and row height all come from the scale."
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "设置是一级页面，桌面端主侧栏切换为设置导航，主区统一取看板档（1200）。"
-msgstr "Settings is a top-level page: the desktop sidebar swaps to settings navigation, and the main area uniformly uses the board column (1200)."
-
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "设置是独立窗口，⌘, 打开"
 msgstr "Settings is a separate window, opened with ⌘,"
@@ -8826,6 +8849,10 @@ msgstr "Settings is a separate window, opened with ⌘,"
 #: src/app/design/android/TypeChapter.tsx
 msgid "设置用紧凑的导航栏标题，大标题只用于滚动时会收起的页面"
 msgstr "Settings use the compact bar title; the large title is only for pages that collapse it on scroll"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "设置界面"
+msgstr "Settings layout"
 
 #: src/app/design/mac/WindowChapter.tsx
 msgid "设置窗口"

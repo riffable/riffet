@@ -33,7 +33,7 @@ export function SidebarSection({ onError }: { onError: (message: string) => void
   };
   return <div className="flex flex-col gap-6">
     <p className="text-xs text-fg-3"><Trans>所有设备生效</Trans></p>
-    <fieldset disabled={!canEdit} className="grid min-w-0 grid-cols-1 gap-6 disabled:[&_button]:pointer-events-none disabled:[&_button]:opacity-50 lg:grid-cols-2 lg:items-start">
+    <fieldset disabled={!canEdit} className="grid min-w-0 grid-cols-1 gap-6 disabled:[&_button]:pointer-events-none disabled:[&_button]:opacity-50 @4xl:grid-cols-2 @4xl:items-start">
       {pinned.length > 0 && <Group title={t`固定显示`}>
         <SortableList ids={pinned} onReorder={(ids) => save((current) => reorderSidebarPinned(current, ids))} label={name}>
           {(id) => <Row title={<span className="-ml-1.5 flex items-center gap-1"><SortHandle label={t`调整${name(id)}的顺序`} />{name(id)}</span>}>{pin(id, true)}</Row>}

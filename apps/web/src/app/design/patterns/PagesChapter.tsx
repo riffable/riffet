@@ -203,11 +203,29 @@ function PageTypes() {
   );
 }
 
-/** The settings page on a desktop window (sidebar swapped to settings nav) and on a phone. */
+/** The settings surface on a desktop window (modal dialog by default, or swapped-sidebar page) and on a phone. */
 function SettingsSketch() {
   const { t } = useLingui();
   return (
-    <Frame className="flex items-end justify-center gap-10 p-8 max-md:p-4">
+    <Frame className="flex items-end justify-center gap-8 p-8 max-md:flex-col max-md:items-stretch max-md:p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="relative flex aspect-[1440/900] w-full items-center justify-center overflow-hidden rounded-xl bg-canvas p-[4%] shadow-[0_0_0_1px_var(--line-strong)]">
+          <div className="flex h-[88%] w-[80%] overflow-hidden rounded-lg bg-elevated shadow-pop">
+            <div className="flex flex-col gap-[5%] bg-subtle px-[3%] pt-[5%] edge-r" style={{ width: `${(224 / 1080) * 100}%` }}>
+              <Bar w={52} />
+              <span className="h-2.5 rounded-sm border border-line bg-bg" />
+              {[62, 48, 56, 40, 52].map((w, index) => <Bar key={index} w={w} className={index === 1 ? 'bg-fg/[0.3]' : undefined} />)}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex h-[11%] items-center px-[5%] edge-b"><Bar w={22} /></div>
+              <div className="flex flex-1 flex-col gap-[6%] px-[5%] pt-[5%]">
+                {[0, 1].map((group) => <div key={group} className="flex flex-col gap-[8%]"><Bar w={18} />{[0, 1].map((row) => <span key={row} className="flex h-2.5 items-center justify-between rounded-sm bg-fg/[0.04] px-[3%]"><Bar w={32} /><span className="h-1.5 w-3.5 rounded-full bg-fg/[0.2]" /></span>)}</div>)}
+              </div>
+            </div>
+          </div>
+        </div>
+        <Mark>{t`桌面（默认弹窗）：工作区弹窗 1080，保留底层会话`}</Mark>
+      </div>
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex aspect-[1440/900] w-full gap-[1%] overflow-hidden rounded-xl bg-canvas p-[1.2%] shadow-[0_0_0_1px_var(--line-strong)]">
           <div className="flex flex-col gap-[3.5%] px-[1.5%] pt-[3%]" style={{ width: `${(280 / 1440) * 100}%` }}>
@@ -222,9 +240,9 @@ function SettingsSketch() {
             </div>
           </div>
         </div>
-        <Mark>{t`桌面：主侧栏切为设置导航，主区取看板档（1200）`}</Mark>
+        <Mark>{t`桌面（整页）：主侧栏切为设置导航，主区取看板档（1200）`}</Mark>
       </div>
-      <div className="flex w-28 shrink-0 flex-col gap-2 max-md:w-20">
+      <div className="flex w-24 shrink-0 flex-col gap-2 max-md:w-20">
         <div className="flex aspect-[390/844] w-full flex-col gap-[6%] rounded-lg bg-elevated p-[10%] shadow-[0_0_0_1px_var(--line-strong)]">{[60, 48, 55, 40, 52].map((w, index) => <Bar key={index} w={w} />)}</div>
         <Mark>{t`手机：先分类，再全屏`}</Mark>
       </div>
@@ -339,7 +357,7 @@ export function PagesChapter() {
       <Plate number={4} title={t`页面类型`} note={t`类型决定骨架与内容列；同一类型的页面不另起布局。`}>
         <PageTypes />
       </Plate>
-      <Plate number={5} title={t`设置`} note={t`设置是一级页面，桌面端主侧栏切换为设置导航，主区统一取看板档（1200）。`}>
+      <Plate number={5} title={t`设置`} note={t`桌面端支持弹窗（默认，1080 工作区弹窗）与整页（侧栏切为设置导航、1200 看板档）两种形式，可在通用设置或右上角切换。`}>
         <SettingsSketch />
       </Plate>
       <Plate number={6} title={t`首次引导`} note={t`铺满窗口，一页一个决定；内容列 440，主按钮高 40、回车前进。只在需要决定时出现的页不计入进度。`}>

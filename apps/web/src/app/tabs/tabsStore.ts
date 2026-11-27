@@ -84,8 +84,8 @@ function insertNormal(tabs: readonly TabEntry[], normal: readonly TabEntry[], en
 }
 
 /** Statistics, tasks, marks, design, extensions, plugins and attempt pages cover the conversation; the selection underneath stays. */
-export function isPageOpen(state: Pick<NavState, 'pluginsOpen' | 'statsOpen' | 'tasksOpen' | 'automationsOpen' | 'councilOpen' | 'marksOpen' | 'settingsOpen' | 'extensionsOpen' | 'mainViewId' | 'attemptsGroupId'>): boolean {
-  return state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.marksOpen || state.settingsOpen || state.extensionsOpen || Boolean(state.mainViewId) || Boolean(state.attemptsGroupId);
+export function isPageOpen(state: Pick<NavState, 'pluginsOpen' | 'statsOpen' | 'tasksOpen' | 'automationsOpen' | 'councilOpen' | 'marksOpen' | 'designOpen' | 'settingsOpen' | 'extensionsOpen' | 'mainViewId' | 'attemptsGroupId'>): boolean {
+  return state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.councilOpen || state.marksOpen || state.designOpen || state.settingsOpen || state.extensionsOpen || Boolean(state.mainViewId) || Boolean(state.attemptsGroupId);
 }
 
 const LAUNCH_WINDOW_MS = 10_000;

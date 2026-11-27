@@ -1096,6 +1096,14 @@
 - **范围**：Web、Mac、iOS、Android 全端对齐；同步修订 2026-11-25 Android 模型面板额度胶囊（按窗口分行常态展示重置时间，有周期窗口时隐藏 credits）。
 - **规则**：`apps/web/src/lib/usage.ts`、`apps/web/src/app/session/ModelPicker.tsx`、`apps/web/src/app/settings/ProviderUsage.tsx`、`apps/web/src/app/settings/BackendProfilesSection.tsx`、`apps/web/src/app/design/surfaces/NewSessionChapter.tsx`、`apps/macos/Riffet/Features/Composer/ModelPicker.swift`、`apps/mobile/client/src/commonMain/kotlin/riffet/ui/pickers/ModelUsageRules.kt`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/pickers/ModelUsage.kt`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/settings/providers/ProviderConnection.kt`、`apps/mobile/iosApp/Riffet/Features/Home/TaskOptions.swift`、`apps/mobile/iosApp/Riffet/Features/Management/NativeProvidersView.swift`。
 
+## 2026-11-27 · Web 设置同时支持弹窗与整页，默认弹窗
+
+- **决定**：修订 2026-11-23「Web 设置改为侧栏切换整页」。Web 桌面端设置同时支持「弹窗」（默认，工作区宽弹窗 `1080 × 820`，内含带搜索框的左侧导航栏 `SettingsSidebar`，保留底层侧栏与当前会话）与「整页」（主侧栏切为设置导航，主区取 `board` 1200 列宽），作为浏览器本地偏好（`DisplaySettings.settingsPresentation`）在「设置 › 通用设置」选择，并在设置页头/弹窗右上角提供一键切换图标。两种形式均同步地址栏 `/settings/<section>` 并复用同一套未保存守卫；宽屏双栏分区（主题、排版、终端、侧栏、快捷键）改用 `@container`（`@4xl:`）容器查询，弹窗自动单栏、整页自动双栏。「设计规范」恢复为独立工作台页面（`/design`），从设置中点开时关闭设置并保留工作台主侧栏，不改写上次访问的设置分区。手机端保持两级全屏钻取，Mac 设置仍为独立系统窗口。
+- **原因**：日常改一两项偏好时，整页会遮挡会话与主侧栏并去掉点击遮罩即关的轻量路径，操作效率反而不如弹窗；但在配置多模型提供商、查看服务图表或调主题/终端预览时，整页确实更宽敞。共用同一套导航与正文组件，并用容器查询自动切换单双栏后，保留两种形式交给用户自选、默认走高频高效的弹窗形态，维护成本很低。
+- **否决**：仅保留整页并回退弹窗；为两种形态分别维护两套设置分区实现；弹窗模式不同步地址栏（会导致刷新或深链行为与整页不一致）。
+- **范围**：仅 Web 桌面端。
+- **规则**：[模式](system/patterns.md) §1.3、§2.2；代码 `apps/web/src/app/settings/SettingsPage.tsx`、`SettingsSidebar.tsx`、`apps/web/src/app/Workbench.tsx`、`apps/web/src/lib/display-settings.ts`。
+
 ## 2026-11-27 · 收件箱通知从左下角头像浮出，头像角标改为纯红点
 
 - **决定**：修改 2026-11-26「独立收件箱能力与任务看板『待处理』分离」中的头像角标与 Web 收件箱新消息提醒形态：

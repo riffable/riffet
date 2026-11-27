@@ -1312,6 +1312,14 @@ msgstr ""
 msgid "代码高亮（14 色）"
 msgstr ""
 
+#: src/app/settings/SettingsPage.tsx
+msgid "以弹窗打开"
+msgstr ""
+
+#: src/app/settings/SettingsPage.tsx
+msgid "以整页打开"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "以本地版本覆盖"
 msgstr ""
@@ -4564,6 +4572,11 @@ msgstr ""
 msgid "弹窗"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-presentation"
+msgid "弹窗"
+msgstr ""
+
 #: src/app/design/catalog.tsx
 msgid "弹窗、菜单、弹出层"
 msgstr ""
@@ -5606,6 +5619,11 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-presentation"
+msgid "整页"
 msgstr ""
 
 #: src/app/design/components/ActionsChapter.tsx
@@ -6761,7 +6779,11 @@ msgid "桌面 52，手机 48"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
-msgid "桌面：主侧栏切为设置导航，主区取看板档（1200）"
+msgid "桌面（整页）：主侧栏切为设置导航，主区取看板档（1200）"
+msgstr ""
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "桌面（默认弹窗）：工作区弹窗 1080，保留底层会话"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -6770,6 +6792,10 @@ msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "桌面端尺寸写入 Mac 的 InterfaceStyles.swift"
+msgstr ""
+
+#: src/app/design/patterns/PagesChapter.tsx
+msgid "桌面端支持弹窗（默认，1080 工作区弹窗）与整页（侧栏切为设置导航、1200 看板档）两种形式，可在通用设置或右上角切换。"
 msgstr ""
 
 #: src/app/design/foundations/RadiusChapter.tsx
@@ -8795,6 +8821,7 @@ msgstr ""
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 #: src/app/settings/SettingsPage.tsx
+#: src/app/settings/SettingsSidebar.tsx
 msgid "设置"
 msgstr ""
 
@@ -8815,16 +8842,16 @@ msgstr ""
 msgid "设置分组的一行：内边距、图标、间距与行高均取自档位。"
 msgstr ""
 
-#: src/app/design/patterns/PagesChapter.tsx
-msgid "设置是一级页面，桌面端主侧栏切换为设置导航，主区统一取看板档（1200）。"
-msgstr ""
-
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "设置是独立窗口，⌘, 打开"
 msgstr ""
 
 #: src/app/design/android/TypeChapter.tsx
 msgid "设置用紧凑的导航栏标题，大标题只用于滚动时会收起的页面"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "设置界面"
 msgstr ""
 
 #: src/app/design/mac/WindowChapter.tsx

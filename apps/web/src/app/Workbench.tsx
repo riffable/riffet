@@ -21,6 +21,7 @@ import { isShellTerminal, sessionBackend } from '@/lib/backends';
 import { parseSelection } from '@/lib/models';
 import { sessionActivityAt } from '@/lib/session-order';
 import { setThemeMode } from '@/lib/theme';
+import { setDisplaySettings, useDisplaySettings, type SettingsPresentation } from '@/lib/display-settings';
 import { useDocumentTitle } from '@/lib/document-title';
 import type { PaletteAction } from './CommandPalette';
 import { sendSessionCommand } from '@/lib/session-commands';
@@ -82,7 +83,9 @@ const CouncilPage = lazy(() => import('./council/CouncilPage').then((module) => 
 const ExtensionsPage = lazy(() => import('./extensions/ExtensionsPage').then((module) => ({ default: module.ExtensionsPage })));
 const PluginsPage = lazy(() => import('./plugins/PluginsPage').then((module) => ({ default: module.PluginsPage })));
 const MarksPage = lazy(() => import('./marks/MarksPage').then((module) => ({ default: module.MarksPage })));
+const DesignPage = lazy(() => import('./design/DesignPage').then((module) => ({ default: module.DesignPage })));
 const SettingsPage = lazy(() => import('./settings/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const SettingsDialog = lazy(() => import('./settings/SettingsPage').then((module) => ({ default: module.SettingsDialog })));
 
 const pushError = (message: string) => toast.error(message);
 
@@ -141,6 +144,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const extensionsOpen = useNav((state) => state.extensionsOpen);
   const extensionsMounted = useNav((state) => state.extensionsMounted);
   const marksOpen = useNav((state) => state.marksOpen);
+  const designOpen = useNav((state) => state.designOpen);
   const settingsOpen = useNav((state) => state.settingsOpen);
   const settingsSection = useNav((state) => state.settingsSection);
   const mainViewId = useNav((state) => state.mainViewId);
@@ -178,6 +182,14 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const remoteHomeMap = useCatalog((state) => state.remoteHome);
 
   const desktop = !useMediaQuery(MOBILE_LAYOUT_QUERY);
+  const { settingsPresentation } = useDisplaySettings();
+  // Phones always use the full-page two-level drill-down; desktop respects the user's presentation preference.
+  const settingsAsPage = settingsOpen && (!desktop || settingsPresentation === 'page');
+  const settingsAsModal = settingsOpen && desktop && !settingsAsPage;
+  const [settingsModalMounted, setSettingsModalMounted] = useState(settingsAsModal);
+  useEffect(() => {
+    if (settingsAsModal) setSettingsModalMounted(true);
+  }, [settingsAsModal]);
   const tabStyle = useTabs((state) => state.style);
   const tabbed = desktop && tabStyle !== 'off';
   /** The slot at the right end of the tab bar, where the page header puts its actions once the bar has mounted. */
@@ -361,7 +373,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const openMainView = (viewId: string) => {
     void nav.navigate(() => { nav.openMainView(viewId); ui.setMobileSidebar(false); });
   };
-  const pageOpen = settingsOpen || pluginsOpen || statsOpen || inboxOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || Boolean(mainViewId);
+  const pageOpen = settingsAsPage || pluginsOpen || statsOpen || inboxOpen || tasksOpen || automationsOpen || councilOpen || extensionsOpen || marksOpen || designOpen || Boolean(mainViewId);
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
   const sidebarSelectedSessionId = anyPageOpen ? '' : session?.id ?? '';
@@ -370,7 +382,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const assistantPage = Boolean((activeMember || isAssistantProject(project)) && !anyPageOpen);
   // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
   const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
-  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? (settingsSection === 'design' ? t`设计规范` : t`设置`) : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : inboxOpen ? t`收件箱` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: activeMember?.name ?? t`个人助理` } : session, sidebarSessions.unreadCount, settingsOpen ? t`设置` : mainViewId ? (activeMainView?.title ?? t`插件`) : pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : inboxOpen ? t`收件箱` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : councilOpen ? t`模型协作` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? (activeMember?.name ?? t`个人助理`) : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -381,12 +393,17 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [nav, ui]);
   const openSettingsAt = useCallback((section?: SettingsSection) => {
     if (section === 'integrations') { openPage('plugins'); return; }
+    if (section === 'design') { openPage('design'); return; }
     if (section?.includes('/')) { void nav.navigate(() => nav.openPlugins(section.split('/')[0], section)); return; }
     if (nav.get().settingsOpen && section && section === nav.get().settingsSection) { ui.setMobileSidebar(false); return; }
     void nav.navigate(() => { ui.clearProviderTarget(); nav.openSettings(section); ui.setMobileSidebar(false); }, { keepUnderlying: true });
   }, [nav, ui, openPage]);
   useSecurityAlerts(openSettingsAt);
   const selectSettingsSection = useCallback(async (next: SettingsSection) => {
+    if (next === 'design') {
+      openPage('design');
+      return;
+    }
     const current = nav.get().settingsSection;
     if (next === current) return;
     await nav.navigate(() => {
@@ -394,10 +411,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         nav.setSettingsSection(next, { mobileDetail: true });
       });
     }, { keepUnderlying: true });
-  }, [nav]);
+  }, [nav, openPage]);
   const closeSettings = useCallback(() => {
     void nav.navigate(() => { nav.closeSettings(); ui.clearProviderTarget(); }, { keepUnderlying: true });
   }, [nav, ui]);
+  const switchSettingsPresentation = useCallback((next: SettingsPresentation) => {
+    void nav.navigate(() => { setDisplaySettings({ settingsPresentation: next }); }, { keepUnderlying: true });
+  }, [nav]);
   const { loadBootstrap, bootstrapFailed, refreshBackends, homeProfilesKey, loadCatalog } = useWorkbenchBootstrap({ loaded, project: catalogProject, session: catalogSession, backends: catalogBackends, homeBackendId, homeProfileId, catalogRevision, catalogBackendId, catalogProfileId, catalogKey, ...(catalogServerId ? { catalogServerId } : {}) });
   // The same for the per-provider lists, while `loadProfiles` has not published this key yet.
   const profilesCurrent = profileCatalogs?.key === homeProfilesKey;
@@ -796,24 +816,29 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     ]}
   />} />;
 
+  const sharedSettingsProps = {
+    project: quickChat ? undefined : project,
+    settings,
+    onClose: closeSettings,
+    onSelectSection: selectSettingsSection,
+    onSwitchPresentation: switchSettingsPresentation,
+    onRefreshBackends: async () => { await refreshBackends(); await loadCatalog(); },
+    onSettingsChanged: settingsStore.applySaved,
+    onLogout: onLogout ? () => { void nav.navigate(onLogout); } : undefined,
+    onError: pushError,
+    ...(pendingProviderTarget ? { providerTarget: pendingProviderTarget } : {}),
+    onProviderTargetHandled: (token: number) => ui.clearProviderTarget(token),
+  };
+
   let content: ReactNode;
-  if (settingsOpen) {
+  if (settingsAsPage) {
     content = (
       <SettingsPage
-        project={quickChat ? undefined : project}
-        settings={settings}
+        {...sharedSettingsProps}
         desktop={desktop}
         sidebarCollapsed={desktop && sidebarCollapsed}
         onExpandSidebar={expandSidebar}
         onOpenSidebar={openMobileSidebar}
-        onClose={closeSettings}
-        onSelectSection={selectSettingsSection}
-        onRefreshBackends={async () => { await refreshBackends(); await loadCatalog(); }}
-        onSettingsChanged={settingsStore.applySaved}
-        onLogout={onLogout ? () => { void nav.navigate(onLogout); } : undefined}
-        onError={pushError}
-        {...(pendingProviderTarget ? { providerTarget: pendingProviderTarget } : {})}
-        onProviderTargetHandled={(token) => ui.clearProviderTarget(token)}
       />
     );
   } else if (pluginsOpen) {
@@ -875,6 +900,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onExpandSidebar={expandSidebar}
         onOpenMark={(id) => void openMark(id)}
         onOpenMarkFile={(mark) => void openMark(mark.id).then(() => { if (mark.asset?.path) ui.preview(mark.asset.path); })}
+      />
+    );
+  } else if (designOpen) {
+    content = (
+      <DesignPage
+        sidebarCollapsed={desktop && sidebarCollapsed}
+        onClose={() => nav.set({ designOpen: false })}
+        onOpenSidebar={openMobileSidebar}
+        onExpandSidebar={expandSidebar}
       />
     );
   } else if (attemptsGroupId) {
@@ -1158,7 +1192,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
                 : cn('absolute inset-y-0 left-0 z-(--z-panel) transition-[translate] duration-[var(--duration-slow)] ease-out-soft', sidebarCollapsed ? '-translate-x-full bg-canvas' : 'translate-x-0', leavingPeek && 'transition-none'),
             )}
           >
-            {settingsOpen ? (
+            {settingsAsPage ? (
               <SettingsSidebar
                 section={settingsSection}
                 onSelect={(next) => void selectSettingsSection(next)}
@@ -1221,7 +1255,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         )}
         {/* Scoped to the conversation/home region so a bad row cannot take the sidebar or the
             terminal dock down with it, and so switching sessions clears the failure. */}
-        {extensionsMounted && <div className={cn('min-h-0 flex-1 flex-col', extensionsOpen && !settingsOpen ? 'flex' : 'hidden')} aria-hidden={(!extensionsOpen || settingsOpen) || undefined} inert={!extensionsOpen || settingsOpen}>
+        {extensionsMounted && <div className={cn('min-h-0 flex-1 flex-col', extensionsOpen && !settingsAsPage ? 'flex' : 'hidden')} aria-hidden={(!extensionsOpen || settingsAsPage) || undefined} inert={!extensionsOpen || settingsAsPage}>
           <ErrorBoundary resetKey={String(extensionsOpen)}><Suspense fallback={loadingPanel}><ExtensionsPage
             active={extensionsOpen}
             projects={extensionProjects}
@@ -1290,6 +1324,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
           if (nav.get().memberId === id) newSession();
         }}
       />
+      {settingsModalMounted && !settingsAsPage && (
+        <Suspense fallback={null}>
+          <SettingsDialog open={settingsAsModal} {...sharedSettingsProps} />
+        </Suspense>
+      )}
       {pluginCommands.dialogs}
       <AppearanceBackdrop placement="overlay" />
     </div>

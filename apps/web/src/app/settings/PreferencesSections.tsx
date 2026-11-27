@@ -22,7 +22,7 @@ import {
   MAX_TERMINAL_PADDING_HORIZONTAL, MAX_TERMINAL_PADDING_VERTICAL, MAX_TERMINAL_SCROLL_SENSITIVITY,
   MIN_TERMINAL_FONT_SIZE, MIN_TERMINAL_LETTER_SPACING, MIN_TERMINAL_LINE_HEIGHT,
   MIN_TERMINAL_SCROLL_SENSITIVITY, setDisplaySettings, TERMINAL_FONT_PRESETS, TERMINAL_FONT_WEIGHTS,
-  useDisplaySettings, type Density, type DisplaySettings, type TerminalBellMode, type TerminalCursorStyle,
+  useDisplaySettings, type Density, type DisplaySettings, type SettingsPresentation, type TerminalBellMode, type TerminalCursorStyle,
   type TerminalFontWeight, type TerminalMobileKeyId, type TerminalRendererMode,
   type TerminalRightClickBehavior, type TextSize,
 } from '@/lib/display-settings';
@@ -46,7 +46,7 @@ import { DirectoryPicker } from '../DirectoryPicker';
 import { useLists } from '../state/stores';
 import { ConnectServerDialog, PairDeviceDialog } from './PairingDialogs';
 import { PairingQrScanner } from '@/components/PairingQrScanner';
-import { useMediaQuery } from '@/lib/use-media-query';
+import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { UpdateSection } from './UpdateSection';
 
 const ThemeEditor = lazy(() => import('./ThemeEditor').then((module) => ({ default: module.ThemeEditor })));
@@ -147,7 +147,7 @@ function ThemeLivePreview({ label }: { label: string }) {
     return () => { active = false; };
   }, [html]);
   return (
-    <aside className="hidden lg:sticky lg:top-6 lg:flex lg:flex-col lg:gap-1">
+    <aside className="hidden @4xl:sticky @4xl:top-6 @4xl:flex @4xl:flex-col @4xl:gap-1">
       <div className="flex h-7 items-center justify-between">
         <span className="text-xs font-medium text-fg-3"><Trans>实时预览</Trans></span>
         <span className="truncate text-2xs text-fg-4">{label}</span>
@@ -236,7 +236,7 @@ export function ThemeSection() {
   const activeThemeName = paletteKey
     ? (localizedText(plugins.find((entry) => entry.key === paletteKey)?.palette.title) ?? paletteKey)
     : (themes.find((theme) => theme.id === themeId)?.name ?? themeId);
-  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-12">
+  return <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_23rem] @4xl:items-start @4xl:gap-12">
     <div className="flex min-w-0 flex-col gap-6">
       <Group title={t`显示`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
         <Row title={t`明暗`}>
@@ -305,7 +305,7 @@ export function ThemeSection() {
             </Button>
           </div>
         </Row>
-        <CodeThemePreview className="lg:hidden" />
+        <CodeThemePreview className="@4xl:hidden" />
       </Group>
       {editorTarget && <Suspense fallback={null}><ThemeEditor open={editorOpen} target={editorTarget} onOpenChange={setEditorOpen} /></Suspense>}
     </div>
@@ -319,7 +319,7 @@ export function TypographySection() {
   const display = useDisplaySettings();
   const { catalog, effective } = useAppearance();
   const [uiFonts, monoFonts] = [fontsOf(catalog, 'ui'), fontsOf(catalog, 'mono')];
-  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-12">
+  return <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_23rem] @4xl:items-start @4xl:gap-12">
     <div className="flex min-w-0 flex-col gap-6">
       <Group title={t`文字`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
         {uiFonts.length > 0 && <Row title={t`界面字体`}>
@@ -337,7 +337,7 @@ export function TypographySection() {
       </Group>
     </div>
     {/* The sample demonstrates the size and spacing chosen above. */}
-    <div className="min-w-0 lg:sticky lg:top-6">
+    <div className="min-w-0 @4xl:sticky @4xl:top-6">
       <Group title={t`预览`}>
         <div className="flex flex-col py-4" style={{ gap: display.density === 'compact' ? 6 : display.density === 'relaxed' ? 14 : 10 }}>
           <p className="text-base font-medium text-fg"><Trans>今天的工作</Trans></p>
@@ -676,7 +676,7 @@ export function TerminalSettingsSection({ settings, onSaved, onError }: ServerSe
   const profiles = serverTerminal.profiles ?? [];
   const shellIntegration = serverTerminal.shellIntegration ?? true;
 
-  return <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_23rem] lg:items-start lg:gap-12">
+  return <div className="grid grid-cols-1 gap-8 @4xl:grid-cols-[minmax(0,1fr)_23rem] @4xl:items-start @4xl:gap-12">
     <div className="flex min-w-0 flex-col gap-6">
     <Group title={t`字体与排版`} action={<span className="text-2xs text-fg-4"><Trans>仅保存在这个浏览器</Trans></span>}>
       <Row title={t`字体`}>
@@ -1067,7 +1067,7 @@ export function TerminalSettingsSection({ settings, onSaved, onError }: ServerSe
       </div>
     </Group>
     </div>
-    <aside className="order-first min-w-0 lg:order-none lg:sticky lg:top-6">
+    <aside className="order-first min-w-0 @4xl:order-none @4xl:sticky @4xl:top-6">
       <TerminalDesktopPreviewCard
         display={display}
         palette={palette}
@@ -1123,10 +1123,24 @@ export function AppIconSection() {
 export function GeneralSection() {
   const { t } = useLingui();
   const locale = useLocale();
+  const { settingsPresentation } = useDisplaySettings();
+  const desktop = !useMediaQuery(MOBILE_LAYOUT_QUERY);
   return <Group note={t`仅保存在这个浏览器。`}>
     <Row title={t`语言`}>
       <Segmented<CatalogLocale> size="xs" value={locale} onChange={setLocale} ariaLabel={t`语言`} options={localeOptions} />
     </Row>
+    {desktop && <Row title={t`设置界面`}>
+      <Segmented<SettingsPresentation>
+        size="xs"
+        value={settingsPresentation}
+        onChange={(next) => setDisplaySettings({ settingsPresentation: next })}
+        ariaLabel={t`设置界面`}
+        options={[
+          { value: 'modal', label: t({ message: '弹窗', context: 'settings-presentation' }) },
+          { value: 'page', label: t({ message: '整页', context: 'settings-presentation' }) },
+        ]}
+      />
+    </Row>}
   </Group>;
 }
 

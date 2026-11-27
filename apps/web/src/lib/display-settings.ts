@@ -10,6 +10,7 @@ export type TerminalBellMode = 'none' | 'visual' | 'sound';
 export type TerminalFontWeight = '300' | '400' | '500' | '600' | '700' | '800';
 export type TerminalRightClickBehavior = 'menu' | 'copyPaste';
 export type TerminalRendererMode = 'auto' | 'dom';
+export type SettingsPresentation = 'modal' | 'page';
 export const ALL_TERMINAL_MOBILE_KEYS = [
   'esc', 'tab', 'shiftTab', 'ctrlC', 'ctrlD', 'ctrlL', 'ctrlR',
   'space', 'up', 'down', 'left', 'right',
@@ -78,6 +79,8 @@ export interface DisplaySettings {
   terminalMobileKeys: TerminalMobileKeyId[];
   /** Code syntax highlighting theme (`auto` follows the UI theme, or a built-in id). */
   codeTheme: CodeThemeSelection;
+  /** Desktop Web settings presentation: modal workspace dialog (default) or full-page swapped sidebar. */
+  settingsPresentation: SettingsPresentation;
 }
 
 const KEY = 'riffet.display';
@@ -106,6 +109,7 @@ export const defaultDisplaySettings: DisplaySettings = {
   terminalMacOptionIsMeta: false, terminalBell: 'none',
   terminalMobileKeys: [...DEFAULT_TERMINAL_MOBILE_KEYS],
   codeTheme: CODE_THEME_AUTO,
+  settingsPresentation: 'modal',
 };
 
 const VALID_MOBILE_KEYS = new Set<string>(ALL_TERMINAL_MOBILE_KEYS);
@@ -189,6 +193,7 @@ export function parseDisplaySettings(raw: string): DisplaySettings {
       ? parsed.terminalBell : defaultDisplaySettings.terminalBell,
     terminalMobileKeys: parseMobileKeys(parsed.terminalMobileKeys),
     codeTheme: parseCodeThemeSelection(parsed.codeTheme),
+    settingsPresentation: parsed.settingsPresentation === 'page' ? 'page' : defaultDisplaySettings.settingsPresentation,
   };
 }
 

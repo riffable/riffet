@@ -70,7 +70,7 @@ export function ShortcutSettings() {
     );
   };
 
-  return <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+  return <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-2 @4xl:items-start">
     {shortcutGroups.map(({ group, title }, index) => (
       <Group
         key={group}

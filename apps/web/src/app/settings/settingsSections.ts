@@ -6,8 +6,8 @@ import { IconActivity, IconBot, IconColumns2, IconCornerDownLeft, IconCpu, IconD
 /**
  * Shared by the settings navigation and command palette. `appearance` is the theme page: the
  * appearance page it named was split into its group's pages, and links to it keep working. A page
- * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` renders the design
- * system specimen page inside Settings while keeping its `/design` URL.
+ * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` opens the
+ * standalone design-system page (`/design`) and closes Settings.
  */
 export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'shortcuts' | 'notifications' | 'titles' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'assistant' | 'workitems' | 'connection' | 'shares' | 'devices' | 'links' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
@@ -52,7 +52,7 @@ interface SettingsSectionDefinition extends Omit<SettingsSectionItem, 'label'> {
 
 const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'profile', label: msg`个人资料`, group: 'general', icon: IconUser, keywords: 'profile avatar name 头像 昵称' }, // i18n-ignore
-  { id: 'general', label: msg`通用设置`, group: 'general', icon: IconSettings2, keywords: 'general language locale 语言 地区' }, // i18n-ignore
+  { id: 'general', label: msg`通用设置`, group: 'general', icon: IconSettings2, keywords: 'general language locale settings modal dialog page presentation 语言 地区 设置 弹窗 整页' }, // i18n-ignore
   { id: 'appearance', label: msg`主题`, group: 'appearance', icon: IconSun, keywords: 'theme dark light color palette syntax highlight code 浅色 深色 配色 代码高亮 背景' }, // i18n-ignore
   { id: 'typography', label: msg`排版`, group: 'appearance', icon: IconWrapText, keywords: 'font typography size density spacing width 字体 字号 间距 阅读列宽' }, // i18n-ignore
   { id: 'sidebar', label: msg`侧栏`, group: 'appearance', icon: IconPanelLeft, keywords: 'sidebar pin navigation order 固定 导航 排序' }, // i18n-ignore
@@ -98,9 +98,9 @@ export const settingsNavigationSections = settingsSections.filter((section) => !
 /** First top-level settings section, used when opening Settings with no prior visit stored. */
 export const DEFAULT_SETTINGS_SECTION: SettingsSection = settingsNavigationSections[0]!.id;
 
-/** Resolves a raw section id (from a URL or caller) to a known settings section, or `undefined`. */
+/** Resolves a raw section id (from a URL or caller) to a known settings section, or `undefined`. `design` is a standalone page, not a persisted settings section. */
 export function resolveSettingsSection(raw: string | undefined): SettingsSection | undefined {
-  if (!raw) return undefined;
+  if (!raw || raw === 'design') return undefined;
   return settingsSections.find((item) => item.id === raw)?.id;
 }
 
