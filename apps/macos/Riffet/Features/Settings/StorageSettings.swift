@@ -33,6 +33,7 @@ struct StorageSettings: View {
                     Text(error)
                 } actions: {
                     Button("重试") { Task { await load() } }
+                        .buttonStyle(SolidButtonStyle(kind: .primary))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

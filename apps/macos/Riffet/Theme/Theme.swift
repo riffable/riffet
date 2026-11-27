@@ -486,6 +486,9 @@ enum RiffetFont {
     static var body: Font { text(RiffetTextSize.base) }
     static var label: Font { text(RiffetTextSize.sm) }
     static var caption: Font { text(RiffetTextSize.xs) }
+    static var footnote: Font { text(RiffetTextSize.x2xs) }
+    static var dialogTitle: Font { text(RiffetTextSize.lg, weight: .medium) }
+    static var barTitle: Font { text(RiffetTextSize.sm, weight: .medium) }
     static var code: Font { mono(12.5) }
     /// A first-launch page's title: the largest step of the text scale, as the new-session greeting.
     static var pageTitle: Font { text(RiffetTextSize.x2xl, weight: .medium) }

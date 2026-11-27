@@ -401,41 +401,60 @@ struct WindowBackdrop: NSViewRepresentable {
     func updateNSView(_ view: Backdrop, context: Context) { view.material = material }
 }
 
-/// A labelled button for dialogs and cards: primary is solid, secondary is a quiet outline.
+/// A labelled button for dialogs and cards: primary is solid ink, secondary is a 7% ink wash
+/// without a border, danger is a soft red wash, and quiet is transparent until hovered.
 struct SolidButtonStyle: ButtonStyle {
     enum Kind { case primary, secondary, danger, quiet }
     var kind: Kind = .secondary
     @Environment(\.palette) private var palette
     @Environment(\.isEnabled) private var enabled
+    @Environment(\.controlSize) private var controlSize
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.riffet(size: S(12.5), weight: kind == .primary ? .semibold : .medium))
-            .foregroundStyle(foreground)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 5)
-            .frame(minHeight: 28)
-            .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(background))
-            .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(kind == .secondary ? palette.line : .clear))
-            .opacity(enabled ? (configuration.isPressed ? 0.82 : 1) : 0.5)
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        SolidBody(configuration: configuration, kind: kind, palette: palette, enabled: enabled, controlSize: controlSize)
     }
 
-    private var foreground: Color {
-        switch kind {
-        case .primary: palette.primaryFg
-        case .secondary: palette.fg
-        case .danger: .white
-        case .quiet: palette.fg2
+    private struct SolidBody: View {
+        let configuration: Configuration
+        let kind: Kind
+        let palette: Palette
+        let enabled: Bool
+        let controlSize: ControlSize
+        @State private var hovering = false
+
+        private var compact: Bool { controlSize == .small || controlSize == .mini }
+
+        var body: some View {
+            let shape = RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+            configuration.label
+                .font(RiffetFont.text(compact ? RiffetTextSize.xs : RiffetTextSize.sm, weight: .medium))
+                .foregroundStyle(foreground)
+                .padding(.horizontal, compact ? Space.sm : Space.md)
+                .padding(.vertical, compact ? Space.xxs : Space.xs)
+                .frame(minHeight: compact ? 24 : 28)
+                .background(shape.fill(background))
+                .opacity(enabled ? (configuration.isPressed ? 0.85 : 1) : 0.5)
+                .contentShape(shape)
+                .onHover { hovering = $0 && enabled }
+                .animation(Motion.fast, value: hovering)
         }
-    }
 
-    private var background: Color {
-        switch kind {
-        case .primary: palette.primary
-        case .secondary: palette.bgElevated
-        case .danger: palette.danger
-        case .quiet: .clear
+        private var foreground: Color {
+            switch kind {
+            case .primary: palette.primaryFg
+            case .secondary: palette.fg
+            case .danger: palette.danger
+            case .quiet: hovering ? palette.fg : palette.fg2
+            }
+        }
+
+        private var background: Color {
+            switch kind {
+            case .primary: hovering ? palette.primaryHover : palette.primary
+            case .secondary: palette.fg.opacity(hovering ? 0.11 : 0.07)
+            case .danger: palette.danger.opacity(hovering ? 0.18 : 0.12)
+            case .quiet: configuration.isPressed ? palette.bgActive : hovering ? palette.bgHover : .clear
+            }
         }
     }
 }

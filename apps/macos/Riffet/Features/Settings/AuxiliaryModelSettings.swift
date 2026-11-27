@@ -111,6 +111,8 @@ private struct AuxiliaryModelSection: View {
                                     state.preview = AuxiliaryPreviewSelection(purpose: purpose, ref: ref)
                                 }
                             }
+                            .buttonStyle(SolidButtonStyle(kind: .secondary))
+                            .controlSize(.small)
                             .disabled(purpose.ref(in: settings) == nil || state.saving != nil)
                         }
                     }

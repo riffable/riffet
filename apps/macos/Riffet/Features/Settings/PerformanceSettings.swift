@@ -17,17 +17,25 @@ struct PerformanceSettingsSection: View {
 
     var body: some View {
         SettingsBlock("性能监测") {
-            Toggle("记录帧率、卡顿与主线程占用", isOn: $enabled)
-                .onChange(of: enabled) { _, on in PerfMonitor.shared.setEnabled(on) }
-            Toggle("显示悬浮读数", isOn: $hud)
-                .onChange(of: hud) { _, on in
-                    PerfHUD.shared.setVisible(on)
-                    enabled = PerfMonitor.shared.enabled
-                }
+            SettingsRow("记录帧率、卡顿与主线程占用") {
+                Toggle("记录帧率、卡顿与主线程占用", isOn: $enabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .onChange(of: enabled) { _, on in PerfMonitor.shared.setEnabled(on) }
+            }
+            SettingsRow("显示悬浮读数") {
+                Toggle("显示悬浮读数", isOn: $hud)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .onChange(of: hud) { _, on in
+                        PerfHUD.shared.setVisible(on)
+                        enabled = PerfMonitor.shared.enabled
+                    }
+            }
             if enabled {
                 ForEach(rows) { row in
                     LabeledContent(row.id) {
-                        Text(row.summary).font(.riffet(size: S(11.5)).monospacedDigit()).foregroundStyle(palette.fg2).multilineTextAlignment(.trailing)
+                        Text(row.summary).font(RiffetFont.caption.monospacedDigit()).foregroundStyle(palette.fg2).multilineTextAlignment(.trailing)
                     }
                 }
                 if rows.isEmpty {

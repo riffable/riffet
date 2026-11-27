@@ -226,7 +226,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var scope: SettingsScope? {
         switch pane {
         case .general, .appearance, .window, .tabs, .typography, .terminal, .appIcon, .shortcuts, .notifications, .connection: .mac
-        case .sidebar, .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .assistant, .workItems, .shares, .channels: .server
+        case .profile, .sidebar, .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .assistant, .workItems, .shares, .channels: .server
         default: nil
         }
     }

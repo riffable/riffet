@@ -23,6 +23,7 @@ struct ThemeSettings: View {
                         Label("深色", icon: "moon").tag("dark")
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
             }
 
@@ -68,7 +69,7 @@ struct ThemeSettings: View {
                 .padding(.vertical, Space.xs)
             }
 
-            Section("代码高亮") {
+            SettingsBlock("代码高亮") {
                 let customSyntaxThemes = theme.customThemes.filter { $0.syntax != nil }
                 let selection = (prefs.codeTheme.hasPrefix("custom-") && !customSyntaxThemes.contains { $0.id == prefs.codeTheme }) ? "auto" : prefs.codeTheme
                 SettingsRow("风格") {
@@ -103,6 +104,7 @@ struct ThemeSettings: View {
                                 }
                             }
                             .buttonStyle(SolidButtonStyle(kind: .secondary))
+                            .controlSize(.small)
                         }
                     }
                 }
@@ -238,6 +240,7 @@ struct WindowSettings: View {
                         }
                     }
                     .labelsHidden()
+                    .fixedSize()
                     .disabled(prefs.reduceTransparency)
                 }
 
@@ -275,6 +278,7 @@ struct TypographySettings: View {
                         Text("特大").tag(1.2)
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
 
                 SettingsRow("间距") {
@@ -284,6 +288,7 @@ struct TypographySettings: View {
                         Text("宽松").tag(1.25)
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
 
                 SettingsRow("阅读宽度") {
@@ -302,6 +307,7 @@ struct TypographySettings: View {
                         Text("仅导航条").tag(false)
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
 
                 SettingsRow("导航条样式") {
@@ -310,6 +316,7 @@ struct TypographySettings: View {
                         Text("圆点").tag(true)
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
             }
 
@@ -329,10 +336,10 @@ struct TypographySettings: View {
         let width = 300 + CGFloat(fraction) * 300
         return VStack(alignment: .leading, spacing: Space.md * CGFloat(density)) {
             Text("今天的工作")
-                .font(.riffet(size: S(15), weight: .semibold))
+                .font(RiffetFont.text(RiffetTextSize.base, weight: .medium))
                 .foregroundStyle(palette.fg)
             Text("先检查项目进度，再继续处理等待确认的会话。")
-                .font(.riffet(size: S(13)))
+                .font(RiffetFont.label)
                 .foregroundStyle(palette.fg2)
         }
         .padding(Space.lg)
@@ -396,13 +403,12 @@ struct TerminalSettings: View {
                 }
 
                 SettingsRow("字重") {
-                    Picker("字重", selection: $prefs.terminalFontWeight) {
+                    FormSegmented("字重", selection: $prefs.terminalFontWeight) {
                         Text("常规").tag(TerminalFontWeight.regular)
                         Text("中等").tag(TerminalFontWeight.medium)
                         Text("半粗").tag(TerminalFontWeight.semibold)
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
                     .fixedSize()
                 }
 
@@ -423,57 +429,64 @@ struct TerminalSettings: View {
 
             Section {
                 SettingsRow("光标样式") {
-                    Picker("光标样式", selection: $prefs.terminalCursorStyle) {
+                    FormSegmented("光标样式", selection: $prefs.terminalCursorStyle) {
                         Text("方块").tag(TerminalCursorShape.block)
                         Text("下划线").tag(TerminalCursorShape.underline)
                         Text("竖线").tag(TerminalCursorShape.bar)
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
                     .fixedSize()
                 }
 
                 SettingsRow("光标闪烁") {
-                    Toggle("光标闪烁", isOn: $prefs.terminalCursorBlink).labelsHidden()
+                    Toggle("光标闪烁", isOn: $prefs.terminalCursorBlink)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
 
                 SettingsRow("选中即复制") {
-                    Toggle("选中即复制", isOn: $prefs.terminalCopyOnSelect).labelsHidden()
+                    Toggle("选中即复制", isOn: $prefs.terminalCopyOnSelect)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
 
                 SettingsRow("右键行为") {
-                    Picker("右键行为", selection: $prefs.terminalRightClick) {
+                    FormSegmented("右键行为", selection: $prefs.terminalRightClick) {
                         Text("菜单").tag(TerminalRightClickBehavior.menu)
                         Text("复制或粘贴").tag(TerminalRightClickBehavior.copyPaste)
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
                     .fixedSize()
                 }
 
                 SettingsRow("Option 作为 Meta 键") {
-                    Toggle("Option 作为 Meta 键", isOn: $prefs.terminalOptionAsMeta).labelsHidden()
+                    Toggle("Option 作为 Meta 键", isOn: $prefs.terminalOptionAsMeta)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
 
                 SettingsRow("响铃提醒") {
-                    Picker("响铃提醒", selection: $prefs.terminalBell) {
+                    FormSegmented("响铃提醒", selection: $prefs.terminalBell) {
                         Text("关闭").tag(TerminalBellMode.none)
                         Text("闪烁").tag(TerminalBellMode.visual)
                         Text("声音").tag(TerminalBellMode.sound)
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
                     .fixedSize()
                 }
             }
 
             Section {
                 SettingsRow("输入时滚到底部") {
-                    Toggle("输入时滚到底部", isOn: $prefs.terminalScrollOnInput).labelsHidden()
+                    Toggle("输入时滚到底部", isOn: $prefs.terminalScrollOnInput)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
 
                 SettingsRow("新输出时滚到底部") {
-                    Toggle("新输出时滚到底部", isOn: $prefs.terminalScrollOnOutput).labelsHidden()
+                    Toggle("新输出时滚到底部", isOn: $prefs.terminalScrollOnOutput)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
 
                 SettingsRow("滚轮速度") {
@@ -615,6 +628,7 @@ struct AppIconSettings: View {
                         }
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
 
                 HStack(spacing: Space.md) {
@@ -655,16 +669,16 @@ private struct SettingsNumberSlider: View {
             Slider(value: $value, in: range, step: step)
                 .frame(minWidth: 150)
             Text(verbatim: "\(value.formatted(.number.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US"))))\(suffix)")
-                .font(.riffet(size: S(12)))
+                .font(RiffetFont.caption)
                 .foregroundStyle(palette.fg2)
                 .monospacedDigit()
                 .frame(width: 52, alignment: .trailing)
             Button { value = defaultValue } label: {
                 Image(icon: "arrow.counterclockwise")
-                    .font(.riffet(size: S(12)))
             }
             .buttonStyle(IconButtonStyle(size: 24))
             .help("恢复默认")
+            .accessibilityLabel("恢复默认")
             .disabled(value == defaultValue)
         }
     }
@@ -687,13 +701,13 @@ private struct ThemePreviewCard: View {
                 preview
                 HStack(spacing: Space.xs) {
                     Text(entry.name)
-                        .font(.riffet(size: S(12.5), weight: .medium))
+                        .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium))
                         .foregroundStyle(palette.fg)
                         .lineLimit(1)
                     Spacer(minLength: 0)
                     if selected {
                         Image(icon: "checkmark.circle.fill")
-                            .font(.riffet(size: S(12), weight: .semibold))
+                            .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium))
                             .foregroundStyle(palette.accent)
                     }
                 }
@@ -766,13 +780,13 @@ private struct NewThemeCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: Space.sm) {
                 Image(icon: "plus")
-                    .font(.riffet(size: S(14), weight: .medium))
+                    .font(RiffetFont.text(RiffetTextSize.base, weight: .medium))
                     .foregroundStyle(palette.fg3)
                     .frame(maxWidth: .infinity)
                     .frame(height: Space.xxl + Space.xl)
                     .background(hovering ? palette.bgHover : .clear, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                 Text("新建主题")
-                    .font(.riffet(size: S(12.5), weight: .medium))
+                    .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium))
                     .foregroundStyle(palette.fg2)
                     .lineLimit(1)
             }

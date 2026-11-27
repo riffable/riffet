@@ -32,7 +32,7 @@ struct SettingsView: View {
             List(selection: selection) {
                 if visibleGroups.isEmpty {
                     Text("没有匹配的设置")
-                        .font(.riffet(size: S(12)))
+                        .font(RiffetFont.caption)
                         .foregroundStyle(palette.fg3)
                         .padding(.vertical, Space.sm)
                 }
@@ -41,11 +41,15 @@ struct SettingsView: View {
                         ForEach(entry.sections) { section in
                             row(section)
                         }
-                        ForEach(webRows(in: entry.group)) { web in
+                        ForEach(entry.webRows) { web in
                             webRow(web)
                         }
                     } header: {
-                        if let title = entry.group.title { Text(title) }
+                        if let title = entry.group.title {
+                            Text(title)
+                                .font(RiffetFont.caption)
+                                .foregroundStyle(palette.fg3)
+                        }
                     }
                 }
             }
@@ -67,9 +71,16 @@ struct SettingsView: View {
             }
             .navigationTitle(selection.wrappedValue.title)
             .toolbar {
-                if let web = selection.wrappedValue.webSection, let workbench = model.workbench {
-                    ToolbarItem(placement: .primaryAction) { WebHandoffButton(page: .settings(section: web), workbench: workbench) }
+                // Keep one toolbar item across all sections so switching between local preferences
+                // and server management panes never changes the title bar height or shifts the sidebar.
+                ToolbarItem(placement: .primaryAction) {
+                    if let web = selection.wrappedValue.webSection, let workbench = model.workbench {
+                        WebHandoffButton(page: .settings(section: web), workbench: workbench)
+                    } else {
+                        Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+                    }
                 }
+                .hideSharedToolbarBackground()
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -90,6 +101,7 @@ struct SettingsView: View {
     private struct GroupEntry: Identifiable {
         let group: SettingsGroup
         let sections: [SettingsSection]
+        let webRows: [WebSettingsRow]
         var id: SettingsGroup { group }
     }
 
@@ -97,29 +109,29 @@ struct SettingsView: View {
         let allowed = Set(matches)
         return SettingsGroup.allCases.compactMap { group in
             let sections = group.sections.filter { allowed.contains($0) }
-            return sections.isEmpty ? nil : GroupEntry(group: group, sections: sections)
+            let web = webRows(in: group)
+            return sections.isEmpty && web.isEmpty ? nil : GroupEntry(group: group, sections: sections, webRows: web)
         }
     }
 
     private func row(_ section: SettingsSection) -> some View {
-        rowLabel(symbol: section.symbol, title: section.title)
+        let selected = selection.wrappedValue == section
+        return rowLabel(symbol: section.symbol, title: section.title, selected: selected)
             .tag(section)
             .help(section.summary)
-            .listRowBackground(selection.wrappedValue == section ? SidebarSelectionBackground() : nil)
+            .listRowBackground(selected ? SidebarSelectionBackground() : nil)
     }
 
-    private func rowLabel(symbol: String, title: String) -> some View {
-        HStack(spacing: Space.sm) {
-            ZStack {
-                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .fill(palette.bgMuted)
-                    .frame(width: 22, height: 22)
-                Image(icon: symbol)
-                    .font(.riffet(size: S(11), weight: .medium))
-                    .foregroundStyle(palette.accent)
-            }
-            .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
+    private func rowLabel(symbol: String, title: String, selected: Bool = false) -> some View {
+        let color = selected ? palette.fg : palette.fg2
+        return HStack(spacing: Space.sm) {
+            Image(icon: symbol)
+                .font(RiffetFont.label)
+                .foregroundStyle(color)
+                .frame(width: Space.lg, alignment: .center)
             Text(title)
+                .font(RiffetFont.text(RiffetTextSize.sm, weight: selected ? .medium : .regular))
+                .foregroundStyle(color)
                 .lineLimit(1)
         }
     }
@@ -133,19 +145,9 @@ struct SettingsView: View {
 
     /// A section only the Web has: the row opens it there instead of selecting a pane.
     private func webRow(_ web: WebSettingsRow) -> some View {
-        Button {
+        SettingsWebRowButton(web: web) {
             if let workbench = model.workbench { WebHandoff.open(.settings(section: web.section), in: workbench) }
-        } label: {
-            HStack(spacing: Space.sm) {
-                rowLabel(symbol: web.symbol, title: web.title)
-                Spacer(minLength: 0)
-                Image(icon: "arrow.up.right.square")
-                    .font(RiffetFont.caption)
-                    .foregroundStyle(palette.fg4)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -290,8 +292,9 @@ final class SettingsPaneController: NSViewController {
                 MainActor.assumeIsolated { self?.dropHidden() }
             }
         }
-        // Keep the window's native presentation unanimated; layout preparation is separate above.
+        // Keep the window's native presentation unanimated and single-row unified; layout preparation is separate above.
         window?.animationBehavior = .none
+        window?.toolbarStyle = .unified
     }
 
     private func dropHidden() {
@@ -299,6 +302,37 @@ final class SettingsPaneController: NSViewController {
             pane.removeFromSuperview()
             panes[key] = nil
         }
+    }
+}
+
+private struct SettingsWebRowButton: View {
+    let web: WebSettingsRow
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+    @State private var hovering = false
+
+    var body: some View {
+        let color = hovering ? palette.fg : palette.fg2
+        Button(action: action) {
+            HStack(spacing: Space.sm) {
+                Image(icon: web.symbol)
+                    .font(RiffetFont.label)
+                    .foregroundStyle(color)
+                    .frame(width: Space.lg, alignment: .center)
+                Text(web.title)
+                    .font(RiffetFont.label)
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+                Image(icon: "arrow.up.right.square")
+                    .font(RiffetFont.caption)
+                    .foregroundStyle(hovering ? palette.fg2 : palette.fg4)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("在 Web 中打开")
+        .onHover { hovering = $0 }
     }
 }
 

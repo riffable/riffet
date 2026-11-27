@@ -12,6 +12,7 @@ struct TabsSettings: View {
                         Text("标题栏").tag(SessionTabStyle.titleBar)
                     }
                     .labelsHidden()
+                    .fixedSize()
                 }
 
                 SettingsRow("打开会话时") {
@@ -20,6 +21,7 @@ struct TabsSettings: View {
                         Text("直接加入").tag(SessionTabOpenMode.keep)
                     }
                     .labelsHidden()
+                    .fixedSize()
                     .disabled(prefs.style == .off)
                 }
 
@@ -32,6 +34,7 @@ struct TabsSettings: View {
                         Text("直接加入").tag(SessionTabNewMode.keep)
                     }
                     .labelsHidden()
+                    .fixedSize()
                     .disabled(prefs.style == .off || prefs.openMode == .keep)
                 }
             }

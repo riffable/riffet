@@ -23395,16 +23395,6 @@
         }
       }
     },
-    "所有连接这台服务器的设备共用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shared by every device connected to this server"
-          }
-        }
-      }
-    },
     "图片太大": {
       "localizations": {
         "en": {

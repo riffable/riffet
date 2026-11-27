@@ -358,6 +358,7 @@ private struct ChannelManualStep: View {
                         Text(verbatim: "Lark").tag("lark")
                     }
                     .labelsHidden()
+                    .fixedSize()
                     .disabled(busy)
                 }
             }

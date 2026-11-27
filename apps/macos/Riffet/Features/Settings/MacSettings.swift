@@ -325,10 +325,8 @@ struct ConnectionSettings: View {
                     .controlSize(.small)
             }
             if let forget {
-                Button("忘记", role: .destructive, action: forget)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(palette.danger)
-                    .font(.riffet(size: S(12.5)))
+                SettingsActionButton("忘记", kind: .danger, action: forget)
+                    .controlSize(.small)
             }
         }
     }
@@ -728,7 +726,7 @@ private struct ServerOutputSheet<Status: View>: View {
         VStack(alignment: .leading, spacing: Space.md) {
             HStack(spacing: Space.sm) {
                 Text(title)
-                    .font(.riffet(size: S(16), weight: .semibold))
+                    .font(RiffetFont.dialogTitle)
                     .foregroundStyle(palette.fg)
                 Spacer(minLength: Space.sm)
                 status
@@ -831,10 +829,14 @@ struct AboutSettings: View {
     @ViewBuilder
     private var updateCard: some View {
         if usesFeed {
-            Toggle("接收测试版更新", isOn: Binding(
-                get: { receivesBeta },
-                set: { receivesBeta = $0; Updater.shared.receivesBeta = $0 }
-            ))
+            SettingsRow("接收测试版更新") {
+                Toggle("接收测试版更新", isOn: Binding(
+                    get: { receivesBeta },
+                    set: { receivesBeta = $0; Updater.shared.receivesBeta = $0 }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+            }
         }
 
         HStack(spacing: Space.sm) {

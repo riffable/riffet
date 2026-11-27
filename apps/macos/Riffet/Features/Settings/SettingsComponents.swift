@@ -37,13 +37,13 @@ struct SettingsScopeBadge: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(icon: scope.symbol).font(.riffet(size: S(8.5), weight: .medium))
-            Text(scope.label).font(.riffet(size: S(10), weight: .medium))
+        HStack(spacing: Space.xs) {
+            Image(icon: scope.symbol).font(RiffetFont.text(RiffetTextSize.x2xs, weight: .medium))
+            Text(scope.label).font(RiffetFont.text(RiffetTextSize.x2xs, weight: .medium))
         }
         .foregroundStyle(palette.fg3)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, Space.sm)
+        .padding(.vertical, Space.xxs)
         .background(palette.bgMuted, in: Capsule())
         .overlay(Capsule().strokeBorder(palette.lineSoft))
         .accessibilityLabel("作用范围：\(scope.label)")
@@ -51,8 +51,7 @@ struct SettingsScopeBadge: View {
 }
 
 /// The pane's dominant storage, set by the settings window. A section that lives in the same place
-/// leaves its scope unsaid; `SettingsScopeFooter` states it once at the end of the pane. (A toolbar
-/// item would turn the settings window's title bar into a full toolbar and push the sidebar down.)
+/// leaves its scope unsaid; `SettingsScopeFooter` states it once at the end of the pane.
 extension EnvironmentValues {
     @Entry var settingsPaneScope: SettingsScope?
 }
@@ -66,7 +65,7 @@ struct SettingsScopeFooter: View {
         if let text {
             Section {} footer: {
                 Text(text)
-                    .font(.riffet(size: S(11.5)))
+                    .font(RiffetFont.caption)
                     .foregroundStyle(palette.fg4)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -92,20 +91,20 @@ struct SettingsSectionHeader: View {
     @Environment(\.settingsPaneScope) private var paneScope
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
+        VStack(alignment: .leading, spacing: Space.xxs) {
+            HStack(spacing: Space.xs) {
                 Text(title)
-                    .font(.riffet(size: S(DisplayPreferences.shared.style.text.label), weight: .semibold))
+                    .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium))
                     .foregroundStyle(palette.fg3)
                 Spacer(minLength: Space.sm)
                 if let scope, scope != paneScope { SettingsScopeBadge(scope: scope) }
             }
             if let detail {
                 Text(detail)
-                    .font(.riffet(size: S(DisplayPreferences.shared.style.text.label)))
+                    .font(RiffetFont.caption)
                     .foregroundStyle(palette.fg4)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.trailing, 4)
+                    .padding(.trailing, Space.xs)
             }
         }
         .textCase(nil)
@@ -185,13 +184,13 @@ struct SettingsRow<Trailing: View>: View {
         LabeledContent {
             trailing
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title)
-                    .font(.riffet(size: S(13)))
+                    .font(RiffetFont.label)
                     .foregroundStyle(palette.fg)
                 if let detail {
                     Text(detail)
-                        .font(.riffet(size: S(11.5)))
+                        .font(RiffetFont.caption)
                         .foregroundStyle(palette.fg3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -221,7 +220,7 @@ struct SettingsFieldRow<Control: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text(title)
-                .font(.riffet(size: S(13)))
+                .font(RiffetFont.label)
                 .foregroundStyle(palette.fg)
             control
                 // The row title is the control's label; a TextField/Picker inside would otherwise
@@ -229,7 +228,7 @@ struct SettingsFieldRow<Control: View>: View {
                 .labelsHidden()
             if let detail {
                 Text(detail)
-                    .font(.riffet(size: S(11.5)))
+                    .font(RiffetFont.caption)
                     .foregroundStyle(palette.fg3)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -246,14 +245,14 @@ struct SettingsStatusBadge: View {
 
     var body: some View {
         let color = tint ?? palette.fg3
-        HStack(spacing: 5) {
+        HStack(spacing: Space.xs) {
             Circle().fill(color).frame(width: 6, height: 6)
             Text(text)
-                .font(.riffet(size: S(11.5), weight: .medium))
+                .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium))
                 .foregroundStyle(color)
         }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 2.5)
+        .padding(.horizontal, Space.sm)
+        .padding(.vertical, Space.xxs)
         .background(color.opacity(0.12), in: Capsule())
         .accessibilityElement(children: .combine)
     }
@@ -270,13 +269,13 @@ struct SettingsStatusRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(title)
-                    .font(.riffet(size: S(13)))
+                    .font(RiffetFont.label)
                     .foregroundStyle(palette.fg)
                 if let detail {
                     Text(detail)
-                        .font(.riffet(size: S(11.5)))
+                        .font(RiffetFont.caption)
                         .foregroundStyle(palette.fg3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -338,17 +337,17 @@ struct SettingsCallout: View {
     var body: some View {
         HStack(alignment: .top, spacing: Space.sm) {
             Image(icon: symbol)
-                .font(.riffet(size: S(12), weight: .medium))
+                .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium))
                 .foregroundStyle(foreground)
                 .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Space.xxs) {
                 if let title {
                     Text(title)
-                        .font(.riffet(size: S(12.5), weight: .medium))
+                        .font(RiffetFont.barTitle)
                         .foregroundStyle(palette.fg)
                 }
                 Text(message)
-                    .font(.riffet(size: S(12)))
+                    .font(RiffetFont.caption)
                     .foregroundStyle(palette.fg2)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
@@ -356,13 +355,13 @@ struct SettingsCallout: View {
                     Button(actionTitle, action: action)
                         .buttonStyle(SolidButtonStyle(kind: .secondary))
                         .controlSize(.small)
-                        .padding(.top, 2)
+                        .padding(.top, Space.xxs)
                 }
             }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, Space.md)
-        .padding(.vertical, Space.sm + 2)
+        .padding(.vertical, Space.sm + Space.xxs)
         .background(background, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.lineSoft))
         .accessibilityElement(children: .combine)
@@ -414,14 +413,14 @@ struct SettingsHint: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
+        HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
             if let symbol {
                 Image(icon: symbol)
-                    .font(.riffet(size: S(10.5)))
+                    .font(RiffetFont.footnote)
                     .foregroundStyle(palette.fg4)
             }
             Text(text)
-                .font(.riffet(size: S(11.5)))
+                .font(RiffetFont.caption)
                 .foregroundStyle(palette.fg4)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -434,13 +433,13 @@ struct SettingsKeycaps: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: Space.xs) {
             ForEach(keys.indices, id: \.self) { index in
                 Text(keys[index])
-                    .font(.riffet(size: S(10.5), weight: .medium, design: .monospaced))
+                    .font(RiffetFont.mono(RiffetTextSize.x2xs.size))
                     .foregroundStyle(palette.fg2)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, Space.xs + Space.xxs)
+                    .padding(.vertical, Space.xxs)
                     .background(palette.bgMuted, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
                     .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
             }
@@ -456,7 +455,7 @@ struct SettingsShortcutRow: View {
     var body: some View {
         HStack(spacing: Space.sm) {
             Text(title)
-                .font(.riffet(size: S(13)))
+                .font(RiffetFont.label)
                 .foregroundStyle(palette.fg)
             Spacer(minLength: Space.sm)
             SettingsKeycaps(keys: keys)
@@ -611,16 +610,16 @@ struct SettingsFeedback: View {
                         Spinner(size: .mini)
                         Text("保存中…")
                     }
-                    .font(.riffet(size: S(11.5)))
+                    .font(RiffetFont.caption)
                     .foregroundStyle(palette.fg3)
                 }
             case .saved:
-                HStack(spacing: 5) {
+                HStack(spacing: Space.xs) {
                     Image(icon: "checkmark.circle")
-                        .font(.riffet(size: S(11), weight: .medium))
+                        .font(RiffetFont.text(RiffetTextSize.x2xs, weight: .medium))
                         .foregroundStyle(palette.success)
                     Text("已保存")
-                        .font(.riffet(size: S(11.5)))
+                        .font(RiffetFont.caption)
                         .foregroundStyle(palette.fg3)
                 }
                 .transition(.opacity)

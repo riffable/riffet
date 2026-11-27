@@ -41,9 +41,9 @@ private struct ProfileForm: View {
                         .controlSize(.small)
                     if !styles.isEmpty {
                         Button { picking = true } label: { Image(icon: "dice") }
-                            .buttonStyle(SolidButtonStyle(kind: .secondary))
-                            .controlSize(.small)
+                            .buttonStyle(IconButtonStyle(size: 24))
                             .help("随机头像")
+                            .accessibilityLabel("随机头像")
                             .popover(isPresented: $picking, arrowEdge: .bottom) {
                                 AvatarStylePicker(workbench: workbench, styles: styles, ink: inkHex, paper: paperHex) { style, seed in
                                     picking = false
@@ -73,10 +73,12 @@ private struct ProfileForm: View {
                         }
                 }
                 if let history = owner?.history, !history.isEmpty {
+                    let recent = Array(history.prefix(12))
+                    let contentWidth = CGFloat(recent.count) * 28 + CGFloat(max(recent.count - 1, 0)) * Space.sm
                     SettingsRow("历史头像") {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: Space.sm) {
-                                ForEach(history.prefix(12), id: \.sha256) { avatar in
+                                ForEach(recent, id: \.sha256) { avatar in
                                     Button {
                                         Task { await save.run { try await workbench.restoreOwnerAvatar(sha256: avatar.sha256) } }
                                     } label: {
@@ -91,18 +93,14 @@ private struct ProfileForm: View {
                                 }
                             }
                         }
-                        .frame(maxWidth: 28 * 12 + Space.sm * 11)
+                        .frame(maxWidth: min(contentWidth, 28 * 8 + Space.sm * 7))
                         .fixedSize(horizontal: false, vertical: true)
                         .disabled(save.busy)
                     }
                 }
                 SettingsFeedback(state: save)
-            } footer: {
-                Text("所有连接这台服务器的设备共用")
-                    .font(.riffet(size: S(11.5)))
-                    .foregroundStyle(palette.fg4)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
+            SettingsScopeFooter()
         }
         .riffetForm()
         .onAppear { draft = owner?.name ?? "" }
@@ -160,10 +158,10 @@ private struct AvatarStylePicker: View {
                 ForEach(shown, id: \.id) { style in
                     let seed = seeds[style.id] ?? Self.randomSeed()
                     Button { choose(style.id, seed) } label: {
-                        VStack(spacing: 4) {
+                        VStack(spacing: Space.xs) {
                             AvatarPreview(url: workbench.ownerAvatarPreviewUrl(style: style.id, seed: seed, ink: ink, paper: paper))
                             Text(localizedText(style.title, fallback: style.id.split(separator: "/").last.map(String.init) ?? style.id))
-                                .font(.riffet(size: S(11)))
+                                .font(RiffetFont.footnote)
                                 .foregroundStyle(palette.fg3)
                                 .lineLimit(1)
                         }

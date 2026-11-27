@@ -571,6 +571,8 @@ struct AgentProviderEditor: View {
                         .formField()
                         .disabled(saving)
                     Button("添加") { addManual() }
+                        .buttonStyle(SolidButtonStyle(kind: .secondary))
+                        .controlSize(.small)
                         .disabled(saving || manualModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

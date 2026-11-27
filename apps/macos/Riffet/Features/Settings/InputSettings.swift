@@ -96,6 +96,7 @@ struct InputSettings: View {
 /// (`ShortcutStore`), each one recordable. This Mac's.
 struct ShortcutSettings: View {
     private let store = ShortcutStore.shared
+    @Environment(\.palette) private var palette
     @State private var recording: ShortcutID?
     @State private var notice: Notice?
     @State private var monitor = KeyMonitor()
@@ -168,31 +169,38 @@ struct ShortcutSettings: View {
                         store.set(id, chords: [replace.chord])
                         notice = nil
                     }
+                    .controlSize(.small)
                 }
                 Button { notice = nil; recording = recording == id ? nil : id } label: {
-                    if recording == id {
-                        Text("按下新快捷键")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    } else if let chord = store.chords(id).first {
-                        SettingsKeycaps(keys: ShortcutChord.keycaps(chord))
-                    } else {
-                        Text("未设置")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    Group {
+                        if recording == id {
+                            Text("按下新快捷键")
+                                .font(RiffetFont.caption)
+                                .foregroundStyle(palette.accent)
+                        } else if let chord = store.chords(id).first {
+                            SettingsKeycaps(keys: ShortcutChord.keycaps(chord))
+                        } else {
+                            Text("未设置")
+                                .font(RiffetFont.caption)
+                                .foregroundStyle(palette.fg3)
+                        }
                     }
+                    .padding(.horizontal, Space.xs)
+                    .padding(.vertical, Space.xxs)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(HoverRowStyle())
                 .accessibilityLabel(label(id))
                 if store.isOverridden(id) {
                     Button { store.reset(id); notice = nil } label: { Image(icon: "arrow.counterclockwise") }
                         .buttonStyle(IconButtonStyle(size: 24))
                         .help("恢复默认")
+                        .accessibilityLabel("恢复默认")
                 }
                 if !store.chords(id).isEmpty {
                     Button { store.set(id, chords: []); notice = nil } label: { Image(icon: "xmark") }
                         .buttonStyle(IconButtonStyle(size: 24))
-                        .help("关闭")
+                        .help("清除")
+                        .accessibilityLabel("清除")
                 }
             }
         }

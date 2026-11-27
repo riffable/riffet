@@ -72,6 +72,7 @@ struct RiffetApp: App {
             SettingsView()
                 .environment(model)
                 .environment(\.palette, theme.palette)
+                .tint(theme.palette.accent)
         }
         // The content's ideal size, so the window opens at the size the sections were laid out for
         // instead of being measured into place a few frames after it appears. Tall enough for the
@@ -81,6 +82,7 @@ struct RiffetApp: App {
         // (content size) re-derives the window's size limits from the content on every update,
         // which re-tiles the window frame while the first section lays out.
         .windowResizability(.contentMinSize)
+        .windowToolbarStyle(.unified)
     }
 }
 

@@ -42,9 +42,9 @@
 | 正文 | `.body` | 14 / 23 | `RiffetTextSize.base`；行高取 `style.text.readingLine` |
 | 界面 | `.label` | 13 / 20 | `style.text.body` |
 | 次要 | `.caption` | 12 / 16 | `style.text.secondary` |
-| 注脚 | `.footnote`（新增） | 11 / 16 | `RiffetTextSize.x2xs` |
-| 标题 · 弹窗 | `.dialogTitle`（新增） | 16 / 24，500 | `RiffetTextSize.lg` |
-| 标题 · 栏 | `.barTitle`（新增） | 13 / 20，500 | `style.text.body` |
+| 注脚 | `.footnote` | 11 / 16 | `RiffetTextSize.x2xs` |
+| 标题 · 弹窗 | `.dialogTitle` | 16 / 24，500 | `RiffetTextSize.lg` |
+| 标题 · 栏 | `.barTitle` | 13 / 20，500 | `style.text.body` |
 | 代码 | `.code` | 13 / 20 | `RiffetTextSize.sm`，等宽 |
 
 - 字重只用 `.regular` 与 `.medium`。`.semibold` 只给品牌名。
@@ -210,10 +210,10 @@ Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 
 
 | Web（`components/ui/`） | Mac（`Theme/`） | 现状 |
 |---|---|---|
-| `Button` `primary` | `SolidButtonStyle(kind: .primary)` | 字号 12.5、semibold，改为 `.label`、500 |
-| `Button` `secondary` | `SolidButtonStyle(kind: .secondary)` | 是 `bgElevated` 加描边，改为 7% 墨色浅底、无描边（[决定](../DECISIONS.md) 2026-11-14） |
+| `Button` `primary` | `SolidButtonStyle(kind: .primary)` | |
+| `Button` `secondary` | `SolidButtonStyle(kind: .secondary)` | |
 | `Button` `ghost` / `quiet` | `SolidButtonStyle(kind: .quiet)`；行内用 `HoverRowStyle` | 弹窗的取消按钮现在用 `.secondary` |
-| `Button` `danger` | `SolidButtonStyle(kind: .danger)` | 是红色实心白字，改为红色浅底红字 |
+| `Button` `danger` | `SolidButtonStyle(kind: .danger)` | |
 | 图标按钮 | `IconButtonStyle` | 默认 26，改为 28 |
 | 胶囊 | `ChipButtonStyle`、`ChipLabel` | |
 | `Input` / `Textarea` | `.formField()` 的 `TextField`、`TextEditor` | |

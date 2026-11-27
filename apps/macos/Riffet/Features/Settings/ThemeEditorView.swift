@@ -283,7 +283,7 @@ struct ThemeEditorView: View {
                     .foregroundStyle(palette.fg3)
             }
         }
-        Section("对比度提示（\(mode.title)）") {
+        SettingsBlock("对比度提示（\(mode.title)）") {
             ForEach(ThemeEditorRoles.contrastChecks, id: \.label) { check in
                 HStack {
                     Text(check.label).font(.riffet(size: S(12))).foregroundStyle(palette.fg3)

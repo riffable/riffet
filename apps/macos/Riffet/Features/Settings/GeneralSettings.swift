@@ -40,14 +40,26 @@ struct GeneralSettings: View {
             }
 
             SettingsBlock("启动与菜单栏") {
-                Toggle("登录时打开 Riffet", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, on in updateLoginItem(on) }
+                SettingsRow("登录时打开 Riffet") {
+                    Toggle("登录时打开 Riffet", isOn: $launchAtLogin)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .onChange(of: launchAtLogin) { _, on in updateLoginItem(on) }
+                }
                 if let loginError {
                     SettingsCallout(.danger, message: loginError)
                 }
-                Toggle("关闭窗口后只保留菜单栏图标", isOn: $menuBarOnly)
-                    .onChange(of: menuBarOnly) { _, _ in AppPresence.apply() }
-                Toggle("在菜单栏显示运行进度", isOn: $menuBarProgress)
+                SettingsRow("关闭窗口后只保留菜单栏图标") {
+                    Toggle("关闭窗口后只保留菜单栏图标", isOn: $menuBarOnly)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .onChange(of: menuBarOnly) { _, _ in AppPresence.apply() }
+                }
+                SettingsRow("在菜单栏显示运行进度") {
+                    Toggle("在菜单栏显示运行进度", isOn: $menuBarProgress)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
             }
 
             SettingsBlock("审批") {
@@ -117,7 +129,11 @@ struct NotificationSettings: View {
     var body: some View {
         Form {
             Section {
-                Toggle("会话完成、失败或等待确认时通知我", isOn: $notifications)
+                SettingsRow("会话完成、失败或等待确认时通知我") {
+                    Toggle("会话完成、失败或等待确认时通知我", isOn: $notifications)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
 
                 // Only a permission that is missing is shown; an allowed one needs nothing.
                 if permissionMissing {
@@ -126,8 +142,10 @@ struct NotificationSettings: View {
                             SettingsStatusBadge(text: permission, tint: permissionTint)
                             if permissionDenied {
                                 SettingsActionButton("打开系统设置") { openNotificationSettings() }
+                                    .controlSize(.small)
                             } else {
                                 SettingsActionButton("允许通知") { Task { await requestPermission() } }
+                                    .controlSize(.small)
                             }
                         }
                     }
@@ -137,13 +155,19 @@ struct NotificationSettings: View {
             // The Mac posts its own notifications; the server's switch is what browsers follow.
             if model.workbench != nil {
                 Section {
-                    Toggle(isOn: serverNotifications) {
+                    LabeledContent {
+                        Toggle("网页端会话提醒", isOn: serverNotifications)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .disabled(serverBusy)
+                    } label: {
                         HStack(spacing: Space.sm) {
                             Text("网页端会话提醒")
+                                .font(RiffetFont.label)
+                                .foregroundStyle(palette.fg)
                             SettingsScopeBadge(scope: .server)
                         }
                     }
-                    .disabled(serverBusy)
                     SettingsErrorText(message: error)
                 }
             }

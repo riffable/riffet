@@ -55,8 +55,9 @@ struct BackupSettings: View {
                                 } label: {
                                     Image(icon: "folder")
                                 }
-                                .buttonStyle(.borderless)
+                                .buttonStyle(IconButtonStyle(size: 24))
                                 .help("在访达中显示")
+                                .accessibilityLabel("在访达中显示")
                             }
                         }
                     }

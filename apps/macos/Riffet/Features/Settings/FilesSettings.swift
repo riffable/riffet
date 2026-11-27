@@ -43,8 +43,8 @@ struct FilesSettings: View {
                             SettingsFeedback(state: save, explicit: true)
                             TextField("服务器命令", text: $editor, prompt: Text(verbatim: "cursor"))
                                 .labelsHidden()
-                                .font(.riffet(size: S(13), design: .monospaced))
-                                .formField()
+                                .font(RiffetFont.mono(RiffetTextSize.sm.size))
+                                .formField(bezeled: true)
                                 .frame(width: 200)
                                 .focused($focus, equals: .editor)
                                 .onSubmit { Task { await saveEditor(workbench) } }
@@ -110,8 +110,8 @@ struct FilesSettings: View {
                 ) {
                     HStack(spacing: Space.sm) {
                         TextField("存放位置", text: $workspaceRoot, prompt: Text(workspaceLocation?.path ?? ""))
-                            .font(.riffet(size: S(13), design: .monospaced))
-                            .formField()
+                            .font(RiffetFont.mono(RiffetTextSize.sm.size))
+                            .formField(bezeled: true)
                             .focused($focus, equals: .workspaceRoot)
                             .onSubmit { Task { await saveWorkspaceRoot(workbench) } }
                         if workbench.local {
@@ -122,10 +122,11 @@ struct FilesSettings: View {
                                     await saveWorkspaceRoot(workbench)
                                 }
                             } label: {
-                                Image(icon: "folder").font(.riffet(size: S(12)))
+                                Image(icon: "folder")
                             }
                             .buttonStyle(IconButtonStyle(size: 26))
                             .help("浏览…")
+                            .accessibilityLabel("浏览…")
                         }
                         if !savedWorkspaceRoot.isEmpty {
                             Button("默认") {
