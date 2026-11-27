@@ -18,7 +18,7 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { cn, formatDateTime, relativeTime, tildePath, timeAgo } from '@/lib/utils';
 import { isSessionDeleted } from '@/lib/session-deletion';
 import { compactTokens } from './session/Composer';
-import { runIsActive, runStatusTone, runTimestamp, useRunStateLabel } from './session/MemberBackgroundRuns';
+import { runHasInspectableDetail, runIsActive, runStatusTone, runTimestamp, useRunStateLabel } from './session/MemberBackgroundRuns';
 import type { ContextUsage } from './session/model';
 import { useStores, useWorkItems } from './state/stores';
 import { useServerBadge } from './useServerLabel';
@@ -317,7 +317,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
 }
 
 /** Background delegation / scheduled runs owned by this member, shown in SessionInfo for narrow layouts. */
-export function SessionMemberRuns({ runs, onOpen }: { runs: readonly AssistantRunSummary[]; onOpen?: (sessionId: string) => void }) {
+export function SessionMemberRuns({ runs, onOpen, onInspect }: { runs: readonly AssistantRunSummary[]; onOpen?: (sessionId: string) => void; onInspect?: (run: AssistantRunSummary) => void }) {
   const { t } = useLingui();
   const stateLabel = useRunStateLabel();
   const [expanded, setExpanded] = useState(false);
@@ -337,12 +337,14 @@ export function SessionMemberRuns({ runs, onOpen }: { runs: readonly AssistantRu
           const leading = isRunning ? <Spinner className="size-3.5 text-fg-3" /> : <StatusDot tone={runStatusTone(run)} />;
           const meta = `${stateLabel(run)} · ${relativeTime(runTimestamp(run))}`;
           const canOpen = Boolean(run.sessionId && onOpen);
+          const canInspect = Boolean(!canOpen && onInspect && runHasInspectableDetail(run));
+          const clickable = canOpen || canInspect;
           return (
             <li key={run.id}>
               <ListRow
-                data-closes-overlay={canOpen ? '' : undefined}
-                disabled={!canOpen}
-                onClick={canOpen ? () => run.sessionId && onOpen?.(run.sessionId) : undefined}
+                data-closes-overlay={clickable ? '' : undefined}
+                disabled={!clickable}
+                onClick={canOpen ? () => run.sessionId && onOpen?.(run.sessionId) : canInspect ? () => onInspect?.(run) : undefined}
                 className="text-fg"
                 leading={leading}
                 meta={meta}

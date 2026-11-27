@@ -85,7 +85,7 @@ const USAGE_DAYS = 7;
 const TITLES: Record<AssistantJob, string> = { supervise: '跟进', consolidate: '记忆整理', delegation: '委托' };
 
 /** Compact, safe summary of a background run for the workbench UI (no raw payloads or prompt templates). */
-export function summarizeAssistantRun(run: AssistantRun): AssistantRunSummary {
+export function summarizeAssistantRun(run: AssistantRun, hasSession?: (sessionId: string) => boolean): AssistantRunSummary {
   const goal = typeof run.brief.goal === 'string' ? run.brief.goal.trim() : '';
   const firstSentence = goal.split(/[。\n!?！？]/, 1)[0]?.trim() ?? '';
   const fallback = run.job === 'consolidate'
@@ -94,6 +94,7 @@ export function summarizeAssistantRun(run: AssistantRun): AssistantRunSummary {
       ? (typeof run.brief.title === 'string' && run.brief.title.trim() ? run.brief.title.trim() : '任务跟进')
       : '后台委托';
   const title = (firstSentence || fallback).slice(0, 64);
+  const sessionId = run.sessionId && (!hasSession || hasSession(run.sessionId)) ? run.sessionId : undefined;
   return {
     id: run.id,
     ...(run.memberId ? { memberId: run.memberId } : {}),
@@ -103,7 +104,7 @@ export function summarizeAssistantRun(run: AssistantRun): AssistantRunSummary {
     title,
     ...(run.text ? { text: run.text } : {}),
     ...(run.error ? { error: run.error } : {}),
-    ...(run.sessionId ? { sessionId: run.sessionId } : {}),
+    ...(sessionId ? { sessionId } : {}),
     createdAt: run.createdAt,
     ...(run.startedAt ? { startedAt: run.startedAt } : {}),
     ...(run.endedAt ? { endedAt: run.endedAt } : {}),
@@ -155,6 +156,15 @@ export class AssistantRuns {
       return this.db.prepare('SELECT json FROM assistant_runs ORDER BY created_at DESC LIMIT ?').all(limit).map(row => this.parse(row)!);
     }
     return this.db.prepare("SELECT json FROM assistant_runs WHERE COALESCE(json_extract(json,'$.memberId'), ?) = ? ORDER BY created_at DESC LIMIT ?").all(DEFAULT_AGENT_MEMBER_ID, memberId, limit).map(row => this.parse(row)!);
+  }
+
+  private hasSession(sessionId: string | undefined): boolean {
+    return Boolean(sessionId && this.deps.store.findSession(sessionId));
+  }
+
+  /** Latest runs summarized for the UI, omitting any `sessionId` whose conversation does not exist. */
+  recentSummaries(limit = 20, memberId?: string): AssistantRunSummary[] {
+    return this.recent(limit, memberId).map(run => summarizeAssistantRun(run, id => this.hasSession(id)));
   }
 
   /** Whether [session] is one of these runs: it is not the main conversation, and nothing is pushed for it. */
@@ -284,7 +294,10 @@ export class AssistantRuns {
   private fail(id: string, error: string): void {
     const run = this.get(id);
     if (!run || run.state === 'done' || run.state === 'failed') return;
-    this.write({ ...run, state: 'failed', error: error.slice(0, 2000), endedAt: new Date().toISOString() });
+    // Drop a pre-allocated sessionId if launch failed before the conversation was persisted.
+    const sessionId = this.hasSession(run.sessionId) ? run.sessionId : undefined;
+    const { sessionId: _dropped, ...rest } = run;
+    this.write({ ...rest, ...(sessionId ? { sessionId } : {}), state: 'failed', error: error.slice(0, 2000), endedAt: new Date().toISOString() });
   }
 
   // ---- Reporting -------------------------------------------------------------------------------

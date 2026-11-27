@@ -2722,6 +2722,10 @@ msgstr "访问网络"
 msgid "诊断"
 msgstr "诊断"
 
+#: src/app/use-session-actions.ts
+msgid "该会话已不存在"
+msgstr "该会话已不存在"
+
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "请在服务器所在设备上安装此插件"
 msgstr "请在服务器所在设备上安装此插件"

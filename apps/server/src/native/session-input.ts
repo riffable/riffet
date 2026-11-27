@@ -96,7 +96,11 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   const memberApproval=member?.target?.permissionMode;
   const fallbackApproval=memberApproval&&capabilities.supportsPermissionSelection&&capabilities.permissions.some(item=>item.id===memberApproval)?memberApproval:undefined;
   const approval=body.approval===undefined?(fallbackApproval??(applyBackendDefaults?defaults?.approval:undefined)):requireString(body.approval,'approval',100);
-  if(approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===approval)))throw new AppError('INVALID_APPROVAL_MODE','Choose a permission setting supported by this backend');
+  // Internal background runs for standing team members launch with `dontAsk`; drivers that
+  // declare `startsNewTopic` enforce it via standing hooks even when `dontAsk` is not offered
+  // in the interactive composer picker (Cursor, Antigravity).
+  const standingBackgroundApproval=headers===undefined&&approval==='dontAsk'&&supportsMember&&Boolean(member||(!optOutMember&&project.system==='assistant'));
+  if(approval!==undefined&&!standingBackgroundApproval&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===approval)))throw new AppError('INVALID_APPROVAL_MODE','Choose a permission setting supported by this backend');
   return {
     projectId:project.id,title:body.title?.slice(0,200),backendId,
     terminalAppearance:resolveTerminalAppearance(readTerminalAppearance(headers)),

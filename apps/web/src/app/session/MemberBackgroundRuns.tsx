@@ -3,10 +3,13 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { DEFAULT_AGENT_MEMBER_ID, type AssistantRunSummary } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Spinner, StatusDot } from '@/components/ui/controls';
+import { CopyButton } from '@/components/ui/copy-button';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Notice } from '@/components/ui/notice';
 import { api } from '@/lib/api';
 import { plainMarkdownText } from '@/lib/markdown-preview';
 import { useVisibleInterval } from '@/lib/use-visible-interval';
-import { cn, readStored, relativeTime, writeStored } from '@/lib/utils';
+import { cn, formatDateTime, readStored, relativeTime, writeStored } from '@/lib/utils';
 import { Markdown } from './Markdown';
 
 const RUN_LIMIT = 5;
@@ -42,6 +45,67 @@ export function runStatusTone(run: AssistantRunSummary): 'danger' | 'warning' | 
 
 export function runTimestamp(run: AssistantRunSummary): string {
   return run.endedAt ?? run.startedAt ?? run.createdAt;
+}
+
+/** Whether a background run without a conversation still has failure/report detail worth opening. */
+export function runHasInspectableDetail(run: AssistantRunSummary): boolean {
+  return Boolean(run.error || run.text || run.state === 'failed');
+}
+
+/** Full detail dialog for background runs that have no openable conversation (e.g. failed before launch). */
+export function MemberRunDetailDialog({ run, onClose, onOpenSession }: {
+  run: AssistantRunSummary | undefined;
+  onClose: () => void;
+  onOpenSession?: (sessionId: string) => void;
+}) {
+  const stateLabel = useRunStateLabel();
+  const isRunning = run ? runIsActive(run) : false;
+  const hasBody = Boolean(run?.error || run?.text);
+  const hasFooter = Boolean(run?.sessionId && onOpenSession);
+  return (
+    <Dialog open={Boolean(run)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent size="form" mobileSheet>
+        {run && (
+          <>
+            <DialogHeader className={cn(!hasBody && !hasFooter && 'pb-5')}>
+              <DialogTitle>{run.title}</DialogTitle>
+              <DialogDescription className="flex items-center gap-2">
+                <span className="grid size-3.5 shrink-0 place-items-center">
+                  {isRunning ? <Spinner className="size-3.5 text-fg-3" /> : <StatusDot tone={runStatusTone(run)} />}
+                </span>
+                <span className={cn(run.state === 'failed' && 'text-danger', run.outcome === 'ask' && 'text-warning')}>
+                  {stateLabel(run)}
+                </span>
+                <span aria-hidden>·</span>
+                <span className="tabular-nums">{formatDateTime(runTimestamp(run))}</span>
+              </DialogDescription>
+            </DialogHeader>
+            {hasBody && (
+              <DialogBody className={cn('flex flex-col gap-3', !hasFooter && 'pb-5')}>
+                {run.error && (
+                  <Notice tone="danger" action={<CopyButton text={run.error} size="xs" />}>
+                    <p className="font-mono text-xs whitespace-pre-wrap break-words text-fg select-text">{run.error}</p>
+                  </Notice>
+                )}
+                {run.text && (
+                  <div className="min-w-0 select-text">
+                    <Markdown text={run.text} className="md-compact min-w-0" />
+                  </div>
+                )}
+              </DialogBody>
+            )}
+            {hasFooter && run.sessionId && onOpenSession && (
+              <DialogFooter>
+                <Button size="sm" variant="secondary" onClick={() => { const id = run.sessionId!; onClose(); onOpenSession(id); }}>
+                  <Trans>查看记录</Trans>
+                </Button>
+              </DialogFooter>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function useRunStateLabel() {
@@ -95,15 +159,18 @@ export function useMemberBackgroundRuns(memberId: string | undefined, enabled: b
 const foldButton = 'flex h-7 w-full items-center gap-2.5 rounded-lg px-2 text-left text-2xs text-fg-4 transition-colors hover:bg-hover hover:text-fg-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 
 /** Member background runs shown in the wide session aside, including silent runs so none stay opaque. */
-export const AsideMemberRuns = memo(function AsideMemberRuns({ runs, onOpenSession }: {
+export const AsideMemberRuns = memo(function AsideMemberRuns({ runs, onOpenSession, onInspectRun }: {
   runs: readonly AssistantRunSummary[];
   onOpenSession?: (sessionId: string) => void;
+  onInspectRun?: (run: AssistantRunSummary) => void;
 }) {
   const { t } = useLingui();
   const stateLabel = useRunStateLabel();
   const [expanded, setExpanded] = useState(false);
+  const [localInspect, setLocalInspect] = useState<AssistantRunSummary>();
   if (runs.length === 0) return null;
 
+  const inspect = onInspectRun ?? setLocalInspect;
   const active = runs.filter(runIsActive).length;
   const ordered = [...runs].sort((left, right) => {
     const activeDiff = Number(runIsActive(right)) - Number(runIsActive(left));
@@ -123,6 +190,7 @@ export const AsideMemberRuns = memo(function AsideMemberRuns({ runs, onOpenSessi
         {shown.map((run) => {
           const isRunning = runIsActive(run);
           const canOpen = Boolean(run.sessionId && onOpenSession);
+          const canInspect = !canOpen && runHasInspectableDetail(run);
           const detailRaw = run.error ?? run.text;
           const detail = detailRaw ? plainMarkdownText(detailRaw, { singleLine: true }) : undefined;
           const time = relativeTime(runTimestamp(run));
@@ -150,11 +218,14 @@ export const AsideMemberRuns = memo(function AsideMemberRuns({ runs, onOpenSessi
           );
           return (
             <li key={run.id}>
-              {canOpen ? (
+              {canOpen || canInspect ? (
                 <button
                   type="button"
                   title={summary}
-                  onClick={() => run.sessionId && onOpenSession?.(run.sessionId)}
+                  onClick={() => {
+                    if (canOpen && run.sessionId) onOpenSession?.(run.sessionId);
+                    else if (canInspect) inspect(run);
+                  }}
                   className="flex w-full min-w-0 items-start gap-2.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
                 >
                   {body}
@@ -182,6 +253,7 @@ export const AsideMemberRuns = memo(function AsideMemberRuns({ runs, onOpenSessi
           </li>
         )}
       </ul>
+      {!onInspectRun && <MemberRunDetailDialog run={localInspect} onClose={() => setLocalInspect(undefined)} onOpenSession={onOpenSession} />}
     </section>
   );
 });

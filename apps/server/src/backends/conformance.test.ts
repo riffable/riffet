@@ -18,6 +18,7 @@ import { AgentTeamService } from '../assistant/team.js';
 import { JournalFeed } from '../journal/feed.js';
 import { buildSessionControlSnapshot } from '../native/control.js';
 import { NativeDispatcher } from '../native/dispatch.js';
+import { resolveNativeSessionInput } from '../native/session-input.js';
 import { PluginRegistry } from '../plugins/registry.js';
 import { RiffetMcpService } from '../riffet-mcp/service.js';
 import { restartObservation } from '../session-identity.js';
@@ -286,6 +287,24 @@ describe('backend conformance suite', () => {
         driver.configure(service.host, session, defaultProfile, { approval: 'dontAsk' }),
         `${driver.id}: configure({ approval: 'dontAsk' }) must be accepted`,
       ).resolves.toBeDefined();
+
+      // Internal background runs enter through resolveNativeSessionInput with approval='dontAsk'.
+      const assistantProj = store.updateProject(store.createProject(`/tmp/riffet-conformance-standing-${driver.id}`, `Standing ${driver.id}`).id, { system: 'assistant' });
+      const resolved = await resolveNativeSessionInput(
+        { store, settings: { getSettings: () => ({}) } as never, nativeBackends: service },
+        { projectId: assistantProj.id, backendId: driver.id, approval: 'dontAsk' },
+      );
+      expect(resolved.approval, `${driver.id}: internal standing background run must accept approval='dontAsk'`).toBe('dontAsk');
+      if (!capabilities.permissions.some(item => item.id === 'dontAsk')) {
+        await expect(
+          resolveNativeSessionInput(
+            { store, settings: { getSettings: () => ({}) } as never, nativeBackends: service },
+            { projectId: project.id, backendId: driver.id, approval: 'dontAsk' },
+            { 'x-riffet-features': 'antigravity-agent,cursor-agent,pi-agent' },
+          ),
+          `${driver.id}: interactive HTTP request must still reject hidden approval='dontAsk'`,
+        ).rejects.toMatchObject({ code: 'INVALID_APPROVAL_MODE' });
+      }
     }
 
     // Lockstep check for every static ASSISTANT_BACKENDS entry.

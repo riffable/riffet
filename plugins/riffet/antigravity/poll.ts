@@ -246,7 +246,7 @@ async function adoptObservedConfig(runtime: Runtime, session: Session, status: A
       /* ignore unknown native permission values */
     }
   }
-  const approval = observedApproval ?? runtime.launch.config?.approval;
+  const approval = session.approval === 'dontAsk' ? 'dontAsk' : (observedApproval ?? runtime.launch.config?.approval);
   const patch = { ...(model ? { model } : {}), mode, ...(approval ? { approval } : {}) };
   runtime.status = { ...runtime.status, ...patch };
   if (Object.entries(patch).some(([key, value]) => session[key as keyof typeof session] !== value)) {

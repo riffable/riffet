@@ -238,6 +238,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
     else void loadBootstrap().then((next) => {
       const launched = next.sessions.find((item) => item.id === id);
       if (launched) handlers.selectSession(launched);
+      else toast.info(t`该会话已不存在`);
     }).catch((error) => toast.error(errorMessage(error, t`无法刷新会话列表`)));
   }, [lists, handlers, loadBootstrap, t]);
 

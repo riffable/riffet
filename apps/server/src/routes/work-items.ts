@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { ASSISTANT_BUDGET, DEFAULT_AGENT_MEMBER_ID } from '../../../../packages/contracts/src/index.js';
 import type { AssistantDelegation, AssistantFile, AssistantPack, AssistantRunSummary, AssistantRunUsage, AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
-import { summarizeAssistantRun } from '../assistant/runs.js';
 import { AppError } from '../errors.js';
 import { projectVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
 import { createReadStream, constants, openSync } from 'node:fs';
@@ -90,7 +89,7 @@ export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): v
     if(!runs)throw new AppError('SERVICE_STARTING','The workbench is starting',503);
     const rawLimit=request.query.limit?Number(request.query.limit):20;
     const limit=Number.isFinite(rawLimit)?Math.max(1,Math.min(50,Math.floor(rawLimit))):20;
-    return {runs:runs.recent(limit,DEFAULT_AGENT_MEMBER_ID).map(summarizeAssistantRun)};
+    return {runs:runs.recentSummaries(limit,DEFAULT_AGENT_MEMBER_ID)};
   });
   app.get('/api/assistant/delegations',async():Promise<{delegations:AssistantDelegation[]}>=>({delegations:delegations().list()}));
   app.post<{Params:{id:string}}>('/api/assistant/delegations/:id/end',async(request):Promise<AssistantDelegation>=>{

@@ -354,4 +354,63 @@ describe('assistant background runs', () => {
     expect(server.assistantRuns!.offerPending(advisor.id)).toEqual([]);
     expect(server.assistantDelegations.pluginEvent('personal.finance/alert', { symbol: '00700.HK' }, 'evt-2')).toEqual({ delegations: 0 });
   }, 60_000);
+
+  it('launches cursor background consolidation with dontAsk and drops phantom sessionIds on pre-session launch failure', async () => {
+    const stateDir = await mkdtemp(join(tmpdir(), 'riffet-cursor-runs-'));
+    const server = await boot(stateDir);
+    cleanups.push(async () => {
+      await server.app.close();
+      await rm(stateDir, { recursive: true, force: true });
+    });
+
+    vi.mocked(server.nativeBackends.catalog.listBackends).mockResolvedValue([
+      { backendId: 'cursor', label: 'Cursor', available: true, models: [], profiles: [], capabilities: { supportsStandingMember: true } },
+    ] as never);
+
+    const pm = await server.team.create({
+      name: '产品经理',
+      scope: { kind: 'personal' },
+      target: { backendId: 'cursor' },
+    });
+    const run = server.assistantRuns!.enqueue('consolidate', `consolidate:${pm.id}:2026-11-28`, {
+      since: '2026-11-27 10:00', until: '2026-11-28 04:00', note: '每晚整理', messages: '[2026-11-27 10:00] 用户：记住发布节奏', userChars: 0, indexLines: 0,
+    }, undefined, pm.id);
+    await settled(() => {
+      const current = server.assistantRuns!.get(run.id);
+      if (!current) return false;
+      if (current.state === 'failed') return true;
+      return Boolean(current.sessionId && server.store.findSession(current.sessionId));
+    });
+    const launched = server.assistantRuns!.get(run.id)!;
+    expect(launched.error).toBeUndefined();
+    expect(launched.sessionId).toBeTruthy();
+    expect(server.store.findSession(launched.sessionId!)).toMatchObject({ backendId: 'cursor', approval: 'dontAsk', agentMemberId: pm.id });
+
+    // If launch fails before creating a session, no dangling sessionId is stored or returned in summaries.
+    vi.mocked(server.nativeBackends.catalog.listBackends).mockResolvedValue([]);
+    const unavailableMember = await server.team.create({
+      name: '不可用成员',
+      scope: { kind: 'personal' },
+      target: { backendId: 'cursor' },
+    });
+    const failed = server.assistantRuns!.enqueue('consolidate', `consolidate:${unavailableMember.id}:2026-11-29`, {
+      since: '2026-11-28 10:00', until: '2026-11-29 04:00', note: '每晚整理', messages: '[2026-11-28 10:00] 用户：测试', userChars: 0, indexLines: 0,
+    }, undefined, unavailableMember.id);
+    await settled(() => server.assistantRuns!.get(failed.id)?.state !== 'queued', 2_000);
+    expect(server.assistantRuns!.get(failed.id)).toMatchObject({ state: 'failed' });
+    expect(server.assistantRuns!.get(failed.id)?.sessionId).toBeUndefined();
+    expect(server.assistantRuns!.recentSummaries(10, unavailableMember.id).find(item => item.id === failed.id)).toMatchObject({
+      state: 'failed',
+      error: expect.any(String),
+    });
+    expect(server.assistantRuns!.recentSummaries(10, unavailableMember.id).find(item => item.id === failed.id)?.sessionId).toBeUndefined();
+
+    // Historical records that already carry a nonexistent sessionId also omit it from summaries.
+    const orphanId = 'historical-orphan-run';
+    server.store.db.prepare('INSERT INTO assistant_runs(id,key,state,session_id,created_at,json) VALUES(?,?,?,?,?,?)').run(
+      orphanId, `consolidate:${pm.id}:2026-11-26`, 'failed', 'assistant-run-missing', Date.now() - 1000,
+      JSON.stringify({ id: orphanId, memberId: pm.id, job: 'consolidate', key: `consolidate:${pm.id}:2026-11-26`, state: 'failed', brief: {}, sessionId: 'assistant-run-missing', error: 'Choose a permission setting supported by this backend', createdAt: new Date(Date.now() - 1000).toISOString() }),
+    );
+    expect(server.assistantRuns!.recentSummaries(10, pm.id).find(item => item.id === orphanId)?.sessionId).toBeUndefined();
+  }, 60_000);
 });

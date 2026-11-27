@@ -16,7 +16,6 @@ import {
   type AssistantRunSummary,
   type Session,
 } from '../../../../packages/contracts/src/index.js';
-import { summarizeAssistantRun } from '../assistant/runs.js';
 import { AppError } from '../errors.js';
 import type { RouteDeps } from './deps.js';
 
@@ -136,6 +135,6 @@ export function registerTeamRoutes(app: FastifyInstance, deps: RouteDeps): void 
     if (!runs) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
     const rawLimit = request.query.limit ? Number(request.query.limit) : 20;
     const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, Math.floor(rawLimit))) : 20;
-    return { runs: runs.recent(limit, member.id).map(summarizeAssistantRun) };
+    return { runs: runs.recentSummaries(limit, member.id) };
   });
 }
