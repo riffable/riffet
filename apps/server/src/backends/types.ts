@@ -684,7 +684,7 @@ export interface NativeBackendDriver {
    * Skills and custom commands the provider offers in this project, for the composer's `/` menu.
    * Static built-ins stay in `capabilities().slashCommands`. Must not start or touch a conversation.
    */
-  slashItems?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]>;
+  slashItems?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<NativeSlashItem[]>;
   /** Called once per registration of a plugin's backend, with its default profile: starts what has to run with nobody using it (sweeps, a warm pool). */
   start?(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<void>;
   /** Starts an unused process held for the next session of this project; `skipped` with the reason when it cannot. */

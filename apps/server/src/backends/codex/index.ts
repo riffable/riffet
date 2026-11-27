@@ -140,7 +140,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       withManagementTransport: (...args) => this.withManagementTransport(...args),
       ownAddresses: () => [...this.runtimes.values()].flatMap(runtime => runtime.transport?.remoteAddress ?? []),
     });
-    this.skills = new CodexSkills({ withTransport, standingOf: (host, project) => this.standingOf(host, project) });
+    this.skills = new CodexSkills({ withTransport, standingOf: (host, project, session) => this.standingOf(host, project, session) });
     this.journalFeeds = new CodexJournalFeeds({
       flavor,
       observation: this.observation,
@@ -649,8 +649,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return usageOf({ flavor: this.flavor, withTransport: (project, profile, session, read) => this.withTransport(project, profile, session, read) }, project, profile, session);
   }
 
-  slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
-    return this.skills.slashItems(host, project, profile);
+  slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<NativeSlashItem[]> {
+    return this.skills.slashItems(host, project, profile, session);
   }
 
 

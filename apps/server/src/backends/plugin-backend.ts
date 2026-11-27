@@ -304,7 +304,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
     if (backend.validateNativeSessionId) this.validateNativeSessionId = id => backend.validateNativeSessionId!(id);
     if (backend.validateProfileConfig) this.validateProfileConfig = config => backend.validateProfileConfig!(config);
     if (backend.describeProfile) this.describeProfile = profile => backend.describeProfile!(profileView(profile));
-    if (backend.slashItems) this.slashItems = (host, project, profile) => backend.slashItems!(this.hostFor(host), project && projectView(project), profileView(profile));
+    if (backend.slashItems) this.slashItems = (host, project, profile, session) => backend.slashItems!(this.hostFor(host), project && projectView(project), profileView(profile), session && sessionView(session));
     if (backend.stop) {
       this.dispose = async (host, sessionId) => {
         this.forget(sessionId);

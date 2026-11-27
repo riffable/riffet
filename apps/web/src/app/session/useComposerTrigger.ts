@@ -6,7 +6,7 @@ import { backendLabel, sessionBackend } from '@/lib/backends';
 import { agentMentionCandidates, inlineMentionRanges, mentionText, type AgentMentionSource } from './agentMentions';
 import type { SlashCommand } from './model';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
-import { detectSlashTrigger, slashCandidates, slashMenuGroups, slashTokenRanges } from './slashMenu';
+import { detectSlashTrigger, passthroughSlashFirst, slashCandidates, slashMenuGroups, slashTokenRanges } from './slashMenu';
 
 export type Trigger = { type: 'slash' | 'mention'; query: string; start: number; leading?: boolean };
 
@@ -117,6 +117,7 @@ export function useComposerTrigger({
    * token: mid-message a slash is just as likely a path.
    */
   const unknownSlashCommand = trigger?.type === 'slash' && trigger.leading === true && Boolean(slashQuery) && !slashItems.some((command) => command.name === slashQuery);
+  const unknownSlashFirst = unknownSlashCommand && passthroughSlashFirst(slashItems, slashQuery);
   const slashMenuOpen = trigger?.type === 'slash';
   useEffect(() => { if (slashMenuOpen) onSlashMenuOpen?.(); }, [slashMenuOpen, onSlashMenuOpen]);
 
@@ -202,7 +203,7 @@ export function useComposerTrigger({
   }, [sessionMentions, mentionQuery, browsing, referenceCandidates, referenceProjects, projectId]);
 
   const menuLength = trigger?.type === 'slash' ? slashItems.length + (unknownSlashCommand ? 1 : 0) : files.length + agentRows.length + sessionFiles.length + projectRows.length;
-  const highlightScope = `${trigger?.type}|${trigger?.query}|${browsing}|${files.length}|${agentRows.length}|${sessionFiles.length}|${projectRows.length}`;
+  const highlightScope = `${trigger?.type}|${trigger?.query}|${unknownSlashFirst}|${browsing}|${files.length}|${agentRows.length}|${sessionFiles.length}|${projectRows.length}`;
   const [highlightedScope, setHighlightedScope] = useState(highlightScope);
   if (highlightedScope !== highlightScope) { setHighlightedScope(highlightScope); setHighlight(0); }
 
@@ -246,7 +247,8 @@ export function useComposerTrigger({
     if (disabled || !trigger) return;
     const caret = textareaRef.current?.selectionStart ?? textRef.current.length;
     if (trigger.type === 'slash') {
-      const command = slashItems[index];
+      if (unknownSlashFirst && index === 0) { setTrigger(null); onSubmitUnknownSlash(); return; }
+      const command = slashItems[unknownSlashFirst ? index - 1 : index];
       // Only the typed token is replaced, so a skill picked mid-message keeps the words around it.
       if (command) replaceRange(trigger.start, caret, /^\s/.test(textRef.current.slice(caret)) ? `/${command.name}` : `/${command.name} `);
       // Index past the advertised list is the "send verbatim" row.
@@ -326,6 +328,7 @@ export function useComposerTrigger({
     invokedSlashRanges,
     slashQuery,
     unknownSlashCommand,
+    unknownSlashFirst,
     menuOpen,
     menuLength,
     menuListRef,

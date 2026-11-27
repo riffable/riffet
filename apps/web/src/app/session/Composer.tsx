@@ -200,6 +200,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     invokedSlashRanges,
     slashQuery,
     unknownSlashCommand,
+    unknownSlashFirst,
     menuOpen,
     menuLength,
     menuListRef,
@@ -681,6 +682,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       slashItems={slashItems}
       slashQuery={slashQuery}
       unknownSlashCommand={unknownSlashCommand}
+      unknownSlashFirst={unknownSlashFirst}
       unknownCommandHint={props.unknownCommandHint}
       highlight={highlight}
       setHighlight={setHighlight}

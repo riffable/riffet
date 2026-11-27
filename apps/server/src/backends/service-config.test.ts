@@ -309,10 +309,14 @@ describe('NativeBackendService controls after a pending provider is deleted', ()
 });
 
 describe('NativeBackendService.slashCatalog', () => {
-  function catalogService(slashItems?: () => Promise<Array<{ name: string; kind: 'command' | 'skill'; description?: string }>>) {
+  function catalogService(
+    slashItems?: (host: unknown, proj: unknown, profile: unknown, sess?: { id: string; agentMemberId?: string }) => Promise<Array<{ name: string; kind: 'command' | 'skill'; description?: string }>>,
+    options: { startsNewTopic?: boolean; newTopic?: (sessionId: string, text: string) => boolean } = {},
+  ) {
     const driver = {
       id: 'claude',
       label: 'Test backend',
+      ...(options.startsNewTopic ? { traits: { startsNewTopic: true } } : {}),
       profiles: () => [{ id: 'local', backendId: 'claude', name: 'Local', isDefault: true, config: {} }] as ProfileConfig[],
       capabilities: () => ({
         backendId: 'claude', label: 'Test backend', modes: [], permissions: [], interactionTransport: 'terminal',
@@ -327,6 +331,7 @@ describe('NativeBackendService.slashCatalog', () => {
       store: {} as never, workspace: {} as never, terminal: {} as never,
       runtime: { withSession: async <T>(_id: string, operation: () => Promise<T> | T) => await operation() } as never,
       registry: { require: () => driver } as never,
+      ...(options.newTopic ? { standing: { launch: () => undefined, newTopic: options.newTopic } } : {}),
     });
     services.push(service);
     return service;
@@ -354,6 +359,22 @@ describe('NativeBackendService.slashCatalog', () => {
       reason: 'probe failed',
       items: [{ name: 'model', description: 'static', kind: 'command' }, { name: 'permissions', kind: 'command' }],
     });
+  });
+
+  it('prepends /new for standing sessions via host.standing.newTopic and caches slash discovery per member', async () => {
+    const service = catalogService(
+      async (_host, _proj, _profile, sess) => sess?.agentMemberId
+        ? [{ name: `member-${sess.agentMemberId}`, kind: 'skill' }]
+        : [{ name: 'project-skill', kind: 'skill' }],
+      { startsNewTopic: true, newTopic: (id, text) => id === 'member-main' && text === '/new' },
+    );
+    const regular = await service.catalog.slashCatalog('claude', project as never, undefined, session({ id: 'regular' }));
+    expect(regular.items.map(item => item.name)).toEqual(['model', 'permissions', 'project-skill']);
+
+    const memberSession = { ...session({ id: 'member-main' }), agentMemberId: 'pm' };
+    const member = await service.catalog.slashCatalog('claude', project as never, undefined, memberSession);
+    expect(member.items.map(item => item.name)).toEqual(['new', 'model', 'permissions', 'member-pm']);
+    expect(member.items[0]).toMatchObject({ name: 'new', kind: 'command' });
   });
 });
 

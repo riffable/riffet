@@ -320,8 +320,8 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     };
   }
 
-  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
-    return await claudeSlashItems(profile, await queryDirectory(project, profile), 0, project ? standingArgs(host, project) : []);
+  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<NativeSlashItem[]> {
+    return await claudeSlashItems(profile, await queryDirectory(project, profile), 0, project ? standingArgs(host, project, session) : []);
   }
 
   private async loadedExtensions(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig) {

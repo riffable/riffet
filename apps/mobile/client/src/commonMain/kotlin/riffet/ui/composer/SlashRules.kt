@@ -40,12 +40,14 @@ private fun isSubsequence(needle: String, haystack: String): Boolean {
 private fun slashScore(item: NativeSlashItem, query: String): Int? {
     if (query.isEmpty()) return 0
     val name = item.name.lowercase()
+    val parts = name.split('-', ':', '_', '.').filter { it.isNotEmpty() }
+    val initials = parts.joinToString("") { it[0].toString() }
     return when {
         name == query -> 0
         name.startsWith(query) -> 1
-        name.split('-', ':', '_', '.').any { it.startsWith(query) } -> 2
+        parts.any { it.startsWith(query) } -> 2
         query in name -> 3
-        isSubsequence(query, name) -> 4
+        query.length >= 2 && isSubsequence(query, initials) -> 4
         item.description?.lowercase()?.contains(query) == true -> 5
         else -> null
     }

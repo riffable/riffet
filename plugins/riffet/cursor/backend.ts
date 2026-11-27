@@ -55,6 +55,7 @@ const CURSOR_COMMANDS = [
   { name: 'ask', description: '切换只读问答模式' },
   { name: 'goal', description: '设定一个持续推进的目标', hint: '[objective]' },
   { name: 'summarize', description: '压缩对话以释放上下文' },
+  { name: 'new', description: '开始新的会话' },
   { name: 'clear', description: '开始新的会话' },
   { name: 'resume', description: '打开最近会话并恢复' },
   { name: 'fork', description: '把当前会话分叉为新会话' },
@@ -529,8 +530,8 @@ export class CursorBackend implements AgentBackend {
    * them: project roots before user roots, the bundled `skills-cursor` last. Custom commands come
    * from `.cursor/commands`. Text after `/` is forwarded to the CLI verbatim either way.
    */
-  async slashItems(host: AgentHost, project: AgentProjectView | undefined): Promise<NativeSlashItem[]> {
-    const standing = project ? host.standing?.launch(project) : undefined;
+  async slashItems(host: AgentHost, project: AgentProjectView | undefined, _profile: AgentProfile, session?: AgentSessionView): Promise<NativeSlashItem[]> {
+    const standing = project ? host.standing?.launch(project, session) : undefined;
     if (standing) {
       return await scanSkillRoots([standing.skillsDir, ...standing.pluginDirs.map(dir => join(dir, 'skills'))]);
     }

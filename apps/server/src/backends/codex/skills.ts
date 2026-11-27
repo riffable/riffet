@@ -1,4 +1,4 @@
-import type { NativeSlashItem, Project } from '../../../../../packages/contracts/src/index.js';
+import type { NativeSlashItem, Project, Session } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import type { CodexAppServerClient } from '../shared/codex-app-server.js';
 import { referencedSkills, slashTokens } from '../shared/slash-tokens.js';
@@ -10,7 +10,7 @@ import { asArray, asRecord, str } from './util.js';
 interface SkillsContext {
   /** Looked up on each call: the adapter's reader of a live or short-lived app-server. */
   withTransport<T>(project: Project | undefined, profile: NativeBackendProfileConfig, session: undefined, read: (transport: CodexAppServerClient) => Promise<T>): Promise<T>;
-  standingOf(host: NativeBackendHost, project: Project): CodexStanding | undefined;
+  standingOf(host: NativeBackendHost, project: Project, session?: Pick<Session, 'origin' | 'agentMemberId'>): CodexStanding | undefined;
 }
 
 /**
@@ -24,9 +24,9 @@ export class CodexSkills {
 
   constructor(private readonly ctx: SkillsContext) {}
 
-  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
+  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<NativeSlashItem[]> {
     const cwd = await queryDirectory(project, profile);
-    const standing = project && this.ctx.standingOf(host, project);
+    const standing = project && this.ctx.standingOf(host, project, session);
     const items = await this.ctx.withTransport(project, profile, undefined, async transport => {
       if (standing) await useStandingSkillRoots(transport, standing);
       return await listSkills(transport, cwd, standing);

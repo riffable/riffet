@@ -12,7 +12,7 @@ import {
 } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentDiscussionRequest, type AgentExtensionLayout, type AgentHistoryOptions, type AgentHost, type AgentModelQuery,
-  type AgentOpenResult, type AgentProfile, type AgentProjectView, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
+  type AgentOpenResult, type AgentProfile, type AgentProjectView, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentSessionView, type AgentStopOptions,
 } from '@riffet/plugin-api/experimental/agent';
 import { emptyComposer, sameInput } from './composer.js';
 import { agyMode, agySelection, agySessionGeminiDir, agyToolPermission, parseAgyProfile } from './config.js';
@@ -152,12 +152,9 @@ export class AntigravityBackend implements AgentBackend {
     return streamAgyDiscussion(this.hub, host, profile, { ...request, signal: AbortSignal.any([request.signal, this.discussions.signal]) });
   }
 
-  async slashItems(host: AgentHost, project: AgentProjectView | undefined, profile: AgentProfile): Promise<NativeSlashItem[]> {
-    const standing = project ? host.standing?.launch(project) : undefined;
-    if (standing) {
-      const skills = await scanStandingSkills(standing);
-      return [{ name: 'new', description: 'Start a new topic', kind: 'command' as const }, ...skills];
-    }
+  async slashItems(host: AgentHost, project: AgentProjectView | undefined, profile: AgentProfile, session?: AgentSessionView): Promise<NativeSlashItem[]> {
+    const standing = project ? host.standing?.launch(project, session) : undefined;
+    if (standing) return await scanStandingSkills(standing);
     let sourceDir: string;
     try {
       sourceDir = parseAgyProfile(profile.config).sourceDir;

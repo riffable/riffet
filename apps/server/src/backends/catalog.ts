@@ -667,10 +667,20 @@ export class BackendCatalog {
     let discovered: NativeSlashItem[] = [];
     let reason: string | undefined;
     if (driver.slashItems) {
-      try { discovered = await this.discoverSlashItems(driver, project, profile, options.refresh === true); }
+      try { discovered = await this.discoverSlashItems(driver, project, profile, session, options.refresh === true); }
       catch (error) { reason = safeBackendReason(error instanceof Error ? error.message : 'Could not list skills', profile); }
     }
-    return { items: mergeSlashItems(builtins, discovered), inlineSkills: capabilities.inlineSkills === true, ...(reason ? { reason } : {}) };
+    let items = mergeSlashItems(builtins, discovered);
+    // Standing continuous conversations (personal assistant & continuous team members) start a new
+    // topic in place of opening a second conversation; keep `host.standing.newTopic` as the sole
+    // source of truth so catalog and dispatch never diverge.
+    if (session && driver.traits?.startsNewTopic && this.host.standing?.newTopic?.(session.id, '/new')) {
+      items = [
+        { name: 'new', description: 'Start a new topic: the context is cleared, memory stays', kind: 'command' },
+        ...items.filter(item => item.name !== 'new'),
+      ];
+    }
+    return { items, inlineSkills: capabilities.inlineSkills === true, ...(reason ? { reason } : {}) };
   }
 
   /** The MCP servers and skills a launch of this backend profile in `project` loads; kept for five minutes. */
@@ -696,9 +706,9 @@ export class BackendCatalog {
     }
   }
 
-  private discoverSlashItems(driver: NativeBackendDriver, project: Project | undefined, profile: NativeBackendProfileConfig, refresh: boolean): Promise<NativeSlashItem[]> {
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
-    return this.slashListings.get(key, () => driver.slashItems!(this.host, project, profile), { refresh });
+  private discoverSlashItems(driver: NativeBackendDriver, project: Project | undefined, profile: NativeBackendProfileConfig, session: Session | undefined, refresh: boolean): Promise<NativeSlashItem[]> {
+    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null, session?.agentMemberId ?? null])).digest('hex');
+    return this.slashListings.get(key, () => driver.slashItems!(this.host, project, profile, session), { refresh });
   }
 
   /**

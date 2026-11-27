@@ -490,7 +490,7 @@ export interface AgentBackend {
   readHistory?(host: AgentHost, context: AgentContext, options?: AgentHistoryOptions): Promise<AgentHistory>;
   /** A catalog that cannot be read throws `MODEL_CATALOG_UNAVAILABLE` (503), whose message reaches the client; `details.reason` is set when the Agent can say why. */
   listModels?(host: AgentHost, query: AgentModelQuery): Promise<AgentModel[]>;
-  slashItems?(host: AgentHost, project: AgentProjectView | undefined, profile: AgentProfile): Promise<NativeSlashItem[]>;
+  slashItems?(host: AgentHost, project: AgentProjectView | undefined, profile: AgentProfile, session?: AgentSessionView): Promise<NativeSlashItem[]>;
   /** Stop and send in one step (`send` with `now`), with a native input receipt for the replacement in its own turn. */
   readonly sendsNow?: boolean;
   /** Pure mapping of a stored model string to the Agent's canonical one. Synchronous because pickers call it in loops. */

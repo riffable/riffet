@@ -7,6 +7,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Workbench
 
 - After `/new` in a continuous team member or personal assistant conversation on Web, the right-side turn outline and edge rail now reset numbering from `1` for the current topic (labeled "This topic" and hidden while empty) and keep per-topic numbering with dividers when earlier topics are expanded; `/new` dividers no longer take turn numbers.
+- Continuous team members now list `/new` and only their own isolated skills in the `/` menu across all supported agents, Cursor's `/` menu includes `/new`, and slash matching tightens subsequence matches to segment initials while placing verbatim CLI commands ahead of description-only hits.
 - Settings › Agent on Web now shows the CLI version as a settings row: a version newer than Riffet has verified says which version was verified, instead of an unexplained yellow number; a warning appears only when the version is too old and needs an update.
 - Cursor now takes several model providers, as Codex does: the CLI's own login and custom gateways side by side, chosen when a session starts. A gateway provider keeps its CLI state on its own and no longer touches the login's `~/.cursor`.
 - Restarting the server no longer ends Antigravity conversations: a running turn keeps going and is picked up again, as with Claude Code and Codex.

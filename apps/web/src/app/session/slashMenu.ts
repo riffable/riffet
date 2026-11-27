@@ -46,18 +46,36 @@ function isSubsequence(needle: string, haystack: string): boolean {
 /**
  * How well `query` names `item`; lower is better, `undefined` is no match. Name hits outrank
  * description hits, and among name hits a prefix (of the name or of one of its `-`/`:`-separated
- * parts) outranks a substring, which outranks an ordered subsequence.
+ * parts) outranks a substring, which outranks segment-initial abbreviations (`nr` → `new-repo`).
  */
 function slashScore(item: SlashCommand, query: string): number | undefined {
   if (!query) return 0;
   const name = item.name.toLowerCase();
   if (name === query) return 0;
   if (name.startsWith(query)) return 1;
-  if (name.split(/[-:_.]/).some((part) => part.startsWith(query))) return 2;
+  const parts = name.split(/[-:_.]/).filter(Boolean);
+  if (parts.some((part) => part.startsWith(query))) return 2;
   if (name.includes(query)) return 3;
-  if (isSubsequence(query, name)) return 4;
+  const initials = parts.map((part) => part[0]!).join('');
+  if (query.length >= 2 && isSubsequence(query, initials)) return 4;
   if (item.description?.toLowerCase().includes(query)) return 5;
   return undefined;
+}
+
+const RAW_SLASH_COMMAND = /^[A-Za-z0-9][\w.:-]*$/;
+
+/**
+ * Whether the "send `/<query>` verbatim" row should sit ahead of catalog matches: when the user
+ * typed a valid CLI command token and nothing in the catalog matched by name (only weak
+ * description hits, if any), pressing Enter should send the command as in a terminal.
+ */
+export function passthroughSlashFirst(items: readonly SlashCommand[], query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle || !RAW_SLASH_COMMAND.test(needle)) return false;
+  return !items.some((item) => {
+    const score = slashScore(item, needle);
+    return score !== undefined && score < 5;
+  });
 }
 
 /** Matching items, best first; ties keep the catalog's order. */
