@@ -1,8 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { AppSettings, CommandObservation, ModelInfo, NativeBackendId, NativeBackendProfileSettings, NativeBackendProfileSettingsUpdate, Session } from '@contracts';
-import { IconCircleAlert } from '@/components/icons';
-import { Tip } from '@/components/ui/tooltip';
+import { Notice } from '@/components/ui/notice';
 import { AgentMark } from '@/components/agent-marks';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -179,9 +178,14 @@ export function AgentSettingsSection({ settings, onRefresh, onDirtyChange, onBus
       options={agentOptions.map((option) => ({ ...option, icon: <AgentMark backend={option.value} size={16} style={agentMarkStyle(option.value)} />, disabled: saving, panelId: agentPanelId }))}
       onChange={(next) => { if (next !== backendId) void leave().then((ok) => { if (ok) { setLaunchEdit(undefined); setBackendId(next); } }); }} />
     <div id={agentPanelId} role="tabpanel" aria-label={backendLabel(backendId)} className="flex flex-col gap-6">
-      {cliVersion?.version && (cliVersion.status === 'too-old' || cliVersion.status === 'untested') && <Tip label={cliVersion.status === 'too-old' ? t`需要 ${cliVersion.minimum ?? ''} 或更高` : t`已验证至 ${cliVersion.testedThrough ?? ''}`}>
-        <span className="inline-flex items-center gap-1 text-xs text-warning"><IconCircleAlert className="size-3" />{cliVersion.version}</span>
-      </Tip>}
+      {cliVersion?.version && <div className="flex flex-col gap-3">
+        {cliVersion.status === 'too-old' && cliVersion.minimum && <Notice tone="warning">{t`需要 ${cliVersion.minimum} 或更高版本，当前版本可能无法正常运行`}</Notice>}
+        <SettingsGroup>
+          <SettingsRow title={t`CLI 版本`} description={cliVersion.status === 'untested' && cliVersion.testedThrough ? t`Riffet 只验证到 ${cliVersion.testedThrough}，会话异常时可先改用这个版本` : undefined}>
+            <span className="text-sm text-fg-3">{cliVersion.version}</span>
+          </SettingsRow>
+        </SettingsGroup>
+      </div>}
     <SettingsGroup title={t`启动设置`} loading={startupPending}>
       {error ? <SettingsRow title={error}><Button variant="secondary" size="sm" onClick={() => setRetry((value) => value + 1)}><Trans>重试</Trans></Button></SettingsRow> : scopedProfiles.length === 0 ? <p className="py-4 text-sm text-fg-3"><Trans>还没有提供商</Trans></p> : <>
         <SettingsRow title={t`默认提供商`}>

@@ -424,6 +424,10 @@ msgstr "CLI memory limit"
 msgid "CLI 可用，但读取模型失败：{0}"
 msgstr "CLI is available, but reading models failed: {0}"
 
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "CLI 版本"
+msgstr "CLI version"
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "CLI 自带登录"
@@ -531,6 +535,11 @@ msgstr "px, scales with \"Text size\""
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "QuickInput：组合框，Escape 关闭浮层"
 msgstr "QuickInput: a combobox; Escape closes the overlay"
+
+#. placeholder {0}: cliVersion.testedThrough
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "Riffet 只验证到 {0}，会话异常时可先改用这个版本"
+msgstr "Riffet is verified through {0}; if sessions misbehave, try that version"
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "Riffet 自己的整页"
@@ -4355,11 +4364,6 @@ msgstr "Selected"
 #: src/app/settings/ProviderModelList.tsx
 msgid "已选 {0} / {1} 个"
 msgstr "{0} of {1} selected"
-
-#. placeholder {0}: cliVersion.testedThrough ?? ''
-#: src/app/settings/AgentSettingsSection.tsx
-msgid "已验证至 {0}"
-msgstr "Tested through {0}"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "市场"
@@ -10174,10 +10178,10 @@ msgstr "Must be compatible with the OpenAI Responses API; include /v1 in the add
 msgid "需要"
 msgstr "Need"
 
-#. placeholder {0}: cliVersion.minimum ?? ''
+#. placeholder {0}: cliVersion.minimum
 #: src/app/settings/AgentSettingsSection.tsx
-msgid "需要 {0} 或更高"
-msgstr "Requires {0} or later"
+msgid "需要 {0} 或更高版本，当前版本可能无法正常运行"
+msgstr "Requires {0} or newer; this version may not work correctly"
 
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "需要并排比较各对象的状态"

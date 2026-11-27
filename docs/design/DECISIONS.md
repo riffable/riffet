@@ -1112,3 +1112,10 @@
 - **原因**：`24px` 头像叠 `20px` 含描边的数字红点几乎盖住半个头像；顶部 `Toaster` 本用于短操作结果，塞入多行成员消息后同时出现截断的「详情」与「查看收件箱」并遮挡顶栏。
 - **否决**：在 `24px` 头像上塞入小于最小字阶（`11px`）的迷你数字角标；继续复用顶部单行 `toast.info` 展示异步收件箱消息。
 - **规则**：`apps/web/src/app/SidebarUserMenu.tsx`、`apps/web/src/app/work-items/InboxAlertDock.tsx`、`apps/web/src/app/Workbench.tsx`。
+
+## 2026-11-27 · Agent 设置的 CLI 版本按是否需要处理着色
+
+- **决定**：Agent 设置在 Agent 导航下方用一行「CLI 版本」显示本机 CLI 的版本，值为中性的元信息色。版本比 Riffet 验证过的新时，只在该行说明里写「Riffet 只验证到 X，会话异常时可先改用这个版本」；只有低于最低版本时才在上方加 `warning` 的 `Notice`，写明需要的版本。
+- **原因**：原来只在异常时显示一个带警示图标的黄色版本号，含义只在悬停提示里，读者看不出它在说什么。「未验证」不需要用户处理，Codex、Cursor 发版快，会长期处于这个状态，用 `warning`（等待处理）会让警示失去意义；插件页同样只把过旧算作警示。
+- **否决**：把含义放在悬停提示里（触屏和键盘看不到）；未验证也用警示色。
+- **规则**：[模式](system/patterns.md) §1.3「Agent 与模型提供商」；代码 `apps/web/src/app/settings/AgentSettingsSection.tsx`。

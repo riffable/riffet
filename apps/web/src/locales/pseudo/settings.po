@@ -424,6 +424,10 @@ msgstr ""
 msgid "CLI 可用，但读取模型失败：{0}"
 msgstr ""
 
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "CLI 版本"
+msgstr ""
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "CLI 自带登录"
@@ -530,6 +534,11 @@ msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "QuickInput：组合框，Escape 关闭浮层"
+msgstr ""
+
+#. placeholder {0}: cliVersion.testedThrough
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "Riffet 只验证到 {0}，会话异常时可先改用这个版本"
 msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
@@ -4354,11 +4363,6 @@ msgstr ""
 #. placeholder {1}: candidates.length
 #: src/app/settings/ProviderModelList.tsx
 msgid "已选 {0} / {1} 个"
-msgstr ""
-
-#. placeholder {0}: cliVersion.testedThrough ?? ''
-#: src/app/settings/AgentSettingsSection.tsx
-msgid "已验证至 {0}"
 msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
@@ -10174,9 +10178,9 @@ msgstr ""
 msgid "需要"
 msgstr ""
 
-#. placeholder {0}: cliVersion.minimum ?? ''
+#. placeholder {0}: cliVersion.minimum
 #: src/app/settings/AgentSettingsSection.tsx
-msgid "需要 {0} 或更高"
+msgid "需要 {0} 或更高版本，当前版本可能无法正常运行"
 msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx
