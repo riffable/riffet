@@ -1,0 +1,146 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "The secret word is pelican. Reply with exactly: ok"
+          }
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "OK"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    },
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-5>:started",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "turnId": "<id-5>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "runId": "claude-turn:<id-6>",
+        "nativeTurnId": "<id-5>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Reply with exactly: ok"
+          },
+          "commandId": "command-3"
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-7>:0",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-7>:0",
+        "nativeAliases": [
+          "<id-7>"
+        ],
+        "runId": "claude-turn:<id-6>",
+        "nativeTurnId": "<id-5>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "OK"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-5>:ended",
+      "rev": 1,
+      "turnId": "<id-5>",
+      "payload": {
+        "turnId": "<id-5>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {}
+}

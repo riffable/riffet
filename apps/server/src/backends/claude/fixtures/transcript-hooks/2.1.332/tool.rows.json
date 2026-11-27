@@ -1,0 +1,144 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Run `ls` with the Bash tool, then reply with only the number of entries it printed."
+          },
+          "commandId": "command-1"
+        }
+      }
+    },
+    {
+      "kind": "tool_call",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "toolu_f020115d5e314eba9323aee3f8a4d8ac",
+          "toolName": "Bash",
+          "status": "in_progress",
+          "kind": "search",
+          "title": "List files",
+          "rawInput": {
+            "command": "ls",
+            "description": "List the sample project",
+            "commandActions": [
+              {
+                "type": "listFiles",
+                "command": "ls"
+              }
+            ]
+          },
+          "command": "ls"
+        }
+      }
+    },
+    {
+      "kind": "tool_call_update",
+      "nativeId": "claude:<id-2>:<id-5>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "nativeAliases": [
+          "<id-5>"
+        ],
+        "createdAt": "<time>",
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "toolu_f020115d5e314eba9323aee3f8a4d8ac",
+          "status": "completed",
+          "toolName": "Bash",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "README.md\nnotes.txt"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "DONE"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {}
+}

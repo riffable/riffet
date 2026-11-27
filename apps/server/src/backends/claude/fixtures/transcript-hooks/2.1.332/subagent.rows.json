@@ -1,0 +1,306 @@
+{
+  "phases": [
+    "starting",
+    "idle",
+    "busy",
+    "idle"
+  ],
+  "rows": [
+    {
+      "kind": "meta.turn_started",
+      "nativeId": "meta:turn:<id-1>:started",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "user_message_chunk",
+      "nativeId": "claude:<id-2>:<id-3>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "nativeAliases": [
+          "<id-3>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Use the Agent tool with a general-purpose subagent to read README.md and report its first line. Then reply with that line only."
+          },
+          "commandId": "command-1"
+        }
+      }
+    },
+    {
+      "kind": "meta.subagent",
+      "nativeId": "meta:subagent:toolu_df89357af0ef41b080ec99b3bb986e6e",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "toolCallId": "toolu_df89357af0ef41b080ec99b3bb986e6e",
+        "agentId": "a8a915a0438baeac2",
+        "lane": "sub:toolu_df89357af0ef41b080ec99b3bb986e6e",
+        "title": "Read the sample",
+        "subagentType": "general-purpose",
+        "model": "synthetic-model-001"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "nativeId": "claude:<id-2>:<id-4>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-4>:0",
+        "nativeAliases": [
+          "<id-4>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "toolu_df89357af0ef41b080ec99b3bb986e6e",
+          "toolName": "Agent",
+          "status": "in_progress",
+          "kind": "agent",
+          "title": "Read the sample",
+          "rawInput": {
+            "description": "Read the sample",
+            "subagent_type": "general-purpose",
+            "prompt": "Read README.md and report its first line.",
+            "run_in_background": false
+          },
+          "subagent": {
+            "description": "Read the sample",
+            "prompt": "Read README.md and report its first line.",
+            "type": "general-purpose"
+          }
+        }
+      }
+    },
+    {
+      "kind": "tool_call_update",
+      "nativeId": "claude:<id-2>:<id-5>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-5>:0",
+        "nativeAliases": [
+          "<id-5>"
+        ],
+        "createdAt": "<time>",
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "toolu_df89357af0ef41b080ec99b3bb986e6e",
+          "status": "completed",
+          "toolName": "Agent",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "Async agent launched successfully. (This tool result is internal metadata — never quote or paste any part of it, including the agentId below, into a user-facing reply.)\nagentId: a8a915a0438baeac2 (internal ID - do not mention to user. Use SendMessage with to: 'a8a915a0438baeac2', summary: '<5-10 word recap>' to continue this agent.)\nThe agent is working in the background. You will be notified automatically when it completes. You know nothing about its results until that notification arrives — do not report, assume, or predict them; continue other work or respond to the user in the meantime.\nDo not duplicate this agent's work — avoid working with the same files or topics it is using.\noutput_file: /tmp/claude/-workspace-project/<id-2>/tasks/a8a915a0438baeac2.output\nDo NOT Read or tail this file via the shell tool — it is the full subagent JSONL transcript and reading it will overflow your context. If the user asks for progress, say the agent is still running; you'll get a completion notification."
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "kind": "session/update",
+      "nativeId": "claude:a8a915a0438baeac2",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "type": "session/update",
+        "data": {
+          "sessionUpdate": "activity",
+          "activity": {
+            "id": "claude:a8a915a0438baeac2",
+            "kind": "background_task",
+            "status": "running",
+            "title": "Read the sample",
+            "toolCallId": "toolu_df89357af0ef41b080ec99b3bb986e6e",
+            "startedAt": "<time>",
+            "stop": {
+              "via": "session"
+            },
+            "task": {
+              "kind": "agent"
+            }
+          }
+        },
+        "createdAt": "<time>",
+        "nativeId": "claude:a8a915a0438baeac2",
+        "nativeTurnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "session/update",
+      "nativeId": "claude:a8a915a0438baeac2",
+      "rev": 2,
+      "turnId": "<id-1>",
+      "payload": {
+        "type": "session/update",
+        "data": {
+          "sessionUpdate": "activity",
+          "activity": {
+            "id": "claude:a8a915a0438baeac2",
+            "kind": "background_task",
+            "status": "completed",
+            "title": "Read the sample",
+            "toolCallId": "toolu_df89357af0ef41b080ec99b3bb986e6e",
+            "startedAt": "<time>",
+            "stop": {
+              "via": "session"
+            },
+            "task": {
+              "kind": "agent"
+            },
+            "endedAt": "<time>",
+            "durationMs": "<n>"
+          }
+        },
+        "createdAt": "<time>",
+        "nativeId": "claude:a8a915a0438baeac2",
+        "nativeTurnId": "<id-1>"
+      }
+    },
+    {
+      "kind": "agent_message_chunk",
+      "nativeId": "claude:<id-2>:<id-6>:0",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "nativeId": "claude:<id-2>:<id-6>:0",
+        "nativeAliases": [
+          "<id-6>"
+        ],
+        "runId": "claude-turn:<id-3>",
+        "nativeTurnId": "<id-1>",
+        "createdAt": "<time>",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "phase": "final_answer",
+          "content": {
+            "type": "text",
+            "text": "DONE"
+          }
+        }
+      }
+    },
+    {
+      "kind": "meta.turn_ended",
+      "nativeId": "meta:turn:<id-1>:ended",
+      "rev": 1,
+      "turnId": "<id-1>",
+      "payload": {
+        "turnId": "<id-1>",
+        "status": "completed"
+      }
+    }
+  ],
+  "lanes": {
+    "sub:toolu_df89357af0ef41b080ec99b3bb986e6e": [
+      {
+        "kind": "meta.turn_started",
+        "nativeId": "meta:turn:claude-turn:<id-1>:started",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "turnId": "claude-turn:<id-1>"
+        }
+      },
+      {
+        "kind": "user_message_chunk",
+        "nativeId": "claude:<id-2>:<id-1>:0",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "nativeId": "claude:<id-2>:<id-1>:0",
+          "nativeAliases": [
+            "<id-1>"
+          ],
+          "runId": "claude-turn:<id-1>",
+          "nativeTurnId": "claude-turn:<id-1>",
+          "createdAt": "<time>",
+          "type": "user_message_chunk",
+          "data": {
+            "sessionUpdate": "user_message_chunk",
+            "content": {
+              "type": "text",
+              "text": "Read README.md and report its first line."
+            }
+          }
+        }
+      },
+      {
+        "kind": "meta.turn_ended",
+        "nativeId": "meta:turn:claude-turn:<id-1>:ended",
+        "rev": 1,
+        "turnId": "claude-turn:<id-1>",
+        "payload": {
+          "turnId": "claude-turn:<id-1>",
+          "status": "completed"
+        }
+      },
+      {
+        "kind": "meta.turn_started",
+        "nativeId": "meta:turn:claude-turn:<id-3>:started",
+        "rev": 1,
+        "turnId": "claude-turn:<id-3>",
+        "payload": {
+          "turnId": "claude-turn:<id-3>"
+        }
+      },
+      {
+        "kind": "agent_message_chunk",
+        "nativeId": "claude:<id-2>:<id-3>:0",
+        "rev": 1,
+        "turnId": "claude-turn:<id-3>",
+        "payload": {
+          "nativeId": "claude:<id-2>:<id-3>:0",
+          "nativeAliases": [
+            "<id-3>"
+          ],
+          "runId": "claude-turn:<id-3>",
+          "nativeTurnId": "claude-turn:<id-3>",
+          "createdAt": "<time>",
+          "type": "agent_message_chunk",
+          "data": {
+            "sessionUpdate": "agent_message_chunk",
+            "phase": "final_answer",
+            "content": {
+              "type": "text",
+              "text": "OK"
+            }
+          }
+        }
+      },
+      {
+        "kind": "meta.turn_ended",
+        "nativeId": "meta:turn:claude-turn:<id-3>:ended",
+        "rev": 1,
+        "turnId": "claude-turn:<id-3>",
+        "payload": {
+          "turnId": "claude-turn:<id-3>",
+          "status": "completed"
+        }
+      }
+    ]
+  }
+}

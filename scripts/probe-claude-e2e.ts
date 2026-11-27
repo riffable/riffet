@@ -81,6 +81,7 @@ const directory = await realpath(await mkdtemp(testsRestart
   : join(tmpdir(), 'riffet-claude-e2e-')));
 const stateDir = join(directory, 'state');
 const projectDir = join(directory, 'project');
+const SLEEPER_SECONDS = 70;
 await mkdir(projectDir);
 execFileSync('git', ['init', '-q'], { cwd: projectDir });
 await mkdir(join(projectDir, '.claude', 'agents'), { recursive: true });
@@ -90,7 +91,7 @@ description: Runs a long sleep in the background. Use only when explicitly asked
 tools: Bash
 background: true
 ---
-Run the Bash command \`printf 'STARTING\\n'; sleep 70; printf 'DONE\\n'\` and then reply with only the word DONE.
+Run the Bash command \`printf 'STARTING\\n'; sleep ${SLEEPER_SECONDS}; printf 'DONE\\n'\` and then reply with only the word DONE.
 `);
 execFileSync('git', ['-c', 'user.email=probe@example.invalid', '-c', 'user.name=probe', 'commit', '--allow-empty', '-qm', 'init'], { cwd: projectDir });
 
@@ -689,7 +690,6 @@ async function uploadPng(): Promise<string> {
 }
 
 // A project subagent declared `background: true`, so launching it never depends on the model remembering run_in_background.
-const SLEEPER_SECONDS = 70; // must match .claude/agents/sleeper.md written at start-up
 const BG_PROMPT = 'Use the Agent tool to launch the "sleeper" subagent (subagent_type sleeper, run_in_background true) with the prompt "go". As soon as it is launched, end your turn by replying only LAUNCHED. Do not wait for it and do not use any other tool.';
 const settled = (run: Run) => ['completed', 'failed', 'interrupted', 'cancelled'].includes(run.state);
 const hasBackgroundAgent = (rows: Row[]) => rows.some(({ row }) => row.type === 'assistant' && Array.isArray(row.message?.content)
