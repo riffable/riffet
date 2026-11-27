@@ -485,7 +485,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
     }
     if ((part.type === 'thinking' || part.type === 'reasoning') && typeof (part.thinking ?? part.text) === 'string') {
       const text = readableThinking(string(part.thinking) ?? string(part.text)!);
-      if (text.trim()) events.push({ ...base(ordinal++), type: 'agent_thought_chunk', data: { sessionUpdate: 'agent_thought_chunk', channel: isNarration(row, part.signature) ? 'narration' : 'thinking', content: { type: 'text', text: hooks.unbounded ? text : clip(text) } } });
+      if (text.trim()) events.push({ ...base(ordinal++), type: 'agent_thought_chunk', data: { sessionUpdate: 'agent_thought_chunk', channel: isNarration(part.signature) ? 'narration' : 'thinking', content: { type: 'text', text: hooks.unbounded ? text : clip(text) } } });
       continue;
     }
     if (part.type === 'tool_use' && typeof part.id === 'string' && typeof part.name === 'string') {

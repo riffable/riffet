@@ -88,13 +88,14 @@ export function readableThinking(text: string): string {
 
 /**
  * Whether a thinking block is the progress note the CLI shows as prose (`· summary`) rather than reasoning.
- * Under `thinking.display: "updates"` the API returns reasoning empty and only progress notes with text;
- * a block without a signature did not come from that API (a proxy relaying another model's raw reasoning).
- * CLI versions that did not record the display still mark the note in its signature's header.
+ * Under `thinking.display: "updates"` the API returns reasoning empty and only progress notes with text,
+ * and every note's signature header carries the `narration` tag. Only that tag decides: `thinkingDisplay`
+ * is what the CLI requested, not what came back, and a gateway relaying another model's reasoning
+ * (Gemini thought summaries) keeps the request flag and fills the signature with a placeholder.
  */
-export function isNarration(row: ClaudeRow, signature: unknown): boolean {
+export function isNarration(signature: unknown): boolean {
   if (typeof signature !== 'string' || !signature) return false;
-  return row.thinkingDisplay === 'updates' || Buffer.from(signature.slice(0, 64), 'base64').includes('narration');
+  return Buffer.from(signature.slice(0, 64), 'base64').includes('narration');
 }
 
 export interface ClaudeRow {
