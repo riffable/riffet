@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type Key
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeInteraction, NativeInteractionResponse, NativeInteractionResult } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Input, Kbd } from '@/components/ui/controls';
+import { Input, Kbd, Spinner } from '@/components/ui/controls';
 import { api, HttpError } from '@/lib/api';
 import { formatTime } from '@/lib/i18n/format';
 import { toast } from '@/lib/toast';
@@ -256,6 +256,11 @@ export function NativeInteractionCard({
     }
   };
   const reviewed = actionRows ? shown.actions.filter((action) => action.detail) : [];
+  // Waiting shows on the control that waits, never as a row of its own: a card that grew while it
+  // posted and shrank after would push the transcript twice (patterns §5.2).
+  const postingAction = submission?.phase === 'posting' ? submission.request.action : undefined;
+  const buttonActions = actionRows ? shown.actions : (isQuestion || selectsOptions) ? shown.actions.filter((action) => action.id !== 'next') : [];
+  const postingUnseen = postingAction !== undefined && !buttonActions.some((action) => action.id === postingAction);
 
   return (
     <article
@@ -272,6 +277,8 @@ export function NativeInteractionCard({
         {shortcutHint && <span className="hidden shrink-0 text-xs text-fg-3 md:group-focus-within:inline">{shortcutHint}</span>}
         {shown.expiresAt && submission?.phase !== 'success' && <ExpiryCountdown sessionId={sessionId} interaction={{ ...shown, expiresAt: shown.expiresAt }} />}
         {counter && <span className="shrink-0 text-xs text-fg-3">{counter}</span>}
+        {postingUnseen && <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-fg-3"><Spinner className="size-3.5" /><Trans>提交中…</Trans></span>}
+        {!connected && <span className="shrink-0 text-xs text-fg-3"><Trans>重连后提交</Trans></span>}
       </header>
 
       <div className="mt-2 flex flex-col gap-2">
@@ -338,17 +345,22 @@ export function NativeInteractionCard({
         <div className="mt-2 flex flex-col gap-1.5">
           {shown.actions.map((action, index) => {
             const focused = Boolean(focusedOptionId) && action.id === `option:${focusedOptionId}`;
+            const posting = action.id === postingAction;
+            // The row keeps its label, so the reader sees which choice is on its way; the spinner takes the key's place.
             return (
               <Button
                 key={action.id}
                 size="sm"
                 variant={action.tone === 'danger' ? 'danger' : focused ? 'primary' : 'secondary'}
                 className="h-auto min-h-11 w-full justify-start whitespace-normal px-3 py-2 text-left text-sm break-words md:min-h-9"
-                disabled={!connected || busy}
-                onClick={() => { void submit(action.id); }}
+                disabled={!posting && (!connected || busy)}
+                aria-busy={posting || undefined}
+                onClick={() => { if (!busy) void submit(action.id); }}
               >
                 <span className="min-w-0 flex-1">{actionLabel(action)}</span>
-                {index < shortcutCount && <ShortcutKey className="bg-transparent text-current opacity-60">{index + 1}</ShortcutKey>}
+                {posting
+                  ? <Spinner className="size-4 shrink-0 text-current" />
+                  : index < shortcutCount && <ShortcutKey className="bg-transparent text-current opacity-60">{index + 1}</ShortcutKey>}
               </Button>
             );
           })}
@@ -360,13 +372,15 @@ export function NativeInteractionCard({
           // `submit` is a protocol question's own submit (DSH sends it), `answer` is the terminal
           // one; both are the primary action and both wait for a selection, so they read the same.
           const submitsSelection = action.id === 'answer' || action.id === 'submit';
+          const posting = action.id === postingAction;
           return (
             <Button
               key={action.id}
               size="xs"
               variant={action.tone === 'danger' ? 'danger-ghost' : submitsSelection || action.tone === 'primary' ? 'primary' : 'secondary'}
               className="h-auto min-h-11 max-w-full whitespace-normal px-3 py-2 text-sm md:h-7 md:min-h-0 md:max-w-none md:whitespace-nowrap md:px-2.5 md:py-0 md:text-xs"
-              disabled={!connected || busy || (submitsSelection && !answerPresent)}
+              busy={posting}
+              disabled={!posting && (!connected || busy || (submitsSelection && !answerPresent))}
               title={action.id === 'skip' ? t`跳过这组问题` : undefined}
               onClick={() => { void submit(action.id); }}
             >
@@ -374,13 +388,11 @@ export function NativeInteractionCard({
             </Button>
           );
         })}
-        {submission?.phase === 'posting' && <span className="ml-auto text-xs text-fg-3"><Trans>提交中…</Trans></span>}
         {submission?.phase === 'unknown' && <Button size="xs" variant="secondary" className="h-auto min-h-11 px-3 text-sm md:h-7 md:min-h-0 md:px-2.5 md:text-xs" disabled={!connected || syncing} onClick={() => { void post(retryInteraction(state)); }}><Trans>重试</Trans></Button>}
         {submission?.phase === 'unknown' && <Button size="xs" variant="secondary" className="h-auto min-h-11 px-3 text-sm md:h-7 md:min-h-0 md:px-2.5 md:text-xs" disabled={syncing} onClick={() => { void sync(); }}>{syncing ? <Trans>正在检查</Trans> : <Trans>检查状态</Trans>}</Button>}
         {onOpenTerminal && submission?.phase === 'unknown' && <Button size="xs" variant="secondary" className="h-auto min-h-11 px-3 text-sm md:h-7 md:min-h-0 md:px-2.5 md:text-xs" onClick={onOpenTerminal}><Trans>终端</Trans></Button>}
         {(submission?.phase === 'stale' || submission?.phase === 'uncertain') && <Button size="xs" variant="secondary" className="h-auto min-h-11 px-3 text-sm md:h-7 md:min-h-0 md:px-2.5 md:text-xs" disabled={syncing} onClick={() => { void sync(); }}>{syncing ? <Trans>正在检查</Trans> : <Trans>检查状态</Trans>}</Button>}
         {onOpenTerminal && (submission?.phase === 'stale' || submission?.phase === 'uncertain') && <Button size="xs" variant="secondary" className="h-auto min-h-11 px-3 text-sm md:h-7 md:min-h-0 md:px-2.5 md:text-xs" onClick={onOpenTerminal}><Trans>终端</Trans></Button>}
-        {!connected && <span className="ml-auto text-xs text-fg-3"><Trans>重连后提交</Trans></span>}
       </footer>
     </article>
   );

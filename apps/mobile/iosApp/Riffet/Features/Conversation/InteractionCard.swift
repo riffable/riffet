@@ -212,9 +212,13 @@ struct InteractionCardView: View {
         authenticating ? tappedAction : submission?.phase == .posting ? submission?.request.action : nil
     }
     private var retryInFlight: Bool { authenticating && tappedAction == nil }
-    private var visibleActionIDs: [String] {
-        let ids = shown.actions.map(\.id)
-        return !isQuestion && !selectsOptions ? ids : ids.filter { $0 != "next" }
+    private var sending: Bool { authenticating || submission?.phase == .posting }
+    /// The summary shows buttons for the quick approval and the refusal only; a send from anywhere else is noted in the title row.
+    private var sendingWithoutSummaryButton: Bool {
+        guard sending, !retryInFlight, let action = inFlightAction else { return sending && !retryInFlight }
+        let quick = !readOnly && shown.kind == .permission && !selectsOptions ? shown.actions.first(where: approves)?.id : nil
+        let refusal = readOnly ? nil : shown.actions.first(where: refuses)?.id
+        return action != quick && action != refusal
     }
     private var answerPresent: Bool { !current.selectedIds.isEmpty || !current.otherText.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -225,6 +229,11 @@ struct InteractionCardView: View {
                 Text(title).riffetFont(.headline).lineLimit(2)
                     .foregroundStyle(palette.fg)
                 Spacer(minLength: 0)
+                if sendingWithoutSummaryButton {
+                    HStack(spacing: 6) { ProgressView().controlSize(.small); Text("提交中…", bundle: .riffet) }.riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
+                } else if !connected, !readOnly {
+                    Text("重连后提交", bundle: .riffet).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
+                }
                 if isQuestion, let count = shown.questionCount?.int64Value, count > 0 {
                     Text("\(max(1, shown.questionIndex?.int64Value ?? 1)) / \(count)").riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg3)
                 }
@@ -281,7 +290,7 @@ struct InteractionCardView: View {
                 HStack(spacing: 8) { summaryButtons; quickApproval }
                 VStack(alignment: .leading, spacing: 8) { summaryButtons }
             }
-            if !readOnly, card.frozen || card.notice != nil || card.error != nil || localNotice != nil || localError != nil || expired {
+            if !readOnly, !sending, card.frozen || card.notice != nil || card.error != nil || localNotice != nil || localError != nil || expired {
                 Button { showingDetails = true } label: {
                     Text(summaryNotice).riffetFont(.caption).foregroundStyle(palette.warning).lineLimit(2)
                 }.buttonStyle(.plain)
@@ -325,7 +334,6 @@ struct InteractionCardView: View {
         if let localNotice { return localNotice }
         if let error = card.error { return error.message ?? String(localized: "发送失败", bundle: .riffet) }
         if expired { return String(localized: "此请求已过期，请同步最新状态。", bundle: .riffet) }
-        if authenticating || submission?.phase == .posting { return String(localized: "提交中…", bundle: .riffet) }
         if let submission, let message = submissionMessage(submission) { return message }
         if card.notice == .draftStale { return String(localized: "题目已更新，旧草稿未提交。", bundle: .riffet) }
         return String(localized: "暂时无法确认回答是否已提交", bundle: .riffet)
@@ -560,11 +568,7 @@ struct InteractionCardView: View {
 
     @ViewBuilder
     private var submissionActions: some View {
-        // Progress shows in the button that sent it; a send whose button is not on the card says so here.
-        if authenticating || submission?.phase == .posting, !retryInFlight,
-           inFlightAction.map({ !visibleActionIDs.contains($0) }) ?? true {
-            HStack(spacing: 6) { ProgressView().controlSize(.small); Text("提交中…") }.riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
-        }
+        // Progress shows in the button that sent it, or in the card's title row; never as a row here.
         if let submission, submission.phase == .unknown {
             HStack(spacing: 6) {
                 Button(action: retry) { InteractionButtonLabel(text: String(localized: "重试", bundle: .riffet), running: retryInFlight) }.buttonStyle(.bordered).disabled(!connected || !card.canRetry || authenticating)

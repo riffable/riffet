@@ -207,12 +207,14 @@ struct InteractionCardView: View {
         }.sorted { refuses($0) && !refuses($1) }
         return HStack(spacing: Space.sm) {
             submissionActions
+            let showsQuick = !selectsOptions && !isQuestion && isInteractionRenderable(interaction: shown) && (!busy || postingAction != nil)
+            if let postingAction, !(showsQuick && quick.contains { $0.id == postingAction }) { postingStatus }
             Spacer(minLength: 0)
             Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle())
-            if !busy, !selectsOptions, !isQuestion, isInteractionRenderable(interaction: shown) {
+            if showsQuick {
                 ForEach(quick, id: \.id) { action in
-                    actionButton(action.shortLabel ?? action.label, refuses(action) ? .secondary : .primary) { submit(action.id) }
-                        .disabled(!connected || busy)
+                    actionButton(action.shortLabel ?? action.label, refuses(action) ? .secondary : .primary, posting: action.id == postingAction) { submit(action.id) }
+                        .disabled(action.id != postingAction && (!connected || busy))
                 }
             }
         }
@@ -223,8 +225,12 @@ struct InteractionCardView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: Space.md) {
-                    Text(title).font(.riffet(size: S(14), weight: .semibold)).foregroundStyle(palette.fg)
-                        .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                    HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                        Text(title).font(.riffet(size: S(14), weight: .semibold)).foregroundStyle(palette.fg)
+                            .fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                        Spacer(minLength: 0)
+                        titleStatus(buttonActions: chosenAction.map { [$0.id] } ?? [])
+                    }
                     if shown.expiresAt != nil, submission?.phase != .success, let sessionID = currentSessionID {
                         ExpiryCountdown(workbench: workbench, sessionID: sessionID, interaction: shown, failed: { extendError = $0 })
                     }
@@ -263,7 +269,6 @@ struct InteractionCardView: View {
                         if let openTerminal { Button("打开终端", action: openTerminal).buttonStyle(ChipButtonStyle()) }
                     }
                     notices
-                    if !connected { Text("重连后提交").font(.riffet(size: S(12))).foregroundStyle(palette.fg3) }
                 }
                 .padding(Space.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -310,9 +315,11 @@ struct InteractionCardView: View {
                     Text(action.shortLabel ?? action.label).lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     Text("提交").lineLimit(1)
                 }
+                .opacity(action.id == postingAction ? 0 : 1)
+                .overlay { if action.id == postingAction { Spinner(size: .mini) } }
             }
                 .buttonStyle(SolidButtonStyle(kind: action.tone == "danger" ? .secondary : .primary))
-                .disabled(!connected || busy || !isInteractionRenderable(interaction: shown))
+                .disabled(action.id != postingAction && (!connected || busy || !isInteractionRenderable(interaction: shown)))
         } else if isQuestion || selectsOptions {
             footer
         }
@@ -332,6 +339,7 @@ struct InteractionCardView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer()
+                titleStatus(buttonActions: footerButtonIDs)
                 if cardFocused, let shortcutHint { Text(shortcutHint).font(.riffet(size: S(12))).foregroundStyle(palette.fg3) }
                 if shown.expiresAt != nil, submission?.phase != .success, let sessionID = currentSessionID {
                     ExpiryCountdown(workbench: workbench, sessionID: sessionID, interaction: shown, failed: { extendError = $0 })
@@ -362,9 +370,6 @@ struct InteractionCardView: View {
                 notices
                 Text("这个对话框需要在终端里处理。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
                 if let openTerminal { Button("打开终端", action: openTerminal).buttonStyle(SolidButtonStyle(kind: .secondary)) }
-            }
-            if !connected {
-                Text("重连后提交").font(.riffet(size: S(12))).foregroundStyle(palette.fg3).frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .padding(containerInsets)
@@ -559,25 +564,44 @@ struct InteractionCardView: View {
                 let label = action.id == "previous" ? String(localized: "上一题")
                     : submits ? (last || action.label.contains("提交") ? String(localized: "提交") : String(localized: "下一题")) // i18n-ignore: matches the server's submit action label
                     : action.id == "skip" ? String(localized: "跳过") : action.label
-                actionButton(label, action.tone == "danger" ? .danger : submits || action.tone == "primary" ? .primary : .secondary) { submit(action.id) }
-                    .disabled(!connected || busy || (submits && !answerPresent))
+                actionButton(label, action.tone == "danger" ? .danger : submits || action.tone == "primary" ? .primary : .secondary, posting: action.id == postingAction) { submit(action.id) }
+                    .disabled(action.id != postingAction && (!connected || busy || (submits && !answerPresent)))
                     .help(action.id == "skip" ? "跳过这组问题" : "")
                     .modifier(DefaultActionIf(enabled: submits))
             }
         }
     }
 
+    /// The action being posted. Its button shows the wait in place; a transient state never adds a row.
+    private var postingAction: String? { submission?.phase == .posting ? submission?.request.action : nil }
+
+    private var footerButtonIDs: [String] { shown.actions.filter { $0.id != "next" }.map(\.id) }
+
+    private var postingStatus: some View {
+        HStack(spacing: 6) { Spinner(size: .mini); Text("提交中…") }.font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+    }
+
+    /// Trailing end of a title row: the wait for an action with no button here, or the offline note.
+    @ViewBuilder
+    private func titleStatus(buttonActions: [String]) -> some View {
+        if submission?.phase == .posting, !(postingAction.map(buttonActions.contains) ?? false) {
+            postingStatus
+        } else if !connected {
+            Text("重连后提交").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+        }
+    }
+
     /// The shared solid buttons, in the web card's sizes and tones.
-    private func actionButton(_ title: String, _ role: ApprovalActionRole, action: @escaping () -> Void) -> some View {
-        Button(title, action: action)
+    /// A posting button stays enabled so its spinner is not dimmed; `submit` ignores it while the card is busy.
+    private func actionButton(_ title: String, _ role: ApprovalActionRole, posting: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).opacity(posting ? 0 : 1).overlay { if posting { Spinner(size: .mini) } }
+        }
             .buttonStyle(SolidButtonStyle(kind: role == .danger ? .danger : role == .primary ? .primary : .secondary))
     }
 
     @ViewBuilder
     private var submissionActions: some View {
-        if submission?.phase == .posting {
-            HStack(spacing: 6) { Spinner(size: .mini); Text("提交中…") }.font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
-        }
         if state.canSync {
             HStack(spacing: 6) {
                 if submission?.phase == .unknown {

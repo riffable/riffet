@@ -299,6 +299,19 @@ fun InteractionCard(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        // The pressed button carries the spinner; the title row only notes an action no button shows.
+        val postingAction = submission?.takeIf { it.phase == SubmissionPhase.POSTING }?.request?.action
+        // A tap-to-answer question hides its answer button, so posting that answer is noted in the title row.
+        val buttonActions = shown.actions.map { it.id }
+            .filter { it != "next" || (!isQuestion && !selectsOptions) }
+            .filter { !(tapAnswers && it == answerAction) }
+
+        val waitingNote = when {
+            postingAction != null && postingAction !in buttonActions -> WaitingNote.SUBMITTING
+            !connected -> WaitingNote.OFFLINE
+            else -> WaitingNote.NONE
+        }
+
         Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -312,6 +325,11 @@ fun InteractionCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (waitingNote != WaitingNote.NONE) {
+                    Spacer(Modifier.width(8.dp))
+                    WaitingNoteLabel(waitingNote)
+                    if (isQuestion && shown.questionCount != null) Spacer(Modifier.width(8.dp))
+                }
                 if (isQuestion && shown.questionCount != null) {
                     Text(
                         text = "${shown.questionIndex?.coerceAtLeast(1) ?: 1} / ${shown.questionCount}",
@@ -470,13 +488,6 @@ fun InteractionCard(
             verifyNotice?.let { Text(text = it, style = typography.caption, color = colors.warning) }
         }
 
-        // The pressed button carries the spinner; the caption is only for an action no button shows.
-        val postingAction = submission?.takeIf { it.phase == SubmissionPhase.POSTING }?.request?.action
-        // A tap-to-answer question hides its answer button, so posting that answer shows the caption.
-        val buttonActions = shown.actions.map { it.id }
-            .filter { it != "next" || (!isQuestion && !selectsOptions) }
-            .filter { !(tapAnswers && it == answerAction) }
-
         if (!isQuestion && !selectsOptions) {
             // The CLI's own choices, in its own order. The focused row leads; a clearly negative
             // row is tinted as destructive and a clearly affirmative one as safe, so the two are
@@ -525,9 +536,6 @@ fun InteractionCard(
             }
         }
 
-        if (postingAction != null && postingAction !in buttonActions) {
-            Text(text = stringResource(Res.string.timeline_interaction_submitting), style = typography.caption, color = colors.fg3)
-        }
         if (state.canSync) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (submission?.phase == SubmissionPhase.UNKNOWN) {
@@ -539,10 +547,6 @@ fun InteractionCard(
                     !state.syncing,
                 ) { sync() }
             }
-        }
-
-        if (!connected) {
-            Text(text = stringResource(Res.string.timeline_interaction_disconnected), style = typography.caption, color = colors.fg3)
         }
     }
 }
@@ -602,7 +606,19 @@ private fun ApprovalCard(
             (action.id in quickActionIds || (permission && action.tone in setOf("primary", "danger"))) }
         val quickAllowed = permission && !selectsOptions
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(title, style = typography.label, color = colors.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            val shownQuick = quick.filter { quickAllowed || refuses(it) }
+            val waitingNote = when {
+                posting != null && shownQuick.none { it.id == posting } -> WaitingNote.SUBMITTING
+                !connected -> WaitingNote.OFFLINE
+                else -> WaitingNote.NONE
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = typography.label, color = colors.fg, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (waitingNote != WaitingNote.NONE) {
+                    Spacer(Modifier.width(8.dp))
+                    WaitingNoteLabel(waitingNote)
+                }
+            }
             if (!shown.message.isNullOrBlank()) {
                 Text(shown.message.orEmpty(), style = typography.monoSmall, color = colors.fg2,
                     maxLines = 3, overflow = TextOverflow.Ellipsis,
@@ -610,7 +626,7 @@ private fun ApprovalCard(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 PlainAction(stringResource(Res.string.session_details), ActionTone.NORMAL, true, neutral = true, onClick = onOpen)
-                quick.filter { quickAllowed || refuses(it) }.sortedBy { !refuses(it) }.forEach { action ->
+                shownQuick.sortedBy { !refuses(it) }.forEach { action ->
                     PlainAction(action.shortLabel ?: action.label, if (refuses(action)) ActionTone.NORMAL else ActionTone.PRIMARY, connected && !busy,
                         posting = action.id == posting, neutral = true, onClick = { onSubmit(action.id) })
                 }
@@ -803,7 +819,25 @@ private fun ApprovalNotices(
                 ActionTone.NORMAL, !state.syncing, neutral = true, onClick = onSync)
         }
     }
-    if (!connected) Text(stringResource(Res.string.timeline_interaction_disconnected), style = typography.caption, color = colors.fg3)
+    // On the card the offline note sits in the title row; the reader has no such row.
+    if (!connected && !compact) Text(stringResource(Res.string.timeline_interaction_disconnected), style = typography.caption, color = colors.fg3)
+}
+
+private enum class WaitingNote { NONE, SUBMITTING, OFFLINE }
+
+/** Trailing end of the title row: waiting never adds a row to the card. */
+@Composable
+private fun WaitingNoteLabel(note: WaitingNote) {
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    if (note == WaitingNote.SUBMITTING) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            SubmittingSpinner(colors.fg3)
+            Text(stringResource(Res.string.timeline_interaction_submitting), style = typography.caption, color = colors.fg3)
+        }
+    } else {
+        Text(stringResource(Res.string.timeline_interaction_disconnected), style = typography.caption, color = colors.fg3)
+    }
 }
 
 private enum class ActionTone { DANGER, SAFE, PRIMARY, NORMAL }

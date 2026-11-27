@@ -1160,3 +1160,10 @@
 - **原因**：当时以为模式是过时的设计、不会有 Agent 在用，但 agy、Droid、TRAE 都把它和权限分成两个设置。agy 的 `proceed-in-sandbox` 只自动放行沙箱里的终端命令，文件编辑由模式决定，默认的 Agent 模式每次编辑都问；Codex、DSH、Droid 的「沙箱 / 工作区写」档位却同时放行工作区编辑。模式藏起来以后，选了 Sandbox 的 agy 会话改项目文件仍逐个确认，用户找不到 Accept edits。两者都回答「Agent 先做多少再问」，Claude Code 本来就把 Accept edits、Plan 放在权限模式里，放进同一个菜单最贴近读者的理解。
 - **否决**：在适配层把 agy 的模式和权限合成一个设置（4×4 种组合里多数没有意义，也和 agy 自己的 Shift+Tab、`/settings` 对不上）；选 Sandbox 时自动带上 Accept edits（悄悄改掉用户选的模式，两个设置的边界不清）；模式单独做成输入框里的一个文字胶囊（工具行左侧只放固定图标）；按钮上给非默认模式加角标。
 - **规则**：[界面](system/surfaces.md) §1.6「权限模式」；代码 `apps/web/src/app/session/ApprovalPicker.tsx`、`apps/macos/Riffet/Features/Composer/ComposerView.swift`、`plugins/riffet/antigravity/metadata.ts`。
+
+## 2026-11-28 · 短暂状态不给卡片添行：提交中在按下的按钮里
+
+- **决定**：审批与提问卡片提交时，转圈放在按下的那个按钮里：行按钮保留选项名，转圈替换行尾的数字键位；页脚按钮用 `busy`。其余按钮禁用。提交的动作在卡片上没有按钮时（点选项即提交），「提交中…」放在标题行末端；离线时的「重连后提交」也放在那里。四端一致。原则 3 和模式 §5.2 补一条通则：会自行结束的状态不在卡片或列表里另起一行。
+- **原因**：Web 与 Mac 原来在按钮下方加一行「提交中…」，iPhone 也有同样的说明行。权限卡片的按钮一行一个，页脚本来是空的，提交那一下卡片先撑高、几百毫秒后又缩回，转录被推动两次。规范只写了「Spinner 放在等待的控件内」，没写不能另起一行，所以各端各自加了说明行。转圈放在按下的按钮里还能看出提交的是哪个选择；Android 原本就是这样做的。
+- **否决**：统一放在标题行右侧、按钮只禁用（不加行，但看不出提交的是 Allow 还是 Deny）；给页脚预留一行高度（空着的时候白占位置）。
+- **规则**：[总览](system/README.md) 原则 3；[模式](system/patterns.md) §5.2；[界面](system/surfaces.md) §1.6；代码 `apps/web/src/app/session/NativeInteractionCard.tsx`、`apps/macos/Riffet/Features/Conversation/InteractionCard.swift`、`apps/mobile/iosApp/Riffet/Features/Conversation/InteractionCard.swift`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/interaction/InteractionCard.kt`。
