@@ -15,13 +15,14 @@
  */
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CLIENT_FEATURES_HEADER } from '../packages/contracts/src/protocol.js';
 import type { NativeBackendId, Run, SyncFrame, SyncLane, TimelineChanges, TimelineRow, TurnOutlineV3 } from '../packages/contracts/src/index.js';
 import { createApp } from '../apps/server/src/app.js';
+import { gitEnvironment } from '../apps/server/src/update/git.js';
 
 export interface ProbeArgs { model?: string; timeoutSeconds: number; keep: boolean; out?: string; prompts?: string[]; profile?: string }
 export interface Check { name: string; ok: boolean; detail?: unknown }
@@ -100,14 +101,30 @@ export async function bootServer(stateDir: string, options: { cliPath?: string }
 }
 export type ProbeServer = Awaited<ReturnType<typeof bootServer>>;
 
+/** Initializes the probe's own repository, including when launched from an enclosing Git hook. */
+export async function initProbeProject(project: string): Promise<void> {
+  await mkdir(project, { recursive: true });
+  const options = { cwd: project, env: gitEnvironment() };
+  execFileSync('git', ['init', '-q'], options);
+  execFileSync('git', [
+    '-c', 'user.email=probe@example.invalid', '-c', 'user.name=probe',
+    '-c', 'core.hooksPath=/dev/null', '-c', 'commit.gpgSign=false',
+    'commit', '-q', '--allow-empty', '-m', 'init',
+  ], options);
+}
+
 /** A temp state dir and a temp git project inside it. */
 export async function probeDirs(prefix: string): Promise<{ root: string; stateDir: string; project: string; remove(): Promise<void> }> {
   const root = await realpath(await mkdtemp(join(tmpdir(), `riffet-${prefix}-probe-`)));
   const project = join(root, 'project');
-  execFileSync('mkdir', ['-p', project]);
-  execFileSync('git', ['init', '-q'], { cwd: project });
-  execFileSync('git', ['-c', 'user.email=probe@riffet', '-c', 'user.name=probe', 'commit', '-q', '--allow-empty', '-m', 'init'], { cwd: project });
-  return { root, stateDir: join(root, 'state'), project, remove: () => rm(root, { recursive: true, force: true }) };
+  const remove = () => rm(root, { recursive: true, force: true });
+  try {
+    await initProbeProject(project);
+    return { root, stateDir: join(root, 'state'), project, remove };
+  } catch (error) {
+    await remove();
+    throw error;
+  }
 }
 
 /** What a sync stream of one lane received: its frames in order, and where it holds the lane. */
@@ -251,20 +268,29 @@ export async function restartChecks(stateDir: string, before: ProbeServer, sessi
   log('server restarted over the same state dir');
   const server = await bootServer(stateDir, cliPath ? { cliPath } : {});
   const checks: Check[] = [];
-  for (const lane of lanes) {
-    const old = held.get(lane)!;
-    const now = await laneRows(server, sessionId, lane);
-    const seqs = new Map(old.rows.map(row => [row.key, row.seq]));
-    const moved = now.rows.filter(row => seqs.has(row.key) && seqs.get(row.key) !== row.seq).map(row => `${row.key}: ${seqs.get(row.key)} -> ${row.seq}`);
-    checks.push({ name: `${lane}: seq and generation unchanged after a restart`, ok: moved.length === 0 && now.generation === old.generation, detail: { moved: moved.slice(0, 10), generation: [old.generation, now.generation] } });
-    const resumed = openLane(server, sessionId, lane, { generation: old.generation, after: old.headSeq });
-    await sleep(3_000);
-    resumed.close();
-    const hello = resumed.frames.find((frame): frame is Extract<SyncFrame, { type: 'hello' }> => frame.type === 'hello');
-    const resent = resumed.frames.filter(frame => frame.type === 'rows' || frame.type === 'snapshot').length;
-    checks.push({ name: `${lane}: resuming at the head after a restart is an empty delta`, ok: hello?.mode === 'delta' && resent === 0, detail: { mode: hello?.mode, framesWithRows: resent } });
+  try {
+    for (const lane of lanes) {
+      const old = held.get(lane)!;
+      const now = await laneRows(server, sessionId, lane);
+      const seqs = new Map(now.rows.map(row => [row.key, row.seq]));
+      const changed = old.rows.filter(row => seqs.get(row.key) !== row.seq).map(row => `${row.key}: ${row.seq} -> ${seqs.get(row.key) ?? 'missing'}`);
+      checks.push({
+        name: `${lane}: rows, seq and generation unchanged after a restart`,
+        ok: changed.length === 0 && old.rows.length === now.rows.length && now.generation === old.generation,
+        detail: { changed: changed.slice(0, 10), count: [old.rows.length, now.rows.length], generation: [old.generation, now.generation] },
+      });
+      const resumed = openLane(server, sessionId, lane, { generation: old.generation, after: old.headSeq });
+      await sleep(3_000);
+      resumed.close();
+      const hello = resumed.frames.find((frame): frame is Extract<SyncFrame, { type: 'hello' }> => frame.type === 'hello');
+      const resent = resumed.frames.filter(frame => frame.type === 'rows' || frame.type === 'snapshot').length;
+      checks.push({ name: `${lane}: resuming at the head after a restart is an empty delta`, ok: hello?.mode === 'delta' && resent === 0, detail: { mode: hello?.mode, framesWithRows: resent } });
+    }
+    return { checks, server };
+  } catch (error) {
+    await server.close().catch(() => undefined);
+    throw error;
   }
-  return { checks, server };
 }
 
 /** Prints the report, writes it when asked, and exits non-zero on a failed check. */

@@ -42,7 +42,7 @@ import {
   CLAUDE_CODE_PASTE_PLACEHOLDER_PATTERN, claudeAgentRows, claudeBackgroundScreen, claudeComposer, claudeFooterFocused, claudeTasksEntryFocused, claudeTasksEntryShown, claudeViewsSubagent,
 } from '../apps/server/src/adapters/cli/claude-code.js';
 import { localRedactions } from './terminal-fixture-guards.js';
-import { copyRiffetProfile, openLane, requireCli, type LaneStream } from './probe-sync-e2e-lib.js';
+import { copyRiffetProfile, initProbeProject, openLane, requireCli, type LaneStream } from './probe-sync-e2e-lib.js';
 
 // The probe may itself be launched from inside a Claude Code / Riffet session; those variables would
 // make the CLI it starts behave like a nested child instead of the standalone launch Riffet does.
@@ -82,10 +82,10 @@ const directory = await realpath(await mkdtemp(testsRestart
 const stateDir = join(directory, 'state');
 const projectDir = join(directory, 'project');
 const SLEEPER_SECONDS = 70;
-await mkdir(projectDir);
-execFileSync('git', ['init', '-q'], { cwd: projectDir });
-await mkdir(join(projectDir, '.claude', 'agents'), { recursive: true });
-await writeFile(join(projectDir, '.claude', 'agents', 'sleeper.md'), `---
+async function prepareProject(): Promise<void> {
+  await initProbeProject(projectDir);
+  await mkdir(join(projectDir, '.claude', 'agents'), { recursive: true });
+  await writeFile(join(projectDir, '.claude', 'agents', 'sleeper.md'), `---
 name: sleeper
 description: Runs a long sleep in the background. Use only when explicitly asked to use the sleeper subagent.
 tools: Bash
@@ -93,7 +93,7 @@ background: true
 ---
 Run the Bash command \`printf 'STARTING\\n'; sleep ${SLEEPER_SECONDS}; printf 'DONE\\n'\` and then reply with only the word DONE.
 `);
-execFileSync('git', ['-c', 'user.email=probe@example.invalid', '-c', 'user.name=probe', 'commit', '--allow-empty', '-qm', 'init'], { cwd: projectDir });
+}
 
 /**
  * Machine-specific text a captured screen must not keep: the temp project and directory (as realpath, without
@@ -101,6 +101,7 @@ execFileSync('git', ['-c', 'user.email=probe@example.invalid', '-c', 'user.name=
  */
 const scrubs: Array<readonly [string, string]> = [
   ...[projectDir, projectDir.replace(/^\/private/, ''), join(tmpdir(), basename(directory), 'project')].map(path => [path, '/tmp/project'] as const),
+  ...(projectDir.startsWith(homedir() + '/') ? [[`~${projectDir.slice(homedir().length)}`, '/tmp/project'] as const] : []),
   ...[directory, directory.replace(/^\/private/, ''), join(tmpdir(), basename(directory))].map(path => [path, '/tmp/riffet-claude-e2e'] as const),
   [homedir(), '~'],
   ...localRedactions,
@@ -156,8 +157,6 @@ async function ok(method: 'GET' | 'POST', url: string, payload?: Record<string, 
   if (result.code >= 400) throw new Error(`${method} ${url}: ${result.code} ${JSON.stringify(result.body)}`);
   return result.body;
 }
-await boot();
-
 // Test instrumentation only: log every hook the server routes (event, prompt_id, agent) so a stall can be
 // matched against what the CLI actually delivered. The method is wrapped on the instance's prototype, not edited.
 const hookLog: Array<{ tool?: string; at: number; session: string; event: string; promptId?: string; agent?: string; ms?: number; error?: string }> = [];
@@ -543,7 +542,6 @@ class Ctx {
           const tail = lines.slice(-8).map(line => line.trimEnd()).join(' / ');
           const markers = getScreenMarkers('claude-code');
           const verdict = `busyPattern=${markers.busyPattern.test(lines.slice(-8).join('\n'))} readyPattern=${markers.readyPattern.test(lines.slice(-8).join('\n'))}`;
-          writeFileSync(`/tmp/claude-e2e-stall-${process.pid}-${this.stalls.size}.txt`, screen);
           const hooks = hookLog.filter(item => services.store.getSession(sessionId).nativeSessionId?.startsWith(item.session) && item.at >= startedAt - 1000).map(item => `${item.event}${item.promptId ? ':' + item.promptId : ''}${item.agent ? ':agent' : ''}@${rel(item.at - rec.t0)}${item.ms !== undefined ? '/' + item.ms + 'ms' : '/pending'}${item.error ? '!' + item.error : ''}`);
           this.note(`STALL @${rel(Date.now() - rec.t0)}: Run#${rec.runOrder.indexOf(run.id) + 1} still ${run.state}/${run.native?.delivery} ${rel(Date.now() - last.at)} after the CLI's stop_hook_summary (nativeTurnId=${run.native?.nativeTurnId?.slice(0, 8)} expectsTurnOutcome=${run.native?.expectsTurnOutcome}); status ${statusLine(sessionId)}; hooks routed to this session since the Run started: [${hooks.join(' ')}]; product screen verdict: ${verdict}; last 8 pane lines: ${snip(tail, 520)}`);
         } catch { /* best effort */ }
@@ -1040,40 +1038,40 @@ async function s7(ctx: Ctx) {
   ctx.note(`configure approval=manual -> ${configured.code} ${snip(configured.body, 160)}`);
   if (configured.code >= 400) ctx.note('manual rejected; staying on "default" (Claude asks for Bash by default)');
   await ctx.quiet(id, 60_000);
-  async function permissionRound(label: string, file: string, action: 'approve' | 'deny') {
-    const run = await send(id, `First write a plain-text explanation of at least 150 words about why file permissions matter (no tools yet). Only after that, in the same response, run exactly this shell command: touch ${file}   Your turn is not over until the command ran. Then reply with only the word DONE_${label}.`);
-    const appeared = await ctx.until(`permission card (${label})`, () => ctx.phase(id) === 'attention', 120_000);
-    ctx.check(`${label}: attention phase + interaction card appears`, appeared, `phase=${ctx.phase(id)} run=${run.state}/${run.native?.delivery}`);
+  const endpoint = `/api/sessions/${id}/native/interaction`;
+  async function permissionRound(label: string, file: string, action: 'allow' | 'deny') {
+    const command = `touch ${file}`;
+    const run = await send(id, `First write a plain-text explanation of at least 150 words about why file permissions matter (no tools yet). Only after that, in the same response, run exactly this shell command: ${command}   Your turn is not over until the command ran. Then reply with only the word DONE_${label}.`);
+    // A screen card may be replaced by the hook. Wait for the protocol card with the exact command.
+    const appeared = await ctx.until(`protocol permission card (${label})`, () => {
+      const status = services.nativeBackends.status(id);
+      return status.phase === 'attention' && status.interaction?.transport === 'protocol';
+    }, 120_000);
+    ctx.check(`${label}: attention phase + protocol card appears`, appeared, `phase=${ctx.phase(id)} run=${run.state}/${run.native?.delivery}`);
     if (!appeared) return;
-    const card = await ok('GET', `/api/sessions/${id}/native/interaction`);
-    ctx.note(`${label} card: kind=${card?.kind} title="${snip(card?.title, 80)}" transport=${card?.transport} actions=${card?.actions?.map((item: any) => item.id).join(',')} expiresAt=${card?.expiresAt ?? '-'}`);
-    ctx.check(`${label}: card grants or refuses permission`, card?.kind === 'permission', `transport=${card?.transport} kind=${card?.kind}`);
-    if (captureDir && action === 'approve') {
+    if (captureDir && action === 'allow') {
       // Claude Code draws its own dialog beside the held PermissionRequest hook.
       const dialog = await paneUntil(id, screen => /^\s*(?:❯\s*)?1\.\s+Yes/m.test(screen), 8000);
       if (dialog) await capture('permission-dialog', dialog);
       else ctx.note(`permission-dialog: the pane shows no dialog while the card is up; pane tail ${snip(paneScreen(id).split('\n').filter(line => line.trim()).slice(-10), 500)}`);
     }
-    const endpoint = `/api/sessions/${id}/native/interaction`;
-    // The hook can replace a terminal card during capture. Read the current card before choosing a decision.
     const current = await ok('GET', endpoint) as NativeInteraction;
-    if (current?.kind !== 'permission' || !current.message?.includes(file)) throw new Error(`The ${label} permission card changed to a different operation`);
-    const decision = current.actions.find(item => action === 'approve'
-      ? item.tone === 'primary' && /^(?:Yes|Allow|Approve)$/i.test(item.label.trim())
-      : item.tone === 'danger');
-    if (!decision) throw new Error(`No one-time ${action} action on the ${label} card`);
-    const answered = await http('POST', endpoint, { interactionId: current.id, revision: current.revision, requestId: randomUUID(), action: decision.id });
-    ctx.note(`${label} ${action} -> ${answered.code} ${snip(answered.body, 160)}`);
+    if (current?.kind !== 'permission' || current.transport !== 'protocol' || current.message !== command) {
+      throw new Error(`The ${label} permission card does not show exactly ${command}`);
+    }
+    if (!current.actions.some(item => item.id === action)) throw new Error(`No one-time ${action} action on the ${label} card`);
+    const answered = await ok('POST', endpoint, { interactionId: current.id, revision: current.revision, requestId: randomUUID(), action });
+    ctx.note(`${label} ${action} -> ${snip(answered, 160)}`);
     const done = await ctx.settle(run.id, 120_000);
     await ctx.quiet(id, 30_000);
     const created = existsSync(join(projectDir, file));
-    if (action === 'approve') {
+    if (action === 'allow') {
       ctx.check(`${label}: approve -> Run completed and file created`, done.state === 'completed' && created, `state=${done.state} created=${created} error=${done.error ?? ''}`);
     } else {
       ctx.check(`${label}: deny -> file NOT created, Run finished, phase idle`, !created && settled(done) && ctx.phase(id) === 'idle', `state=${done.state} created=${created} phase=${ctx.phase(id)} error=${done.error ?? ''}`);
     }
   }
-  await permissionRound('APPROVE', 'approved.txt', 'approve');
+  await permissionRound('APPROVE', 'approved.txt', 'allow');
   await permissionRound('DENY', 'denied.txt', 'deny');
   const rows = readRows(id);
   contract.push({ scenario: 7, action: 'permission approve / deny', kinds: kindList(rows, rec.t0) });
@@ -1508,9 +1506,8 @@ async function s11(ctx: Ctx) {
   const closed = await ctx.settle(closing.id, 90_000).catch(() => services.store.getRun(closing.id));
   await sleep(3000); // the screen poll has had its chances
   const closingScreen = paneScreen(a.id);
-  writeFileSync('/tmp/claude-e2e-question-ending.txt', closingScreen);
   const card = await http('GET', `/api/sessions/${a.id}/native/interaction`);
-  ctx.note(`E: pane after a turn that ends on a question (saved to /tmp/claude-e2e-question-ending.txt): ${snip(closingScreen.split('\n').filter(line => line.trim()).slice(-7), 360)}`);
+  ctx.note(`E: pane after a turn that ends on a question: ${snip(closingScreen.split('\n').filter(line => line.trim()).slice(-7), 360)}`);
   ctx.check('E: a turn ending on a question leaves no attention interaction, phase idle', closed.state === 'completed' && ctx.phase(a.id) === 'idle' && !interactionOf(a.id) && !(card.body && card.body.id), `run=${closed.state} phase=${ctx.phase(a.id)} interaction=${interactionOf(a.id)?.id ?? '-'} card=${snip(card.body, 120)}`);
   // (d) Short turns, repeated: the Stop hook races the row that holds the answer.
   for (let index = 1; index <= 8; index += 1) {
@@ -1532,9 +1529,8 @@ async function s11(ctx: Ctx) {
     const card = interactionOf(b.id);
     if (!appeared) {
       const hooks = hookLog.filter(item => services.store.getSession(b.id).nativeSessionId?.startsWith(item.session) && (item.event === 'PreToolUse' || item.event === 'PermissionRequest')).map(item => `${item.event}@${rel(item.at - started)}/${item.ms ?? 'open'}ms`);
-      writeFileSync(`/tmp/claude-e2e-${label}-nofallback.txt`, paneScreen(b.id));
       ctx.note(`${label}: transcript tail: ${snip(readRows(b.id).slice(-8).map(({ row }) => `${rowKey(row)} "${snip(rowText(row), 50)}"`), 700)}; all hooks since: ${hookLog.filter(item => services.store.getSession(b.id).nativeSessionId?.startsWith(item.session)).slice(-14).map(item => `${item.event}:${item.tool ?? ''}@${rel(item.at - started)}/${item.ms ?? 'open'}ms`).join(' ')}`);
-      ctx.note(`${label}: no native dialog card; interaction=${card?.id ?? '-'} phase=${ctx.phase(b.id)}; question hooks: ${hooks.join(' ')}; pane tail (saved to /tmp/claude-e2e-${label}-nofallback.txt): ${snip(paneScreen(b.id).split('\n').filter(line => line.trim()).slice(-10), 600)}`);
+      ctx.note(`${label}: no native dialog card; interaction=${card?.id ?? '-'} phase=${ctx.phase(b.id)}; question hooks: ${hooks.join(' ')}; pane tail: ${snip(paneScreen(b.id).split('\n').filter(line => line.trim()).slice(-10), 600)}`);
     }
     ctx.check(`${label}: after the hook timed out Riffet lifts the CLI's own dialog as an answerable card`, appeared && card?.kind === 'question' && card.transport === 'terminal' && card.options.map(option => option.label).join('/') === 'Alpha/Beta' && card.actions.some(action => action.id === 'answer'), JSON.stringify(card ?? null).slice(0, 300));
     ctx.note(`${label}: AskUserQuestion tool_use rows in the transcript while the dialog is up: ${readRows(b.id).filter(({ row }) => row.type === 'assistant' && Array.isArray(row.message?.content) && row.message.content.some((block: any) => block?.type === 'tool_use' && block.name === 'AskUserQuestion')).length} (results: ${toolResults(b.id).length})`);
@@ -1548,7 +1544,6 @@ async function s11(ctx: Ctx) {
     // What the CLI shows while its question hook is still open (the card is up, the hook has not timed out yet).
     const duringHook = interactionOf(b.id);
     const screen = paneScreen(b.id);
-    writeFileSync('/tmp/claude-e2e-question-during-hook.txt', screen);
     ctx.note(`B while the hook is open (card ${duringHook?.id ?? '-'}, transport ${duringHook?.transport ?? '-'}): the pane ${/Enter to select/.test(screen) ? 'ALREADY shows' : 'does not yet show'} the native dialog; tail ${snip(screen.split('\n').filter(line => line.trim()).slice(-6), 360)}`);
   }
   const lifted = await fallbackCard('B');
@@ -1625,18 +1620,20 @@ async function disposeSession(id: string) {
 
 /** Why the probe could not start its scenarios. */
 let setupError: string | undefined;
-let cleaned = false;
-async function cleanup() {
-  if (cleaned) return;
-  cleaned = true;
-  try { await services.app.close(); } catch { /* closing twice */ }
-  tmux('kill-server');
-  await rm(directory, { recursive: true, force: true });
+let cleanupTask: Promise<void> | undefined;
+function cleanup(): Promise<void> {
+  return cleanupTask ??= (async () => {
+    try { await services?.app.close(); } catch { /* closing twice */ }
+    tmux('kill-server');
+    await rm(directory, { recursive: true, force: true });
+  })();
 }
 process.on('SIGINT', () => { void cleanup().finally(() => process.exit(130)); });
 process.on('SIGTERM', () => { void cleanup().finally(() => process.exit(143)); });
 
 try {
+  await prepareProject();
+  await boot();
   projectId = services.store.createProject(projectDir, 'Claude e2e').id;
   if (modelSource) {
     // The source comes from a built-in plugin; one still detecting is waited for, and one that is off ends the probe.
@@ -1706,6 +1703,7 @@ try {
   // Nothing ran: the CLI, its model or its route is not usable here.
   setupError = error instanceof Error ? error.message : String(error);
 } finally {
+  await cleanup();
   const total = rel(Date.now() - started);
   console.log('\n================ CLAUDE E2E PROBE REPORT ================');
   console.log(`model=${chosenModel} total=${total}`);
@@ -1720,6 +1718,5 @@ try {
   console.log('\n### Contract table (action -> transcript record kinds)');
   for (const item of contract) console.log(`  S${item.scenario} ${item.action}: ${item.kinds.join(' ; ')}`);
   if (outFile) writeFileSync(outFile, JSON.stringify({ model: chosenModel, total, ...(setupError ? { skipped: setupError } : {}), results, contract }, null, 1));
-  await cleanup();
   process.exit(setupError ? 2 : results.some(result => !result.pass) ? 1 : 0);
 }

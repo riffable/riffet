@@ -11,10 +11,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { Run } from '../packages/contracts/src/index.js';
+import type { NativeInteraction, Run } from '../packages/contracts/src/index.js';
 import {
   answerChecks, bootServer, finish, laneOutline, laneRows, log, openLane, probeArgs, probeDirs, requireCli, restartChecks, seqChecks, stateChecks, subagentLanes, waitIdle,
-  type Check, type ProbeServer,
+  type Check, type LaneStream, type ProbeServer,
 } from './probe-sync-e2e-lib.js';
 
 const args = probeArgs();
@@ -22,7 +22,7 @@ requireCli(process.env.DROID_CLI?.trim() || 'droid', 'Droid', 'Install the Facto
 const model = args.model ?? 'claude-haiku-4-5-20251001';
 const dirs = await probeDirs('droid');
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
-let server: ProbeServer = await bootServer(dirs.stateDir);
+let server!: ProbeServer;
 const post = <T = any>(url: string, payload: Record<string, unknown>) => server.call<T>('POST', url, payload);
 const get = <T = any>(url: string) => server.call<T>('GET', url);
 const settle = async (runId: string, timeoutMs = args.timeoutSeconds * 1000): Promise<Run> => {
@@ -45,7 +45,9 @@ const until = async (label: string, check: () => boolean, timeoutMs = 60_000) =>
 const checks: Check[] = [];
 const check = (name: string, ok: boolean, detail?: unknown) => { checks.push({ name, ok, ...(detail === undefined ? {} : { detail }) }); log(`${ok ? 'ok  ' : 'FAIL'} ${name}`); };
 let sessionId = '';
+let main: LaneStream | undefined;
 try {
+  server = await bootServer(dirs.stateDir);
   const project = server.services.store.createProject(dirs.project, 'Droid e2e');
   const first = await post<{ session: { id: string }; run: { id: string } }>('/api/sessions', {
     projectId: project.id, kind: 'native', backendId: 'droid', model, mode: 'agent', approval: 'off',
@@ -53,15 +55,18 @@ try {
     initialMessage: { commandId: randomUUID(), text: 'Isolated integration test. Do not use tools. Reply only DROID_E2E_OK.' },
   });
   sessionId = first.session.id;
-  const main = openLane(server, sessionId);
+  main = openLane(server, sessionId);
   const runs: Run[] = [await settle(first.run.id)];
   const session = server.services.store.getSession(sessionId);
   check('first turn completed with a native session', runs[0]!.state === 'completed' && !!session.nativeSessionId, { state: runs[0]!.state });
 
   const ask = await post<Run>(`/api/sessions/${sessionId}/native/send`, { commandId: randomUUID(), text: 'Run the shell command `touch approved.txt` with the Execute tool, then reply DONE.' });
   await until('permission card', () => server.services.nativeBackends.status(sessionId).phase === 'attention');
-  const interaction = await get(`/api/sessions/${sessionId}/native/interaction`);
-  await post(`/api/sessions/${sessionId}/native/interaction`, { interactionId: interaction.id, revision: interaction.revision, requestId: interaction.requestId, action: 'proceed_once' });
+  const interaction = await get<NativeInteraction>(`/api/sessions/${sessionId}/native/interaction`);
+  if (interaction?.kind !== 'permission' || interaction.message !== 'touch approved.txt' || !interaction.actions.some(action => action.id === 'proceed_once')) {
+    throw new Error('Droid did not ask for one-time approval of exactly touch approved.txt');
+  }
+  await post(`/api/sessions/${sessionId}/native/interaction`, { interactionId: interaction.id, revision: interaction.revision, requestId: randomUUID(), action: 'proceed_once' });
   runs.push(await settle(ask.id));
   check('approved command ran', runs.at(-1)!.state === 'completed' && existsSync(join(dirs.project, 'approved.txt')));
 
@@ -124,7 +129,8 @@ try {
   check('probe ran to the end', false, error instanceof Error ? error.message : String(error));
   if (sessionId) log(JSON.stringify(server.services.store.listRuns(sessionId).map(run => ({ id: run.id, state: run.state, error: run.error, native: run.native }))));
 } finally {
-  await server.close().catch(() => undefined);
+  main?.close();
+  await server?.close().catch(() => undefined);
   if (!args.keep) await dirs.remove();
 }
 await finish('droid', checks, { sessionId, model }, args);
