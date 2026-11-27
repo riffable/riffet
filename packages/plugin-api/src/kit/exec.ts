@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 
-export interface ProcessResult { code: number | null; stdout: string; stderr: string; stdoutData: Buffer; stderrData: Buffer; timedOut: boolean; truncated: boolean; aborted?: boolean; }
+export interface ProcessResult { code: number | null; stdout: string; stderr: string; stdoutData: Buffer; stderrData: Buffer; timedOut: boolean; truncated: boolean; aborted?: boolean; spawnErrorCode?: string; }
 export interface ProcessOptions {
   cwd: string;
   /** Null delegates the deadline to the caller's signal. Numeric values retain setTimeout semantics. */
@@ -40,7 +40,13 @@ export function runProcess(file: string, args: string[], options: ProcessOptions
     };
     const stopWithEscalation = (): void => {
       kill('SIGTERM');
-      if (!killTimer) killTimer = setTimeout(() => kill('SIGKILL'), 500);
+      if (!killTimer) killTimer = setTimeout(() => {
+        kill('SIGKILL');
+        // A helper outside the launcher's group may still hold the other end of these pipes.
+        child.stdin.destroy();
+        child.stdout.destroy();
+        child.stderr.destroy();
+      }, 500);
     };
     const finishStop = () => {
       if (!killTimer) return;
@@ -98,7 +104,8 @@ export function runProcess(file: string, args: string[], options: ProcessOptions
       if (lineFailure) { reject(lineFailure); return; }
       const stdout = Buffer.concat(stdoutChunks);
       const errorData = Buffer.from([Buffer.concat(stderrChunks).toString('utf8'), error.message].filter(Boolean).join('\n'));
-      resolve({ code: null, stdout: stdout.toString('utf8'), stderr: errorData.toString('utf8'), stdoutData: stdout, stderrData: errorData, timedOut, truncated, ...(aborted ? { aborted } : {}) });
+      const spawnErrorCode = (error as NodeJS.ErrnoException).code;
+      resolve({ code: null, stdout: stdout.toString('utf8'), stderr: errorData.toString('utf8'), stdoutData: stdout, stderrData: errorData, timedOut, truncated, ...(aborted ? { aborted } : {}), ...(spawnErrorCode ? { spawnErrorCode } : {}) });
     });
     child.on('close', code => {
       if (settled) return;

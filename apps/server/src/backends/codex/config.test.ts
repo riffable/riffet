@@ -121,7 +121,10 @@ const calls = ${JSON.stringify(calls)};
 fs.appendFileSync(calls, command + '\\n');
 if (command === '--version') console.log('traecli 0.217.0');
 else if (command === 'resume') console.log('Usage: resume --remote <ADDR> --remote-auth-token-env VAR');
-else if (fs.readFileSync(calls, 'utf8').split('app-server').length === 2) setTimeout(() => {}, 30_000);
+else if (fs.readFileSync(calls, 'utf8').split('app-server').length === 2) {
+  process.on('SIGTERM', () => {});
+  setTimeout(() => {}, 30_000);
+}
 else console.log('Usage: app-server --listen ws:// --ws-auth capability-token --ws-token-file FILE');
 `, { mode: 0o755 });
     const current = { ...profile(traexFlavor), config: { executable } };

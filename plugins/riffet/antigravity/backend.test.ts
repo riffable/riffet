@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -116,6 +116,33 @@ async function fixture() {
     writeJson(join(root, 'bridge', `${conversationId}.json`), { nonce: runtime.launch.nonce, at: 10, payload });
   return { backend, runtime, host, context, session, root, geminiDir, bridgeDir, cwd, pending, saved, emitEvent, emit, status, hook };
 }
+
+it('lists home skills only for the default Gemini root and gives its native skills precedence', async () => {
+  const { backend, host, context, cwd, root, geminiDir } = await fixture();
+  vi.stubEnv('HOME', cwd);
+  try {
+    for (const [root, name] of [['.agents/skills', 'shared'], ['.agents/skills', 'both'], ['.gemini/config/skills', 'both'], ['private/skills', 'private']] as const) {
+      const dir = join(cwd, root, name);
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: ${root}\n---\n`);
+    }
+    const profile = context.profile;
+    const privateProfile = { ...profile, config: { sourceDir: join(cwd, 'private') } };
+    const skills = await backend.slashItems(host, undefined, profile);
+    expect(skills.map(skill => skill.name)).toEqual(['both', 'shared']);
+    expect(skills[0]?.description).toBe('.gemini/config/skills');
+    expect((await backend.slashItems(host, undefined, privateProfile)).map(skill => skill.name)).toEqual(['private']);
+    expect(backend.extensionLayout(privateProfile).sharedRoot).toBeUndefined();
+
+    const legacySkill = join(geminiDir, 'skills', 'legacy');
+    await mkdir(legacySkill, { recursive: true });
+    await writeFile(join(legacySkill, 'SKILL.md'), '---\nname: legacy\ndescription: private copy\n---\n');
+    await writeFile(join(root, 'initialized.json'), JSON.stringify({ version: 1 }));
+    expect((await backend.slashItems(host, undefined, profile, context.session)).map(skill => skill.name)).toEqual(['legacy']);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
 
 it('opens a side chat in a private scope, refuses an unexpected native agent and removes its files', async () => {
   const stateDir = await mkdtemp(join(tmpdir(), 'riffet-agy-side-test-'));

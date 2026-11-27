@@ -509,13 +509,14 @@ export class BackendCatalog {
   }
 
   async listBackends(options: { onAvailability?: (id: NativeBackendId, checkedAt: number) => void; installation?: 'cached' | 'recheck-missing' } = {}): Promise<NativeBackendCatalogEntry[]> {
-    const result: NativeBackendCatalogEntry[] = [];
-    for (const driver of this.registry.list()) {
+    const entries = await Promise.all(this.registry.list().map(async (driver): Promise<NativeBackendCatalogEntry | undefined> => {
       const profiles = this.profiles(driver);
       const profile = profiles.find(item => item.isDefault) ?? profiles[0];
-      if (!profile) continue;
-      const capabilities = await this.driverCapabilities(driver, profile);
-      const probe = await this.backendAvailability(driver, profile, { recheckMissing: options.installation === 'recheck-missing' });
+      if (!profile) return undefined;
+      const [capabilities, probe] = await Promise.all([
+        this.driverCapabilities(driver, profile),
+        this.backendAvailability(driver, profile, { recheckMissing: options.installation === 'recheck-missing' }),
+      ]);
       const { result: availability, checkedAt } = probe;
       options.onAvailability?.(driver.id, checkedAt);
       // The picker needs agent-wide evidence. Cache the aggregate so extra profiles never evict
@@ -525,9 +526,9 @@ export class BackendCatalog {
       const reason = availability.reason ? safeBackendReason(availability.reason, profile) : undefined;
       const rawDefaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
       const defaultModel = rawDefaultModel ? driver.normalizeModel?.(rawDefaultModel, profile) ?? rawDefaultModel : undefined;
-      result.push({ backendId: driver.id, label: driver.label, available: availability.available, ...(cliMissing ? { cliMissing: true } : {}), ...(availability.needsLogin ? { needsLogin: true } : {}), profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models: [], ...(reason ? { reason } : {}), ...(defaultModel ? { defaultModel } : {}), ...cliVersionOf(driver, availability) });
-    }
-    return result;
+      return { backendId: driver.id, label: driver.label, available: availability.available, ...(cliMissing ? { cliMissing: true } : {}), ...(availability.needsLogin ? { needsLogin: true } : {}), profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models: [], ...(reason ? { reason } : {}), ...(defaultModel ? { defaultModel } : {}), ...cliVersionOf(driver, availability) };
+    }));
+    return entries.filter((entry): entry is NativeBackendCatalogEntry => entry !== undefined);
   }
 
   async entry(backendId: string, project: Project | undefined, profileId?: string, session?: Session, options: { allModels?: boolean } = {}): Promise<NativeBackendCatalogEntry> {
@@ -542,8 +543,10 @@ export class BackendCatalog {
     const pendingChoiceRemoved = session !== requestedSession;
     if (!selected || (profileId && selected.id !== profileId && !(pendingChoiceRemoved && profileId === requestedSession?.backendProfileId))) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
     await prepareSource(selected.config);
-    const capabilities = await this.driverCapabilities(driver, selected);
-    const availability: NativeBackendAvailability = await driver.available(this.host, selected).catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
+    const [capabilities, availability] = await Promise.all([
+      this.driverCapabilities(driver, selected),
+      driver.available(this.host, selected).catch((error): NativeBackendAvailability => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' })),
+    ]);
     let reason = availability.reason ? safeBackendReason(availability.reason, selected) : undefined;
     let models: ModelInfo[] = [];
     if (availability.available && capabilities.supportsModelSelection) {
@@ -707,7 +710,7 @@ export class BackendCatalog {
   }
 
   private discoverSlashItems(driver: NativeBackendDriver, project: Project | undefined, profile: NativeBackendProfileConfig, session: Session | undefined, refresh: boolean): Promise<NativeSlashItem[]> {
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null, session?.agentMemberId ?? null])).digest('hex');
+    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null, session?.id ?? null, session?.agentMemberId ?? null])).digest('hex');
     return this.slashListings.get(key, () => driver.slashItems!(this.host, project, profile, session), { refresh });
   }
 

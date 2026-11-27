@@ -54,7 +54,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 ## 排障
 
 - 新会话菜单里找不到 Codex 或 TRAE CLI：`availability.ts#availabilityOf` 会在启动探测收到 `ENOENT` 后核对可执行文件是否存在。文件存在但缺少解释器时仍会列出 Agent。
-- CLI 升级后首次探测超时：`config.ts#probeAppServer` 只重跑撞到 5 秒时限的命令。再次超时会单独报告，并释放按可执行文件缓存的探测结果。检查提示和 CLI 的 `app-server --help`，即可区分启动超时与协议能力缺失。
+- CLI 升级后首次探测超时：`config.ts#probeAppServer` 回收超时的启动器及同组子进程，再重试一次。能力和可用性查询共用进行中的探测。再次超时会单独报告，并释放按可执行文件缓存的探测结果。
 - 流式回答的最后一行轮流闪现片段：查该会话 `journal_events` 中 `kind='draft'` 的行。nativeId 以 `-draft:<n>` 结尾的是运行时写的片段，以 `:assistant` 结尾的是转写源写的累积版本；前者出现，说明有运行时在没有 `host.transcript` 的路径上被创建。
 - 回合正文缺失或回合不结束：`riffet logs --scope codex-history,codex-journal`，确认是否读到了定稿副本。
 - 线程归属冲突、启动或恢复失败：`riffet logs --scope codex-recovery`。

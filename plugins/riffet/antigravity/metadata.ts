@@ -1,5 +1,6 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { AgentCapabilities, AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
-import { parseAgyProfile } from './config.js';
 
 export const COMMANDS = ['model', 'mode', 'mcp', 'skills', 'plugins', 'hooks', 'clear', 'resume', 'rewind', 'help'];
 
@@ -36,9 +37,9 @@ export function capabilities(): AgentCapabilities {
   };
 }
 
-export function extensionLayout(): AgentExtensionLayout {
+export function extensionLayout(sourceDir: string): AgentExtensionLayout {
   return {
-    userRoot: config => parseAgyProfile(config).sourceDir,
+    userRoot: () => sourceDir,
     applyEffect: 'User customizations are copied when a new Antigravity conversation is created.',
     configFiles: {
       user: [
@@ -59,6 +60,6 @@ export function extensionLayout(): AgentExtensionLayout {
     },
     ruleFiles: { user: ['AGENTS.md', 'GEMINI.md'], project: ['AGENTS.md', 'GEMINI.md'] },
     create: { user: [], project: [] },
-    sharedRoot: { directories: { skill: ['.agents/skills'], command: [] }, create: [] },
+    ...(sourceDir === join(homedir(), '.gemini') ? { sharedRoot: { directories: { skill: ['.agents/skills'], command: [] }, create: [] } } : {}),
   };
 }

@@ -1,10 +1,9 @@
-import { execFile, type ExecException } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
+import { runProcess } from '@riffet/plugin-api/kit';
 import type { Project } from '../../../../../packages/contracts/src/index.js';
 import { readProbe, type AppServerProbe, type CodexFlavor } from './flavors.js';
 import { resolveCliExecutable } from '../shared/cli-resolve.js';
@@ -14,7 +13,6 @@ import { asRecord, str } from './util.js';
 
 /** A rollout larger than this is not read whole for statistics. */
 export const MAX_ROLLOUT_BYTES = 64 * 1024 * 1024;
-const execFileAsync = promisify(execFile);
 const probes = new Map<string, Promise<AppServerProbe>>();
 const PROFILE_PREFERENCE_FIELDS = new Set(['id', 'backendId', 'name', 'description', 'isDefault', 'defaultModel', 'enabledModels', 'modelInputModalities']);
 type CodexPermissionId = 'on-request' | 'dontAsk' | 'read-only' | 'danger-full-access';
@@ -175,14 +173,17 @@ export function supportsSteerVersion(version: string | undefined, flavor: CodexF
 }
 
 async function probeCliCommand(executable: string, args: string[], maxBuffer: number) {
-  const options = { timeout: 5_000, maxBuffer, encoding: 'utf8' as const };
-  try {
-    return await execFileAsync(executable, args, options);
-  } catch (error) {
-    // Large CLI binaries can miss the first deadline while macOS verifies or pages them in.
-    if (!(error as ExecException).killed) throw error;
-    return await execFileAsync(executable, args, options);
-  }
+  // runProcess bounds the combined output. Keep the original limit on each stream as well.
+  const options = { cwd: process.cwd(), maxOutputBytes: 2 * maxBuffer };
+  let result = await runProcess(executable, args, { ...options, timeoutMs: 5_000 });
+  // Keep both attempts and their kill grace periods within a 10-second catalog request.
+  if (result.timedOut && !result.truncated) result = await runProcess(executable, args, { ...options, timeoutMs: 3_000 });
+  return {
+    ok: result.code === 0 && !result.timedOut && !result.truncated && Math.max(result.stdoutData.length, result.stderrData.length) <= maxBuffer,
+    text: `${result.stdout}\n${result.stderr}`,
+    timedOut: result.timedOut && !result.truncated,
+    missing: result.spawnErrorCode === 'ENOENT',
+  };
 }
 
 export async function probeAppServer(executable: string): Promise<AppServerProbe> {
@@ -198,24 +199,21 @@ export async function probeAppServer(executable: string): Promise<AppServerProbe
   if (cached) return await cached;
   const task = (async () => {
     try {
-      const [versionResult, appResult, tuiResult] = await Promise.all([
+      const results = await Promise.all([
         probeCliCommand(executable, ['--version'], 128 * 1024),
         probeCliCommand(executable, ['app-server', '--help'], 512 * 1024),
         probeCliCommand(executable, ['resume', '--help'], 512 * 1024),
-      ]);
-      return readProbe(
-        `${versionResult.stdout}${versionResult.stderr}`,
-        `${appResult.stdout}\n${appResult.stderr}`,
-        `${tuiResult.stdout}\n${tuiResult.stderr}`,
-      );
-    } catch (error) {
+      ] as const);
+      if (results.every(result => result.ok)) return readProbe(results[0].text, results[1].text, results[2].text);
       probes.delete(key);
-      const failure = error as NodeJS.ErrnoException & Pick<ExecException, 'killed'>;
       return {
-        appServer: false, unixSocket: false, wsAuth: false, remoteUnix: false, remoteWs: false, noAltScreen: false,
-        ...(failure.code === 'ENOENT' ? { executableNotFound: true } : {}),
-        ...(failure.killed ? { timedOut: true } : {}),
+        ...readProbe('', '', ''),
+        ...(results.some(result => result.missing) ? { executableNotFound: true } : {}),
+        ...(results.some(result => result.timedOut) ? { timedOut: true } : {}),
       };
+    } catch {
+      probes.delete(key);
+      return readProbe('', '', '');
     }
   })();
   probes.set(key, task);

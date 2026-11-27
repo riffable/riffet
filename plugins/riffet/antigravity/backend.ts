@@ -114,8 +114,8 @@ export class AntigravityBackend implements AgentBackend {
     return capabilities();
   }
 
-  extensionLayout(): AgentExtensionLayout {
-    return extensionLayout();
+  extensionLayout(profile: AgentProfile): AgentExtensionLayout {
+    return extensionLayout(parseAgyProfile(profile.config).sourceDir);
   }
 
   async available(_host: AgentHost, profile: AgentProfile) {
@@ -156,15 +156,15 @@ export class AntigravityBackend implements AgentBackend {
     if (standing) return await scanStandingSkills(standing);
     let sourceDir: string;
     try {
-      sourceDir = parseAgyProfile(profile.config).sourceDir;
+      sourceDir = (session && agySessionGeminiDir(this.hub.stateDir, session.id)) ?? parseAgyProfile(profile.config).sourceDir;
     } catch {
       sourceDir = join(homedir(), '.gemini');
     }
+    const layout = extensionLayout(sourceDir);
     return await scanSkillRoots([
-      ...(project ? [join(project.cwd, '.agents', 'skills')] : []),
-      join(sourceDir, 'config', 'skills'),
-      join(sourceDir, 'antigravity-cli', 'skills'),
-      join(sourceDir, 'skills'),
+      ...(project ? layout.directories.project.skill.map(dir => join(project.cwd, dir)) : []),
+      ...layout.directories.user.skill.map(dir => join(sourceDir, dir)),
+      ...(layout.sharedRoot?.directories.skill ?? []).map(dir => join(homedir(), dir)),
     ]);
   }
 
