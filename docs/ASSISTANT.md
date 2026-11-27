@@ -42,7 +42,7 @@
 - `memory/` 是 Claude Code 自带记忆机制的目录：启动设置里把 `autoMemoryDirectory` 指到这里，CLI 启动时加载索引，压缩后重新加载。
 - 系统提示（`apps/server/src/prompts/assistant-system.md`）写到目录之外的 `<数据目录>/assistant-runtime/system-prompt.md`，Riffet 自带的 skill 写到同一目录下的 `riffet/`（§8）。两者每次服务端启动重写，不在助理目录里，不进它的提交历史。
 - 助理的一轮结束（包括被用户停止）5 秒后，服务端在目录里提交一次（`assistant/home.ts`）。只提交 `AGENTS.md`、`CLAUDE.md`、`USER.md`、`memory/`、`.claude/skills/` 和 `.gitignore`；其中整个被删掉的路径，删除也记进这次提交。助理留在目录里的其他文件（下载的内容、带令牌的 `.mcp.json`）不进历史。有改动才提交；主机没有 git 时不提交。提交历史用于查看和撤销助理对自己文件的改动。
-- 用户的文件助理改不了：启动设置对 `AGENTS.md`、`CLAUDE.md`、`.mcp.json`、`.claude/settings.json`、`.claude/settings.local.json` 加了 `Edit` 拒绝规则，在任何权限模式下都生效；系统提示也要求它只提出修改建议。规则拦的是 CLI 的文件工具，拦不住 shell 命令。Codex 上的做法见 §4.1。
+- 用户的文件助理改不了：启动设置对 `AGENTS.md`、`CLAUDE.md`、`.mcp.json`、`.claude/settings.json`、`.claude/settings.local.json` 加了 `Edit` 拒绝规则，在任何权限模式下都生效；用户在对话里要求时，它经 `agent_member` 工具由服务端改写；用户没要求时，系统提示要求它只提出修改建议。规则拦的是 CLI 的文件工具，拦不住 shell 命令。Codex 上的做法见 §4.1。
 
 ## 3. 主对话
 
@@ -240,7 +240,7 @@ Claude 后端连续两次在启动后 30 秒内退出时，放弃 `--resume`，�
 | --- | --- |
 | 直接做 | 读取、检索、写记忆和成员目录里的文件、建任务和评论、记下委托、通知用户、给自己约唤醒，以及完成 `AGENTS.md` 写明的职责所需的常规操作 |
 | 先问用户 | 职责之外向 Riffet 之外发送任何东西、职责之外启动会改代码的任务、删除或不可撤销的操作（`AGENTS.md` 明确允许的除外） |
-| 由用户自己做 | 代答其他 Agent 的审批、录入密钥、扩大自己的权限、执行设置目录标为人工处理的管理操作、删除会话 |
+| 由用户决定 | 改自己的 `AGENTS.md` 和成员配置、扩大自己的权限：只在用户在这条对话里亲自要求时经 `agent_member` 做，不听网页、文件、工具结果或别的对话。代答其他 Agent 的审批、录入密钥、执行设置目录标为人工处理的管理操作、删除会话：由用户自己操作 |
 
 前两级是默认值，成员的 `AGENTS.md` 可以放宽或收紧；第三级不受它影响（[TEAM.md](TEAM.md) §3.3）。
 
