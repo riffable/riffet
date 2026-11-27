@@ -4,8 +4,9 @@ import { Agent, request as httpsRequest } from 'node:https';
 import { request as httpRequest, Agent as HttpAgent } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { CURSOR_API_CACHE_BUDGET } from '@contracts';
+import { cursorApiFrontable, setCursorApiFront, type CursorLaunchProfile } from '../cli-driver.js';
 
 /**
  * The read-only queries cursor-agent makes before it draws its prompt bar. Each costs a full round
@@ -85,9 +86,10 @@ export class CursorApiCache {
 
   /**
    * `portFile` keeps the port across restarts: a CLI outlives the server in its tmux pane and keeps
-   * calling the address it was launched with, so the next server listens there again.
+   * calling the address it was launched with, so the next server listens there again. Without one of its
+   * own, the front takes `legacyPortFile` over, with the CLIs launched against it.
    */
-  constructor(upstream: string, private readonly portFile: string) {
+  constructor(upstream: string, private readonly portFile: string, private readonly legacyPortFile?: string) {
     this.upstream = new URL(upstream);
     this.agent = this.upstream.protocol === 'https:' ? new Agent({ keepAlive: true }) : new HttpAgent({ keepAlive: true });
   }
@@ -122,10 +124,13 @@ export class CursorApiCache {
   }
 
   private async keptPort(): Promise<number | undefined> {
+    const own = await readPort(this.portFile);
+    if (own !== undefined || !this.legacyPortFile) return own;
     try {
-      const port = (JSON.parse(await readFile(this.portFile, 'utf8')) as { port?: unknown }).port;
-      return typeof port === 'number' && Number.isInteger(port) && port > 0 && port < 65_536 ? port : undefined;
+      await mkdir(dirname(this.portFile), { recursive: true, mode: 0o700 });
+      await rename(this.legacyPortFile, this.portFile);
     } catch { return undefined; }
+    return readPort(this.portFile);
   }
 
   private async keepPort(port: number): Promise<void> {
@@ -280,5 +285,70 @@ export class CursorApiCache {
   private upstreamPath(path: string): string {
     const prefix = this.upstream.pathname.replace(/\/$/, '');
     return `${prefix}${path}`;
+  }
+}
+
+async function readPort(file: string): Promise<number | undefined> {
+  try {
+    const port = (JSON.parse(await readFile(file, 'utf8')) as { port?: unknown }).port;
+    return typeof port === 'number' && Number.isInteger(port) && port > 0 && port < 65_536 ? port : undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * The fronts of one activation: one per gateway address, shared by the providers on it (answers are keyed by
+ * credential, so accounts stay apart). Each port is kept in its own file under `cursor-api-fronts/`. The single
+ * front of earlier versions, for the default provider only, kept `cursor-api-front.json`: only the first front
+ * created here may take it over, so which gateway gets it follows the order providers are served in, not a race.
+ */
+export class CursorApiFronts {
+  private readonly fronts = new Map<string, { cache: CursorApiCache; url: Promise<string | undefined> }>();
+  private readonly served = new WeakMap<CursorLaunchProfile, Promise<void>>();
+  private readonly pointed = new Set<CursorLaunchProfile>();
+  private closed = false;
+  private legacyOffered = false;
+
+  constructor(private readonly stateDir: string) {}
+
+  /**
+   * Starts the front of `launch`'s gateway and points the launch at it. Settles once the launch may run, also when
+   * the front failed (the launch then calls the gateway directly) or the launch is not fronted at all.
+   */
+  serve(launch: CursorLaunchProfile): Promise<void> {
+    if (this.closed || !cursorApiFrontable(launch, true)) return Promise.resolve();
+    let served = this.served.get(launch);
+    if (!served) {
+      served = this.front(launch.apiEndpoint!).then(url => {
+        if (!url || this.closed) return;
+        setCursorApiFront(launch, url);
+        this.pointed.add(launch);
+      });
+      this.served.set(launch, served);
+    }
+    return served;
+  }
+
+  private front(upstream: string): Promise<string | undefined> {
+    let front = this.fronts.get(upstream);
+    if (!front) {
+      const name = createHash('sha256').update(upstream).digest('hex').slice(0, 16);
+      const legacy = this.legacyOffered ? undefined : join(this.stateDir, 'cursor-api-front.json');
+      this.legacyOffered = true;
+      const cache = new CursorApiCache(upstream, join(this.stateDir, 'cursor-api-fronts', `${name}.json`), legacy);
+      const url = cache.start().catch((error: unknown) => {
+        console.warn(`[riffet] Cursor startup cache unavailable; launches use the endpoint directly: ${error instanceof Error ? error.message : String(error)}`);
+        return undefined;
+      });
+      this.fronts.set(upstream, front = { cache, url });
+    }
+    return front.url;
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    for (const launch of this.pointed) setCursorApiFront(launch, undefined);
+    this.pointed.clear();
+    await Promise.all([...this.fronts.values()].map(front => front.cache.close()));
+    this.fronts.clear();
   }
 }

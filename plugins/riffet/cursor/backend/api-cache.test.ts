@@ -1,10 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CursorApiCache } from './api-cache.js';
+import { cursorApiUpstream, cursorLaunchProfileOf } from '../cli-driver.js';
+import { CursorApiCache, CursorApiFronts } from './api-cache.js';
 
 const GET_ME = '/aiserver.v1.DashboardService/GetMe';
 const EXCHANGE = '/auth/exchange_user_api_key';
@@ -84,5 +85,29 @@ describe('CursorApiCache', () => {
     expect(traded).toBe(1);
     // Another key trades for itself.
     expect(await ask('Bearer other', EXCHANGE)).not.toEqual(first);
+  });
+
+  it('brings every gateway\'s front back on its port after a restart, the one-front port included', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'cursor-api-fronts-'));
+    cleanups.push(() => rm(dir, { recursive: true, force: true }));
+    const free = await new Promise<number>(resolve => {
+      const probe = createServer().listen(0, '127.0.0.1', () => { const { port } = probe.address() as AddressInfo; probe.close(() => resolve(port)); });
+    });
+    // What a version with a single front, for the default provider only, left behind.
+    await writeFile(join(dir, 'cursor-api-front.json'), JSON.stringify({ port: free }));
+    const gateway = (endpoint: string) => cursorLaunchProfileOf({ apiEndpoint: endpoint, configDir: join(dir, endpoint.replace(/\W/g, '')) });
+    const start = async () => {
+      const fronts = new CursorApiFronts(dir);
+      cleanups.push(() => fronts.close());
+      const [a, b] = [gateway('https://a.example'), gateway('https://b.example')];
+      await Promise.all([fronts.serve(a), fronts.serve(b)]);
+      return [cursorApiUpstream(a), cursorApiUpstream(b)];
+    };
+    const first = await start();
+    // The first gateway served takes the old port over; the other gets one of its own.
+    expect(first[0]).toBe(`http://127.0.0.1:${free}`);
+    expect(first[1]).not.toBe(first[0]);
+    await cleanups.pop()!();
+    expect(await start()).toEqual(first);
   });
 });

@@ -10,7 +10,7 @@ import {
   type AgentTerminalBehaviour, type AgentTraits, type AgentTranscriptSource,
 } from '@riffet/plugin-api/experimental/agent';
 import { CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN, CURSOR_CLI_VERSIONS, cursorAgentStartupError, cursorPromptBarEmpty } from './cli-adapter.js';
-import { CURSOR_LAUNCH_ENV, cursorApiFrontable, cursorConfigDirectory, cursorLaunchProfileOf, setCursorApiFront, cursorLaunchSpec, redactCursorOutput, runCursor, withCursorConfigDir, type CursorLaunchProfile } from './cli-driver.js';
+import { CURSOR_LAUNCH_ENV, cursorConfigDirectory, cursorLaunchProfileOf, cursorLaunchSpec, redactCursorOutput, runCursor, withCursorConfigDir, type CursorLaunchProfile } from './cli-driver.js';
 import { cursorCapabilityReport, cursorNeedsLogin, describeCursorProfile, runCursorOperation } from './config.js';
 import { cursorPort, type CursorPort } from './host-port.js';
 import { CursorActivities } from './backend/activity.js';
@@ -24,7 +24,7 @@ import { readCursorShare } from './backend/share-read.js';
 import { cursorProjectConfigDir, cursorStandingDir, isStandingProject, prepareStandingLaunch, withoutStandingMemberContext, wrapStandingPrompt } from './backend/standing.js';
 import { CursorSteerBridge } from './backend/steer.js';
 import { CursorRiffetTools } from './backend/riffet-tools.js';
-import { CursorApiCache } from './backend/api-cache.js';
+import { CursorApiFronts } from './backend/api-cache.js';
 import { CursorTranscriptSource, type CursorTranscriptSignals } from './backend/transcript-source.js';
 import { CursorUsageIngest } from './backend/usage.js';
 import { ChatReader, chatStorePath, userQuery, workspaceChatsDir } from './native/chat-store.js';
@@ -104,7 +104,7 @@ export interface CursorLiveUsageProgress {
 
 /**
  * The pieces built from the first resolved launch profile; one set for the activation. `profile` is that launch
- * profile: what the warm CLIs, the startup-query front and the hook probe use. A conversation on another
+ * profile: what the warm CLIs and the hook probe use. A conversation on another
  * profile launches with its own (`CursorBackend.sessionLaunch`).
  */
 interface CursorParts {
@@ -117,7 +117,6 @@ interface CursorParts {
   live: CursorLive;
   receipts: CursorLiveReceipts;
   usage: CursorUsageIngest;
-  apiCache?: CursorApiCache;
 }
 
 /**
@@ -176,6 +175,8 @@ export class CursorBackend implements AgentBackend {
   /** Whether a screen that shows no dialog has the CLI back at its prompt, which completes a dialog answer at once. */
   readonly settledScreen = promptSettled;
   private built?: CursorParts;
+  /** Set while the activation's parts are; every gateway launch profile resolved meanwhile gets its front. */
+  private fronts?: CursorApiFronts;
   private shutdown?: Promise<void>;
   private usageHost?: AgentHost;
   private stopUsageChanges?: () => void;
@@ -248,13 +249,15 @@ export class CursorBackend implements AgentBackend {
     const launch = cursorLaunchProfileOf(config);
     // What the launch is made of; a profile's name, default model or default flag is not.
     const key = JSON.stringify([launch.identityKey, typeof config.apiKey === 'string' ? config.apiKey : null]);
-    const cached = this.launches.get(profile.id);
-    if (cached?.config === key) return cached.launch;
-    if (profile.id !== CURSOR_DEFAULT_PROFILE_ID && launch.configDir === cursorProfileDir(this.options.stateDir, profile.id)) {
-      prepareCursorProfileDir(launch.configDir, cursorConfigDirectory('cursor-agent'));
+    let cached = this.launches.get(profile.id);
+    if (cached?.config !== key) {
+      if (profile.id !== CURSOR_DEFAULT_PROFILE_ID && launch.configDir === cursorProfileDir(this.options.stateDir, profile.id)) {
+        prepareCursorProfileDir(launch.configDir, cursorConfigDirectory('cursor-agent'));
+      }
+      this.launches.set(profile.id, cached = { config: key, launch });
     }
-    this.launches.set(profile.id, { config: key, launch });
-    return launch;
+    void this.fronts?.serve(cached.launch);
+    return cached.launch;
   }
 
   /**
@@ -344,28 +347,32 @@ export class CursorBackend implements AgentBackend {
     if (this.built) return this.built;
     // A call that outlived the activation must not build a second runtime (a sweep, a hook server) that nothing would close.
     if (this.shutdown) throw new AppError('AGENT_BACKEND_CLOSED', 'Cursor was turned off', 409);
+    // A gateway's startup queries are answered locally; a launch waits for its gateway's front, a failed one is skipped.
+    // Every gateway provider's front starts now, not at its first launch: CLIs launched before a restart call theirs.
+    const fronts = this.fronts = new CursorApiFronts(this.options.stateDir);
     const launch = this.launchFor(profile);
+    for (const item of this.options.profiles?.() ?? []) {
+      try { this.launchFor(item); } catch { /* an invalid provider reports where it is used */ }
+    }
     const port = cursorPort(host);
     const live = new CursorLive(join(this.options.stateDir, 'cursor-live'));
     const launchOf = (session: AgentSessionView | undefined) => this.sessionLaunch(session, launch);
     const configDirFor = (project: AgentProjectView, session?: AgentSessionView) => cursorProjectConfigDir(launchOf(session).configDir, this.options.stateDir, project, session);
     const tools = new CursorRiffetTools(host, this.options.stateDir, () => probeCursorHookSteer(launch));
-    // A gateway's startup queries are answered locally; the first launch waits for the front, a failed one is skipped.
-    const apiCache = cursorApiFrontable(launch, true) ? new CursorApiCache(launch.apiEndpoint!, join(this.options.stateDir, 'cursor-api-front.json')) : undefined;
-    const front = apiCache?.start().then(url => { if (!this.shutdown) setCursorApiFront(launch, url); }, error => {
-      console.warn(`[riffet] Cursor startup cache unavailable; launches use the endpoint directly: ${error instanceof Error ? error.message : String(error)}`);
-    });
     let steering!: CursorSteerBridge;
     /** The conversation's own launch profile, as configured when it starts: read again rather than taken from what was seen last. */
     const ownLaunch = async (session: AgentSessionView) => {
       try { return this.launchFor(await host.profile(session.id)); } catch { return launchOf(session); }
     };
+    const frontFor = async (session: AgentSessionView | undefined) => {
+      await fronts.serve(session ? await ownLaunch(session) : launch);
+    };
     // A conversation on another profile than the warm CLIs' starts cold, as a standing one does.
     const sessionExtras = async (session: AgentSessionView, project: AgentProjectView): Promise<NativeLaunchExtras | undefined> => {
       const own = await ownLaunch(session);
+      await fronts.serve(own);
       const standing = host.standing?.launch(project, session);
       if (!standing) return own === launch ? undefined : { profile: own, skipWarm: true as const };
-      await front;
       const prepared = prepareStandingLaunch({
         baseProfile: own,
         stateDir: this.options.stateDir,
@@ -382,7 +389,7 @@ export class CursorBackend implements AgentBackend {
       configDirFor,
       profileFor: launchOf,
       restartLaunch: async (session, project) => {
-        await front;
+        await frontFor(session);
         const [pluginArgs, toolsLaunch, standing] = await Promise.all([
           steering.launchArgs(session).catch(() => []),
           tools.forSession(session.id).catch(() => undefined),
@@ -416,8 +423,8 @@ export class CursorBackend implements AgentBackend {
       this.activities.get(sessionId)?.tracker.settleLiveCompaction();
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.changed();
     };
-    runtime.useLaunchPlugin(async session => { await front; return steering.launchArgs(session); });
-    this.built = { profile: launch, port, native, runtime, steering, titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live, sessionId => native.notePromptReceived(sessionId)), usage, ...(apiCache ? { apiCache } : {}) };
+    runtime.useLaunchPlugin(async session => { await frontFor(session); return steering.launchArgs(session); });
+    this.built = { profile: launch, port, native, runtime, steering, titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live, sessionId => native.notePromptReceived(sessionId)), usage };
     this.ensureLiveUsageWatch();
     return this.built;
   }
@@ -975,8 +982,11 @@ export class CursorBackend implements AgentBackend {
       this.reseedStandingSessions.clear();
       this.usageHost = undefined;
       this.configs.clear();
+      // Taken out first: fronts started by a build that then threw have no parts to be closed with.
+      const fronts = this.fronts;
+      this.fronts = undefined;
       const built = this.built;
-      if (!built) return;
+      if (!built) { await fronts?.close(); return; }
       await built.usage.close();
       await built.steering.close();
       await built.runtime.close();
@@ -984,8 +994,7 @@ export class CursorBackend implements AgentBackend {
       built.titles.disposeAll();
       built.receipts.close();
       built.live.close();
-      setCursorApiFront(built.profile, undefined);
-      await built.apiCache?.close();
+      await fronts?.close();
     })();
   }
 }
