@@ -24,18 +24,18 @@
 # Compose Multiplatform 1.11 dropped the iosX64 (Intel-Mac simulator) target; the modules declare
 # iosArm64 and iosSimulatorArm64 only.
 [versions]
-kotlin = "2.4.20"
-agp = "9.3.1"
-composeMultiplatform = "1.12.1"
+kotlin = "2.4.21"
+agp = "9.5.3"
+composeMultiplatform = "1.12.2"
 # Material 3 has its own version line since CMP 1.10. 1.9.0 is what the CMP 1.12.1 Gradle plugin's
 # (deprecated) `compose.material3` accessor resolves to.
 composeMaterial3 = "1.9.0"
-haze = "2.0.1"
+haze = "2.1.0"
 # Haze core/blur/glass share one version; Kotlin 2.4.20 and Compose 1.12.1 match this build.
 # Only its source-backed public API is used; platform window-backdrop remains experimental/off.
-ktor = "3.6.0"
+ktor = "3.6.1"
 coroutines = "1.11.0"
-serialization = "1.11.0"
+serialization = "1.13.0"
 
 # The transcript's markdown renderer (mikepenz/multiplatform-markdown-renderer, Apache-2.0, CMP,
 # Android + iOS + jvm). Retained at the version verified with JVM 17 output: 0.40.0 and later ship
@@ -54,7 +54,7 @@ serialization = "1.11.0"
 #
 # Transitive: org.jetbrains:markdown (the CommonMark/GFM parser), kotlinx-collections-immutable
 # and, at runtime, the kotlinx-coroutines-core already pinned below.
-markdownRenderer = "0.39.2"
+markdownRenderer = "0.46.0"
 
 # Image loading (Coil 3, Apache-2.0). Two artifacts: `coil-compose` (the `AsyncImage` /
 # `rememberAsyncImagePainter` Compose API) and `coil-network-ktor3` (the Ktor 3 network fetcher).
@@ -68,12 +68,12 @@ coil = "3.6.3"
 # Kotlin -> Swift interop for the macOS app's RiffetKit framework (touchlab/SKIE, Apache-2.0):
 # sealed hierarchies become Swift enums, Flow becomes AsyncSequence, suspend becomes async.
 # 0.10.15 is the first release that supports Kotlin 2.4.20 (release notes, 2026-09-25).
-skie = "0.10.15"
+skie = "0.10.16"
 
 # Android host. Not needed by contracts/core/shared.
 androidxActivityCompose = "1.13.0"
 # Official app-language backport for Android 8–12.
-androidxAppcompat = "1.7.1"
+androidxAppcompat = "1.8.0"
 androidxCoreKtx = "1.19.1"
 androidxLifecycle = "2.11.0"
 androidxWindow = "1.5.1"
@@ -92,8 +92,8 @@ androidTargetSdk = "35"
 # 1.4.2 is the newest of the 1.4 line and its AAR metadata asks for minCompileSdk=34 / no AGP
 # requirement. (1.5.3 also exists and resolves, but it raises the floor to minCompileSdk=35 and
 # AGP 8.6.0 for no API this code uses.)
-androidxCamera = "1.4.2"
-zxing = "3.5.3"
+androidxCamera = "1.7.0"
+zxing = "3.5.4"
 
 [libraries]
 haze-core = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
