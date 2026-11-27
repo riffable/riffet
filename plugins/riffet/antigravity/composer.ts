@@ -2,14 +2,22 @@ import { createHash } from 'node:crypto';
 
 export const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 
+const opensPrompt = (block: string[] | undefined) => /^\s*>/.test(block?.[0] ?? '');
+const indentedRows = (block: string[]) => block.some(line => line.trim()) && block.every(line => !line.trim() || /^\s/.test(line));
+
+/**
+ * The text between the composer's borders. While background tasks run, agy draws them as indented rows in another
+ * bordered block under the composer (1.5.18). Only that block is skipped: a dialog in its place must not send us
+ * up into the transcript, whose blocks can open with an earlier `>` prompt.
+ */
 export const composerText = (screen: string | undefined): string => {
   const lines = (screen ?? '').split(/\r?\n/);
   const borders = lines.flatMap((line, index) => (/^\s*[─━]{8,}\s*$/.test(line) ? [index] : []));
   if (borders.length < 2) return '';
-  return lines
-    .slice(borders.at(-2)! + 1, borders.at(-1)!)
-    .join('\n')
-    .replace(/^\s*>\s?/, '');
+  const blocks = borders.slice(1).map((end, index) => lines.slice(borders[index]! + 1, end));
+  const [above, last] = [blocks.at(-2), blocks.at(-1)!];
+  const composer = !opensPrompt(last) && opensPrompt(above) && indentedRows(last) ? above! : last;
+  return composer.join('\n').replace(/^\s*>\s?/, '');
 };
 
 // An empty composer may still show the current mode's grey hint, e.g. "Plan mode: research & plan only (shift+tab to cycle)".

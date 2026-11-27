@@ -12,6 +12,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Cursor now takes several model providers, as Codex does: the CLI's own login and custom gateways side by side, chosen when a session starts. A gateway provider keeps its CLI state on its own and no longer touches the login's `~/.cursor`.
 - Cursor conversations on a gateway provider keep working after the server restarts. Before, when the gateway was not the default provider, their turns ended with nothing, or tools failed with "Service temporarily unavailable", until the conversation was reopened.
 - Restarting the server no longer ends Antigravity conversations: a running turn keeps going and is picked up again, as with Claude Code and Codex.
+- Messages sent to an Antigravity conversation while a background task is running now go through. Before, they stayed unsent in the terminal's input box and the message showed "Can't confirm whether it was sent yet".
 - File names with Chinese or other non-English characters written in a conversation can now be clicked to preview the file, as English ones already could (Web, Mac, Android, iPhone).
 - Segmented controls on Web no longer sit in a gray track, so the selected option shows as a clean tint of the theme color instead of a muddy gray-purple.
 - The web page no longer fails with "render failed" right after it finishes loading.
