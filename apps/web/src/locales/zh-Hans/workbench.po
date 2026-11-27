@@ -51,6 +51,10 @@ msgstr "{0} 读取失败"
 msgid "{0}到期"
 msgstr "{0}到期"
 
+#: src/app/SessionInfo.tsx
+msgid "{active} 进行中"
+msgstr "{active} 进行中"
+
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
@@ -762,6 +766,10 @@ msgstr "各自在独立 Worktree"
 #: src/app/use-project-actions.ts
 msgid "名称"
 msgstr "名称"
+
+#: src/app/SessionInfo.tsx
+msgid "后台任务"
+msgstr "后台任务"
 
 #: src/app/team/MemberConfigDialog.tsx
 msgid "向团队内其他成员发起协作调用"

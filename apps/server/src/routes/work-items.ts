@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ASSISTANT_BUDGET, DEFAULT_AGENT_MEMBER_ID } from '../../../../packages/contracts/src/index.js';
-import type { AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
+import type { AssistantDelegation, AssistantFile, AssistantPack, AssistantRunSummary, AssistantRunUsage, AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
+import { summarizeAssistantRun } from '../assistant/runs.js';
 import { AppError } from '../errors.js';
 import { projectVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
 import { createReadStream, constants, openSync } from 'node:fs';
@@ -84,6 +85,13 @@ export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): v
   // What the 助理 follows over time (docs/ASSISTANT.md §7.3): the owner reads and ends them; the 助理 makes them.
   const delegations=()=>deps.assistantDelegations?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})();
   app.get('/api/assistant/runs/usage',async():Promise<AssistantRunUsage>=>(deps.assistantRuns?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})()).usage(DEFAULT_AGENT_MEMBER_ID));
+  app.get<{Querystring:{limit?:string}}>('/api/assistant/runs',async(request):Promise<{runs:AssistantRunSummary[]}>=>{
+    const runs=deps.assistantRuns?.();
+    if(!runs)throw new AppError('SERVICE_STARTING','The workbench is starting',503);
+    const rawLimit=request.query.limit?Number(request.query.limit):20;
+    const limit=Number.isFinite(rawLimit)?Math.max(1,Math.min(50,Math.floor(rawLimit))):20;
+    return {runs:runs.recent(limit,DEFAULT_AGENT_MEMBER_ID).map(summarizeAssistantRun)};
+  });
   app.get('/api/assistant/delegations',async():Promise<{delegations:AssistantDelegation[]}>=>({delegations:delegations().list()}));
   app.post<{Params:{id:string}}>('/api/assistant/delegations/:id/end',async(request):Promise<AssistantDelegation>=>{
     const ended=delegations().end(request.params.id,'owner');

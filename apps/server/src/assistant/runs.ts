@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseSync } from 'node:sqlite';
-import { ASSISTANT_BUDGET, DEFAULT_AGENT_MEMBER_ID, TEAM_BUDGET, assistantChoice, type AppSettings, type AssistantChoice, type AssistantJob, type AssistantRunUsage, type NativeBackendCatalogEntry, type Project, type Session, type SessionOrigin } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, DEFAULT_AGENT_MEMBER_ID, TEAM_BUDGET, assistantChoice, type AppSettings, type AssistantChoice, type AssistantJob, type AssistantRunSummary, type AssistantRunUsage, type NativeBackendCatalogEntry, type Project, type Session, type SessionOrigin } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { assistantRunBrief } from '../prompts/index.js';
 import type { Store } from '../store.js';
@@ -83,6 +83,32 @@ const DAY_MS = 24 * 60 * 60_000;
 /** The window `usage` reports. */
 const USAGE_DAYS = 7;
 const TITLES: Record<AssistantJob, string> = { supervise: '跟进', consolidate: '记忆整理', delegation: '委托' };
+
+/** Compact, safe summary of a background run for the workbench UI (no raw payloads or prompt templates). */
+export function summarizeAssistantRun(run: AssistantRun): AssistantRunSummary {
+  const goal = typeof run.brief.goal === 'string' ? run.brief.goal.trim() : '';
+  const firstSentence = goal.split(/[。\n!?！？]/, 1)[0]?.trim() ?? '';
+  const fallback = run.job === 'consolidate'
+    ? '记忆整理'
+    : run.job === 'supervise'
+      ? (typeof run.brief.title === 'string' && run.brief.title.trim() ? run.brief.title.trim() : '任务跟进')
+      : '后台委托';
+  const title = (firstSentence || fallback).slice(0, 64);
+  return {
+    id: run.id,
+    ...(run.memberId ? { memberId: run.memberId } : {}),
+    job: run.job,
+    state: run.state,
+    ...(run.outcome ? { outcome: run.outcome } : {}),
+    title,
+    ...(run.text ? { text: run.text } : {}),
+    ...(run.error ? { error: run.error } : {}),
+    ...(run.sessionId ? { sessionId: run.sessionId } : {}),
+    createdAt: run.createdAt,
+    ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+    ...(run.endedAt ? { endedAt: run.endedAt } : {}),
+  };
+}
 
 export class AssistantRuns {
   private readonly db: DatabaseSync;

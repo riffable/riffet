@@ -213,6 +213,21 @@ export interface AssistantRunUsage {
   limit: number;
   waiting: number;
 }
+/** A background run of a team member or personal assistant shown in the session aside and info panel. */
+export interface AssistantRunSummary {
+  id: string;
+  memberId?: string;
+  job: AssistantJob;
+  state: 'queued' | 'running' | 'done' | 'failed';
+  outcome?: 'silent' | 'tell' | 'ask';
+  title: string;
+  text?: string;
+  error?: string;
+  sessionId?: string;
+  createdAt: string;
+  startedAt?: string;
+  endedAt?: string;
+}
 /**
  * A capability pack of the 助理 (docs/ASSISTANT.md §8.2): a plugin folder under its `packs/`, with a skill, the
  * memory topic it keeps, and the MCP servers it needs. `entry` is the command that starts its work (`/travel:plan`),

@@ -1,6 +1,6 @@
 import { memo, useContext, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { NativeActivity, NativeJob, SessionGoal } from '@contracts';
+import type { AssistantRunSummary, NativeActivity, NativeJob, SessionGoal } from '@contracts';
 import { IconCheck } from '@/components/icons';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
@@ -8,6 +8,7 @@ import { FileDiffDialog } from '../panels/FileDiffDialog';
 import { FileIcon } from '../panels/fileVisuals';
 import { BackgroundTaskItem } from './Activities';
 import { goalStatusLabel, todoEntries, todoSettled, type TodoEntry } from './ComposerDock';
+import { AsideMemberRuns } from './MemberBackgroundRuns';
 import type { TimelineItem } from './model';
 import { formatDuration, subagentTitle, transcriptDuration, backgroundTaskSummary, type SubagentBrief } from './SessionWorkActions';
 import { sessionOutputs, type EditRecord } from './sessionAsideModel';
@@ -182,7 +183,7 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
  * on screen is `useSessionLayout`'s call, never its contents': an empty column stays a column.
  */
 /** Streamed frames only reach `Outputs`: the plan and the work list keep their memo while the timeline moves. */
-export const SessionAside = memo(function SessionAside({ projectId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
+export const SessionAside = memo(function SessionAside({ projectId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, memberRuns, onOpenSession, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
   projectId: string;
   outlineRef: Ref<HTMLDivElement>;
   goal?: SessionGoal;
@@ -192,6 +193,8 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
   backgroundTasks: readonly NativeActivity[];
   reportedBackground: number;
   subagentBriefs?: ReadonlyMap<string, SubagentBrief>;
+  memberRuns?: readonly AssistantRunSummary[];
+  onOpenSession?: (sessionId: string) => void;
   timeline: readonly TimelineItem[];
   timelineVersion: number;
   root?: string;
@@ -208,6 +211,7 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
     <aside aria-label={t`会话概览`} className={cn('flex w-[248px] shrink-0 flex-col gap-7 overflow-y-auto pt-3.5 pr-4 pb-6 pl-1 scrollbar-none', !switchedIn && 'animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]')}>
       {(goal || entries.length > 0) && <Plan goal={goal} todos={entries} />}
       <div ref={outlineRef} className="contents" />
+      {memberRuns && memberRuns.length > 0 && <AsideMemberRuns runs={memberRuns} onOpenSession={onOpenSession} />}
       <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} root={root} />
       {outputs && <Outputs key={projectId} projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />}
     </aside>

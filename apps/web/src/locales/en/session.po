@@ -60,6 +60,10 @@ msgstr "{0} is still running. Stop the current task before handing it off."
 msgid "{active} 运行"
 msgstr "{active} running"
 
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "{active} 进行中"
+msgstr "{active} running"
+
 #: src/app/session/TimelineBlocks.tsx
 msgid "{agents} 个子 Agent 运行中"
 msgstr "{agents, plural, one {# subagent running} other {# subagents running}}"
@@ -683,11 +687,16 @@ msgstr "Background"
 msgid "后台 Agent"
 msgstr "Background agent"
 
+#: src/app/session/MemberBackgroundRuns.tsx
 #: src/app/session/SessionAside.tsx
 #: src/app/session/SessionWorkActions.tsx
 #: src/app/session/TimelineTools.tsx
 msgid "后台任务"
 msgstr "Background task"
+
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "后台任务汇报"
+msgstr "Background task reports"
 
 #: src/app/session/Activities.tsx
 msgid "后台命令"
@@ -846,6 +855,7 @@ msgstr "Copy path"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
+#: src/app/session/MemberBackgroundRuns.tsx
 #: src/app/session/SubagentSession.tsx
 #: src/app/session/TimelineBlocks.tsx
 msgid "失败"
@@ -1005,6 +1015,10 @@ msgstr "Processed"
 msgid "已复制文件路径"
 msgstr "File path copied"
 
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "已完成"
+msgstr "Done"
+
 #: src/app/session/Attempts.tsx
 #: src/app/session/ComposerDock.tsx
 msgctxt "session-status-finished"
@@ -1040,6 +1054,10 @@ msgstr "Image favorited"
 #: src/app/session/ComposerDock.tsx
 msgid "已暂停"
 msgstr "Paused"
+
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "已汇报"
+msgstr "Reported"
 
 #: src/app/session/SubagentSession.tsx
 msgid "已结束"
@@ -1196,6 +1214,10 @@ msgstr "Instructions"
 msgid "按住 说话"
 msgstr "Hold to talk"
 
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "排队中"
+msgstr "Queueing"
+
 #: src/app/session/Composer.tsx
 msgid "排队发送"
 msgstr "Queue to send"
@@ -1259,6 +1281,7 @@ msgstr "Favorite image"
 msgid "收藏的目录"
 msgstr "Favorite folders"
 
+#: src/app/session/MemberBackgroundRuns.tsx
 #: src/app/session/SessionAside.tsx
 #: src/app/session/SideDiscussion.tsx
 msgid "收起"
@@ -1618,9 +1641,17 @@ msgstr "View captured messages"
 msgid "查看源码"
 msgstr "View source"
 
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "查看记录"
+msgstr "View transcript"
+
 #: src/app/session/Timeline.tsx
 msgid "查看详情"
 msgstr "View details"
+
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "标为已读"
+msgstr "Mark read"
 
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/SideDiscussion.tsx
@@ -2092,6 +2123,7 @@ msgid "输出过大，只显示末尾"
 msgstr "Output is too large; showing the end only"
 
 #: src/app/session/Attempts.tsx
+#: src/app/session/MemberBackgroundRuns.tsx
 #: src/app/session/SubagentSession.tsx
 msgid "运行中"
 msgstr "Running"
@@ -2131,6 +2163,10 @@ msgstr "{0, plural, one {# more file} other {# more files}}"
 #: src/app/session/SessionAside.tsx
 msgid "还有 {hidden} 个已结束"
 msgstr "{hidden} more finished"
+
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "还有 {hidden} 条记录"
+msgstr "{hidden} more"
 
 #: src/app/session/SessionAside.tsx
 msgid "还有 {hiddenOpen} 项"
@@ -2306,6 +2342,10 @@ msgstr "Attachment"
 msgid "附件不可用"
 msgstr "Attachment unavailable"
 
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "需确认"
+msgstr "Needs input"
+
 #: src/app/session/NativeInteractionCard.tsx
 msgid "需要回答"
 msgstr "Answer needed"
@@ -2321,6 +2361,10 @@ msgstr "Confirmation needed"
 #: src/app/session/NativeInteractionCard.tsx
 msgid "需要选择"
 msgstr "Choice needed"
+
+#: src/app/session/MemberBackgroundRuns.tsx
+msgid "静默"
+msgstr "Silent"
 
 #: src/app/session/ChapterNavigation.tsx
 msgid "章节导航"

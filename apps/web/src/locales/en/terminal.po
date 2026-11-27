@@ -186,6 +186,10 @@ msgid "右"
 msgstr "Right"
 
 #: src/app/terminal/NativeSession.tsx
+msgid "后台任务"
+msgstr "Background task"
+
+#: src/app/terminal/NativeSession.tsx
 msgid "启动中"
 msgstr "Starting"
 
@@ -524,6 +528,11 @@ msgstr "Running"
 #: src/app/terminal/NativeSession.tsx
 msgid "运行中的任务会中断，对话记录保留"
 msgstr "Running tasks will be interrupted. Conversation history will be kept."
+
+#. placeholder {0}: runOwnerMember?.name
+#: src/app/terminal/NativeSession.tsx
+msgid "返回 {0}"
+msgstr "Back to {0}"
 
 #: src/app/terminal/NativeSession.tsx
 #: src/app/terminal/TerminalDock.tsx

@@ -13,8 +13,10 @@ import {
   type AssistantFile,
   type AssistantInstructions,
   type AssistantMemory,
+  type AssistantRunSummary,
   type Session,
 } from '../../../../packages/contracts/src/index.js';
+import { summarizeAssistantRun } from '../assistant/runs.js';
 import { AppError } from '../errors.js';
 import type { RouteDeps } from './deps.js';
 
@@ -126,5 +128,14 @@ export function registerTeamRoutes(app: FastifyInstance, deps: RouteDeps): void 
     const delegations = deps.assistantDelegations?.();
     if (!delegations) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
     return { delegations: delegations.list(member.id) };
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/api/team/members/:id/runs', async (request): Promise<{ runs: AssistantRunSummary[] }> => {
+    const member = team().get(request.params.id);
+    const runs = deps.assistantRuns?.();
+    if (!runs) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
+    const rawLimit = request.query.limit ? Number(request.query.limit) : 20;
+    const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, Math.floor(rawLimit))) : 20;
+    return { runs: runs.recent(limit, member.id).map(summarizeAssistantRun) };
   });
 }

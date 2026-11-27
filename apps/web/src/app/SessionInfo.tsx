@@ -2,7 +2,7 @@ import { createContext, Fragment, useContext, useEffect, useState, type ReactNod
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
-import type { Session } from '@contracts';
+import type { AssistantRunSummary, Session } from '@contracts';
 import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconFileText, IconMessageSquareText, IconRepeat, IconSettings2, IconShieldCheck, IconSparkles, IconSquareKanban, IconTerminal } from '@/components/icons';
 import { ActionBar, ActionBarButton } from '@/components/ui/action-bar';
 import { Badge, Spinner, StatusDot } from '@/components/ui/controls';
@@ -18,6 +18,7 @@ import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { cn, formatDateTime, relativeTime, tildePath, timeAgo } from '@/lib/utils';
 import { isSessionDeleted } from '@/lib/session-deletion';
 import { compactTokens } from './session/Composer';
+import { runIsActive, runStatusTone, runTimestamp, useRunStateLabel } from './session/MemberBackgroundRuns';
 import type { ContextUsage } from './session/model';
 import { useStores, useWorkItems } from './state/stores';
 import { useServerBadge } from './useServerLabel';
@@ -312,6 +313,48 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
       )}
       {children}
     </div>
+  );
+}
+
+/** Background delegation / scheduled runs owned by this member, shown in SessionInfo for narrow layouts. */
+export function SessionMemberRuns({ runs, onOpen }: { runs: readonly AssistantRunSummary[]; onOpen?: (sessionId: string) => void }) {
+  const { t } = useLingui();
+  const stateLabel = useRunStateLabel();
+  const [expanded, setExpanded] = useState(false);
+  if (runs.length === 0) return null;
+  const active = runs.filter(runIsActive).length;
+  const sorted = [...runs].sort((left, right) => {
+    const activeDiff = Number(runIsActive(right)) - Number(runIsActive(left));
+    if (activeDiff !== 0) return activeDiff;
+    return Date.parse(runTimestamp(right)) - Date.parse(runTimestamp(left));
+  });
+  const shown = expanded ? sorted : sorted.slice(0, Math.max(active, 4));
+  return (
+    <InfoSection title={t`后台任务`} summary={active > 0 ? t`${active} 进行中` : runs.length}>
+      <ul>
+        {shown.map((run) => {
+          const isRunning = runIsActive(run);
+          const leading = isRunning ? <Spinner className="size-3.5 text-fg-3" /> : <StatusDot tone={runStatusTone(run)} />;
+          const meta = `${stateLabel(run)} · ${relativeTime(runTimestamp(run))}`;
+          const canOpen = Boolean(run.sessionId && onOpen);
+          return (
+            <li key={run.id}>
+              <ListRow
+                data-closes-overlay={canOpen ? '' : undefined}
+                disabled={!canOpen}
+                onClick={canOpen ? () => run.sessionId && onOpen?.(run.sessionId) : undefined}
+                className="text-fg"
+                leading={leading}
+                meta={meta}
+              >
+                {run.title}
+              </ListRow>
+            </li>
+          );
+        })}
+      </ul>
+      {sorted.length > shown.length && <InfoMore hidden={sorted.length - shown.length} onClick={() => setExpanded(true)} />}
+    </InfoSection>
   );
 }
 

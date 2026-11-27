@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { composerRunningIntent } from '../session/composerRunning';
 import { useComposerQuotes } from '../session/composerQuotes';
 import { IconInfo, IconSquare, IconSquareArrowOutUpRight, IconArrowRightLeft, IconPuzzle, IconBookmarkPlus, IconFileText, IconGitFork, IconMessagesSquare, IconRotateCw, IconSquareTerminal } from '@/components/icons';
-import type { Attachment, AttemptGroup, Automation, DiscussionSource, InboxAction, ModelInfo, NativeBackendCapabilities, NativeBackendCatalogEntry, NativeBackendProfile, NativeProfileContinuation, NativeRuntimeAction, Run, Session, SessionControlSnapshot, TerminalInfo, ToolGroupId } from '@contracts';
+import { DEFAULT_AGENT_MEMBER_ID, type Attachment, type AttemptGroup, type Automation, type DiscussionSource, type InboxAction, type ModelInfo, type NativeBackendCapabilities, type NativeBackendCatalogEntry, type NativeBackendProfile, type NativeProfileContinuation, type NativeRuntimeAction, type Run, type Session, type SessionControlSnapshot, type TerminalInfo, type ToolGroupId } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Spinner, StatusDot, StatusPill } from '@/components/ui/controls';
 import { FeedbackNotice, FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-notice';
@@ -37,10 +37,11 @@ import { useSessionTranscript } from '../session/useSessionTranscript';
 import { modelUsageAliases, timelineItemTime, type Choice, type SlashCommand } from '../session/model';
 import { ModelPicker, type ModelProviderChoices } from '../session/ModelPicker';
 import { SessionAside } from '../session/SessionAside';
+import { MemberRunReportsDock, runIsActive, useMemberBackgroundRuns } from '../session/MemberBackgroundRuns';
 import { ASSEMBLY_MS, ContentColumn, useLingering, useSessionLayout } from '../session/sessionLayout';
 import { ShareDialog } from '../shares/ShareDialog';
 import { SessionWorkActions } from '../session/SessionWorkActions';
-import { SessionCalls, SessionDiscussions } from '../SessionInfo';
+import { SessionCalls, SessionDiscussions, SessionMemberRuns } from '../SessionInfo';
 import { TabChromeContext } from '../tabs/chrome';
 import { SessionMarksSection, SessionMarksContext, useSessionMarks } from '../session/marks';
 import { SubagentSession } from '../session/SubagentSession';
@@ -402,6 +403,11 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     return Boolean(member && member.sessionMode === 'continuous' && member.mainSessionId === session.id);
   });
   const discussionAllowed = session.origin?.kind !== 'discussion' && !assistant;
+  const memberRunsOwnerId = session.origin?.kind === 'assistant'
+    ? undefined
+    : (session.agentMemberId ?? (assistant ? DEFAULT_AGENT_MEMBER_ID : undefined));
+  const memberRuns = useMemberBackgroundRuns(memberRunsOwnerId, !quickChat && Boolean(memberRunsOwnerId));
+  const activeMemberRuns = memberRuns.some(runIsActive);
   const overview = useViewPrefs((state) => state.side === 'overview');
   const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!quickChat && !mobileViewport && overview);
   // The view dots sit on the reading column's centre line, which an aside pushes left of the
@@ -1028,9 +1034,14 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       onRemoveQueued={removeQueued}
       onQueueShown={setQueueShown}
       followUps={followUpList}
-      plans={assistant ? <PlanDock /> : undefined}
+      plans={(assistant || memberRuns.length > 0) ? (
+        <div className="flex flex-col gap-2 empty:hidden">
+          {memberRuns.length > 0 && <MemberRunReportsDock runs={memberRuns} onOpenSession={onOpenSession} />}
+          {assistant && <PlanDock />}
+        </div>
+      ) : undefined}
     />
-    ), [assistant, followUpList, layout.plan, goal, todoEntries, dockRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, canSendQueuedNow, inboxActions, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
+    ), [assistant, memberRuns, onOpenSession, followUpList, layout.plan, goal, todoEntries, dockRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, canSendQueuedNow, inboxActions, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
   // Without the backend's permissions there is no name to show, only an id.
   const approvalSummary = useMemo(() => (backendCapabilities?.permissions.length ? <ApprovalSummary mode={approval} options={backendCapabilities.permissions} /> : undefined), [approval, backendCapabilities]);
   const approvalPicker = useMemo(() => (backendCapabilities?.permissions.length ? (
@@ -1145,7 +1156,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     // Shown in the row only while the route is changing or failing; the route in force is in the ⋯ menu.
     alerts: tabbedAlert ? <>{runtimeAlert()}{statusSlot()}</> : runtimeAlert(),
     alertsKey,
-    infoBadge: runningSubagents > 0 || (native.status.activity?.background ?? 0) > 0 || Boolean(infoNotice),
+    infoBadge: runningSubagents > 0 || (native.status.activity?.background ?? 0) > 0 || activeMemberRuns || Boolean(infoNotice),
     info: (
       <ImageSourceContext.Provider value={imageSource}>
       {infoNotice && <section className="edge-t p-1.5"><p className="flex gap-2 px-2.5 py-1.5 text-xs text-fg-2"><IconInfo className="mt-px size-3.5 shrink-0 text-fg-3" /><span className="min-w-0 break-words">{infoNotice}</span></p></section>}
@@ -1156,6 +1167,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             <ActivityContext.Provider value={activityControls}>
               {discussionAllowed && <SessionDiscussions parentId={session.id} onOpen={openDiscussion} />}
               {onOpenSession && <SessionCalls calls={calledSessions} onOpen={onOpenSession} />}
+              {memberRuns.length > 0 && <SessionMemberRuns runs={memberRuns} onOpen={onOpenSession} />}
               {!quickChat && <SessionWorkActions subagentStore={native.subagents} jobStore={native.jobs} tasks={backgroundActivities} reportedBackground={native.status.activity?.background ?? 0} subagentBriefs={subagentBriefs} onOpenPath={onOpenPath} />}
               <SessionMarksSection sessionId={session.id} />
             </ActivityContext.Provider>
@@ -1199,7 +1211,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为自动化…`, onSelect: () => setDialog('automation') },
       ]),
     ],
-  }), [assistant, working, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
+  }), [assistant, working, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, activeMemberRuns, memberRuns, onOpenSession, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, alertsKey, t]);
   const dialogs = (
     <>
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
@@ -1248,6 +1260,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   }, [findSession, teamMembers, labelOf, t]);
   // Call sessions already attribute each message bubble to the calling member/Agent (`callSender`),
   // so only fork and handoff sessions need a top lineage banner.
+  const runOwnerMember = session.origin?.kind === 'assistant'
+    ? (session.agentMemberId
+      ? teamMembers.find((item) => item.id === session.agentMemberId)
+      : teamMembers.find((item) => !item.archivedAt && item.projectId === session.projectId)
+        ?? teamMembers.find((item) => item.id === DEFAULT_AGENT_MEMBER_ID))
+    : undefined;
+  const runOwnerMainId = runOwnerMember?.mainSessionId;
   const lineage = parentId && session.origin?.kind !== 'call' ? (
     <div className="mb-6 flex items-center justify-center gap-1.5 text-xs text-fg-3">
       {session.origin?.kind === 'fork' ? <IconGitFork className="size-3.5" /> : <IconArrowRightLeft className="size-3.5" />}
@@ -1255,6 +1274,14 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       {parent && onOpenSession
         ? <button type="button" className="max-w-64 truncate rounded px-0.5 text-fg-2 underline-offset-2 hover:text-fg hover:underline" onClick={() => onOpenSession(parent.id)}>{parent.title}</button>
         : <span className="text-fg-4"><Trans>已删除的会话</Trans></span>}
+    </div>
+  ) : session.origin?.kind === 'assistant' && runOwnerMainId && onOpenSession ? (
+    <div className="mb-6 flex items-center justify-center gap-1.5 text-xs text-fg-3">
+      <span><Trans>后台任务</Trans></span>
+      <span>·</span>
+      <button type="button" className="max-w-64 truncate rounded px-0.5 text-fg-2 underline-offset-2 hover:text-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" onClick={() => onOpenSession(runOwnerMainId)}>
+        <Trans>返回 {runOwnerMember?.name}</Trans>
+      </button>
     </div>
   ) : undefined;
   const successor = session.handedOffTo ? findSession?.(session.handedOffTo) : undefined;
@@ -1581,6 +1608,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             backgroundTasks={backgroundActivities}
             reportedBackground={native.status.activity?.background ?? 0}
             subagentBriefs={subagentBriefs}
+            memberRuns={memberRuns}
+            onOpenSession={onOpenSession}
             timeline={visibleTimeline}
             timelineVersion={native.timelineVersion}
             root={root}

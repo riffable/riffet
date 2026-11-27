@@ -51,6 +51,10 @@ msgstr ""
 msgid "{0}到期"
 msgstr ""
 
+#: src/app/SessionInfo.tsx
+msgid "{active} 进行中"
+msgstr ""
+
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr ""
@@ -761,6 +765,10 @@ msgstr ""
 #: src/app/team/MemberConfigDialog.tsx
 #: src/app/use-project-actions.ts
 msgid "名称"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "后台任务"
 msgstr ""
 
 #: src/app/team/MemberConfigDialog.tsx
