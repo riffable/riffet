@@ -32,7 +32,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { crc32 as zlibCrc32, deflateSync } from 'node:zlib';
-import type { NativeActivity, NativeStatus, NativeStopRequest, NativeWorkbenchEvent, Run, Session, SyncFrame, TimelineRow } from '../packages/contracts/src/index.js';
+import type { NativeActivity, NativeInteraction, NativeStatus, NativeStopRequest, NativeWorkbenchEvent, Run, Session, SyncFrame, TimelineRow } from '../packages/contracts/src/index.js';
 import { createApp } from '../apps/server/src/app.js';
 import { JournalFeed, latestEvents } from '../apps/server/src/journal/feed.js';
 import { ClaudeHookBridge } from '../apps/server/src/backends/claude/hook-bridge.js';
@@ -1047,15 +1047,22 @@ async function s7(ctx: Ctx) {
     if (!appeared) return;
     const card = await ok('GET', `/api/sessions/${id}/native/interaction`);
     ctx.note(`${label} card: kind=${card?.kind} title="${snip(card?.title, 80)}" transport=${card?.transport} actions=${card?.actions?.map((item: any) => item.id).join(',')} expiresAt=${card?.expiresAt ?? '-'}`);
-    ctx.check(`${label}: card is hook/protocol-mediated`, card?.transport === 'protocol' || card?.kind === 'permission', `transport=${card?.transport} kind=${card?.kind}`);
+    ctx.check(`${label}: card grants or refuses permission`, card?.kind === 'permission', `transport=${card?.transport} kind=${card?.kind}`);
     if (captureDir && action === 'approve') {
       // Claude Code draws its own dialog beside the held PermissionRequest hook.
       const dialog = await paneUntil(id, screen => /^\s*(?:❯\s*)?1\.\s+Yes/m.test(screen), 8000);
       if (dialog) await capture('permission-dialog', dialog);
       else ctx.note(`permission-dialog: the pane shows no dialog while the card is up; pane tail ${snip(paneScreen(id).split('\n').filter(line => line.trim()).slice(-10), 500)}`);
     }
-    const actionId = (card.actions as Array<{ id: string }>).find(item => action === 'approve' ? /allow|approve/i.test(item.id) : /deny|reject/i.test(item.id))?.id ?? action;
-    const answered = await http('POST', `/api/sessions/${id}/native/interaction`, { interactionId: card.id, revision: card.revision, requestId: randomUUID(), action: actionId });
+    const endpoint = `/api/sessions/${id}/native/interaction`;
+    // The hook can replace a terminal card during capture. Read the current card before choosing a decision.
+    const current = await ok('GET', endpoint) as NativeInteraction;
+    if (current?.kind !== 'permission' || !current.message?.includes(file)) throw new Error(`The ${label} permission card changed to a different operation`);
+    const decision = current.actions.find(item => action === 'approve'
+      ? item.tone === 'primary' && /^(?:Yes|Allow|Approve)$/i.test(item.label.trim())
+      : item.tone === 'danger');
+    if (!decision) throw new Error(`No one-time ${action} action on the ${label} card`);
+    const answered = await http('POST', endpoint, { interactionId: current.id, revision: current.revision, requestId: randomUUID(), action: decision.id });
     ctx.note(`${label} ${action} -> ${answered.code} ${snip(answered.body, 160)}`);
     const done = await ctx.settle(run.id, 120_000);
     await ctx.quiet(id, 30_000);
