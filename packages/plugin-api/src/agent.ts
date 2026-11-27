@@ -128,8 +128,6 @@ export interface AgentTraits {
   detachedSubagents?: boolean;
   /** The plugin keeps session state, statistics and screen dialogs itself; only then may it write `state` and `error` of its sessions. */
   ownsSessionObservation?: boolean;
-  /** `close` shuts the plugin's sessions down itself (detaching a reusable daemon), so the core does not stop each one first. */
-  closesSessionsItself?: boolean;
   /** `listModels` answers from a catalog the plugin caches itself. */
   cachesModels?: boolean;
   /** What messages call this CLI (`<name> CLI`, for one that exits at launch, say); "CLI" when unset. */
@@ -508,11 +506,11 @@ export interface AgentBackend {
   /** What a profile list shows of a profile that stores nothing for these fields: the values the launch actually uses (resolved executable and directory, endpoints, auto-update). Synchronous and free of I/O. */
   describeProfile?(profile: AgentProfile): Partial<{ executable: string; configDir: string; sourceDir: string; apiEndpoint: string; agentEndpoint: string; defaultModel: string; disableAutoUpdate: boolean }>;
 
-  /** The core stops watching this session (disabled plugin, idle release). Release observation only; never end the native process. */
+  /** The core stops watching this session (disabled plugin, idle release, server shutdown). Release observation only; never end the native process. */
   detach?(host: AgentHost, sessionId: string): void | Promise<void>;
   /** The session is closed for good (archived, deleted, closed by the user): end its native process. */
   stop?(host: AgentHost, sessionId: string): void | Promise<void>;
-  /** The server is shutting down. Provider-wide resources only; a native process that outlives Riffet stays. */
+  /** The server is shutting down, after `detach` of each session; `stop` is never called for shutdown. Provider-wide resources only; a native process that outlives Riffet stays. */
   close?(host: AgentHost): void | Promise<void>;
   /**
    * Called once per activation, as soon as the core has registered this backend (the server started with the plugin on, or the

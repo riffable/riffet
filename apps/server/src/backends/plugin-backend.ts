@@ -311,7 +311,11 @@ export class PluginBackendDriver implements NativeBackendDriver {
         await backend.stop!(this.hostFor(host), sessionId);
       };
     }
-    if (backend.close) this.close = host => backend.close!(this.hostFor(host));
+    // Shutdown releases each session with `detach`, never `stop`: a CLI the plugin keeps in tmux outlives the service.
+    this.close = async host => {
+      await this.detachAll(host);
+      await backend.close?.(this.hostFor(host));
+    };
     if (backend.start) this.start = async (host, profile) => { await backend.start!(this.hostFor(host), profileView(profile)); };
     this.terminal = backend.terminal;
     this.launchEnv = backend.launchEnv;

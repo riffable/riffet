@@ -354,11 +354,6 @@ export interface NativeBackendTraits {
   /** Session state, statistics and screen dialogs are kept by the driver's own service, not the backend service. */
   ownsSessionObservation?: boolean;
   /**
-   * The provider-wide `close` shuts this backend's sessions down itself (detaching a reusable daemon);
-   * disposing each session first would stop what close means to keep.
-   */
-  closesSessionsItself?: boolean;
-  /**
    * `listModels` answers from a provider catalog the driver keeps itself, because its launch and
    * configuration checks read the same one; the backend service does not cache it a second time.
    */
@@ -719,7 +714,15 @@ export interface NativeBackendDriver {
   status(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): NativeStatus;
   /** Starts an adapter-owned control pump (see `NativeControlMessage`); the core owns its lifetime. */
   subscribe(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, listener: (message: NativeControlMessage) => void): () => void;
+  /**
+   * The session is closed for good (archived, deleted, its terminal closed or handed to the user): release what the
+   * driver holds for it and end what it started beside the terminal. The caller stops the terminal itself.
+   */
   dispose?(host: NativeBackendHost, sessionId: string): void | Promise<void>;
+  /**
+   * The service is shutting down: release every session and end only what dies with the service. A CLI that
+   * outlives it (`survivesRestart`) keeps running. The service never disposes sessions at shutdown.
+   */
   close?(host: NativeBackendHost): void | Promise<void>;
 }
 

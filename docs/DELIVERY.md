@@ -144,7 +144,7 @@
 
 ## 8. 重启
 
-服务重启只结束随服务一起退出的进程。Claude、Cursor 跑在 Riffet 自己的 tmux 里，Codex、Traex 跑在脱离服务的 app-server 守护进程里，重启后回合照常进行（后端特征 `survivesRestart`）；Droid、Pi、DSH（子进程、桥接）和 chat（进程内）随服务结束。
+服务重启只结束随服务一起退出的进程。Claude、Cursor、Antigravity 跑在 Riffet 自己的 tmux 里，Codex、Traex 跑在脱离服务的 app-server 守护进程里，重启后回合照常进行（后端特征 `survivesRestart`）；Droid、Pi、DSH（子进程、桥接）和 chat（进程内）随服务结束。停服不是会话的结束：服务只调用各驱动的 `close`，插件驱动先对每个会话 `detach`，从不 `dispose` 或调用插件的 `stop`（后者结束原生进程，只用于归档、删除、关闭终端）。
 
 - **能否重启**：`GET /api/service/restartable` 返回能否重启及阻塞的会话（会话、标题、后端、原因）。有消息处于 `preparing`、`dispatching`、`input_sent` 时不能重启，否则重启后这些消息会变成 `uncertain`。不随服务存活的后端有回合在跑、会话处于运行或等待状态、或有后台任务时，也不能重启。存活后端的 `observed` 回合不阻塞重启。
 - **暂停派发**：`POST /api/service/drain {on, holder}`（`holder` 是调用方每次重启尝试自生成的 ID，各持各的租约，解除只撤销自己的；缺省为共用的旧持有者，服务只要还有未过期的租约就保持暂停）。暂停期间新消息照常接收并以 `queued` 持久化，但不派发，所以等待一定会结束；重启后自动发出。引导同样保持排队：解除暂停而没有重启时，照常投给它的回合；重启后转为下一条消息（与重启前未写入的引导相同）。这样引导在工具边界上的等待不会拖住重启。暂停只存在内存里，是一份 30 s 的租约，等待方每次轮询都会续期：重启会清除它，等待方中途退出时它也会在 30 s 内自行失效。

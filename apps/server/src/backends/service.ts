@@ -570,15 +570,11 @@ export class NativeBackendService {
     if (address) await stopWorkbenchAppServerAt(address, appServerCredentialDirs()).catch(() => undefined);
   }
 
+  /** Shutdown is not the end of a session: each driver's `close` releases its sessions, and no session is disposed. */
   async closeAll(): Promise<void> {
     this.closed = true;
-    const sessions = this.watches.drainForClose();
-    for (const [sessionId, selected] of this.sessionProfiles) sessions.set(sessionId, selected);
+    this.watches.closeAll();
     this.sessionProfiles.clear();
-    for (const [sessionId, selected] of sessions) {
-      if (selected.driver.traits?.closesSessionsItself && selected.driver.close) continue;
-      try { await selected.driver.dispose?.(this.host, sessionId); } catch { /* remaining native runtimes still need shutdown */ }
-    }
     for (const driver of this.registry.list()) {
       try { await driver.close?.(this.host); } catch { /* app shutdown continues for other adapters */ }
     }

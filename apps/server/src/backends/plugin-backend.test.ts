@@ -100,6 +100,17 @@ async function build(plugin: Plugin, workspace: object = {}) {
 }
 
 describe('an Agent backend from a plugin', () => {
+  it('releases its sessions at shutdown without stopping their CLI', async () => {
+    // `stop` ends the native process; a CLI kept in tmux must outlive a restart (docs/DELIVERY.md §8).
+    const plugin = memoryPlugin({ survivesRestart: true });
+    const { plugins, service, session } = await build(plugin.plugin);
+    await plugins.update('test.agent', { enablement: 'on' });
+    await service.ensure(session);
+    await service.closeAll();
+    expect(plugin.calls).toContain(`detach:${session.id}`);
+    expect(plugin.calls).not.toContain('stop');
+  });
+
   it('isolates durable observations and releases subscriptions when its host is revoked', async () => {
     const plugin = memoryPlugin();
     const { store, plugins, service, session } = await build(plugin.plugin);

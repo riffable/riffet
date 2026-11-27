@@ -538,7 +538,7 @@ terminal 输入租约与对话请求写入事务并存。离开终端只释放�
 | steer/prewarm/initialPromptArgs | 默认 false；各自门槛单独满足后再开放 |
 | extensionToggles/inlineSkills | 每个子能力独立验证，缺省 false |
 
-Traits 先采用保守值：普通受管输入不接受 busy；submitted 不使用通用文本回显自动认领；回合结束依赖 adapter 的真实事件；offline 可能仍运行。`survivesRestart/closesSessionsItself/resumesByNativeId/reportsTurnOutcome/completesOnTurnEvent/detachedSubagents` 按对应生命周期验收后登记，不能从其他后端整份复制。
+Traits 先采用保守值：普通受管输入不接受 busy；submitted 不使用通用文本回显自动认领；回合结束依赖 adapter 的真实事件；offline 可能仍运行。`survivesRestart/resumesByNativeId/reportsTurnOutcome/completesOnTurnEvent/detachedSubagents` 按对应生命周期验收后登记，不能从其他后端整份复制。
 
 doctor 区分 executable 缺失、版本未知/过旧/未验证、tmux 不可用、认证缺失、endpoint/模型失败、hook/MCP 未就绪、路径/历史损坏、holder 冲突和 CLI 地区资格错误。普通 availability 与打开设置只执行有界的本机探测；模型连通测试必须是明确动作，不暗发真实回合。
 

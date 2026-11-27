@@ -471,20 +471,18 @@ export class WatchHub {
     this.deps.terminalDialogs.release(sessionId);
   }
 
-  drainForClose(): Map<string, { driver: NativeBackendDriver; profile: NativeBackendProfileConfig }> {
+  /** Shutdown: every watch and reader is released; the sessions themselves are the drivers' `close` to release. */
+  closeAll(): void {
     clearInterval(this.outputRateTimer);
     this.outputRateTimer = undefined;
     this.outputRates.clear();
     this.deps.terminalDialogs.releaseAll();
-    const sessions = new Map<string, { driver: NativeBackendDriver; profile: NativeBackendProfileConfig }>();
-    for (const [sessionId, watch] of this.watches) {
+    for (const watch of this.watches.values()) {
       if (watch.releaseTimer) clearTimeout(watch.releaseTimer);
       try { watch.unsubscribe(); } catch { /* adapter shutdown continues */ }
-      sessions.set(sessionId, { driver: watch.driver, profile: watch.profile });
     }
     this.watches.clear();
     this.controlReaders.clear();
     for (const sessionId of [...this.following.keys()]) this.unfollow(sessionId);
-    return sessions;
   }
 }

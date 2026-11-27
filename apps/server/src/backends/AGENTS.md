@@ -28,6 +28,7 @@ verify:
 - 驱动不在时，等它的工作按插件激活的时限排队而不是立即失败（`registry.ts#NativeBackendRegistry` 的 `pending`）；撤回后新请求立刻失败。
 - 会话绑定的原生会话 id 只因能对应到本次启动的证据改变：Riffet 指定的 id、协议返回的 id、带本次启动归属的 hook 或进程信号。按工作区、目录或修改时间推断的候选不算，问不到就保持原绑定，也不把「无法确认」报给用户（[NATIVE-BINDING.md](../../../../docs/NATIVE-BINDING.md) §3；`plugins/riffet/cursor/native/service.ts#scan` 曾按修改时间猜，成员的 `/new` 会认回刚归档的 chat）。
 - 核心不带 Cursor 插件也必须能启动：它留下的会话、历史与存储的配置保留，需要 CLI 的操作被拒并写明后端（`no-cursor.test.ts`）。
+- 停服不是会话的结束：`service.ts#NativeBackendService.closeAll` 只调用各驱动的 `close`，插件驱动的 `close` 先对每个会话 `detach`（`plugin-backend.ts`）；`dispose` 和插件的 `stop` 结束原生进程，只留给归档、删除、关闭终端。停服时逐个 `dispose` 曾让插件的 `stop` 关掉 tmux 里的 Antigravity 等插件 Agent，每次重启都中断它们的回合。
 - 探测后端可用性之前先让模型源完成 `prepare`（`catalog.ts#prepareSource`）：自带进程的模型源在此之前只回答未就绪，结果会被缓存 30 秒，刚启动时提供方会显示为不可用（b6108c7）。
 
 ## 外部行为
@@ -42,4 +43,5 @@ verify:
 - 请求报 `NATIVE_BACKEND_UNAVAILABLE`：看原因文本，来自 `registry.ts#NativeBackendRegistry` 的 `describeUnavailable`；插件关闭或激活失败时 `riffet logs --scope riffet` 里有 `agent backend <id> of <owner> was not registered`。
 - 运行一直不结束或被判为未确认：先看该会话的 journal 里 `turn_ended` 是否已写，再看 `dispatch-feed.ts` 的 `outcomeType` 映射。
 - 插件驱动没有观察到会话：日志里 `observing <id> failed` 或 `readers were not re-attached`，对应 `plugin-backend.ts`、`plugin-backends.ts`。
+- 重启后 tmux 里的插件 Agent 退出、回合记为「CLI 在回复过程中退出」（`runtime_exit`）：看该会话 CLI 自己的日志在停服那一刻是否收到挂断（agy 的 `--log-file` 里是 `Terminal gone`），再查停服路径上是谁调用了插件的 `stop` 或 `host.terminals.stop`。
 - 模型列表陈旧或为空：`catalog.ts#BackendCatalog` 的缓存先返回旧值再后台刷新，失败时保留上一次读到的值；先确认探测本身能跑通。

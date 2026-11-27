@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Restarting the server no longer ends Antigravity conversations: a running turn keeps going and is picked up again, as with Claude Code and Codex.
 - File names with Chinese or other non-English characters written in a conversation can now be clicked to preview the file, as English ones already could (Web, Mac, Android, iPhone).
 - Segmented controls on Web no longer sit in a gray track, so the selected option shows as a clean tint of the theme color instead of a muddy gray-purple.
 - The web page no longer fails with "render failed" right after it finishes loading.
