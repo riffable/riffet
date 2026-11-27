@@ -17,16 +17,37 @@ export function windowName(minutes: number | undefined): string {
   return `${minutes}m`;
 }
 
-/** When a window resets: relative within a day, as a date after that. */
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function formatClock(date: Date): string {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+/** When a window resets: relative within a day, weekday + clock within 6 days, date + clock beyond. */
 export function resetLabel(iso: string | undefined, now = Date.now()): string | undefined {
   const at = iso ? Date.parse(iso) : Number.NaN;
   if (!Number.isFinite(at)) return undefined;
   const left = at - now;
   if (left <= 0) return 'Resets soon';
-  if (left < 3_600_000) return `Resets in ${Math.max(1, Math.round(left / 60_000))} min`;
-  if (left < 86_400_000) return `Resets in ${Math.round(left / 3_600_000)} hr`;
+  const mins = Math.max(1, Math.round(left / 60_000));
+  if (mins < 60) return `Resets in ${mins} min`;
+  const hrs = Math.round(left / 3_600_000);
+  if (hrs < 24) return `Resets in ${hrs} hr`;
   const date = new Date(at);
-  return `Resets on ${date.getMonth() + 1}/${date.getDate()}`;
+  if (left < 6 * 86_400_000) return `Resets ${WEEKDAYS[date.getDay()]} ${formatClock(date)}`;
+  return `Resets ${date.getMonth() + 1}/${date.getDate()} ${formatClock(date)}`;
+}
+
+/** Exact local reset date and clock for hover tooltips. */
+function exactResetLabel(iso: string | undefined): string | undefined {
+  const at = iso ? Date.parse(iso) : Number.NaN;
+  if (!Number.isFinite(at)) return undefined;
+  const date = new Date(at);
+  return `Resets ${WEEKDAYS[date.getDay()]} ${date.getMonth() + 1}/${date.getDate()} ${formatClock(date)}`;
 }
 
 /** How a load reads: above 100% the provider queues requests, which is what a reader needs to see. */
@@ -94,30 +115,47 @@ export function statusQuotaTags(status: ModelStatus, now = Date.now()): QuotaTag
   return tags;
 }
 
-function windowSummary(window: UsageWindow, now: number): string {
+function windowSummary(window: UsageWindow): string {
   const name = windowName(window.windowMinutes);
   const left = remainingPercent(window.usedPercent);
-  return [`${name}: ${left}% left`, resetLabel(window.resetsAt, now)].filter(Boolean).join(' · ');
+  return [`${name}: ${left}% left`, exactResetLabel(window.resetsAt)].filter(Boolean).join(' · ');
 }
 
-/** Below this share left a window is the one about to bind, so its reset is worth reading. */
+/** Below this share left a window is highlighted as warning. */
 const LOW_REMAINING = 20;
 
-export interface AccountFigure { name?: string; value: string; tone: 'danger' | 'warning' | 'muted'; reset?: string; hint?: string; }
+export interface AccountFigure {
+  kind: 'window' | 'credit' | 'limit';
+  name?: string;
+  value: string;
+  tone: 'danger' | 'warning' | 'muted';
+  reset?: string;
+  hint?: string;
+}
 
 /**
- * The account row: what is left of each metered window, then credits. The plan is left out (the
- * reader knows it), and a reset is spelled out only on a window that is low or used up.
+ * The account quota entries: every metered window shows what is left and when it resets. Credits
+ * are shown only as a fallback when no metered window is reported (pure credit-based accounts),
+ * since subscription credits alongside timed windows carry little actionable signal.
  */
 export function accountFigures(account: NonNullable<NativeBackendUsage['account']>, now = Date.now()): AccountFigure[] {
   const figures: AccountFigure[] = account.windows.map((window) => {
     const left = remainingPercent(window.usedPercent);
     const tone = left <= 0 ? 'danger' : left < LOW_REMAINING ? 'warning' : 'muted';
-    return { name: windowName(window.windowMinutes), value: `${left}%`, tone, reset: tone === 'muted' ? undefined : resetLabel(window.resetsAt, now), hint: windowSummary(window, now) };
+    return {
+      kind: 'window',
+      name: windowName(window.windowMinutes),
+      value: `${left}%`,
+      tone,
+      reset: resetLabel(window.resetsAt, now),
+      hint: windowSummary(window),
+    };
   });
-  if (account.credits?.unlimited) figures.push({ value: 'Unlimited credits', tone: 'muted' });
-  else if (account.credits?.balance !== undefined) figures.push({ value: `${formatNumber(Math.floor(account.credits.balance))} credits`, tone: 'muted' });
+  if (account.windows.length === 0 && !account.limitReached) {
+    if (account.credits?.unlimited) figures.push({ kind: 'credit', value: 'Unlimited credits', tone: 'muted' });
+    else if (account.credits?.balance !== undefined) figures.push({ kind: 'credit', value: `${formatNumber(Math.floor(account.credits.balance))} credits`, tone: 'muted' });
+  }
   // A provider can stop the account without any window reading full.
-  if (account.limitReached && !figures.some((figure) => figure.tone === 'danger')) figures.push({ value: 'Limit reached', tone: 'danger' });
+  if (account.limitReached && !figures.some((figure) => figure.tone === 'danger')) figures.push({ kind: 'limit', value: 'Limit reached', tone: 'danger' });
   return figures;
 }

@@ -167,7 +167,24 @@ export function QuotaMeterBar({ label, usedPercent, leftPercent, figure, resetsA
   );
 }
 
-/** Account windows, credits and per-model quotas rendered consistently in provider settings and plugin pages. */
+function formatPlanLabel(plan: string): string {
+  return plan.replace(/_/g, ' ').replace(/\b[a-z]/g, (ch) => ch.toUpperCase());
+}
+
+function hasAccountCredits(account: NativeBackendUsage['account']): boolean {
+  return Boolean(account?.credits?.unlimited || account?.credits?.balance !== undefined);
+}
+
+/** Whether a usage snapshot has any account or per-model quota information worth displaying. */
+export function hasUsageContent(usage: NativeBackendUsage | undefined, showPlan = false): boolean {
+  if (!usage) return false;
+  const account = usage.account;
+  const windows = account?.windows ?? [];
+  const showCredits = windows.length === 0 && hasAccountCredits(account);
+  return Boolean((showPlan && account?.plan) || windows.length || showCredits || account?.limitReached || dedicatedModelQuotas(usage).length);
+}
+
+/** Account windows, fallback credits and per-model quotas rendered consistently in provider settings and plugin pages. */
 export function QuotaDetails({ usage, maxModelMeters, showPlan = false }: {
   usage: NativeBackendUsage;
   /** Caps inline per-model meters when a dedicated Models subpage is right below. */
@@ -182,7 +199,8 @@ export function QuotaDetails({ usage, maxModelMeters, showPlan = false }: {
   const modelQuotas = dedicatedModelQuotas(usage);
   const shownModels = maxModelMeters !== undefined ? modelQuotas.slice(0, maxModelMeters) : modelQuotas;
   const hasZeroWindow = windows.some((w) => remainingPercent(w.usedPercent) <= 0);
-  const hasContent = Boolean((showPlan && account?.plan) || windows.length || account?.credits || account?.limitReached || shownModels.length);
+  const showCredits = windows.length === 0 && hasAccountCredits(account);
+  const hasContent = Boolean((showPlan && account?.plan) || windows.length || showCredits || account?.limitReached || shownModels.length);
 
   if (!hasContent) {
     return (
@@ -198,7 +216,7 @@ export function QuotaDetails({ usage, maxModelMeters, showPlan = false }: {
       {showPlan && account?.plan && (
         <div className="flex items-center justify-between gap-4 py-2.5 text-xs">
           <span className="font-medium text-fg"><Trans>套餐</Trans></span>
-          <span className="text-fg-2">{account.plan}</span>
+          <span className="text-fg-2">{formatPlanLabel(account.plan)}</span>
         </div>
       )}
       {windows.map((window, index) => (
@@ -209,7 +227,7 @@ export function QuotaDetails({ usage, maxModelMeters, showPlan = false }: {
           resetsAt={window.resetsAt}
         />
       ))}
-      {account?.credits && (
+      {showCredits && account?.credits && (
         <div className="flex items-center justify-between gap-4 py-2.5 text-xs">
           <span className="font-medium text-fg"><Trans>余额</Trans></span>
           <span className="font-medium tabular-nums text-fg-2">
@@ -292,9 +310,10 @@ export function useProviderUsage(backendId: NativeBackendId, profileId: string, 
 }
 
 /** Mounted for one saved connection inside 设置 › 模型提供商; shares cache and meters with the plugin page. */
-export function ProviderUsage({ backendId, profileId, projectId }: { backendId: NativeBackendId; profileId: string; projectId?: string }) {
+export function ProviderUsage({ backendId, profileId, projectId, hideWhenEmpty = false }: { backendId: NativeBackendId; profileId: string; projectId?: string; hideWhenEmpty?: boolean }) {
   const { t } = useLingui();
   const { usage, loading, error, refresh } = useProviderUsage(backendId, profileId, { projectId });
+  if (hideWhenEmpty && !error && !hasUsageContent(usage, true)) return null;
   const fetched = formatFetchedLabel(usage?.fetchedAt);
   return (
     <div className="flex flex-col py-3.5">

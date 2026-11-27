@@ -363,7 +363,10 @@ private struct NativeProfileEditor: View {
         .onChange(of: apiProtocol) { _, _ in models = [] }
         .onChange(of: key) { _, _ in models = [] }
         .onChange(of: source) { _, _ in models = [] }
-        .onChange(of: dirty) { _, changed in if changed { usage = nil; quotaError = nil } }
+        .onChange(of: dirty) { _, changed in
+            if changed { usage = nil; quotaError = nil }
+            else if initialized, usage == nil, !quotaLoading { Task { await readUsage() } }
+        }
         .confirmationDialog(String(localized: "删除「\(profile?.name ?? "")」？", bundle: .riffet), isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("删除", role: .destructive) { Task { await remove() } }
         } message: { Text("保存的 Key 会一并删除") }
@@ -432,15 +435,16 @@ private struct NativeProfileEditor: View {
                 }
             }
         } header: { RiffetSectionTitle(String(localized: "模型", bundle: .riffet)) }
-        if sourceEntry?.usage?.boolValue == true {
+        let usageSummary = usage?.account.map { account in accountSummary(account: account, now: platformNowMillis(), offsetOf: { KotlinLong(longLong: platformUtcOffsetMillis(epochMillis: $0.int64Value)) }) }
+        let hasUsageSummary = usageSummary?.isEmpty == false
+        if sourceEntry?.usage?.boolValue == true || (source == "login" && (hasUsageSummary || quotaError != nil)) {
             Section {
                 HStack {
-                    let summary = usage?.account.map { account in accountSummary(account: account, now: platformNowMillis(), offsetOf: { KotlinLong(longLong: platformUtcOffsetMillis(epochMillis: $0.int64Value)) }) }
-                    Text(verbatim: summary.flatMap { $0.isEmpty ? nil : $0 } ?? "—").riffetFont(.body).foregroundStyle(palette.fg3)
+                    Text(verbatim: hasUsageSummary ? usageSummary! : "—").riffetFont(.body).foregroundStyle(palette.fg3)
                     Spacer()
                     if quotaLoading { ProgressView() }
                 }
-                RiffetActionRow("刷新额度", busy: quotaLoading) { Task { await readUsage() } }.disabled(dirty || !availableSources.contains(source))
+                RiffetActionRow("刷新额度", busy: quotaLoading) { Task { await readUsage() } }.disabled(dirty || (source != "login" && !availableSources.contains(source)))
             } header: { RiffetSectionTitle(String(localized: "额度", bundle: .riffet)) }
             if let quotaError { RiffetNotice.section(.error, quotaError) }
         }
@@ -515,7 +519,8 @@ private struct NativeProfileEditor: View {
         } catch { if token == catalogToken { self.error = error.riffetMessage } }
     }
     private func readUsage() async {
-        guard !launchOnly, !dirty, sourceEntry?.usage?.boolValue == true, availableSources.contains(source), let profile, let api = workbench.api else { return }
+        let canRead = source == "login" || (sourceEntry?.usage?.boolValue == true && availableSources.contains(source))
+        guard !launchOnly, !dirty, canRead, let profile, let api = workbench.api else { return }
         let token = catalogToken
         quotaLoading = true; defer { quotaLoading = false }
         do {

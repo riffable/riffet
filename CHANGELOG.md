@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Model pickers now show each subscription quota window on its own row with remaining percentage and reset time always visible, hiding credits whenever timed windows are present; official CLI login providers such as Codex also display their plan and quota in Settings › Model providers (Web, Mac, Android, iPhone).
 - Antigravity can now serve as a standing Team Member backend (with isolated settings, skills, MCP servers, file/background guardrails, and `/new` topic resets). The Stop button in the composer now stops running Antigravity turns directly instead of failing repeatedly, project members without delegations no longer stall on startup, timelines no longer flash and reload mid-turn, JPEG/WebP/GIF images and multi-subagent runs are supported, and the config directory and auto-update settings are available across clients (Web, Mac, Android, iPhone).
 - The web page no longer keeps the CPU busy while sessions run: spinners, the shimmering status text, task status rings and loading placeholders are now animated by the GPU compositor instead of repainting the page every frame, and look the same.
 - In the session side column, plan items stop at two lines and the current one is no longer bold, so several items in progress no longer turn into a wall of text; the avatar menu keeps a single divider, below the profile.

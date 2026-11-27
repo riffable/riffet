@@ -99,15 +99,27 @@ function ModelMenu({ agents, providers, models }: { agents: Array<[string, strin
           <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-2">Effort</span>
           <span className="text-xs text-fg-3">High</span>
         </div>
-        <div className="flex min-h-6 items-center gap-3">
-          <span className="flex min-w-0 flex-1 flex-col">
+        <div className="flex flex-col gap-1.5">
+          <span className="flex min-h-5 items-baseline gap-1.5">
             <span className="truncate text-xs font-medium text-fg-2">Quota left</span>
             <span className="truncate text-2xs text-fg-3">All models</span>
           </span>
-          <span className="flex shrink-0 items-center gap-2.5 text-xs tabular-nums text-fg-3">
-            <span><span className="mr-1 text-fg-4">5h</span>100%</span>
-            <span className="text-warning"><span className="mr-1">Weekly</span>12% · Resets on 11/20</span>
-          </span>
+          <div className="flex flex-col gap-1 text-xs tabular-nums">
+            <div className="flex min-h-5 items-baseline justify-between gap-3">
+              <span className="text-fg-3">5h</span>
+              <span className="flex shrink-0 items-baseline gap-2.5">
+                <span className="text-2xs text-fg-4">Resets in 2 hr</span>
+                <span className="min-w-9 text-right font-medium text-fg-2">100%</span>
+              </span>
+            </div>
+            <div className="flex min-h-5 items-baseline justify-between gap-3">
+              <span className="text-fg-3">Weekly</span>
+              <span className="flex shrink-0 items-baseline gap-2.5">
+                <span className="text-2xs text-fg-4">Resets Sun 09:00</span>
+                <span className="min-w-9 text-right font-medium text-warning">12%</span>
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

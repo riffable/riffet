@@ -1087,3 +1087,20 @@
 - **原因**：把任务看板的「待验收」等用户自己流转的任务混进收件箱，会迅速堆出数十条低紧迫度条目，把真正需要主人拍板或查看的重要消息（如插件写入审批、团队成员主动提醒）彻底淹没，也让头像未读数字失去信号价值。
 - **否决**：把任务流转继续塞进收件箱（滥用收件箱、噪音大）；在任务看板里继续叫「收件箱」（与平台级收件箱语义混淆）；在侧栏顶部导航再加一行固定「收件箱」（挤压会话列表高度）。
 - **规则**：`apps/web/src/app/work-items/InboxPage.tsx`、`apps/web/src/app/SidebarUserMenu.tsx`、`apps/server/src/riffet-mcp/notices.ts`、`apps/server/src/routes/plugin-approvals.ts`。
+
+## 2026-11-27 · 模型菜单额度按窗口分行常态展示重置时间，有周期窗口时隐藏 credits
+
+- **决定**：修订 2026-11-16「新会话的模型按钮放在工具行最前，额度并入参数区」中的额度展示规则。账号存在周期窗口（`windows` 非空）时，只展示各窗口的剩余百分比与重置时间，不展示 `credits`；仅无周期窗口的纯余额型账号以 `credits` 兜底。重置时间常态内联显示（当天用相对时长，一周内用星期与时刻，更远用日期与时刻），不再藏到剩余低于 20% 才露出；悬停用 `Tip` 补充精确重置时刻。模型菜单参数区底部的额度改为标题行（「Quota left / All models」）下按窗口分行：左列窗口名，右列重置时间与右对齐的剩余百分比（低于 20% 用 `warning`，用尽用 `danger`）。「设置 › 模型提供商」对官方 CLI 登录提供商同样复用 `ProviderUsage`（有读数时展示套餐与各窗口额度条，无额度接口的 CLI 不占位），`QuotaDetails` 在有周期窗口时同样隐藏 `credits`。
+- **原因**：对 Codex 等订阅账号，决定使用节奏的是 `5h` / `Weekly` 剩余额度与何时重置；没有换算口径的 `credits` 余额并排摆在主位制造噪音，而正常区间隐藏重置时间会让用户无法判断是否该放开使用高档位或 Fast 模式。多个窗口都带重置时间时单行塞不下，按窗口分行在 360px 与 660px 宽度下都清晰对齐。设置页此前只给插件模型源挂载 `ProviderUsage`，官方订阅在提供商管理页看不到套餐与完整额度。
+- **否决**：有周期窗口时继续并排显示 `credits`；仅在 `< 20%` 时显示重置时间；在模型菜单窗口行内嵌短进度条（2026-11-25 已否决）；为无额度接口的官方 CLI 在设置页画空的「额度 —」区块。
+- **范围**：Web、Mac、iOS、Android 全端对齐；同步修订 2026-11-25 Android 模型面板额度胶囊（按窗口分行常态展示重置时间，有周期窗口时隐藏 credits）。
+- **规则**：`apps/web/src/lib/usage.ts`、`apps/web/src/app/session/ModelPicker.tsx`、`apps/web/src/app/settings/ProviderUsage.tsx`、`apps/web/src/app/settings/BackendProfilesSection.tsx`、`apps/web/src/app/design/surfaces/NewSessionChapter.tsx`、`apps/macos/Riffet/Features/Composer/ModelPicker.swift`、`apps/mobile/client/src/commonMain/kotlin/riffet/ui/pickers/ModelUsageRules.kt`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/pickers/ModelUsage.kt`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/settings/providers/ProviderConnection.kt`、`apps/mobile/iosApp/Riffet/Features/Home/TaskOptions.swift`、`apps/mobile/iosApp/Riffet/Features/Management/NativeProvidersView.swift`。
+
+## 2026-11-27 · 收件箱通知从左下角头像浮出，头像角标改为纯红点
+
+- **决定**：修改 2026-11-26「独立收件箱能力与任务看板『待处理』分离」中的头像角标与 Web 收件箱新消息提醒形态：
+  - 侧栏左下角 `24px` 头像右上角由 `16px` 带数字红点改为 `8px` 纯红点（`StatusDot tone="danger"`，`size-2` 加抠边），具体未读数保留在悬停提示与个人菜单「收件箱」行尾（上限 `99+`）。
+  - Web 新到达的收件箱消息（成员 `notify_user` 与插件审批）不再走顶部居中 `Toaster`，改由专属浮层 `InboxAlertDock` 从左下角头像上方浮出（侧栏收起或设置页贴底角，手机端回落顶部安全区）；普通消息展示 6 秒、审批 8 秒，悬停/聚焦/后台暂停；多条仅展开最新一条并叠层露出后方队列；点击正文或主按钮打开对应会话并自动标为已读（审批打开收件箱），已在收件箱或目标会话/该连续成员会话页时不弹出，打开头像个人菜单时自动让位收起。
+- **原因**：`24px` 头像叠 `20px` 含描边的数字红点几乎盖住半个头像；顶部 `Toaster` 本用于短操作结果，塞入多行成员消息后同时出现截断的「详情」与「查看收件箱」并遮挡顶栏。
+- **否决**：在 `24px` 头像上塞入小于最小字阶（`11px`）的迷你数字角标；继续复用顶部单行 `toast.info` 展示异步收件箱消息。
+- **规则**：`apps/web/src/app/SidebarUserMenu.tsx`、`apps/web/src/app/work-items/InboxAlertDock.tsx`、`apps/web/src/app/Workbench.tsx`。

@@ -110,7 +110,7 @@
     "apps/macos/Riffet/Features/CommandPalette/QuickOpen.swift": 7,
     "apps/macos/Riffet/Features/Composer/ComposerMenu.swift": 8,
     "apps/macos/Riffet/Features/Composer/ComposerView.swift": 21,
-    "apps/macos/Riffet/Features/Composer/ModelPicker.swift": 14,
+    "apps/macos/Riffet/Features/Composer/ModelPicker.swift": 10,
     "apps/macos/Riffet/Features/Composer/ToolsPicker.swift": 6,
     "apps/macos/Riffet/Features/Conversation/ConversationComponents.swift": 12,
     "apps/macos/Riffet/Features/Conversation/ConversationView.swift": 45,

@@ -575,9 +575,9 @@ export function BackendProfilesSection({ settings, project, initialTarget, onTar
                         </SettingsRow>
                       )}
 
-                      {sourceEntry(source)?.source.usage && (draft.modelSource === baseline?.modelSource && draft.apiEndpoint === baseline?.apiEndpoint && !apiKey && !clearKey
-                        ? <ProviderUsage key={`${connectionRevision}:${JSON.stringify(provider)}`} backendId={backendId} profileId={provider.id} projectId={provider.modelSource ? undefined : project?.id} />
-                        : <SettingsRow title={t`额度`}><span className="text-xs text-fg-3"><Trans>保存后读取额度</Trans></span></SettingsRow>)}
+                      {(sourceEntry(source)?.source.usage || source === 'login') && (draft.modelSource === baseline?.modelSource && draft.apiEndpoint === baseline?.apiEndpoint && !apiKey && !(clearKey && provider.hasApiKey)
+                        ? <ProviderUsage key={`${connectionRevision}:${JSON.stringify(provider)}`} backendId={backendId} profileId={provider.id} projectId={provider.modelSource ? undefined : project?.id} hideWhenEmpty={source === 'login'} />
+                        : sourceEntry(source)?.source.usage ? <SettingsRow title={t`额度`}><span className="text-xs text-fg-3"><Trans>保存后读取额度</Trans></span></SettingsRow> : null)}
 
                       <div className="flex flex-col gap-2 py-3.5">
                         <div className="flex items-center justify-between gap-3">

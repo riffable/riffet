@@ -14,7 +14,7 @@ enum class LoadTone { DANGER, WARNING, MUTED }
 
 fun windowName(minutes: Int?): String = when {
     minutes == null || minutes == 0 -> "Quota"
-    minutes == 300 -> "5 hours"
+    minutes == 300 -> "5h"
     minutes == 1440 -> "Daily"
     minutes == 10080 -> "Weekly"
     minutes in 40320..44640 -> "Monthly"
@@ -22,19 +22,27 @@ fun windowName(minutes: Int?): String = when {
     else -> "${minutes}m"
 }
 
-/** When a window resets: relative within a day, as a local date after that. */
+private val WEEKDAYS = arrayOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+
+/** When a window resets: relative within a day, weekday + clock within 6 days, date + clock beyond. */
 fun resetLabel(iso: String?, now: Long = platformNowMillis(), offsetOf: (Long) -> Long = ::platformUtcOffsetMillis): String? {
     val at = iso?.let(::parseIsoMillis) ?: return null
     val left = at - now
-    return when {
-        left <= 0 -> "Resets soon"
-        left < 3_600_000 -> "Resets in ${maxOf(1L, (left + 30_000) / 60_000)} min"
-        left < 86_400_000 -> "Resets in ${(left + 1_800_000) / 3_600_000} hr"
-        else -> {
-            val (_, month, day) = civilFromDays((at + offsetOf(at)).floorDiv(86_400_000L))
-            "Resets on $month/$day"
-        }
+    if (left <= 0) return "Resets soon"
+    val mins = maxOf(1L, (left + 30_000) / 60_000)
+    if (mins < 60) return "Resets in $mins min"
+    val hrs = (left + 1_800_000) / 3_600_000
+    if (hrs < 24) return "Resets in $hrs hr"
+    val local = at + offsetOf(at)
+    val days = local.floorDiv(86_400_000L)
+    val minuteOfDay = local.mod(86_400_000L) / 60_000L
+    val clock = "${(minuteOfDay / 60).toString().padStart(2, '0')}:${(minuteOfDay % 60).toString().padStart(2, '0')}"
+    if (left < 6 * 86_400_000L) {
+        val weekday = WEEKDAYS[(days + 4).mod(7)]
+        return "Resets $weekday $clock"
     }
+    val (_, month, day) = civilFromDays(days)
+    return "Resets $month/$day $clock"
 }
 
 /** Above 100% the provider queues requests, which is what a reader needs to see. */
@@ -80,17 +88,29 @@ fun quotaUnavailable(status: ModelStatus): Boolean =
 
 fun quotaUnavailableLabel(): String = "Quota unavailable"
 
-/** One line for the account: plan, each metered window, then credits. */
-fun accountSummary(account: AccountUsage, now: Long = platformNowMillis(), offsetOf: (Long) -> Long = ::platformUtcOffsetMillis): String {
-    val plan = account.plan?.replace('_', ' ')?.replaceFirstChar { it.uppercaseChar() }
-    val windows = account.windows.map { windowSummary(it, now, offsetOf) }
+/** Fallback credit figure when an account reports no metered windows. */
+fun accountCreditsLabel(account: AccountUsage): String? {
+    if (account.windows.isNotEmpty()) return null
     val balance = account.credits?.balance
-    val credits = when {
+    return when {
         account.credits?.unlimited == true -> "Unlimited credits"
         balance != null -> "${groupThousands(balance.toLong())} credits"
         else -> null
     }
-    return (listOfNotNull(plan) + windows + listOfNotNull(credits)).joinToString(" · ")
+}
+
+/** Whether the account carries any actionable quota reading for pickers. */
+fun hasAccountQuota(account: AccountUsage?): Boolean =
+    account != null && (account.windows.isNotEmpty() || account.limitReached || accountCreditsLabel(account) != null)
+
+/** One line for provider settings: plan, each metered window, limit status, or fallback credits when windowless. */
+fun accountSummary(account: AccountUsage, now: Long = platformNowMillis(), offsetOf: (Long) -> Long = ::platformUtcOffsetMillis): String {
+    val plan = account.plan?.replace('_', ' ')?.replaceFirstChar { it.uppercaseChar() }
+    val windows = account.windows.map { windowSummary(it, now, offsetOf) }
+    val hasZeroWindow = account.windows.any { remainingPercent(it.usedPercent) <= 0 }
+    val limit = if (account.limitReached && !hasZeroWindow) "Limit reached" else null
+    val credits = if (limit == null) accountCreditsLabel(account) else null
+    return (listOfNotNull(plan) + windows + listOfNotNull(limit, credits)).joinToString(" · ")
 }
 
 private fun windowSummary(window: UsageWindow, now: Long, offsetOf: (Long) -> Long): String =

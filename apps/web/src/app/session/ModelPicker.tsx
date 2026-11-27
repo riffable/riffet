@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch, Spinner, StatusDot } from '@/components/ui/controls';
+import { Tip } from '@/components/ui/tooltip';
 import { contextChoices, isOn, optionLabel, paramHint, paramKind, paramTitle, toggledValue, type ModelParam, type ParamKind } from '@/lib/models';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/lib/store';
@@ -179,7 +180,7 @@ export function modelUsageStatus(
 
 const loadToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-4' } as const;
 /** The account row reads at the parameters' weight; a model row's tags sit a step quieter. */
-const figureToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-3' } as const;
+const figureToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-2' } as const;
 
 /** A model's quota and load, as short figures after its name; nothing when the provider reported neither. */
 function ModelStatusTags({ status }: { status?: ModelStatus }) {
@@ -577,27 +578,53 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const paramRows = onParamChange ? sorted.map((param) => <ParamControl key={param.id} param={param} disabled={disabled} mobile={isMobile} onChange={(next) => onParamChange(param.id, next)} />) : [];
   const controls = inlineParams && paramRows.length > 0 ? <div className="flex shrink-0 flex-col gap-3">{paramRows}</div> : null;
   /*
-   * The account's quota is the last row under the parameters, in their row shape: it describes the
-   * provider in force as they do. "All models" is what a model's own quota tag cannot say — every
-   * model draws on these windows, and a tagged model on its own cap besides. A refresh dims the
-   * figures in place, so the row neither shifts nor empties every 30 seconds.
+   * The account's quota sits under the parameters: it describes the provider in force as they do.
+   * "All models" is what a model's own quota tag cannot say — every model draws on these windows,
+   * and a tagged model on its own cap besides. Metered windows stack one per row with remaining
+   * share and reset time always visible; a refresh dims the figures in place so the menu neither
+   * shifts nor empties every 30 seconds.
    */
+  const windowFigures = usageFigures.filter((figure) => figure.kind === 'window');
+  const fallbackFigures = usageFigures.filter((figure) => figure.kind !== 'window');
+  const limitFigure = usageFigures.find((figure) => figure.kind === 'limit');
   const accountRow = usageFigures.length > 0 || (usageLoading && !usage) ? (
-    <div aria-busy={usageLoading || undefined} className="flex min-h-6 items-center gap-3">
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-xs font-medium text-fg-2">Quota left</span>
-        <span className="truncate text-2xs text-fg-3">All models</span>
-      </span>
-      <span className={cn('flex shrink-0 items-center gap-2.5 text-xs tabular-nums transition-opacity', usageLoading && usageFigures.length > 0 && 'opacity-60')}>
-        {usageFigures.map((figure, index) => (
-          <span key={`${figure.name ?? ''}:${index}`} title={figure.hint} className={figureToneClass[figure.tone]}>
-            {figure.name && <span className={cn('mr-1', figure.tone === 'muted' && 'text-fg-4')}>{figure.name}</span>}
-            {figure.value}{figure.reset && ` · ${figure.reset}`}
+    windowFigures.length > 0 ? (
+      <div aria-busy={usageLoading || undefined} className="flex flex-col gap-1.5">
+        <div className="flex min-h-5 items-baseline justify-between gap-3">
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className="truncate text-xs font-medium text-fg-2">Quota left</span>
+            <span className="truncate text-2xs text-fg-3">All models</span>
           </span>
-        ))}
-        {!usageFigures.length && <Spinner className="size-3 text-fg-4" />}
-      </span>
-    </div>
+          {limitFigure && <span className="shrink-0 text-xs font-medium text-danger">{limitFigure.value}</span>}
+        </div>
+        <div className={cn('flex flex-col gap-1 transition-opacity', usageLoading && 'opacity-60')}>
+          {windowFigures.map((figure, index) => (
+            <Tip key={`${figure.name ?? ''}:${index}`} label={figure.hint} side="top">
+              <div className="flex min-h-5 items-baseline justify-between gap-3 text-xs tabular-nums">
+                <span className="min-w-0 truncate text-fg-3">{figure.name}</span>
+                <span className="flex shrink-0 items-baseline gap-2.5">
+                  {figure.reset && <span className="text-2xs text-fg-4">{figure.reset}</span>}
+                  <span className={cn('min-w-9 text-right font-medium', figureToneClass[figure.tone])}>{figure.value}</span>
+                </span>
+              </div>
+            </Tip>
+          ))}
+        </div>
+      </div>
+    ) : (
+      <div aria-busy={usageLoading || undefined} className="flex min-h-6 items-center gap-3">
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-xs font-medium text-fg-2">Quota left</span>
+          <span className="truncate text-2xs text-fg-3">All models</span>
+        </span>
+        <span className={cn('flex shrink-0 items-center gap-2.5 text-xs tabular-nums transition-opacity', usageLoading && fallbackFigures.length > 0 && 'opacity-60')}>
+          {fallbackFigures.map((figure, index) => (
+            <span key={`${figure.kind}:${index}`} className={cn('font-medium', figureToneClass[figure.tone])}>{figure.value}</span>
+          ))}
+          {!fallbackFigures.length && <Spinner className="size-3 text-fg-4" />}
+        </span>
+      </div>
+    )
   ) : null;
   const settingsRows = previewIsActive && !inlineParams ? paramRows : [];
 
@@ -774,10 +801,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
    * parameters and quota expand the popover down to `max-h` instead of squeezing the lists.
    */
   const [lockedHeight, setLockedHeight] = useState<number>();
-  const footerCount = settingsRows.length + (previewIsActive && accountRow ? 1 : 0);
+  const footerCount = settingsRows.length + (previewIsActive && accountRow ? 1 + windowFigures.length : 0);
   useEffect(() => {
     if (!open || !providerColumn) { setLockedHeight(undefined); return; }
-    if (side === 'top' && loading) return;
+    if (side === 'top' && (loading || (usageLoading && !usage))) return;
     // The portal mounts its content a render after `open`, so the content is read on the next
     // frame, found through the list it holds; the frame painted before it is the same height.
     const frame = requestAnimationFrame(() => {
@@ -785,7 +812,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
       if (height) setLockedHeight((previous) => (previewIsActive ? Math.max(previous ?? 0, height) : previous ?? height));
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, providerColumn, listId, side, loading, previewIsActive, footerCount]);
+  }, [open, providerColumn, listId, side, loading, usageLoading, usage, previewIsActive, footerCount]);
 
   // On mobile the sheet needs its own scroll lock; on desktop let Popover inherit modal state when inside a Dialog.
   const picker = (

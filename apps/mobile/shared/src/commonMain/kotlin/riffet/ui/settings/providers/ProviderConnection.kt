@@ -67,21 +67,24 @@ internal fun ProviderConnectionChoices(
 @Composable
 internal fun ProviderQuota(controller: SettingsController, backend: NativeBackendId, profile: NativeBackendProfileSettings, dirty: Boolean) {
     val (sources, available) = rememberProviderSources(controller, backend)
-    val hasUsage = sources.firstOrNull { it.id == profile.modelSource }?.usage == true
-    val active = profile.modelSource in available
+    val hasSourceUsage = sources.firstOrNull { it.id == profile.modelSource }?.usage == true
+    val isLogin = profile.modelSource == null && profile.apiEndpoint.isNullOrBlank()
+    val active = isLogin || profile.modelSource in available
+    val canRead = hasSourceUsage || isLogin
     var usage by remember(controller, backend, profile) { mutableStateOf<NativeBackendUsage?>(null) }
     var error by remember(controller, backend, profile) { mutableStateOf(false) }
     var loading by remember(controller, backend, profile) { mutableStateOf(false) }
     var retry by remember { mutableStateOf(0) }
-    LaunchedEffect(controller, backend, profile, dirty, hasUsage, active, retry) {
-        if (dirty) { usage = null; error = false }
-        if (dirty || !hasUsage || !active) { loading = false; return@LaunchedEffect }
+    LaunchedEffect(controller, backend, profile, dirty, canRead, active, retry) {
+        if (dirty && !isLogin) { usage = null; error = false }
+        if (dirty || !canRead || !active) { loading = false; return@LaunchedEffect }
         loading = true
         controller.usage(backend, profile.id).onSuccess { usage = it; error = false }.onFailure { error = true }
         loading = false
     }
-    if (!hasUsage) return
+    if (!canRead) return
     val summary = usage?.account?.let { riffet.ui.pickers.accountSummary(it) }
+    if (!hasSourceUsage && !error && summary.isNullOrBlank()) return
     SettingsGroup(stringResource(Res.string.prov_quota)) {
         GroupRow(title = summary?.takeIf { it.isNotBlank() } ?: "—", trailing = { if (loading) Spinner() })
         if (!active) SettingsFootnote(stringResource(Res.string.prov_unavailable))

@@ -419,10 +419,14 @@ struct ModelPanel: View {
 }
 
 struct ModelAccountUsage: View {
-    private static let rowHeight: CGFloat = 24
+    private static let headerHeight: CGFloat = 18
+    private static let rowHeight: CGFloat = 20
     private static let verticalInset: CGFloat = 8
     static func height(account: AccountUsage?) -> CGFloat {
-        CGFloat(max(1, account?.windows.count ?? 0)) * rowHeight + verticalInset * 2
+        if let windows = account?.windows, !windows.isEmpty {
+            return headerHeight + Space.xs + CGFloat(windows.count) * rowHeight + CGFloat(max(0, windows.count - 1)) * Space.xxs + verticalInset * 2
+        }
+        return rowHeight + verticalInset * 2
     }
     let account: AccountUsage?
     let loading: Bool
@@ -430,57 +434,83 @@ struct ModelAccountUsage: View {
 
     var body: some View {
         Group {
-            if let windows = account?.windows, !windows.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
-                        usageWindowView(window).frame(height: Self.rowHeight)
+            if let account, !account.windows.isEmpty {
+                let hasZeroWindow = account.windows.contains { $0.usedPercent >= 100 }
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
+                        Text(verbatim: "Quota left").font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).foregroundStyle(palette.fg2)
+                        Text(verbatim: "All models").font(RiffetFont.text(RiffetTextSize.x2xs)).foregroundStyle(palette.fg3)
+                        Spacer(minLength: Space.xs)
+                        if account.limitReached && !hasZeroWindow {
+                            Text(verbatim: "Limit reached").font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).foregroundStyle(palette.danger)
+                        }
                     }
+                    .frame(height: Self.headerHeight)
+                    VStack(spacing: Space.xxs) {
+                        ForEach(Array(account.windows.enumerated()), id: \.offset) { _, window in
+                            usageWindowView(window).frame(height: Self.rowHeight)
+                        }
+                    }
+                    .opacity(loading ? 0.6 : 1)
                 }
                 .padding(.horizontal, Space.md)
                 .padding(.vertical, Self.verticalInset)
             } else if let account, account.limitReached {
-                Label { Text(verbatim: "Usage limit reached") } icon: { Image(icon: "exclamationmark.circle") }
-                    .font(.riffet(size: S(11))).foregroundStyle(palette.danger)
-            } else if let credits = account?.credits, credits.unlimited || credits.balance != nil {
-                HStack {
-                    Text(verbatim: "Credits")
+                HStack(spacing: Space.sm) {
+                    Text(verbatim: "Quota left").font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).foregroundStyle(palette.fg2)
                     Spacer()
-                    Text(verbatim: credits.unlimited ? "Unlimited" : credits.balance!.doubleValue.rounded(.towardZero).formatted(.number.precision(.fractionLength(0))))
-                        .monospacedDigit()
+                    Text(verbatim: "Limit reached").font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).foregroundStyle(palette.danger)
                 }
-                .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
+                .frame(height: Self.rowHeight)
                 .padding(.horizontal, Space.md)
+                .padding(.vertical, Self.verticalInset)
+            } else if let credits = account?.credits, credits.unlimited || credits.balance != nil {
+                HStack(spacing: Space.sm) {
+                    Text(verbatim: "Quota left").font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).foregroundStyle(palette.fg2)
+                    Spacer()
+                    Text(verbatim: credits.unlimited ? "Unlimited credits" : "\(credits.balance!.doubleValue.rounded(.towardZero).formatted(.number.precision(.fractionLength(0)))) credits")
+                        .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).monospacedDigit().foregroundStyle(palette.fg2)
+                }
+                .frame(height: Self.rowHeight)
+                .padding(.horizontal, Space.md)
+                .padding(.vertical, Self.verticalInset)
             } else if let plan = account?.plan, !plan.isEmpty {
-                Text(plan.capitalized).font(RiffetFont.caption).foregroundStyle(palette.fg3)
+                Text(plan.replacingOccurrences(of: "_", with: " ").capitalized).font(RiffetFont.caption).foregroundStyle(palette.fg3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: Self.rowHeight)
+                    .padding(.horizontal, Space.md)
+                    .padding(.vertical, Self.verticalInset)
             } else {
                 HStack(spacing: Space.sm) {
                     if loading { Spinner(size: .mini) }
-                    Text(verbatim: loading ? "Reading quota…" : "Quota unavailable").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
+                    Text(verbatim: loading ? "Reading quota…" : "Quota unavailable").font(RiffetFont.text(RiffetTextSize.x2xs)).foregroundStyle(palette.fg4)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .center)
+                .padding(.vertical, Self.verticalInset)
             }
         }
     }
 
     private func usageWindowView(_ window: UsageWindow) -> some View {
-        let ratio = min(1, max(0, Double(100 - window.usedPercent) / 100))
-        let reached = account?.limitReached == true || window.usedPercent >= 100
-        let tone = reached ? palette.danger : window.usedPercent >= 80 ? palette.warning : palette.fg3
+        let left = max(0, 100 - Int(window.usedPercent))
+        let reached = left <= 0
+        let tone = reached ? palette.danger : left < 20 ? palette.warning : palette.fg2
         let title = ModelUsageCopy.window(window.windowMinutes?.intValue)
         let reset = ModelUsageCopy.reset(window.resetsAt)
-        return HStack(spacing: Space.sm) {
-            Text(verbatim: title).fixedSize()
-            GeometryReader { geometry in
-                Capsule().fill(palette.line)
-                Capsule().fill(tone).frame(width: geometry.size.width * ratio)
+        let exact = ModelUsageCopy.exactReset(window.resetsAt)
+        return HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+            Text(verbatim: title).font(RiffetFont.caption).foregroundStyle(palette.fg3).fixedSize()
+            Spacer(minLength: Space.sm)
+            if let reset {
+                Text(verbatim: reset).font(RiffetFont.text(RiffetTextSize.x2xs)).foregroundStyle(palette.fg4).fixedSize()
             }
-            .frame(height: 3)
-            .accessibilityHidden(true)
-            Text(verbatim: "\(max(0, 100 - window.usedPercent))% left").monospacedDigit().fixedSize()
-                .foregroundStyle(reached ? palette.danger : palette.fg2)
+            Text(verbatim: "\(left)%")
+                .font(RiffetFont.text(RiffetTextSize.xs, weight: .medium)).monospacedDigit()
+                .foregroundStyle(tone)
+                .frame(minWidth: 34, alignment: .trailing)
         }
-        .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
-        .help([reached ? "Usage limit reached" : nil, reset].compactMap { $0 }.joined(separator: " · "))
+        .contentShape(Rectangle())
+        .help(["\(title): \(left)% left", exact].compactMap { $0 }.joined(separator: " · "))
         .accessibilityElement(children: .combine)
         .accessibilityValue(reset ?? "")
     }
@@ -516,10 +546,22 @@ struct ModelStatusTags: View {
 /// Usage figures in the model panel, which reads in English throughout as the web's does (model,
 /// parameter and provider names are English). Worded as the shared layer's `en` table.
 enum ModelUsageCopy {
+    private static let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    private static let fractionalISO: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let plainISO: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     static func window(_ minutes: Int?) -> String {
         switch minutes {
         case nil, 0: "Quota"
-        case 300: "5 hours"
+        case 300: "5h"
         case 1440: "Daily"
         case 10080: "Weekly"
         case let minutes? where (40320...44640).contains(minutes): "Monthly"
@@ -538,17 +580,27 @@ enum ModelUsageCopy {
         guard let iso, let at = parse(iso) else { return nil }
         let left = at.timeIntervalSince(now)
         if left <= 0 { return "Resets soon" }
-        if left < 3600 { return "Resets in \(max(1, Int((left / 60).rounded()))) min" }
-        if left < 86400 { return "Resets in \(Int((left / 3600).rounded())) hr" }
-        let day = Calendar.current.dateComponents([.month, .day], from: at)
-        return "Resets on \(day.month ?? 0)/\(day.day ?? 0)"
+        let mins = max(1, Int((left / 60).rounded()))
+        if mins < 60 { return "Resets in \(mins) min" }
+        let hrs = Int((left / 3600).rounded())
+        if hrs < 24 { return "Resets in \(hrs) hr" }
+        let parts = Calendar.current.dateComponents([.weekday, .month, .day, .hour, .minute], from: at)
+        let clock = String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+        if left < 6 * 86400, let weekday = parts.weekday, (1...7).contains(weekday) {
+            return "Resets \(weekdays[weekday - 1]) \(clock)"
+        }
+        return "Resets \(parts.month ?? 0)/\(parts.day ?? 0) \(clock)"
+    }
+
+    static func exactReset(_ iso: String?) -> String? {
+        guard let iso, let at = parse(iso) else { return nil }
+        let parts = Calendar.current.dateComponents([.weekday, .month, .day, .hour, .minute], from: at)
+        let clock = String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+        let dayName = parts.weekday.flatMap { (1...7).contains($0) ? weekdays[$0 - 1] : nil }
+        return ["Resets", dayName, "\(parts.month ?? 0)/\(parts.day ?? 0)", clock].compactMap { $0 }.joined(separator: " ")
     }
 
     private static func parse(_ iso: String) -> Date? {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: iso) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: iso)
+        fractionalISO.date(from: iso) ?? plainISO.date(from: iso)
     }
 }

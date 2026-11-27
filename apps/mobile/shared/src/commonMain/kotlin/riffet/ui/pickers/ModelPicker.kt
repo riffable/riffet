@@ -436,13 +436,14 @@ private fun ModelPanelFooter(
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
-    if (params.isEmpty() && account == null) {
+    val showQuota = hasAccountQuota(account)
+    if (params.isEmpty() && !showQuota) {
         Spacer(Modifier.height(metrics.controlInset))
         return
     }
     Column(Modifier.fillMaxWidth().padding(vertical = metrics.controlInset / 2), verticalArrangement = Arrangement.spacedBy(metrics.controlInset / 2)) {
         if (LocalInterfaceStyle.current.components.sheets.headerLine) HorizontalDivider(color = colors.line)
-        if (account != null) AccountQuotaStrip(account, Modifier.padding(horizontal = SheetInset))
+        if (showQuota && account != null) AccountQuotaStrip(account, Modifier.padding(horizontal = SheetInset))
         if (params.isNotEmpty()) ParamStrip(params = params, enabled = enabled, onChange = onChange, onOpenList = onOpenList)
     }
 }

@@ -546,14 +546,48 @@ struct ModelAccountUsageSummary: View {
     let account: AccountUsage?
     @Environment(\.palette) private var palette
     var body: some View {
-        if let account {
-            let summary = accountSummary(account: account, now: platformNowMillis(), offsetOf: {
-                KotlinLong(longLong: platformUtcOffsetMillis(epochMillis: $0.int64Value))
-            })
-            if !summary.isEmpty || account.limitReached {
-                Text(verbatim: [account.limitReached ? String(localized: "已达用量上限", bundle: .riffet) : nil, summary.isEmpty ? nil : summary].compactMap { $0 }.joined(separator: " · "))
-                    .riffetFont(.caption).foregroundStyle(account.limitReached ? palette.danger : palette.fg3)
-                    .fixedSize(horizontal: false, vertical: true)
+        if let account, hasAccountQuota(account: account) {
+            if !account.windows.isEmpty {
+                let now = platformNowMillis()
+                let hasZeroWindow = account.windows.contains { remainingPercent(used: $0.usedPercent) <= 0 }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(verbatim: "Quota left").riffetFont(.caption, weight: .medium).foregroundStyle(palette.fg2)
+                        Text(verbatim: "All models").riffetFont(.caption).foregroundStyle(palette.fg3)
+                        Spacer(minLength: 4)
+                        if account.limitReached && !hasZeroWindow {
+                            Text(verbatim: "Limit reached").riffetFont(.caption, weight: .medium).foregroundStyle(palette.danger)
+                        }
+                    }
+                    ForEach(Array(account.windows.enumerated()), id: \.offset) { _, window in
+                        let left = remainingPercent(used: window.usedPercent)
+                        let reset = resetLabel(iso: window.resetsAt, now: now, offsetOf: {
+                            KotlinLong(longLong: platformUtcOffsetMillis(epochMillis: $0.int64Value))
+                        })
+                        let tone = left <= 0 ? palette.danger : left < 20 ? palette.warning : palette.fg2
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(verbatim: windowName(minutes: window.windowMinutes)).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
+                            Spacer(minLength: 8)
+                            if let reset { Text(verbatim: reset).riffetFont(.caption).foregroundStyle(palette.fg4).lineLimit(1) }
+                            Text(verbatim: "\(left)%").riffetFont(.caption, weight: .medium).monospacedDigit().foregroundStyle(tone)
+                                .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                                .frame(minWidth: 36, alignment: .trailing)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            } else {
+                let credits = accountCreditsLabel(account: account)
+                HStack(spacing: 8) {
+                    Text(verbatim: "Quota left").riffetFont(.caption, weight: .medium).foregroundStyle(palette.fg2)
+                    Spacer(minLength: 8)
+                    if account.limitReached {
+                        Text(verbatim: "Limit reached").riffetFont(.caption, weight: .medium).foregroundStyle(palette.danger)
+                    } else if let credits {
+                        Text(verbatim: credits).riffetFont(.caption, weight: .medium).monospacedDigit().foregroundStyle(palette.fg2)
+                    }
+                }
+                .accessibilityElement(children: .combine)
             }
         }
     }
