@@ -1165,18 +1165,32 @@ struct RowBuilder {
     private mutating func notice(_ notice: TimelineItemTaskNotification, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let id = "notice:\(notice.key)"
         let open = ui.isOpen(id)
-        let running = notice.status == .running
+        let view = taskNoticeView(item: notice, root: root)
+        let name = view.name
+        var inline = name.map { toolMetaPieces($0) } ?? []
+        if !view.figures.isEmpty { inline.append(.init(text: view.figures.joined(separator: " · "), font: style.figures(12), color: style.color(\.fg4))) }
+        if view.unsettled { inline.append(outcomePiece(failed: false)) }
+        let symbol = switch view.kind {
+        case "subagent": "person.crop.square"
+        case "monitor": "eye"
+        case "workflow": "repeat"
+        default: "apple.terminal"
+        }
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(DisclosureSpec(
-            icon: running ? .spinner : .symbol(notice.taskKind == "subagent" ? "person.crop.square" : "apple.terminal", size: 12, color: style.color(\.fg4)),
-            title: notice.title,
+            icon: view.running ? .spinner : .symbol(symbol, size: 12, color: view.failed ? style.color(\.danger) : style.color(\.fg4)),
+            title: view.headline,
             titleFont: style.font(13),
-            inline: notice.status == .failed ? [outcomePiece(failed: true)] : notice.status == .unknown ? [outcomePiece(failed: false)] : [],
+            detail: name.map { toolDetailPiece($0) },
+            inline: inline,
             chevron: .hover(open: open),
             action: .toggle(id),
-            help: notice.title
+            help: name.map { "\(view.headline) \($0.primary)" } ?? view.headline
         ))))
         guard open else { return style.row }
         var cursor = y + style.row + 4
+        if let name, name.primaryKind == "prose" {
+            cursor += textBlock(text.plain(name.primary, size: 13, color: style.color(\.fg2)), x: x + 24, y: cursor, width: width - 24) + 8
+        }
         if let command = notice.command, !command.isEmpty {
             cursor += codeBlock(command, language: "shell", prefix: "$ ", maxHeight: 220, syntax: nil, x: x + 24, y: cursor, width: width - 24) + 8
         }
@@ -1185,11 +1199,16 @@ struct RowBuilder {
         }
         let metadata = [
             formatDateTime(value: timelineItemTime(item: notice)),
-            notice.jobResult?.runningMs.map { formatDurationMs(millis: $0.int64Value) },
-            notice.jobResult?.exitCode.map { "exit \($0.int64Value)" }
+            notice.tokens.map { "\(compactCount(value: $0.doubleValue)) tok" }
         ].compactMap { $0 }.joined(separator: " · ")
         if !metadata.isEmpty {
             cursor += textBlock(text.plain(metadata, size: 12, color: style.color(\.fg4)), x: x + 24, y: cursor, width: width - 24) + 8
+        }
+        if view.kind == "subagent", let call = notice.subagentToolCallId {
+            let button = ButtonSpec(title: String(localized: "查看子 Agent 对话"), action: .openSubagent(id: call, title: view.name?.primary ?? view.headline), loading: false)
+            let size = buttonSize(button)
+            fragments.append(Fragment(frame: CGRect(x: x + 24, y: cursor, width: size.width, height: size.height), kind: .button(button)))
+            cursor += size.height + 8
         }
         return cursor - y
     }

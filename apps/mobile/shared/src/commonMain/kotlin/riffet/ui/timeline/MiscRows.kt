@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -36,6 +37,8 @@ import org.jetbrains.compose.resources.stringResource
 import riffet.core.StatusTone
 import riffet.core.TaskNotificationStatus
 import riffet.core.TimelineItem
+import riffet.i18n.L10n
+import riffet.stats.compactCount
 import riffet.ui.icons.RiffetIcons
 import riffet_mobile.shared.generated.resources.*
 
@@ -169,67 +172,73 @@ internal fun StatusRow(item: TimelineItem.Status) {
 
 /** Each notification already owns its title, state and disclosure. */
 @Composable
-internal fun TriggerRow(notices: List<TimelineItem.TaskNotification>) {
+internal fun TriggerRow(notices: List<TimelineItem.TaskNotification>, root: String? = null) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-        notices.forEach { notice -> TaskNotificationRow(notice) }
+        notices.forEach { notice -> TaskNotificationRow(notice, root) }
     }
 }
 
 @Composable
-internal fun TaskNotificationRow(item: TimelineItem.TaskNotification) {
+internal fun TaskNotificationRow(item: TimelineItem.TaskNotification, root: String? = null) {
     val colors = TimelineTheme.colors
     val type = TimelineTheme.type
     var open by rememberSaveable(item.key) { mutableStateOf(false) }
     var diagnosticsOpen by rememberSaveable(item.key) { mutableStateOf(false) }
-    // Running, completed and cancelled say nothing on the row; a failure or an unknown end follows the title.
-    val outcome = when (item.status) {
-        TaskNotificationStatus.FAILED -> true
-        TaskNotificationStatus.UNKNOWN -> false
-        else -> null
-    }
-    val running = item.status == TaskNotificationStatus.RUNNING
+    val view = remember(item, root, L10n.locale) { taskNoticeView(item, root) }
+    val name = view.name
     val command = item.command
     TimelineDisclosure(
         open = open,
         onToggle = { open = !open },
-        danger = item.status == TaskNotificationStatus.FAILED,
-        leading = { RunningMark(running) { StatusDot(colors.fg3, 8.dp) } },
-        title = {
-            Text(
-                text = item.title,
-                style = type.rowLabel,
-                color = colors.fg2,
-                maxLines = if (open) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        danger = view.failed,
+        leading = {
+            RunningMark(view.running) {
+                val icon = when (view.kind) {
+                    "subagent" -> RiffetIcons.Bot
+                    "monitor" -> RiffetIcons.Eye
+                    "workflow" -> RiffetIcons.Repeat
+                    else -> RiffetIcons.SquareTerminal
+                }
+                ToolIcon(icon, tint = if (view.failed) colors.danger else colors.fg4)
+            }
         },
-        inline = if (outcome != null) {
-            { RowOutcome(outcome) }
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(view.headline, style = type.rowLabel, color = colors.fg2, maxLines = 1, softWrap = false)
+                if (name != null) {
+                    Text(
+                        text = name.primary,
+                        style = if (name.primaryKind == "prose") type.bodySmall else type.codeSmall,
+                        color = colors.fg3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+            }
+        },
+        inline = if ((name?.extraCommands ?: 0) > 0 || view.figures.isNotEmpty() || view.unsettled) {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    name?.extraCommands?.takeIf { it > 0 }?.let { Text("+$it", style = type.codeSmall, color = colors.fg4, maxLines = 1, softWrap = false) }
+                    if (view.figures.isNotEmpty()) {
+                        Text(view.figures.joinToString(" · "), style = type.caption, color = colors.fg4, maxLines = 1, softWrap = false)
+                    }
+                    if (view.unsettled) RowOutcome(false)
+                }
+            }
         } else null,
     ) {
-        formatDateTime(item.event.createdAt)?.let { Text(it, style = type.caption, color = colors.fg3) }
+        if (name?.primaryKind == "prose") Text(name.primary, style = type.bodySmall, color = colors.fg2)
         if (command != null) {
             CodeBlock(command, prefix = "\$ ", foreground = colors.fg)
         }
         // `detail` lives in another module, so `?.let` rather than a smart-cast after a null check.
         item.detail?.let { detail -> CodeBlock(detail) }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val exitCode = item.jobResult?.exitCode
-            if (exitCode != null) {
-                Text(
-                    text = "exit $exitCode",
-                    style = type.caption,
-                    color = colors.fg3,
-                )
-            }
-            val runningMs = item.jobResult?.runningMs
-            if (runningMs != null && runningMs > 0L) {
-                Text(formatDurationMs(runningMs), style = type.caption, color = colors.fg3)
-            }
-        }
+        val time = formatDateTime(item.event.createdAt)
+        val tokens = item.tokens?.let { "${compactCount(it.toDouble())} tok" }
+        val meta = listOfNotNull(time, tokens)
+        if (meta.isNotEmpty()) Text(meta.joinToString(" · "), style = type.caption, color = colors.fg3)
         if (item.taskId != null || item.sourceStatus != null) {
             TimelineDisclosure(
                 open = diagnosticsOpen,

@@ -50,3 +50,41 @@ class ActivityPresentationTest {
         assertTrue(stopping.summary.contains("停止中"))
     }
 }
+
+class TaskNoticePresentationTest {
+    private val locale = L10n.locale
+
+    @BeforeTest
+    fun useSourceLocale() {
+        L10n.locale = "zh-Hans"
+    }
+
+    @AfterTest
+    fun restoreLocale() {
+        L10n.locale = locale
+    }
+
+    private fun notice(kind: String, status: riffet.core.TaskNotificationStatus, exitCode: Long? = null, title: String = "t", runningMs: Long? = null) =
+        riffet.core.TimelineItem.TaskNotification(
+            key = "n", taskKind = kind, status = status, title = title, command = "npm test",
+            jobResult = exitCode?.let { riffet.core.TaskNotificationResult("j", riffet.core.TaskNotificationResultStatus.SUCCEEDED, it, runningMs) },
+            event = riffet.contracts.WorkbenchEvent(sequence = 1, sessionId = "s", runId = "r", type = "task_notification", createdAt = "2026-01-01T00:00:00Z").let {
+                riffet.core.ProjectedEvent(base = it, projectionKey = "event:1", sourceEvents = listOf(it))
+            },
+        )
+
+    @Test
+    fun `a completed notice with a non-zero exit code reads as failed and shows the code`() {
+        val view = taskNoticeView(notice("shell", riffet.core.TaskNotificationStatus.COMPLETED, exitCode = 2, runningMs = 3_000))
+        assertTrue(view.failed)
+        assertEquals("后台命令失败", view.headline)
+        assertEquals(listOf("3s", "退出码 2"), view.figures)
+        assertEquals("后台命令已完成", taskNoticeView(notice("shell", riffet.core.TaskNotificationStatus.COMPLETED, exitCode = 0)).headline)
+        assertEquals("监控事件", taskNoticeView(notice("monitor", riffet.core.TaskNotificationStatus.RUNNING)).headline)
+        assertEquals(null, taskNoticeView(notice("subagent", riffet.core.TaskNotificationStatus.CANCELLED, title = "子 Agent")).name)
+        // A notice that is not a task's end (a peer's message) keeps its own title.
+        val message = taskNoticeView(notice("message", riffet.core.TaskNotificationStatus.COMPLETED, title = "Message from Codex"))
+        assertEquals("Message from Codex", message.headline)
+        assertEquals(null, message.name)
+    }
+}

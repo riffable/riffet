@@ -688,7 +688,7 @@ private fun TimelineEntryView(
         is TimelineEntry.ProcessFooter -> TurnFooterRow(entry.row.answerText, entry.row.endedAt)
 
         is TimelineEntry.Row -> when (val row = entry.row) {
-            is TimelineRow.Trigger -> TriggerRow(row.notices)
+            is TimelineRow.Trigger -> TriggerRow(row.notices, root)
             is TimelineRow.Single -> SingleRow(row, speed, root = root, onOpenFile = onOpenFile)
             // A process row is always laid out as a header entry; spelled out so the `when` stays
             // exhaustive without an `else` that would swallow a new row kind.

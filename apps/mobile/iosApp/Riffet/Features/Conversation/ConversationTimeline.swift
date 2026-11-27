@@ -54,7 +54,7 @@ struct ConversationTimelineRow: View, Equatable {
         case let .process(process): ConversationProcess(row: process, workbench: workbench, projectID: projectID, parentItems: parentItems, speed: speed)
         case let .trigger(trigger):
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(trigger.notices, id: \.key) { notice in ConversationTaskNotice(notice: notice) }
+                ForEach(trigger.notices, id: \.key) { notice in ConversationTaskNotice(notice: notice, root: workbench.projectRoot(projectID)) }
             }.frame(maxWidth: .infinity, alignment: .leading)
         }
     }
@@ -405,7 +405,7 @@ struct ConversationTimelineItem: View {
                     Label(status.text, systemImage: status.tone == .danger ? "exclamationmark.circle" : "info.circle")
                 }
             }.riffetFont(.label, weight: .regular).foregroundStyle(status.tone == .danger ? palette.danger : palette.fg3).textSelection(.enabled)
-        case let .taskNotification(notice): ConversationTaskNotice(notice: notice)
+        case let .taskNotification(notice): ConversationTaskNotice(notice: notice, root: workbench.projectRoot(projectID))
         case let .activity(item): ConversationActivityRow(item: item, workbench: workbench)
         }
     }
@@ -588,10 +588,13 @@ func conversationAttachmentIsImage(_ attachment: UserAttachment) -> Bool {
 
 private struct ConversationTaskNotice: View {
     let notice: TimelineItemTaskNotification
+    let root: String?
     @State private var expanded = false
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
     @Environment(\.conversationDisclosureState) private var disclosureState
+    @ScaledMetric(relativeTo: .subheadline) private var labelSize = 15.0
+    @ScaledMetric(relativeTo: .footnote) private var smallSize = 13.0
     private var isExpanded: Bool {
         get { disclosureState?["notice." + notice.key] ?? expanded }
         nonmutating set {
@@ -600,38 +603,55 @@ private struct ConversationTaskNotice: View {
         }
     }
     var body: some View {
+        let view = taskNoticeView(item: notice, root: root)
         VStack(alignment: .leading, spacing: 8) {
             Button { readAction(); isExpanded.toggle() } label: {
                 HStack(spacing: 8) {
-                    if notice.status == .running { ProgressView().controlSize(.mini).frame(width: 16) }
-                    else { Image(systemName: notice.status == .failed ? "exclamationmark.circle" : "terminal").font(.system(size: 12)).foregroundStyle(palette.fg4).frame(width: 16) }
-                    Text(notice.title).riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(isExpanded ? nil : 1).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(status).riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize()
-                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    Group {
+                        if view.running { ProgressView().controlSize(.mini) }
+                        else { Image(systemName: Self.symbol(view.kind)).font(.system(size: 12)) }
+                    }.foregroundStyle(view.failed ? palette.danger : palette.fg4).frame(width: 16, height: 16)
+                    headline(view).lineLimit(1).truncationMode(.tail)
+                    Spacer(minLength: 0)
+                    if let extra = view.name?.extraCommands?.intValue, extra > 0 {
+                        Text("+\(extra)").riffetFont(.monoSmall).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1)
+                    }
+                    if !view.figures.isEmpty {
+                        Text(view.figures.joined(separator: " · ")).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4).lineLimit(1).fixedSize().layoutPriority(1)
+                    }
+                    if view.unsettled { Text(String(localized: "未完成", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1) }
+                    Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0)).fixedSize()
                         .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
-                }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).contentShape(Rectangle())
+                }.frame(maxWidth: .infinity, minHeight: 34, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(RiffetDimPressStyle()).accessibilityValue(isExpanded ? "已展开" : "已折叠")
             if isExpanded {
-                if let date = ServerTime.date(notice.event.createdAt) { Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).foregroundStyle(palette.fg4) }
-                if let detail = notice.detail { Text(detail).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                if let name = view.name, name.primaryKind == "prose" { Text(name.primary).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 if let command = notice.command { ConversationCode(text: command, language: "shell", output: true, stateID: "notice." + notice.key + ".command") }
-                if let result = notice.jobResult {
-                    if let exit = result.exitCode { Text("exit \(exit)").riffetFont(.caption).foregroundStyle(palette.fg4) }
-                    if let duration = result.runningMs { Text(formatDurationMs(millis: duration.int64Value)).riffetFont(.caption).foregroundStyle(palette.fg4) }
-                }
+                if let detail = notice.detail { Text(detail).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                HStack(spacing: 8) {
+                    if let date = ServerTime.date(notice.event.createdAt) { Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))) }
+                    if let tokens = notice.tokens { Text("\(StatsMathKt.compactCount(value: tokens.doubleValue)) tok") }
+                }.riffetFont(.caption).foregroundStyle(palette.fg4)
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
-    private var status: String {
-        switch notice.status {
-        case .running: String(localized: "运行中", bundle: .riffet)
-        case .completed: String(localized: "已完成", bundle: .riffet)
-        case .failed: String(localized: "失败", bundle: .riffet)
-        case .cancelled: String(localized: "已取消", bundle: .riffet)
-        default: String(localized: "状态未知", bundle: .riffet)
+    /// The phrase for kind and outcome, then the task's name in the font its kind calls for.
+    private func headline(_ view: TaskNoticeView) -> Text {
+        var result = Text(view.headline).font(.system(size: labelSize, weight: .regular)).foregroundColor(palette.fg2)
+        if let name = view.name {
+            let font: Font = name.primaryKind == "prose" ? .system(size: labelSize, weight: .regular) : .system(size: smallSize, design: .monospaced)
+            result = result + Text("  ") + Text(name.primary).font(font).foregroundColor(palette.fg3)
+        }
+        return result
+    }
+    private static func symbol(_ kind: String) -> String {
+        switch kind {
+        case "subagent": "person.crop.square"
+        case "monitor": "eye"
+        case "workflow": "repeat"
+        default: "terminal"
         }
     }
-
 }
 
 private struct ConversationJob: View {

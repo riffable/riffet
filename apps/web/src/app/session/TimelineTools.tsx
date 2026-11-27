@@ -1,7 +1,7 @@
 import { memo, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
-  IconArrowRightLeft, IconBot, IconBrain, IconFilePenLine, IconFileText, IconGitBranch,
+  IconArrowRightLeft, IconArrowUp, IconBot, IconBrain, IconEye, IconFilePenLine, IconFileText, IconGitBranch,
   IconGlobe, IconImage, IconListChecks, IconMessageCircleQuestion, IconRepeat, IconSearch,
   IconSend, IconSquareTerminal, IconTrash2, IconWrench,
 } from '@/components/icons';
@@ -11,7 +11,7 @@ import { Spinner } from '@/components/ui/controls';
 import { formatDuration } from '@/lib/format-duration';
 import { useNow } from '@/lib/use-now';
 import { cn, formatBytes, formatDateTime, isRecord, pixelEdge, str } from '@/lib/utils';
-import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, RowOutcome, StopButton } from './Activities';
+import { ActivityContext, ActivityDetails, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, finishedMs, RowOutcome, StopButton, TaskLaunchContext } from './Activities';
 import { useImageSource } from './imageSource';
 import { alignmentCached } from './lineDiff';
 import { Markdown } from './Markdown';
@@ -503,41 +503,81 @@ export const TaskNotificationRow = memo(function TaskNotificationRow({ item, mor
   const [open, setOpen] = useRemembered('notice', false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useRemembered('notice-diagnostics', false);
   const subagents = useContext(SubagentContext);
-  const subagent = item.taskKind === 'subagent';
+  const launches = useContext(TaskLaunchContext);
+  // Kinds this row can say the outcome of; any other notice (a peer's message, a worktree entered, a provider's note) keeps its own title.
+  const kind = item.taskKind === 'subagent' || item.taskKind === 'monitor' || item.taskKind === 'workflow' || item.taskKind === 'shell' ? item.taskKind : 'other';
+  const subagent = kind === 'subagent';
   const running = item.status === 'running';
-  const duration = item.jobResult?.runningMs ?? item.durationMs;
-  // A notice about a subagent can lead to that subagent's own transcript, which is where the process
-  // behind the result lives; the result text itself stays readable in the expansion.
+  // The call that started the task: the reader can go back to it, and its row holds the task's exit code and output.
+  // That row holds the call's latest run, so only the latest notice about the call reads from it.
+  const launch = item.subagentToolCallId ? launches?.find(item.subagentToolCallId) : undefined;
+  const activity = launch?.latestNotice === item.key ? launch.activity : undefined;
+  const exitCode = item.jobResult?.exitCode ?? activity?.task?.exitCode;
+  const failed = item.status === 'failed' || (item.status === 'completed' && exitCode !== undefined && exitCode !== 0);
+  const duration = item.jobResult?.runningMs ?? item.durationMs ?? (activity && !running ? finishedMs(activity, item.event.createdAt) : undefined);
+  const command = item.command ?? activity?.task?.command;
   const openSubagent = subagent && item.subagentToolCallId && subagents
     ? () => subagents.open({ toolCallId: item.subagentToolCallId! })
     : undefined;
-  const label = subagent ? (item.title ? { text: item.title, mono: false } : undefined) : taskLabel(item.title, item.command, root);
-  const title = label?.text ?? (subagent ? t`子 Agent` : t`后台任务`);
-  const Icon = subagent ? IconBot : IconSquareTerminal;
+  // Named the way its launching row names it: the call's description, else the gist of its command.
+  const name = useMemo<ToolRowPresentation | undefined>(() => {
+    if (kind === 'other') return undefined;
+    // i18n-ignore: the server's placeholder title for an unnamed subagent, which the headline already says
+    if (subagent) return item.title && item.title !== '子 Agent' ? { icon: 'execute', verb: 'Run', primary: item.title, primaryKind: 'prose' } : undefined;
+    return item.title || command ? describeJobRow(item.title, command, root) : undefined;
+  }, [kind, subagent, item.title, command, root]);
+  const outcome = failed ? 'failed' : item.status;
+  const headline = kind === 'other' ? <span className="text-fg-2">{item.title || t`后台任务`}</span> : kind === 'subagent'
+    ? outcome === 'completed' ? t`子 Agent 已完成` : outcome === 'failed' ? t`子 Agent 失败` : outcome === 'cancelled' ? t`子 Agent 已停止` : t`子 Agent`
+    : kind === 'monitor'
+      ? outcome === 'completed' ? t`监控已结束` : outcome === 'failed' ? t`监控失败` : outcome === 'cancelled' ? t`监控已停止` : outcome === 'running' ? t`监控事件` : t`监控`
+      : kind === 'workflow'
+        ? outcome === 'completed' ? t`工作流已完成` : outcome === 'failed' ? t`工作流失败` : outcome === 'cancelled' ? t`工作流已停止` : t`工作流`
+        : outcome === 'completed' ? t`后台命令已完成` : outcome === 'failed' ? t`后台命令失败` : outcome === 'cancelled' ? t`后台命令已停止` : t`后台命令`;
+  const figures = [
+    duration !== undefined && duration >= 1000 ? compactDuration(duration) : undefined,
+    exitCode !== undefined && exitCode !== 0 ? t`退出码 ${exitCode}` : undefined,
+  ].filter(Boolean).join(' · ');
+  const Icon = subagent ? IconBot : kind === 'monitor' ? IconEye : kind === 'workflow' ? IconRepeat : IconSquareTerminal;
+  // A shell task's output is on its launching row once the task ended; a monitor's notice carries its own event.
+  const output = activity && (kind === 'shell' || kind === 'workflow') && (activity.detail || activity.blobRef) ? activity : undefined;
+  const time = item.event.createdAt;
   return (
     <Disclosure
-      icon={running ? <Spinner className="size-3.5" /> : <Icon />}
-      title={<span className={cn('min-w-0 text-fg-2', open ? 'whitespace-normal break-words' : 'truncate', label?.mono && 'font-mono text-xs')}>{title}</span>}
-      inline={item.status === 'failed' ? <RowOutcome failed /> : item.status === 'unknown' ? <RowOutcome /> : undefined}
+      icon={running ? <Spinner className="size-3.5" /> : <Icon className={cn(failed && 'text-danger')} />}
+      failed={failed}
+      title={headline}
+      detail={name ? <ToolTargetSlot presentation={name} /> : undefined}
+      inline={(name?.extraCommands !== undefined || figures || item.status === 'unknown') && (
+        <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-fg-4">
+          {name?.extraCommands !== undefined && <span className="rounded-sm bg-subtle px-1.5 font-mono text-2xs text-fg-3">+{name.extraCommands}</span>}
+          {figures && <span>{figures}</span>}
+          {item.status === 'unknown' && <RowOutcome />}
+        </span>
+      )}
       open={open}
       onToggle={() => setOpen(!open)}
     >
-      <time dateTime={item.event.createdAt} className="text-2xs tabular-nums text-fg-3">{formatDateTime(item.event.createdAt)}</time>
-      {item.command && <CodeBlock className="text-fg" copy={item.command} remember="command"><span className="select-none text-fg-4">$ </span>{item.command}</CodeBlock>}
-      {item.detail && (subagent ? <Markdown text={item.detail} /> : <CodeBlock copy={item.detail} remember="detail">{item.detail}</CodeBlock>)}
+      {name?.primaryKind === 'prose' && <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{name.primary}</p>}
+      {command && <CodeBlock className="text-fg" copy={command} remember="command"><span className="select-none text-fg-4">$ </span>{command}</CodeBlock>}
+      {output
+        ? <ActivityDetails activity={output} />
+        : item.detail && (subagent ? <Markdown text={item.detail} /> : <CodeBlock copy={item.detail} remember="detail">{item.detail}</CodeBlock>)}
       {more}
-      {(item.jobResult || duration !== undefined || item.tokens !== undefined || openSubagent) && (
-        <div className="flex flex-wrap items-center gap-2 text-2xs text-fg-3">
-          {item.jobResult?.exitCode !== undefined && <span className="tabular-nums"><Trans>退出码 {item.jobResult.exitCode}</Trans></span>}
-          {duration !== undefined && duration > 0 && <span className="tabular-nums">{compactDuration(duration)}</span>}
-          {item.tokens !== undefined && <span className="tabular-nums">{compactTokens(item.tokens)} tok</span>}
-          {openSubagent && (
-            <button type="button" onClick={openSubagent} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs text-fg-2 transition-colors hover:bg-hover hover:text-fg no-hover:min-h-11">
-              <IconBot className="size-3" /><Trans>查看子 Agent 对话</Trans>
-            </button>
-          )}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2 text-2xs text-fg-3">
+        <time dateTime={time} className="tabular-nums">{formatDateTime(time)}</time>
+        {item.tokens !== undefined && <span className="tabular-nums">{compactTokens(item.tokens)} tok</span>}
+        {openSubagent && (
+          <button type="button" onClick={openSubagent} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs text-fg-2 transition-colors hover:bg-hover hover:text-fg no-hover:min-h-11">
+            <IconBot className="size-3" /><Trans>查看子 Agent 对话</Trans>
+          </button>
+        )}
+        {launch && launches && (
+          <button type="button" onClick={() => launches.jump(launch.key)} className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs text-fg-2 transition-colors hover:bg-hover hover:text-fg no-hover:min-h-11">
+            <IconArrowUp className="size-3" /><Trans>跳到启动处</Trans>
+          </button>
+        )}
+      </div>
       {(item.taskId || item.sourceStatus) && <Disclosure
         icon={<IconWrench className="size-3.5" />}
         title={t`诊断信息`}

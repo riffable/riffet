@@ -3,7 +3,7 @@ import type { NativeWorkbenchEvent, Session } from '../../../../../packages/cont
 import { describeCommandActions } from '../../../../../packages/timeline/src/toolTitle.js';
 import { commandActions } from '../shared/command-actions.js';
 import { isImagePath, toolImageContent } from '../shared/tool-images.js';
-import { ClaudeActivities, commandNameOf, localCommandOutput, noticeRowKind, shellInputOf, shellOutputOf, taskNotification, type ClaudeActivityHooks } from './activity.js';
+import { ClaudeActivities, commandNameOf, exitCodeOf, localCommandOutput, noticeRowKind, shellInputOf, shellOutputOf, taskNotification, type ClaudeActivityHooks } from './activity.js';
 import { clip, record, string, INTERRUPTED_MARKER, claudeApiFailure, isClaudeSyntheticPlaceholder, readableThinking, isNarration, type ClaudeRow, isTranscriptOnly, promptIdOf, hiddenTurnPrompt, subagentWake, rowText, stripPastedContent, commandPrompt } from './rows.js';
 
 /** Edits are whole-file sized: `Write` sends the file's full text. Matches the other backends' limit. */
@@ -423,6 +423,10 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
       if (notice) {
         const info = activities?.noticeInfo(notice);
         const monitorEvent = info?.kind === 'monitor' && notice.eventText !== undefined && notice.sourceStatus === undefined;
+        // A command's exit code is only in the summary's words; clients read it from the result they already know.
+        const exitCode = exitCodeOf(notice.summary);
+        const jobResult = exitCode !== undefined && notice.taskId && (notice.status === 'completed' || notice.status === 'failed')
+          ? { id: notice.taskId, status: notice.status === 'completed' ? 'succeeded' : 'failed', exitCode } : undefined;
         // A receipt for a report its hand-back row already showed.
         if (!notice.handedBack) events.push({ ...base(0), runId: state.turnId, type: 'task_notification', data: {
           sessionUpdate: 'task_notification', kind: noticeRowKind(info?.kind), status: monitorEvent ? 'running' : notice.status,
@@ -435,6 +439,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
           ...(notice.result || notice.eventText ? { detail: notice.result ?? notice.eventText } : {}),
           ...(notice.tokens !== undefined ? { tokens: notice.tokens } : {}),
           ...(notice.durationMs !== undefined ? { durationMs: notice.durationMs } : {}),
+          ...(jobResult ? { jobResult } : {}),
         } });
         // Heard of already when it was queued: the row adds the notice, not a second change of state.
         if (activities && !activities.claimed(raw)) events.push(...activities.notified(notice, createdAt, state.turnId, state.calls));

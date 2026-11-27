@@ -31,6 +31,20 @@ export interface ActivityControls {
 }
 export const ActivityContext = createContext<ActivityControls | undefined>(undefined);
 
+/** The call that started a background task, as the loaded transcript has it: its row, and the task's state on that row. */
+export interface TaskLaunch {
+  key: string;
+  activity?: NativeActivity;
+  /** The last notice about this call: the row's task state is the call's latest run, which only that notice reports. */
+  latestNotice: string;
+}
+/**
+ * How a notice about a task reaches back to where it began: the launching call by its tool call id,
+ * and a way to bring that row into view. Absent outside a transcript (a frozen copy, a side page).
+ */
+export interface TaskLaunches { find: (toolCallId: string) => TaskLaunch | undefined; jump: (key: string) => void }
+export const TaskLaunchContext = createContext<TaskLaunches | undefined>(undefined);
+
 const noneStopping: ReadonlySet<string> = new Set();
 /** How long the optimistic 停止中 mark outlives its request when the server never says anything. */
 const STOPPING_MARK_MS = 30_000;
@@ -97,7 +111,7 @@ function startOf(activity: NativeActivity, fallback: string): number {
 }
 
 /** How long it took once it is over, or `undefined` when nothing says. */
-function finishedMs(activity: NativeActivity, fallbackStart: string): number | undefined {
+export function finishedMs(activity: NativeActivity, fallbackStart: string): number | undefined {
   if (typeof activity.durationMs === 'number' && Number.isFinite(activity.durationMs)) return activity.durationMs;
   const span = Date.parse(activity.endedAt ?? '') - startOf(activity, fallbackStart);
   return Number.isFinite(span) && span >= 0 ? span : undefined;
@@ -179,7 +193,7 @@ export function BackgroundTaskMetadata({ activity, status: reported, fallbackSta
 }
 
 /** Full text on request: the preview stays until the reader asks, and a failed fetch can be retried. */
-function Details({ activity }: { activity: NativeActivity }) {
+export function ActivityDetails({ activity }: { activity: NativeActivity }) {
   const { t } = useLingui();
   const sessionId = useContext(ActivityContext)?.sessionId;
   const resources = useTranscriptResources();
@@ -248,7 +262,7 @@ function CompactionRow({ item, status }: { item: ActivityItem; status: NativeAct
       onToggle={() => setOpen(!open)}
       expandable={Boolean(activity.detail || activity.blobRef)}
     >
-      <Details activity={activity} />
+      <ActivityDetails activity={activity} />
     </Disclosure>
   );
 }
@@ -277,7 +291,7 @@ function BackgroundTaskRow({ item, status, root }: { item: ActivityItem; status:
           {label && !label.mono && <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{title}</p>}
           <BackgroundTaskMetadata activity={activity} status={status} fallbackStart={item.event.createdAt} />
           {command && <CodeBlock className="text-fg" copy={command} remember="command"><span className="select-none text-fg-4">$ </span>{command}</CodeBlock>}
-          <Details activity={activity} />
+          <ActivityDetails activity={activity} />
         </Disclosure>
       </div>
       {running && <StopButton activity={activity} />}
@@ -301,7 +315,7 @@ function ShellCommandRow({ activity, status }: { activity: NativeActivity; statu
         onToggle={() => setOpen(!open)}
         expandable={Boolean(activity.detail || activity.blobRef)}
       >
-        <Details activity={activity} />
+        <ActivityDetails activity={activity} />
       </Disclosure>
       {tail && <div className="ml-6 min-w-0"><CodeBlock>{tail}</CodeBlock></div>}
     </div>

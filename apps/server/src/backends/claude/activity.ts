@@ -152,9 +152,12 @@ export function noticeRowKind(kind: ClaudeTaskKind | undefined): string {
   return kind === 'agent' || kind === undefined ? 'subagent' : kind;
 }
 
-/** `Background command "X" failed with exit code 2` / `… completed (exit code 0)`. */
+/**
+ * `Background command "X" failed with exit code 2` / `… completed (exit code 0)`. The code is the last one:
+ * X is the call's description or command and can say "exit code" itself.
+ */
 export function exitCodeOf(summary: string | undefined): number | undefined {
-  const match = summary ? /\bexit code (-?\d+)/i.exec(summary) : null;
+  const match = summary ? [...summary.matchAll(/\bexit code (-?\d+)/gi)].at(-1) : undefined;
   return match ? Number(match[1]) : undefined;
 }
 

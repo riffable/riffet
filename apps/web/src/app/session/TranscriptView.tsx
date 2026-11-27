@@ -5,7 +5,7 @@ import { IconArrowDown, IconRefreshCw } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Button } from '@/components/ui/button';
-import { cn, scrollBehavior } from '@/lib/utils';
+import { cn, scrollBehavior, str } from '@/lib/utils';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH, discardContentWidthPreview, previewContentWidth, resetContentWidth, setContentWidth } from '@/lib/content-width';
 import type { LaneFind, NativeRunRecovery, DiscussionSource, Run, RunMetrics, TurnOutlineV3 } from '@contracts';
 import type { NativeHistoryLoadState } from './transcriptLoad';
@@ -13,7 +13,7 @@ import { transcriptLoadView } from './transcriptLoad';
 import type { TimelineItem } from './model';
 import type { CallSenderInfo, TurnAction } from './Timeline';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
-import { showsRunningCompaction } from './Activities';
+import { showsRunningCompaction, TaskLaunchContext, type TaskLaunch, type TaskLaunches } from './Activities';
 import { TranscriptCatchUp } from './TurnProcess';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { SWITCH_HOLD_MS, useSwitchedIn } from './sessionFrame';
@@ -661,6 +661,36 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   }
   renderedSegments.current = segments;
 
+  // A row asking to be brought into view (a notice's 跳到启动处) is a focus of the transcript's own; a new
+  // search result or 收藏 from outside replaces it.
+  const [ownFocus, setOwnFocus] = useState<MessageFocus>();
+  useEffect(() => { setOwnFocus(undefined); }, [focus, sessionId]);
+  // Rebuilt with the timeline, but handed down only when an entry changed: every notice row reads it.
+  const launchesRef = useRef<{ byCall: Map<string, TaskLaunch>; value: TaskLaunches }>(undefined);
+  const launches = useMemo<TaskLaunches>(() => {
+    const latest = new Map<string, string>();
+    for (const item of timeline) if (item.kind === 'task_notification' && item.subagentToolCallId) latest.set(item.subagentToolCallId, item.key);
+    const byCall = new Map<string, TaskLaunch>();
+    if (latest.size) {
+      for (const item of timeline) {
+        const id = item.kind === 'tool' ? str(item.event.data.toolCallId) : item.kind === 'activity' && item.activity.kind === 'background_task' ? item.activity.toolCallId : undefined;
+        if (!id || !latest.has(id)) continue;
+        const activity = item.kind === 'tool' ? item.activity?.kind === 'background_task' ? item.activity : undefined : item.kind === 'activity' ? item.activity : undefined;
+        // The tool row is where the reader saw the call; a standalone activity only stands in for one outside the window.
+        if (item.kind === 'tool' || !byCall.has(id)) byCall.set(id, { key: item.key, latestNotice: latest.get(id)!, ...(activity ? { activity } : {}) });
+      }
+    }
+    const previous = launchesRef.current;
+    const same = previous && previous.byCall.size === byCall.size && [...byCall].every(([id, entry]) => {
+      const old = previous.byCall.get(id);
+      return old && old.key === entry.key && old.latestNotice === entry.latestNotice && old.activity === entry.activity;
+    });
+    if (same) return previous.value;
+    const value: TaskLaunches = { find: (id) => byCall.get(id), jump: (key) => setOwnFocus({ messageId: key, itemKey: key }) };
+    launchesRef.current = { byCall, value };
+    return value;
+  }, [timeline]);
+
   const {
     reveal,
     setReveal,
@@ -676,7 +706,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     scrollScope,
     loaded,
     historyReady: loaded && historyLoad.state === 'ready' && !historyStale,
-    focus,
+    focus: ownFocus ?? focus,
     timeline,
     displayTimeline,
     timelineVersion,
@@ -818,6 +848,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   });
 
   return (
+    <TaskLaunchContext.Provider value={launches}>
     <div ref={frameRef} className="relative flex min-h-0 flex-1 flex-col">
       <div
         ref={scrollRef}
@@ -923,5 +954,6 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         <IconArrowDown className="size-3.5" /><Trans>回到底部</Trans>
       </button>
     </div>
+    </TaskLaunchContext.Provider>
   );
 }

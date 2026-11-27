@@ -891,7 +891,20 @@ msgid "后台任务汇报"
 msgstr ""
 
 #: src/app/session/Activities.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "后台命令"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "后台命令失败"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "后台命令已停止"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "后台命令已完成"
 msgstr ""
 
 #: src/app/session/SessionHandoff.tsx
@@ -1078,8 +1091,20 @@ msgstr ""
 msgid "子 Agent"
 msgstr ""
 
+#: src/app/session/TimelineTools.tsx
+msgid "子 Agent 失败"
+msgstr ""
+
 #: src/app/session/ComposerPickers.tsx
 msgid "子 Agent 定义"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "子 Agent 已停止"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "子 Agent 已完成"
 msgstr ""
 
 #: src/app/session/SubagentSession.tsx
@@ -1153,7 +1178,20 @@ msgid "展开对比 ({0})"
 msgstr ""
 
 #: src/app/session/Activities.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "工作流"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "工作流失败"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "工作流已停止"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "工作流已完成"
 msgstr ""
 
 #: src/app/session/ComposerPickers.tsx
@@ -2167,7 +2205,24 @@ msgid "留空随机"
 msgstr ""
 
 #: src/app/session/Activities.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "监控"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控事件"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控失败"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控已停止"
+msgstr ""
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控已结束"
 msgstr ""
 
 #: src/app/session/ComposerDock.tsx
@@ -2494,6 +2549,10 @@ msgstr ""
 msgid "超出窗口的历史会自动压缩到此，也可直接改写。"
 msgstr ""
 
+#: src/app/session/TimelineTools.tsx
+msgid "跳到启动处"
+msgstr ""
+
 #. placeholder {0}: index + 1
 #: src/app/session/TurnRail.tsx
 msgid "跳到第 {0} 条消息"
@@ -2641,9 +2700,8 @@ msgstr ""
 msgid "退出全屏编辑"
 msgstr ""
 
-#. placeholder {0}: item.jobResult.exitCode
 #: src/app/session/TimelineTools.tsx
-msgid "退出码 {0}"
+msgid "退出码 {exitCode}"
 msgstr ""
 
 #: src/app/session/ZoomPanImage.tsx

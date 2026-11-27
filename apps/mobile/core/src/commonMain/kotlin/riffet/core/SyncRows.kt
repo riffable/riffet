@@ -91,6 +91,9 @@ fun timelineItem(row: TimelineRow, sessionId: String, run: Run? = null, failureS
                 }
                 TaskNotificationResult(result.id, status, result.exitCode, result.runningMs)
             },
+            subagentToolCallId = body.subagentToolCallId,
+            tokens = body.tokens,
+            durationMs = body.durationMs,
             event = event,
         )
         // Like the v2 projection, an activity of a kind this build cannot draw is left out.

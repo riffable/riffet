@@ -316,6 +316,10 @@ sealed interface TimelineItem {
         val command: String? = null,
         val detail: String? = null,
         val jobResult: TaskNotificationResult? = null,
+        /** The call that started a subagent task; the page of its own conversation opens from it. */
+        val subagentToolCallId: String? = null,
+        val tokens: Long? = null,
+        val durationMs: Long? = null,
         override val event: ProjectedEvent,
     ) : TimelineItem
 

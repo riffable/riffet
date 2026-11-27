@@ -92,6 +92,26 @@ internal object UiText {
         "activity.tokens.wan" to "{0} 万",
         "activity.tokens.wanDecimal" to "{0}.{1} 万",
 
+        // Background task notices
+        "notice.shell.done" to "后台命令已完成",
+        "notice.shell.failed" to "后台命令失败",
+        "notice.shell.stopped" to "后台命令已停止",
+        "notice.shell.other" to "后台命令",
+        "notice.subagent.done" to "子 Agent 已完成",
+        "notice.subagent.failed" to "子 Agent 失败",
+        "notice.subagent.stopped" to "子 Agent 已停止",
+        "notice.subagent.other" to "子 Agent",
+        "notice.monitor.done" to "监控已结束",
+        "notice.monitor.failed" to "监控失败",
+        "notice.monitor.stopped" to "监控已停止",
+        "notice.monitor.running" to "监控事件",
+        "notice.monitor.other" to "监控",
+        "notice.workflow.done" to "工作流已完成",
+        "notice.workflow.failed" to "工作流失败",
+        "notice.workflow.stopped" to "工作流已停止",
+        "notice.workflow.other" to "工作流",
+        "notice.exitCode" to "退出码 {0}",
+
         // Delivery and steering
         "delivery.steer.waitingReceipt" to "发送中",
         "delivery.steer.sending" to "发送中",
@@ -382,6 +402,26 @@ internal object UiText {
         "activity.duration.seconds" to "{0}s",
         "activity.tokens.wan" to "{0}K",
         "activity.tokens.wanDecimal" to "{0}.{1}K",
+
+        // Background task notices
+        "notice.shell.done" to "Background command finished",
+        "notice.shell.failed" to "Background command failed",
+        "notice.shell.stopped" to "Background command stopped",
+        "notice.shell.other" to "Background command",
+        "notice.subagent.done" to "Subagent finished",
+        "notice.subagent.failed" to "Subagent failed",
+        "notice.subagent.stopped" to "Subagent stopped",
+        "notice.subagent.other" to "Subagent",
+        "notice.monitor.done" to "Monitor ended",
+        "notice.monitor.failed" to "Monitor failed",
+        "notice.monitor.stopped" to "Monitor stopped",
+        "notice.monitor.running" to "Monitor event",
+        "notice.monitor.other" to "Monitor",
+        "notice.workflow.done" to "Workflow finished",
+        "notice.workflow.failed" to "Workflow failed",
+        "notice.workflow.stopped" to "Workflow stopped",
+        "notice.workflow.other" to "Workflow",
+        "notice.exitCode" to "Exit code {0}",
 
         // Delivery and steering
         "delivery.steer.waitingReceipt" to "Sending",

@@ -11,6 +11,8 @@ export interface MessageFocus {
   runId?: string;
   /** A highlight's words: the transcript scrolls to them rather than to the whole answer. */
   quote?: MarkQuote;
+  /** A row the transcript itself points at (a notice's launching call), by its timeline key rather than a message id. */
+  itemKey?: string;
 }
 
 function hasNativeId(event: WorkbenchEvent, messageIds: readonly string[]): boolean {
@@ -25,6 +27,7 @@ function hasNativeId(event: WorkbenchEvent, messageIds: readonly string[]): bool
  * pages back through.
  */
 export function rowKeyForMessage(timeline: readonly TimelineItem[], focus: MessageFocus): string | undefined {
+  if (focus.itemKey) return timeline.some((item) => item.key === focus.itemKey) ? focus.itemKey : undefined;
   if (focus.runId) {
     const key = `user:${focus.runId}`;
     if (timeline.some((item) => item.key === key)) return key;

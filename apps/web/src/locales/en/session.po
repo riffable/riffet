@@ -891,8 +891,21 @@ msgid "后台任务汇报"
 msgstr "Background task reports"
 
 #: src/app/session/Activities.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "后台命令"
 msgstr "Background command"
+
+#: src/app/session/TimelineTools.tsx
+msgid "后台命令失败"
+msgstr "Background command failed"
+
+#: src/app/session/TimelineTools.tsx
+msgid "后台命令已停止"
+msgstr "Background command stopped"
+
+#: src/app/session/TimelineTools.tsx
+msgid "后台命令已完成"
+msgstr "Background command finished"
 
 #: src/app/session/SessionHandoff.tsx
 msgid "后续任务"
@@ -1078,9 +1091,21 @@ msgstr "Failed"
 msgid "子 Agent"
 msgstr "Subagent"
 
+#: src/app/session/TimelineTools.tsx
+msgid "子 Agent 失败"
+msgstr "Subagent failed"
+
 #: src/app/session/ComposerPickers.tsx
 msgid "子 Agent 定义"
 msgstr "Subagent definitions"
+
+#: src/app/session/TimelineTools.tsx
+msgid "子 Agent 已停止"
+msgstr "Subagent stopped"
+
+#: src/app/session/TimelineTools.tsx
+msgid "子 Agent 已完成"
+msgstr "Subagent finished"
 
 #: src/app/session/SubagentSession.tsx
 msgid "子 Agent 正在启动…"
@@ -1153,8 +1178,21 @@ msgid "展开对比 ({0})"
 msgstr "Expand compare ({0})"
 
 #: src/app/session/Activities.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "工作流"
 msgstr "Workflow"
+
+#: src/app/session/TimelineTools.tsx
+msgid "工作流失败"
+msgstr "Workflow failed"
+
+#: src/app/session/TimelineTools.tsx
+msgid "工作流已停止"
+msgstr "Workflow stopped"
+
+#: src/app/session/TimelineTools.tsx
+msgid "工作流已完成"
+msgstr "Workflow finished"
 
 #: src/app/session/ComposerPickers.tsx
 msgid "工具定义"
@@ -2167,8 +2205,25 @@ msgid "留空随机"
 msgstr "Random if blank"
 
 #: src/app/session/Activities.tsx
+#: src/app/session/TimelineTools.tsx
 msgid "监控"
 msgstr "Monitor"
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控事件"
+msgstr "Monitor event"
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控失败"
+msgstr "Monitor failed"
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控已停止"
+msgstr "Monitor stopped"
+
+#: src/app/session/TimelineTools.tsx
+msgid "监控已结束"
+msgstr "Monitor ended"
 
 #: src/app/session/ComposerDock.tsx
 msgid "目标"
@@ -2494,6 +2549,10 @@ msgstr "Base"
 msgid "超出窗口的历史会自动压缩到此，也可直接改写。"
 msgstr "History beyond the window is compacted here automatically; you can also edit it directly."
 
+#: src/app/session/TimelineTools.tsx
+msgid "跳到启动处"
+msgstr "Go to launch"
+
 #. placeholder {0}: index + 1
 #: src/app/session/TurnRail.tsx
 msgid "跳到第 {0} 条消息"
@@ -2641,10 +2700,9 @@ msgstr "Exit fullscreen"
 msgid "退出全屏编辑"
 msgstr "Exit fullscreen editing"
 
-#. placeholder {0}: item.jobResult.exitCode
 #: src/app/session/TimelineTools.tsx
-msgid "退出码 {0}"
-msgstr "Exit code {0}"
+msgid "退出码 {exitCode}"
+msgstr "Exit code {exitCode}"
 
 #: src/app/session/ZoomPanImage.tsx
 msgid "适应窗口"
