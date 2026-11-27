@@ -103,7 +103,7 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 - 证据按回合归属（`actor-observations.ts#ownTurn`）：状态的 `activeTurn`、输出事件的回合 ID 与 Run 的回合不同就不计入；Run 还没有回合 ID 时，指向我们另一条消息的回合也不计入。
 - 状态点名的回合属于更早的消息（`actor-observations.ts#earlierTurn`）时，这条状态落后于那一回合的结束：不据此把较新的消息判为「被后续回合取代」，也不因它推迟空闲收敛。
 - P2 之后这些证据不再决定结局，`busyAt`、`firstOutputAt` 只用于统计（首字耗时）和旧客户端的忙碌判断；隔离的作用是让它们和「被取代」的判断不被前一回合污染。
-- Cursor `interrupt` 结束时对 `paneBusyAt` 的重置在 P4 换成了回合栅栏（§4.6）。
+- Cursor `interrupt` 结束时对 `paneBusyAt` 的重置保留，只服务没有 live tap 的兜底路径；有 tap 时停下的 run 按它的 request 隔离（§4.6）。
 
 ### 4.5 替换回合
 
@@ -134,7 +134,10 @@ P4 的实现：
 - 第 1 层（`native/service.ts#observeSettledTurn`、`settleEndedTurn`）：live 文件的回合就是 store 最后的回合、并且 `ended` 已写时，store 一有答案就结束这一回合，不等画面空闲和 3 s 静默；流仍开着时，画面空闲、store 看似答完都不结束它。
 - 第 2 层：流 `broken`，或画面上出现这一回合的 CLI 错误时，交回原来的画面加 store 判断，错误文本给出失败原因。
 - 状态：流开着就是忙（`live.ts#cursorLiveOpen`），不管画面和 store 走到哪一回合；只有 tap 不跟这一回合时，才用 store 的增长推断被隐藏的回合（`transcriptWorking`）。
-- 停止后的栅栏改按回合：记下停止时 store 的回合（`Watch.stoppedTurn`），它后来的写入不算隐藏回合，下一回合的写入从第一条起就算；它留在画面上的错误一并作废。删除了把 `paneBusyAt` 设为停止时刻的重置。
+- 停止：确认停下后，那个 run 的流可能还在服务端收尾（实测 9 次中断里 2 次仍收到字段 14），它不算忙，也不挡结算（`native/service.ts#openUnstopped`，按 `stoppedLiveSteps` 的 request 比较）。停止和发送前的「还有回合在跑」检查（`hasActiveLiveStep`）仍只看正在输出的步骤：画面空闲时 Ctrl+C 不会发出，若也等流结束，停止只能超时。
+- HTTP/1.1 的流请求在拿到响应之前失败或被中止，也记为 `broken`；否则文件一直显示流开着，状态卡在忙。
+- 字段 14 之后又开始新步骤（字段 16），`ended` 撤回：这一回合还没完。
+- 没有 tap 的兜底路径保留停止时把 `paneBusyAt` 设为当前时刻的时间栅栏。设计时打算换成按 store 回合的栅栏，评审发现 store 没有 request id 的回合（CLI 自己发起的任务通知回合）会因此永远不算隐藏回合，停止时留在画面上的错误也会被重新当成当前错误；有 tap 时回合由流隔离，兜底路径不值得为此冒险。
 - 字段 14 本来就在解析（用量记录），协议解析没有变化，不需要补 `pnpm record` 录制。
 
 #### 实测：字段 14 的到达率（2026-11-27）

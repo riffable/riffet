@@ -59,6 +59,7 @@ if (mode === 'h2') {
 } else {
   const headers = { 'x-request-id': 'req-1', 'x-original-request-id': 'turn-1' };
   const sse = http.request({ port, method: 'POST', path: '/agent.v1.AgentService/RunSSE', headers }, response => { response.on('data', () => {}); response.on('end', done); });
+  sse.on('error', done);
   sse.end(envelope(Buffer.from('id'), false));
   const appendRequest = () => {
   const hex = Buffer.from(request).toString('hex');
@@ -208,6 +209,37 @@ describe('Cursor live tap', () => {
     expect(open.ended ?? open.broken).toBeUndefined();
     resume();
     const broken = await until(() => { const value = read(); return value?.broken ? value : undefined; });
+    expect(broken.ended).toBeUndefined();
+    child.stdin.end();
+  });
+
+  it('marks an HTTP/1 run whose stream request fails before any response as broken', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'cursor-live-'));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const dir = join(root, 'live'), cli = join(root, 'cli'), liveReader = new CursorLive(dir);
+    cleanup.push(() => liveReader.close());
+    mkdirSync(dir); mkdirSync(cli);
+    writeFileSync(join(cli, 'index.js'), CLI);
+    let appended!: () => void;
+    const identified = new Promise<void>(resolve => { appended = resolve; });
+    const server = http.createServer((request, response) => {
+      request.on('data', () => {});
+      if (request.url!.endsWith('BidiAppend')) { request.on('end', () => { response.end(); appended(); }); return; }
+      // The stream never gets its headers: the connection goes away once the run is known.
+      void identified.then(() => setTimeout(() => request.socket.destroy(), 100));
+    });
+    cleanup.push(() => server.close());
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const conversation = 'chat-h1-reset';
+    const child = spawn(process.execPath, [join(cli, 'index.js'), 'h1', String((server.address() as AddressInfo).port), conversation], {
+      env: { ...process.env, CURSOR_INVOKED_AS: 'agent', RIFFET_CURSOR_LIVE: dir, RIFFET_CURSOR_USAGE: liveReader.usageDir,
+        NODE_OPTIONS: `--require "${CURSOR_LIVE_TAP}"`, RUN_REQUEST: runRequest(conversation, 'run-3', 'go').toString('base64') },
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
+    cleanup.push(() => child.kill());
+    const file = join(dir, `${conversation}.json`);
+    const broken = await until(() => { const value = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined; return value?.broken ? value : undefined; });
+    expect(broken).toMatchObject({ turnEnds: true, turn: 'turn-1', prompt: 'go' });
     expect(broken.ended).toBeUndefined();
     child.stdin.end();
   });

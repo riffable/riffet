@@ -37,6 +37,9 @@ export interface CursorLiveStep {
   broken?: number;
 }
 
+/** The run (request) a step belongs to: `step` is `<request id>:<step number>`. */
+export const cursorLiveRun = (step: string): string => step.slice(0, step.lastIndexOf(':'));
+
 /** Whether the protocol stream says the run is still going: a tap that reports ends, and neither end yet. */
 export const cursorLiveOpen = (step: CursorLiveStep | undefined): boolean =>
   Boolean(step?.turnEnds && step.ended === undefined && step.broken === undefined);

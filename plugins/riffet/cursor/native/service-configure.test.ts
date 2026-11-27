@@ -307,6 +307,15 @@ it('lets the protocol stream settle a turn the tap follows, whatever the pane sh
     await poll(12100);
     await poll(15200);
     expect(answered.mock.calls[1]?.[1]).toMatchObject({ turnId: 'next', rootId: 'next-root' });
+
+    // A confirmed stop leaves its run's stream to close on the server: it is not the CLI working.
+    (service as unknown as { stoppedLiveSteps: Map<string, string> }).stoppedLiveSteps.set(session.id, 'request:2');
+    step = { turn: 'next', at: '', step: 'request:3', sealed: true, parts: [{ type: 'text', text: 'stopping' }], turnEnds: true };
+    await poll(16000);
+    expect(watch.status.phase).toBe('idle');
+    step = { ...step, turn: 'after', step: 'another:1' };
+    await poll(16100);
+    expect(watch.status.phase).toBe('busy');
   } finally {
     watch.close();
     vi.useRealTimers();

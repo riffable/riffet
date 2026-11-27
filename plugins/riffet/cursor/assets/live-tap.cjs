@@ -204,6 +204,10 @@ class Live {
         this.turnEnded(value);
         this.ended ??= Date.now();
         this.settle();
+      } else if (number === 16 && this.ended !== undefined) {
+        // A step after an end: the run went on, its turn is not over after all.
+        this.ended = undefined;
+        this.settle();
       } else if (number === 16 || number === 17) this.seal();
     }
   }
@@ -412,11 +416,16 @@ function tapHttp1(dir, usageDir, request) {
   while (waiting.size > REQUEST_LIMIT) waiting.delete(waiting.keys().next().value);
   const known = requests.get(id);
   if (known) live.identify(known);
+  let responded = false;
   request.once('response', response => {
+    responded = true;
     const encoding = response.headers['connect-content-encoding'];
     observe(response, live, () => (typeof encoding === 'string' ? encoding : 'gzip'));
   });
+  // A request that fails or is aborted before its response never streams: the run is broken, not open.
+  request.once('error', () => { if (!responded) live.close(); });
   request.once('close', () => {
+    if (!responded) live.close();
     // A terminal can arrive before BidiAppend identifies it. Keep a bounded wait for that identity.
     if (live.info && waiting.get(id) === live) waiting.delete(id);
   });

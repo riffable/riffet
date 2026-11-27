@@ -15,7 +15,7 @@ import type { CursorParameterizedModel } from './model-parameters.js';
 import { withAvailableModelsTap } from './model-tap.js';
 import { MODEL_ID, parseModelList, describeModelListFailure } from './model-list.js';
 import { Transcript, visible } from './transcript.js';
-import { cursorLiveOpen, type CursorLive } from './live.js';
+import { cursorLiveOpen, cursorLiveRun, type CursorLive, type CursorLiveStep } from './live.js';
 import {
   Watch, SCAN_INTERVAL_MS, LEFT_WATCH_MS, PASSIVE_POLL_MS, IDLE_WATCH_POLL_MS, IDLE_WATCH_AFTER_MS, SUBAGENT_POLL_MS, SUBAGENT_IDLE_MS, OPEN_STORES_GRACE_MS, subagentWorking,
   STATE_SWEEP_MS, transcriptWorking, subviewPhase, stateForPhase, JOB_LOG_MS, jobPayload, latestTranscriptActivity, type Listener, type SubagentWatch,
@@ -230,7 +230,7 @@ export class NativeService {
       const session = this.port.getSession(sessionId);
       if (!session.nativeSessionId) return false;
       const step = this.options.live?.read(session.nativeSessionId);
-      return Boolean(step && ((!step.sealed && this.stoppedLiveSteps.get(sessionId) !== step.step) || cursorLiveOpen(step)));
+      return Boolean(step && !step.sealed && this.stoppedLiveSteps.get(sessionId) !== step.step);
     } catch { return false; }
   }
 
@@ -725,13 +725,10 @@ export class NativeService {
     const liveStep = current.nativeSessionId ? this.options.live?.read(current.nativeSessionId) : undefined;
     if (liveStep) this.stoppedLiveSteps.set(session.id, liveStep.step);
     const watch = this.watches.get(session.id);
-    // The stopped turn is fenced by its identity, not by the time of the stop (docs/TURN-LIFECYCLE.md T5): its late
-    // store writes do not make a hidden turn, while the next turn's writes do from the first one. Its error under
-    // the footer was about it, so it is no longer the current one either.
-    if (watch) {
-      watch.stoppedTurn = watch.chat?.turnId();
-      watch.cliError = undefined;
-    }
+    // Keeps a store write from the aborted turn from satisfying `transcriptWorking`
+    // (`lastActivityAt > paneBusyAt + TRANSCRIPT_SETTLE_MS`), and the error line it left from counting as current.
+    // That is the fallback without a live tap; with one, the stopped run is fenced by its request (`stoppedLiveSteps`).
+    if (watch) watch.paneBusyAt = Date.now();
     if (watch && !watch.closed) await this.updateStatus(watch, current);
   }
 
@@ -1257,9 +1254,9 @@ export class NativeService {
             || (booting && !configBoot && liveStep.step.endsWith(':0') && Boolean(liveStep.prompt))));
           // The protocol stream is the first word on a turn (docs/TURN-LIFECYCLE.md §4.6): open means working, whatever
           // the pane shows or which turn the store has reached. Only without it does the store's growth stand in.
-          const protocolOpen = cursorLiveOpen(liveStep);
+          const protocolOpen = this.openUnstopped(session.id, liveStep);
           const protocolKnowsTurn = Boolean(liveStep?.turnEnds && liveStep.turn === turnId);
-          const storeWorking = !protocolKnowsTurn && watch.chat !== undefined && watch.chat.turnId() !== watch.stoppedTurn
+          const storeWorking = !protocolKnowsTurn && watch.chat !== undefined
             && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt });
           const hiddenTurn = !configBoot && (effectiveParsedPhase === 'idle' || booting) && !currentError
             && (protocolOpen || (!outcomeKnown && (liveStreaming || storeWorking)));
@@ -1356,7 +1353,7 @@ export class NativeService {
     }
     // Still streaming: an idle pane or an answered-looking store between steps says nothing. A CLI error shown for
     // it, or a broken stream (layer 2), leaves the decision to what the pane and the store show.
-    if (protocol && protocol.broken === undefined && !idlePane?.error) {
+    if (protocol && this.openUnstopped(session.id, protocol) && !idlePane?.error) {
       watch.idleTurn = undefined;
       return;
     }
@@ -1391,6 +1388,13 @@ export class NativeService {
         && current.nativeSessionId === nativeSessionId && current.terminalId === terminalId
         && terminal !== undefined && terminal.state !== 'exited';
     });
+  }
+
+  /** An open stream, unless it is the run a confirmed stop left behind: it may still be closing on the server. */
+  private openUnstopped(sessionId: string, step: CursorLiveStep | undefined): boolean {
+    if (!step || !cursorLiveOpen(step)) return false;
+    const stopped = this.stoppedLiveSteps.get(sessionId);
+    return !stopped || cursorLiveRun(stopped) !== cursorLiveRun(step.step);
   }
 
   /**
