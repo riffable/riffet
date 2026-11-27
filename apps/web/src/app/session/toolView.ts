@@ -2,7 +2,7 @@ import type { NativeActivity, WorkbenchEvent } from '@contracts';
 import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
 import { records, str } from '@/lib/utils';
-import { commandLabel, isCommandTitle, stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
+import { commandLabel, isCommandTitle, shortFileLabels, stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
 import { describeJobRow, describeToolRow, type ToolRowPresentation } from '../../../../../packages/timeline/src/toolPresentation';
 import { lineDiff } from './lineDiff';
 import { contentDiffStats } from '../../../../../packages/timeline/src/lineDiff';
@@ -34,7 +34,7 @@ export interface ToolView {
 /** Lines added and removed across every diff a tool returned, whatever the tool. */
 export const toolDiffStats = (view: ToolView) => contentDiffStats(view.contents, (before, after) => lineDiff(before, after, 0));
 
-export { describeJobRow, isCommandTitle, stripRoot, type ToolRowPresentation };
+export { describeJobRow, isCommandTitle, shortFileLabels, stripRoot, type ToolRowPresentation };
 
 /** Unified 4-slot presentation for a single tool event. */
 export function toolRowPresentation(event: WorkbenchEvent, root?: string): ToolRowPresentation {

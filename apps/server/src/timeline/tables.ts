@@ -1,5 +1,6 @@
 import type { DatabaseSync, StatementSync } from 'node:sqlite';
 import type { FileChange, SyncLane, TimelineRow, TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import type { StoredRowOutput } from './outputs.js';
 
 /*
  * Where a lane's folded rows live (docs/SYNC-V3.md, 时间线由服务端折叠). Additive tables in `derived.db`
@@ -93,7 +94,11 @@ export class TimelineTables {
       CREATE TABLE IF NOT EXISTS timeline_turns (
         session_id TEXT NOT NULL, lane TEXT NOT NULL, turn TEXT NOT NULL, start_pos INTEGER NOT NULL, cut INTEGER, payload TEXT NOT NULL,
         PRIMARY KEY (session_id, lane, turn));
-      CREATE INDEX IF NOT EXISTS timeline_turns_pos ON timeline_turns(session_id, lane, start_pos);`);
+      CREATE INDEX IF NOT EXISTS timeline_turns_pos ON timeline_turns(session_id, lane, start_pos);
+      CREATE TABLE IF NOT EXISTS timeline_row_outputs (
+        session_id TEXT NOT NULL, lane TEXT NOT NULL, key TEXT NOT NULL, pos INTEGER NOT NULL, payload TEXT NOT NULL,
+        PRIMARY KEY (session_id, lane, key));
+      CREATE INDEX IF NOT EXISTS timeline_row_outputs_pos ON timeline_row_outputs(session_id, lane, pos);`);
     const hasColumn = (table: string, name: string) =>
       (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(column => column.name === name);
     if (!hasColumn('timeline_heads', 'epoch')) this.db.exec('ALTER TABLE timeline_heads ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0');
@@ -203,6 +208,7 @@ export class TimelineTables {
   clearLane(sessionId: string, lane: SyncLane): void {
     this.sql('DELETE FROM timeline_rows WHERE session_id=? AND lane=?').run(sessionId, lane);
     this.sql('DELETE FROM timeline_turns WHERE session_id=? AND lane=?').run(sessionId, lane);
+    this.sql('DELETE FROM timeline_row_outputs WHERE session_id=? AND lane=?').run(sessionId, lane);
   }
 
   /**
@@ -240,10 +246,11 @@ export class TimelineTables {
 
   clearTurns(sessionId: string, lane: SyncLane): void {
     this.sql('DELETE FROM timeline_turns WHERE session_id=? AND lane=?').run(sessionId, lane);
+    this.sql('DELETE FROM timeline_row_outputs WHERE session_id=? AND lane=?').run(sessionId, lane);
   }
 
   dropSession(sessionId: string): void {
-    for (const table of ['timeline_rows', 'timeline_turns', 'timeline_heads']) this.sql(`DELETE FROM ${table} WHERE session_id=?`).run(sessionId);
+    for (const table of ['timeline_rows', 'timeline_turns', 'timeline_row_outputs', 'timeline_heads']) this.sql(`DELETE FROM ${table} WHERE session_id=?`).run(sessionId);
   }
 
   // ---- rows --------------------------------------------------------------------------------
@@ -406,6 +413,54 @@ export class TimelineTables {
   cutAtOrBefore(sessionId: string, lane: SyncLane, at: number): number | undefined {
     const row = this.sql('SELECT MAX(cut) AS cut FROM timeline_turns WHERE session_id=? AND lane=? AND cut IS NOT NULL AND cut<=?').get(sessionId, lane, at) as { cut: number | null };
     return row.cut ?? undefined;
+  }
+
+  /** Persists pre-truncation file outputs for one tool row; deletes the entry when empty. */
+  putRowOutputs(sessionId: string, lane: SyncLane, key: string, pos: number, outputs: readonly StoredRowOutput[]): boolean {
+    if (!outputs.length) return this.deleteRowOutputs(sessionId, lane, key);
+    const payload = JSON.stringify(outputs);
+    const existing = this.sql('SELECT payload FROM timeline_row_outputs WHERE session_id=? AND lane=? AND key=?').get(sessionId, lane, key) as { payload: string } | undefined;
+    if (existing?.payload === payload) return false;
+    this.sql(`INSERT INTO timeline_row_outputs(session_id,lane,key,pos,payload) VALUES(?,?,?,?,?)
+      ON CONFLICT(session_id,lane,key) DO UPDATE SET pos=excluded.pos, payload=excluded.payload`)
+      .run(sessionId, lane, key, pos, payload);
+    return true;
+  }
+
+  deleteRowOutputs(sessionId: string, lane: SyncLane, key: string): boolean {
+    return Number(this.sql('DELETE FROM timeline_row_outputs WHERE session_id=? AND lane=? AND key=?').run(sessionId, lane, key).changes) > 0;
+  }
+
+  /** Pre-truncation file outputs for every live tool row of one lane, in `pos` order. */
+  laneRowOutputs(sessionId: string, lane: SyncLane): StoredRowOutput[] {
+    const rows = this.sql('SELECT payload FROM timeline_row_outputs WHERE session_id=? AND lane=? ORDER BY pos, key').all(sessionId, lane) as Array<{ payload: string }>;
+    const out: StoredRowOutput[] = [];
+    for (const row of rows) {
+      try {
+        const parsed = JSON.parse(row.payload) as StoredRowOutput[];
+        if (Array.isArray(parsed)) out.push(...parsed);
+      } catch { /* ignore corrupt derived row */ }
+    }
+    return out;
+  }
+
+  /** Pre-truncation file outputs across every lane of a session (main + all subagent depths). */
+  sessionRowOutputs(sessionId: string): Array<{ lane: SyncLane; pos: number; key: string; outputs: StoredRowOutput[] }> {
+    const rows = this.sql('SELECT lane,pos,key,payload FROM timeline_row_outputs WHERE session_id=? ORDER BY pos, lane, key').all(sessionId) as Array<{ lane: string; pos: number; key: string; payload: string }>;
+    const out: Array<{ lane: SyncLane; pos: number; key: string; outputs: StoredRowOutput[] }> = [];
+    for (const row of rows) {
+      try {
+        const parsed = JSON.parse(row.payload) as StoredRowOutput[];
+        if (Array.isArray(parsed) && parsed.length) out.push({ lane: row.lane as SyncLane, pos: row.pos, key: row.key, outputs: parsed });
+      } catch { /* ignore corrupt derived row */ }
+    }
+    return out;
+  }
+
+  /** Direct child subagent lanes spawned by live tool rows in `lane`. */
+  laneSubagentLanes(sessionId: string, lane: SyncLane): SyncLane[] {
+    const rows = this.sql(`SELECT json_extract(payload, '$.subagent.lane') AS child FROM timeline_rows WHERE session_id=? AND lane=? AND kind='tool' AND deleted=0 AND instr(payload,'"subagent":{')>0 ORDER BY pos, key`).all(sessionId, lane) as Array<{ child: unknown }>;
+    return rows.flatMap(row => typeof row.child === 'string' && row.child.startsWith('sub:') ? [row.child as SyncLane] : []);
   }
 
   private turnRows(rows: unknown[]): StoredTurn[] {

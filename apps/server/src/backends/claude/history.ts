@@ -574,7 +574,7 @@ export class ClaudeTranscript {
         progress.settled = subagentSettles(value) ?? progress.settled;
         // Every child row carries the prompt id of the parent turn it was written in, unchanged across the
         // child's own rounds: those are told apart by `runId`, so the parent's id is not passed on.
-        for (const { nativeTurnId: _parentTurn, ...event } of mapRow(value, progress.lines, this.session, mapper, { unbounded: this.hooks.unbounded, observedChanges: this.hooks.observedChanges }, true)) {
+        for (const { nativeTurnId: _parentTurn, ...event } of mapRow(value, progress.lines, this.session, mapper, { unbounded: this.hooks.unbounded, observedChanges: this.hooks.observedChanges, fileSnapshots: this.hooks.fileSnapshots }, true)) {
           added.push({ ...event, sequence: base.length + added.length + 1 });
         }
       }

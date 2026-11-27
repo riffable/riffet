@@ -199,9 +199,9 @@ describe('Codex tool item projection', () => {
       { type: 'diff', path: '/repo/src/a.ts', oldText: 'tail', newText: 'tail\n--- added', lineOffset: 39, newLineOffset: 41 },
     ]);
     const [, added] = project({ type: 'fileChange', id: 'add', status: 'completed', changes: [{ path: '/repo/new.ts', kind: { type: 'add' }, diff: 'import x\n-flag\n export y' }] });
-    expect(added?.data.content).toEqual([{ type: 'diff', path: '/repo/new.ts', oldText: '', newText: 'import x\n-flag\n export y' }]);
+    expect(added?.data.content).toEqual([{ type: 'diff', path: '/repo/new.ts', oldText: '', newText: 'import x\n-flag\n export y', status: 'created' }]);
     const [, prefixed] = project({ type: 'fileChange', id: 'add2', status: 'completed', changes: [{ path: '/repo/new.ts', kind: 'add', diff: '+one\n+two' }] });
-    expect(prefixed?.data.content).toEqual([{ type: 'diff', path: '/repo/new.ts', oldText: '', newText: 'one\ntwo' }]);
+    expect(prefixed?.data.content).toEqual([{ type: 'diff', path: '/repo/new.ts', oldText: '', newText: 'one\ntwo', status: 'created' }]);
   });
 
   it('keeps a web search query as its input and title', () => {

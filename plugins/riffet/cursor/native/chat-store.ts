@@ -585,6 +585,49 @@ export function trimDiff(before: string, after: string, context = 3): { oldText:
 
 const clip = (text: string, limit = TEXT_LIMIT) => (text.length > limit ? `${text.slice(0, limit)}\n… 已截断 ${text.length - limit} 个字符` : text);
 
+function toolPath(input: Record<string, unknown>): string | undefined {
+  return str(input.path) ?? str(input.target_file) ?? str(input.file_path);
+}
+
+/** Parses unified diff hunks from `diffString` when full file bodies exceed `FILE_LIMIT`. */
+function parseUnifiedDiffBlocks(diff: string, path: string, status: 'created' | 'modified', limit: number): Array<Record<string, unknown>> {
+  const hunks: Array<{ oldLines: string[]; newLines: string[]; offset: number; newOffset: number }> = [];
+  let hunk: (typeof hunks)[number] | undefined;
+  let oldLeft = 0;
+  let newLeft = 0;
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith('@@')) {
+      const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
+      oldLeft = header ? Number(header[2] ?? 1) : 0;
+      newLeft = header ? Number(header[4] ?? 1) : 0;
+      const offset = header ? Math.max(0, Number(header[1]) - (oldLeft ? 1 : 0)) : 0;
+      const newOffset = header ? Math.max(0, Number(header[3]) - (newLeft ? 1 : 0)) : 0;
+      hunks.push(hunk = { oldLines: [], newLines: [], offset, newOffset });
+      continue;
+    }
+    const inBody = oldLeft > 0 || newLeft > 0;
+    if (line.startsWith('\\') || (!inBody && (line.startsWith('+++') || line.startsWith('---')))) continue;
+    const marker = inBody && line === '' ? ' ' : line[0];
+    if (marker !== '+' && marker !== '-' && marker !== ' ') continue;
+    if (!hunk) hunks.push(hunk = { oldLines: [], newLines: [], offset: 0, newOffset: 0 });
+    const text = line.slice(1);
+    if (marker !== '+') { hunk.oldLines.push(text); oldLeft -= 1; }
+    if (marker !== '-') { hunk.newLines.push(text); newLeft -= 1; }
+  }
+  return hunks
+    .filter(({ oldLines, newLines }) => oldLines.length || newLines.length)
+    .map(({ oldLines, newLines, offset, newOffset }) => ({
+      type: 'diff',
+      path,
+      oldText: clip(oldLines.join('\n'), limit),
+      newText: clip(newLines.join('\n'), limit),
+      status,
+      created: status === 'created',
+      ...(offset ? { lineOffset: offset } : {}),
+      ...(newOffset !== offset ? { newLineOffset: newOffset } : {}),
+    }));
+}
+
 /** `Thursday, Oct 1, 2026, 12:14 AM (UTC+8)` → ISO, or undefined when the CLI changes its format. */
 export function parsePromptTimestamp(value: string): string | undefined {
   const match = /^(?:[A-Za-z]+,\s*)?([A-Za-z]{3,9} \d{1,2}, \d{4}),?\s+(\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M)\s*\(UTC([+-]\d{1,2})(?::?(\d{2}))?\)$/.exec(value.trim());
@@ -1087,9 +1130,25 @@ function describeToolOutcome(part: ToolResultPart, message: ChatMessage, call?: 
     case 'StrReplace': case 'Edit': case 'MultiEdit': case 'Write': {
       const before = str(success?.beforeFullFileContent);
       const after = str(success?.afterFullFileContent);
-      const path = str(success?.path);
-      if (after !== undefined && (unbounded || (after.length <= FILE_LIMIT && (before ?? '').length <= FILE_LIMIT))) return { status, content: [{ type: 'diff', path, ...trimDiff(before ?? '', after) }] };
-      if (str(success?.diffString)) return { status, content: content(str(success?.diffString)!) };
+      const path = str(success?.path) ?? (call ? toolPath(unwrap(call.toolName, call.args).input) : undefined);
+      const changeStatus = before === undefined ? 'created' : 'modified';
+      if (after !== undefined && (unbounded || (after.length <= FILE_LIMIT && (before ?? '').length <= FILE_LIMIT))) {
+        return { status, content: [{ type: 'diff', path, ...trimDiff(before ?? '', after), status: changeStatus, created: changeStatus === 'created' }] };
+      }
+      const diffString = str(success?.diffString);
+      if (diffString && path) {
+        const parsed = parseUnifiedDiffBlocks(diffString, path, changeStatus, unbounded ? Infinity : FILE_LIMIT);
+        if (parsed.length) return { status, content: parsed };
+        return { status, content: content(diffString) };
+      }
+      return { status, ...(status === 'failed' ? { content: content(resultText(part.result)) } : {}) };
+    }
+    case 'Delete': {
+      const path = str(success?.path) ?? (call ? toolPath(unwrap(call.toolName, call.args).input) : undefined);
+      if (status !== 'failed' && path) {
+        const before = str(success?.beforeFullFileContent) ?? '';
+        return { status, content: [{ type: 'diff', path, oldText: clip(before, unbounded ? Infinity : FILE_LIMIT), newText: '', status: 'deleted', created: false }] };
+      }
       return { status, ...(status === 'failed' ? { content: content(resultText(part.result)) } : {}) };
     }
     case 'Read': case 'ReadFile':

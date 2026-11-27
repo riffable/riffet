@@ -354,6 +354,9 @@ class SessionStore(
     /** Sync v3: the open conversation's turns, for the outline and jumps past the window; null for v2. */
     val outline: StateFlow<SyncOutlineState?> = sync.outline
 
+    /** Sync v3: server-aggregated net file outputs for the whole conversation; null on older servers. */
+    val outputs: StateFlow<riffet.contracts.SessionOutputsSummary?> = sync.outputs
+
     /** Sync v3: rows whose text is a preview, by key, with the full row's size; see [expandRow]. */
     val truncatedRows: StateFlow<Map<String, Long>> = sync.truncated
 

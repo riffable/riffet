@@ -44,7 +44,10 @@ export class CodexJournalFeeds {
     return new CodexTranscriptSource({
       sessionId,
       backend: this.ctx.flavor.id,
-      ...(this.ctx.observation ? { observedChanges: (toolCallId: string) => this.ctx.observation?.changes(sessionId, toolCallId) } : {}),
+      ...(this.ctx.observation ? {
+        observedChanges: (toolCallId: string) => this.ctx.observation?.changes(sessionId, toolCallId),
+        fileSnapshots: (toolCallId: string) => this.ctx.observation?.snapshots(sessionId, toolCallId),
+      } : {}),
       threadId: threadOf,
       earlierThreads: () => host.getSession(sessionId).previousNativeSessionIds ?? [],
       topicAfter: threadId => {

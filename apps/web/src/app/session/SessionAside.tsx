@@ -1,6 +1,6 @@
 import { memo, useContext, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { AssistantRunSummary, NativeActivity, NativeJob, SessionGoal } from '@contracts';
+import type { AssistantRunSummary, NativeActivity, NativeJob, SessionGoal, SessionOutputsSummary } from '@contracts';
 import { IconCheck } from '@/components/icons';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
@@ -11,9 +11,10 @@ import { goalStatusLabel, todoEntries, todoSettled, type TodoEntry } from './Com
 import { AsideMemberRuns } from './MemberBackgroundRuns';
 import type { TimelineItem } from './model';
 import { formatDuration, subagentTitle, transcriptDuration, backgroundTaskSummary, type SubagentBrief } from './SessionWorkActions';
-import { sessionOutputs, type EditRecord } from './sessionAsideModel';
+import { sessionOutputs, type EditCacheEntry, type SessionOutput } from './sessionAsideModel';
 import { useSwitchedIn } from './sessionFrame';
 import { SubagentContext, type NativeJobStore, type SubagentStore } from './subagents';
+import { shortFileLabels } from './toolView';
 
 /** A titled group of the right aside; the model-collaboration page shares it. */
 export function Section({ title, meta, children }: { title: string; meta?: ReactNode; children: ReactNode }) {
@@ -142,28 +143,44 @@ const Work = memo(function Work({ subagentStore, jobStore, tasks, reportedBackgr
 
 const OUTPUT_LIMIT = 8;
 
-function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { projectId: string; timeline: readonly TimelineItem[]; timelineVersion: number; root?: string; onOpenPath?: (path: string) => void }) {
+function Outputs({ projectId, sessionId, syncOutputs, timeline, timelineVersion, root, onOpenPath }: {
+  projectId: string;
+  sessionId?: string;
+  syncOutputs?: SessionOutputsSummary;
+  timeline: readonly TimelineItem[];
+  timelineVersion: number;
+  root?: string;
+  onOpenPath?: (path: string) => void;
+}) {
   const { t } = useLingui();
-  const cache = useRef(new WeakMap<object, EditRecord>());
-  const outputs = useMemo(() => sessionOutputs(timeline, root, cache.current), [timeline, timelineVersion, root]);
+  const cache = useRef(new WeakMap<object, EditCacheEntry>());
+  const outputs = useMemo<readonly SessionOutput[]>(() => (
+    syncOutputs !== undefined ? syncOutputs.items : sessionOutputs(timeline, root, cache.current)
+  ), [syncOutputs, timeline, timelineVersion, root]);
+  const totalCount = syncOutputs !== undefined ? syncOutputs.total : outputs.length;
+  const labels = useMemo(() => shortFileLabels(outputs.map((item) => item.path)), [outputs]);
   const [expanded, setExpanded] = useState(false);
-  const [diffPath, setDiffPath] = useState<string>();
+  const [selected, setSelected] = useState<SessionOutput>();
   if (!outputs.length) return null;
   const shown = expanded ? outputs : outputs.slice(0, OUTPUT_LIMIT);
   return (
-    <Section title={t`产出`} meta={outputs.length > 1 ? t`${outputs.length} 个文件` : undefined}>
+    <Section title={t`产出`} meta={totalCount > 1 ? t`${totalCount} 个文件` : undefined}>
       <ul className="flex flex-col">
-        {shown.map((output) => {
+        {shown.map((output, index) => {
           const name = output.path.split('/').at(-1) ?? output.path;
+          const label = labels[index] ?? name;
+          const status = output.status ?? (output.created ? 'created' : 'modified');
           return (
             <li key={output.path}>
-              <button type="button" onClick={() => setDiffPath(output.path)} title={output.path} className="flex h-7 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+              <button type="button" onClick={() => setSelected(output)} title={output.path} className="flex h-7 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                 <span className="grid w-4 shrink-0 place-items-center"><FileIcon entry={{ kind: 'file', name }} className="size-3.5 text-fg-4" /></span>
-                <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-2">{name}</span>
+                <span className={cn('min-w-0 flex-1 truncate font-mono text-xs text-fg-2', status === 'deleted' && 'line-through text-fg-4')}>{label}</span>
                 <span className="flex shrink-0 items-center gap-1.5 font-mono text-2xs tabular-nums">
-                  {output.created && !output.removed ? <span className="font-sans text-fg-4"><Trans>新建</Trans></span> : null}
-                  {output.added > 0 && <span className="text-[var(--diff-add-marker)]">+{output.added}</span>}
-                  {output.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{output.removed}</span>}
+                  {status === 'created' ? <span className="font-sans text-fg-4"><Trans>新建</Trans></span> : null}
+                  {status === 'deleted' ? <span className="font-sans text-fg-4"><Trans>已删除</Trans></span> : null}
+                  {output.binary ? <span className="font-sans text-fg-4"><Trans>二进制</Trans></span> : null}
+                  {!output.binary && output.added > 0 && <span className="text-[var(--diff-add-marker)]">+{output.added}</span>}
+                  {!output.binary && output.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{output.removed}</span>}
                 </span>
               </button>
             </li>
@@ -171,7 +188,15 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
         })}
       </ul>
       {outputs.length > OUTPUT_LIMIT && <button type="button" onClick={() => setExpanded((value) => !value)} className={cn(foldButton, 'pl-8')}>{expanded ? <Trans>收起</Trans> : <Trans>还有 {outputs.length - OUTPUT_LIMIT} 个文件</Trans>}</button>}
-      <FileDiffDialog projectId={projectId} path={diffPath} onClose={() => setDiffPath(undefined)} onOpenPath={onOpenPath} />
+      <FileDiffDialog
+        projectId={projectId}
+        sessionId={sessionId}
+        path={selected?.path}
+        preferSession={selected?.hasSnapshotDiff === true}
+        outsideProject={selected?.outsideProject === true}
+        onClose={() => setSelected(undefined)}
+        onOpenPath={onOpenPath}
+      />
     </Section>
   );
 }
@@ -183,8 +208,9 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
  * on screen is `useSessionLayout`'s call, never its contents': an empty column stays a column.
  */
 /** Streamed frames only reach `Outputs`: the plan and the work list keep their memo while the timeline moves. */
-export const SessionAside = memo(function SessionAside({ projectId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, memberRuns, onOpenSession, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
+export const SessionAside = memo(function SessionAside({ projectId, sessionId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, memberRuns, onOpenSession, syncOutputs, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
   projectId: string;
+  sessionId?: string;
   outlineRef: Ref<HTMLDivElement>;
   goal?: SessionGoal;
   todos?: Record<string, unknown>[];
@@ -195,6 +221,7 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
   subagentBriefs?: ReadonlyMap<string, SubagentBrief>;
   memberRuns?: readonly AssistantRunSummary[];
   onOpenSession?: (sessionId: string) => void;
+  syncOutputs?: SessionOutputsSummary;
   timeline: readonly TimelineItem[];
   timelineVersion: number;
   root?: string;
@@ -213,7 +240,7 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
       <div ref={outlineRef} className="contents" />
       {memberRuns && memberRuns.length > 0 && <AsideMemberRuns runs={memberRuns} onOpenSession={onOpenSession} />}
       <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} root={root} />
-      {outputs && <Outputs key={projectId} projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />}
+      {outputs && <Outputs key={sessionId ?? projectId} projectId={projectId} sessionId={sessionId} syncOutputs={syncOutputs} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />}
     </aside>
   );
 });

@@ -401,13 +401,26 @@ export class ClaudeInteractions {
    * command's. A request left to the CLI's own dialog keeps the window it has.
    */
   async observeDecision(payload: Record<string, unknown>, decision: Record<string, unknown>): Promise<void> {
-    if (!this.deps.observer || payload.tool_name !== 'Bash') return;
+    if (!this.deps.observer) return;
+    const toolName = string(payload.tool_name);
+    if (!toolName) return;
     const input = asRecord(payload.tool_input) ?? {};
-    const toolId = string(payload.tool_use_id) ?? this.announcedToolUses.get(this.toolFingerprint('Bash', input));
+    const toolId = string(payload.tool_use_id) ?? this.announcedToolUses.get(this.toolFingerprint(toolName, input));
     const behavior = string(asRecord(asRecord(decision.hookSpecificOutput)?.decision)?.behavior);
     if (!toolId || !behavior) return;
-    if (behavior === 'deny') this.deps.observer.discard(toolId);
-    else if (behavior === 'allow' && input.run_in_background !== true) await this.deps.observer.begin(toolId, string(payload.cwd) ?? this.deps.project.cwd, string(input.command));
+    const sessionId = this.deps.session().id;
+    if (toolName === 'Bash') {
+      if (behavior === 'deny') this.deps.observer.discard(toolId);
+      else if (behavior === 'allow' && input.run_in_background !== true) await this.deps.observer.begin(toolId, string(payload.cwd) ?? this.deps.project.cwd, string(input.command), sessionId);
+      return;
+    }
+    if (['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(toolName)) {
+      const rawPath = string(input.file_path) ?? string(input.notebook_path);
+      const baseCwd = string(payload.cwd) ?? this.deps.project.cwd;
+      const editPath = rawPath ? (rawPath.startsWith('/') ? rawPath : `${baseCwd.replace(/\/+$/, '')}/${rawPath}`) : undefined;
+      if (behavior === 'deny') this.deps.observer.fileSnapshots?.discardEdit(sessionId, toolId);
+      else if (behavior === 'allow' && editPath) await this.deps.observer.fileSnapshots?.beginEdit(sessionId, toolId, editPath);
+    }
   }
 
   private toolFingerprint(toolName: string, toolInput: Record<string, unknown>): string {

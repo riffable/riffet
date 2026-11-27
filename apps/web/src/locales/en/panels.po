@@ -1044,9 +1044,17 @@ msgstr "It is too large to undo once deleted."
 msgid "定位当前文件"
 msgstr "Select Opened File"
 
+#: src/app/panels/FileDiffDialog.tsx
+msgid "对比范围"
+msgstr "Diff scope"
+
 #: src/app/panels/CodeView.tsx
 msgid "展开"
 msgstr "Expand"
+
+#: src/app/panels/FileDiffDialog.tsx
+msgid "工作区"
+msgstr "Workspace"
 
 #. placeholder {0}: nameOf(path)
 #: src/app/panels/useFileOperations.ts
@@ -1268,6 +1276,10 @@ msgstr "More actions"
 msgid "更多视图"
 msgstr "More views"
 
+#: src/app/panels/FileDiffDialog.tsx
+msgid "期间含外部改动"
+msgstr "Includes external edits"
+
 #: src/app/panels/useFileOperations.ts
 msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
 msgstr "Unsaved edits are lost, and undoing the deletion doesn’t bring them back."
@@ -1281,6 +1293,10 @@ msgstr "Not committed"
 #: src/app/panels/ByteViews.tsx
 msgid "末尾 {0}，共 {1}"
 msgstr "Last {0} of {1}"
+
+#: src/app/panels/FileDiffDialog.tsx
+msgid "本会话"
+msgstr "This session"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法"

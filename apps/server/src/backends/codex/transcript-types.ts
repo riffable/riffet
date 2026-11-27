@@ -50,6 +50,8 @@ export interface CodexTranscriptOptions {
   backend: string;
   /** What a shell command changed in the working tree, by its tool call id (`observation.ts`). */
   observedChanges?: ObservedChanges;
+  /** Exact before/after snapshots recorded around a command or fileChange (`file-snapshots.ts`). */
+  fileSnapshots?: import('./transcript.js').ObservedSnapshots;
   /** The thread the conversation follows now. */
   threadId(): string | undefined;
   /** The threads it followed before, oldest first: each new topic (`/new`) went on in a new thread (`Session.previousNativeSessionIds`). */

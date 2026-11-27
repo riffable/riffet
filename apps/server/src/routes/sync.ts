@@ -126,6 +126,22 @@ export function registerSyncRoutes(app: FastifyInstance, deps: RouteDeps & { syn
     return timeline.outline(id, lane);
   });
 
+  /** Net diff for one output file reconstructed from the conversation's own CAS snapshots (docs/SESSION-OUTPUTS.md). */
+  app.get<{ Params: { id: string }; Querystring: { path?: string } }>('/api/v3/sessions/:id/outputs/diff', async request => {
+    const session = store.getSession(request.params.id);
+    const project = store.getProject(session.projectId);
+    // Assistant/quick-chat workspaces live under the state directory and do not expose output diffs (docs/ASSISTANT.md).
+    if (project.system === 'assistant' || project.system === 'quick-chat') {
+      throw new AppError('OUTPUT_SNAPSHOT_UNAVAILABLE', 'No session snapshot is available for this file', 404);
+    }
+    const path = typeof request.query.path === 'string' ? request.query.path.trim() : '';
+    if (!path || path.length > 8192) throw new AppError('INVALID_OUTPUT_PATH', 'path is required');
+    await timeline.ready(session.id, 'main');
+    const diff = timeline.outputDiff(session.id, path, project.cwd);
+    if (!diff) throw new AppError('OUTPUT_SNAPSHOT_UNAVAILABLE', 'No session snapshot is available for this file', 404);
+    return diff;
+  });
+
   /** One sentence on what a finished turn came to; `{}` while no model is chosen or the turn has no answer. Written on the first request, then kept. */
   app.get<{ Params: { id: string; turn: string } }>('/api/sessions/:id/turns/:turn/summary', async (request, reply) => {
     const id = store.getSession(request.params.id).id;

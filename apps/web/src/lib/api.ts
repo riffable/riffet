@@ -23,6 +23,7 @@ import type {
   OwnerUpdate,
   NativeRuntimeActionRequest,
   NativeTurnTarget,
+  SessionOutputDiff,
   NativeStopRequest,
   NativeRunRecovery,
   SessionReferenceInput,
@@ -804,6 +805,7 @@ export const api = {
   gitStatus: (projectId: string, fresh = false) => request<GitStatus>(`/api/projects/${encodeURIComponent(projectId)}/git/status${fresh ? '?fresh=true' : ''}`),
   /** `base` compares the working tree with `checkpoint:<id>` or a commit instead of what is staged. */
   gitDiff: (projectId: string, path: string, options: { staged?: boolean; base?: string; commit?: string; from?: string } = {}) => request<GitDiff>(`/api/projects/${encodeURIComponent(projectId)}/git/diff?path=${encodeURIComponent(path)}&staged=${options.staged === true}${options.base ? `&base=${encodeURIComponent(options.base)}` : ''}${options.commit ? `&commit=${encodeURIComponent(options.commit)}` : ''}${options.from ? `&from=${encodeURIComponent(options.from)}` : ''}`),
+  sessionOutputDiff: (sessionId: string, path: string, signal?: AbortSignal) => request<SessionOutputDiff>(`/api/v3/sessions/${encodeURIComponent(sessionId)}/outputs/diff?path=${encodeURIComponent(path)}`, { signal }),
   /** A page of history, newest first; `all` walks every branch and tag. */
   gitLog: (projectId: string, options: { all?: boolean; skip?: number } = {}) => request<GitLog>(`/api/projects/${encodeURIComponent(projectId)}/git/log?all=${options.all === true}&skip=${options.skip ?? 0}`),
   gitCommit: (projectId: string, hash: string) => request<GitCommitDetail>(`/api/projects/${encodeURIComponent(projectId)}/git/commits/${encodeURIComponent(hash)}`),

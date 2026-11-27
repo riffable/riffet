@@ -178,8 +178,15 @@ function commandToolCall(item: RpcItem): { name: string; kind: string; title: st
 
 /** What a command changed in the working tree, seen around it by the hooks (`observation.ts`); appended to its result. */
 export type ObservedChanges = (toolCallId: string) => readonly Record<string, unknown>[] | undefined;
+export type ObservedSnapshots = (toolCallId: string) => readonly import('../../../../../packages/contracts/src/sync.js').FileSnapshotRecord[] | undefined;
 
-export function projectToolItem(item: RpcItem, event: (id: string, type: string, data: Record<string, unknown>) => NativeWorkbenchEvent, base: string, observedChanges?: ObservedChanges): NativeWorkbenchEvent[] {
+export function projectToolItem(
+  item: RpcItem,
+  event: (id: string, type: string, data: Record<string, unknown>) => NativeWorkbenchEvent,
+  base: string,
+  observedChanges?: ObservedChanges,
+  fileSnapshots?: ObservedSnapshots,
+): NativeWorkbenchEvent[] {
   const toolCallId = subagentToolCallId(item) ?? base;
   const status = toolStatus(item.status);
   if (isSubagentStart(item)) {
@@ -282,12 +289,18 @@ export function projectToolItem(item: RpcItem, event: (id: string, type: string,
     ...(mcpContent.length ? { content: mcpContent } : {}),
     ...(item.type === 'commandExecution' && str(item.aggregatedOutput) ? { content: [{ type: 'content', content: { type: 'text', text: item.aggregatedOutput } }] } : {}),
     ...(item.type === 'commandExecution' && typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {}),
-    ...(item.type === 'fileChange' && changes.length ? { content: changes.flatMap(change => changeHunks(change).map(hunk => ({ type: 'diff', path: change.path, ...hunk }))) } : {}),
+    ...(item.type === 'fileChange' && changes.length ? { content: changes.flatMap(change => {
+      const changeKind = typeof change.kind === 'string' ? change.kind : str(asRecord(change.kind)?.type);
+      const changeStatus = changeKind === 'add' ? 'created' : changeKind === 'delete' ? 'deleted' : changeKind ? 'modified' : undefined;
+      return changeHunks(change).map(hunk => ({ type: 'diff', path: change.path, ...hunk, ...(changeStatus ? { status: changeStatus } : {}) }));
+    }) } : {}),
     ...(str(item.error) ? { content: [{ type: 'content', content: { type: 'text', text: item.error } }] } : {}),
   };
   // A shell command reports no edits of its own; the diffs seen around it ride along with its output, as Claude's do.
   const observed = item.type === 'commandExecution' ? observedChanges?.(toolCallId) : undefined;
   if (observed?.length) resultData.content = [...asArray<unknown>(resultData.content), ...observed];
+  const snapshots = (item.type === 'commandExecution' || item.type === 'fileChange') ? fileSnapshots?.(toolCallId) : undefined;
+  if (snapshots?.length) resultData.fileSnapshots = snapshots;
   return [call, event(`${base}:result`, 'tool_call_update', resultData)];
 }
 
@@ -298,11 +311,11 @@ export function projectStartedTool(item: RpcItem, sessionId: string, threadId: s
   return projectToolItem({ ...item, status: 'inProgress' }, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, raw), base).slice(0, 1);
 }
 
-export function projectCompletedTool(item: RpcItem, sessionId: string, threadId: string, turnId: string, runId?: string, createdAt?: string, span?: ItemSpan, observedChanges?: ObservedChanges): NativeWorkbenchEvent[] {
+export function projectCompletedTool(item: RpcItem, sessionId: string, threadId: string, turnId: string, runId?: string, createdAt?: string, span?: ItemSpan, observedChanges?: ObservedChanges, fileSnapshots?: ObservedSnapshots): NativeWorkbenchEvent[] {
   if (!isCodexToolItem(item)) return [];
   const base = `${threadId}:${turnId}:${subagentToolCallId(item) ?? item.type}`;
   const raw = sanitizedCodexRaw(item);
-  const all = projectToolItem(item, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, raw), base, observedChanges);
+  const all = projectToolItem(item, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, raw), base, observedChanges, fileSnapshots);
   // A child's start may be announced only once it has happened, so its row comes with it.
   if (isSubagentStart(item)) return all;
   const updates = all.filter(event => event.type === 'tool_call_update');

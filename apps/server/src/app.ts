@@ -51,6 +51,8 @@ import { registerExternalSessionRoutes } from './routes/external-sessions.js';
 import { setAppServerOwner } from './backends/shared/codex-app-server.js';
 import { CodexBackendAdapter } from './backends/codex/index.js';
 import { workspaceObserver } from './backends/shared/workspace-observer.js';
+import { sessionFileSnapshots } from './backends/shared/file-snapshots.js';
+import { OUTPUT_BUDGET } from '../../../packages/contracts/src/budgets.js';
 import { traexFlavor } from './backends/codex/flavors.js';
 import { ClaudeBackendAdapter } from './backends/claude/index.js';
 import { configDirOf } from './backends/claude/launch.js';
@@ -540,12 +542,18 @@ export async function createApp(options: AppOptions = {}) {
   });
   const readNativeInput=createNativeInputReader(workspace);
   const nativeRuns=(id:string)=>[...new Map([...store.listRecentNativeRuns(id).reverse(),...store.listUnfinishedNativeRuns(id)].map(run=>[run.id,run])).values()].sort((a,b)=>a.createdAt.localeCompare(b.createdAt));
+  sessionFileSnapshots(stateDir).configure({
+    putBlob: (id, bytes, mime) => store.journal.putSessionBlob(id, bytes, mime),
+    maxSessionBytes: lite ? OUTPUT_BUDGET.liteSessionSnapshotTotalBytes : OUTPUT_BUDGET.sessionSnapshotTotalBytes,
+  });
   // Sync v3 (docs/SYNC-V3.md): the journal folded into timeline rows in L2 `derived.db`, and each backend's transcript read into L1 `journal.db`.
   const timeline=new TimelineService({db:store.derivedDb,journal:store.journal,listRuns:id=>store.listRuns(id),onRunChanged:listener=>store.onRunChanged(listener),
     hotLanes:profileBudget.timelineHotLanes,summaryEntries:profileBudget.timelineSummaryEntries,
+    outputDiffCacheEntries:lite?OUTPUT_BUDGET.liteDiffCacheEntries:OUTPUT_BUDGET.diffCacheEntries,
     expandedRowCacheEntries:profileBudget.expandedRowCacheEntries,expandedRowCacheBytes:profileBudget.expandedRowCacheBytes,
     listJobs:id=>nativeBackends.listJobs(id),onJobChanged:listener=>nativeBackends.onJobChanged(listener),
     activity:id=>store.sessionActivity(id),
+    projectRoot:id=>{try{const session=store.getSession(id);const project=store.getProject(session.projectId);return project.system==='quick-chat'||project.system==='assistant'?undefined:project.cwd;}catch{return undefined;}},
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
   pluginAgentsRef=createPluginAgentHostFactory({store,settings,nativeBackends,team,memberMain:id=>memberMainRef?.(id),sessionCommands,dispatch,ingest,timeline});
   cacheRegistry.register({name:'store',stats:()=>store.cacheStats(),trim:()=>store.trimCaches()});

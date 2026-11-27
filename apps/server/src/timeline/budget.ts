@@ -143,7 +143,11 @@ export function fitRow(
   options: { persistTruncated?: boolean | 'auto' } = {},
 ): { row: RowContent; json: string; bytes: number; persistedTruncated: boolean } {
   const fit: Fit = { sessionId, put, cut: false };
-  const full = materializeRowImages(row, sessionId, put) as RowContent & Record<string, unknown>;
+  // Internal per-file snapshot hashes are persisted into `timeline_row_outputs` before `fitRow`; strip them from wire rows.
+  const stripped = 'fileSnapshots' in row.event.data
+    ? { ...row, event: { ...row.event, data: Object.fromEntries(Object.entries(row.event.data).filter(([k]) => k !== 'fileSnapshots')) } } as RowContent
+    : row;
+  const full = materializeRowImages(stripped, sessionId, put) as RowContent & Record<string, unknown>;
   const fullJson = JSON.stringify(full);
   const fullBytes = Buffer.byteLength(fullJson);
   // Most rows are small and have nothing long: they are sent as they are, as is all of the model's output.

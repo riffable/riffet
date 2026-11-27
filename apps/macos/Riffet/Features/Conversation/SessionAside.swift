@@ -143,11 +143,15 @@ struct SessionAside: View {
 
     private func outputs(_ outputs: [SessionOutput]) -> some View {
         let root = workbench.project(session.projectId)?.cwd
+        let paths = outputs.map { stripRoot(text: $0.path, root: root) }
+        let labels = shortOutputLabels(paths)
         let shown = outputsExpanded ? outputs : Array(outputs.prefix(Self.outputLimit))
         return InfoSection(title: String(localized: "产出"), count: outputs.count) {
-            ForEach(shown, id: \.path) { output in
-                let path = stripRoot(text: output.path, root: root)
+            ForEach(Array(shown.enumerated()), id: \.element.path) { index, output in
+                let path = paths[index]
                 let name = (path as NSString).lastPathComponent
+                let label = labels[index]
+                let status = output.status ?? (output.created ? "created" : "modified")
                 Button {
                     FileOpener.activate(path: path, line: nil, projectId: session.projectId, workbench: workbench)
                 } label: {
@@ -157,13 +161,17 @@ struct SessionAside: View {
                             .foregroundStyle(palette.fg4)
                             .frame(width: 16)
                             .accessibilityHidden(true)
-                        Text(name).font(.riffet(size: S(12), design: .monospaced))
-                            .foregroundStyle(palette.fg2).lineLimit(1).truncationMode(.middle)
+                        Text(label).font(.riffet(size: S(12), design: .monospaced))
+                            .foregroundStyle(status == "deleted" ? palette.fg4 : palette.fg2)
+                            .strikethrough(status == "deleted")
+                            .lineLimit(1).truncationMode(.middle)
                         Spacer(minLength: Space.xs)
                         HStack(spacing: 6) {
-                            if output.created && output.removed == 0 { Text("新建").foregroundStyle(palette.fg4) }
-                            if output.added > 0 { Text(verbatim: "+\(output.added)").foregroundStyle(palette.success) }
-                            if output.removed > 0 { Text(verbatim: "−\(output.removed)").foregroundStyle(palette.danger) }
+                            if status == "created" { Text("新建").foregroundStyle(palette.fg4) }
+                            if status == "deleted" { Text("已删除").foregroundStyle(palette.fg4) }
+                            if output.binary { Text("二进制").foregroundStyle(palette.fg4) }
+                            if !output.binary && output.added > 0 { Text(verbatim: "+\(output.added)").foregroundStyle(palette.success) }
+                            if !output.binary && output.removed > 0 { Text(verbatim: "−\(output.removed)").foregroundStyle(palette.danger) }
                         }
                         .font(.riffet(size: S(11)).monospacedDigit())
                         .fixedSize()
@@ -178,6 +186,20 @@ struct SessionAside: View {
             if outputs.count > Self.outputLimit {
                 foldButton(outputsExpanded ? String(localized: "收起") : String(localized: "还有 \(outputs.count - Self.outputLimit) 个文件")) { outputsExpanded.toggle() }
             }
+        }
+    }
+
+    /// Shows the file name when unique, or adds parent segments when multiple outputs share a basename.
+    private func shortOutputLabels(_ paths: [String]) -> [String] {
+        let split = paths.map { $0.split(separator: "/").map(String.init) }
+        var counts: [String: Int] = [:]
+        for parts in split {
+            if let base = parts.last { counts[base, default: 0] += 1 }
+        }
+        return zip(paths, split).map { path, parts in
+            guard let base = parts.last else { return path }
+            if (counts[base] ?? 0) <= 1 || parts.count <= 1 { return base }
+            return parts.suffix(2).joined(separator: "/")
         }
     }
 

@@ -138,6 +138,11 @@ export class CodexObservation {
     return this.observer.changes(sessionId, toolCallId);
   }
 
+  /** Exact before/after snapshots recorded for a command or fileChange tool call. */
+  snapshots(sessionId: string, toolCallId: string): readonly import('../../../../../packages/contracts/src/sync.js').FileSnapshotRecord[] | undefined {
+    return this.observer.snapshots(sessionId, toolCallId);
+  }
+
   /** Takes what a notification says about edits, and whether it must wait for its PostToolUse record, and until when. */
   hold(method: string, params: Record<string, unknown>): Promise<void> | undefined {
     const item = asRecord(params.item);
@@ -235,11 +240,11 @@ export class CodexObservation {
       const done = new Promise<void>(resolveWindow => { settle = resolveWindow; });
       const window: Window = { threadId, settled: false, done, settle: () => { if (window.settled) return; window.settled = true; this.windows.delete(id); settle(); } };
       this.windows.set(id, window);
-      await this.observer.begin(id, str(payload.cwd) ?? '/', str(asRecord(payload.tool_input)?.command));
+      await this.observer.begin(id, str(payload.cwd) ?? '/', str(asRecord(payload.tool_input)?.command), route.sessionId);
     } else if (event === 'PostToolUse') {
       const window = this.windows.get(id);
       try {
-        const diffs = await this.observer.end(id);
+        const diffs = await this.observer.end(id, route.sessionId);
         if (diffs?.length) this.observer.record(route.sessionId, id, diffs);
       } finally { window?.settle(); }
     }

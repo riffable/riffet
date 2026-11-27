@@ -372,7 +372,7 @@ export class LaneRead {
     const at = typeof row.timestamp === 'string' ? row.timestamp : NO_TIME;
     // The conversation's hooks match its own input and belong to the main lane; what a command changed is looked up
     // by its call, in a subagent's lane as well.
-    const hooks = this.main ? this.source.hooks : { observedChanges: this.source.hooks.observedChanges };
+    const hooks = this.main ? this.source.hooks : { observedChanges: this.source.hooks.observedChanges, fileSnapshots: this.source.hooks.fileSnapshots };
     // Queuing/consuming an input is a receipt, not an execution boundary. In particular an input
     // absorbed mid-turn must not open an anonymous turn or close the turn still producing output.
     if (this.main && row.type === 'queue-operation' && row.isSidechain !== true && row.agentId === undefined) {

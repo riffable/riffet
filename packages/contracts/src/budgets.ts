@@ -809,3 +809,21 @@ export const MODEL_CHAT_BUDGET = {
   /** Heartbeat interval for a Model Chat SSE stream. */
   streamHeartbeatMs: 15_000,
 } as const;
+
+/** Session outputs aggregation & per-file snapshot ledger limits (docs/SESSION-OUTPUTS.md). */
+export const OUTPUT_BUDGET = {
+  /** Largest single file body persisted into session_blobs for exact net-diff & snapshot viewing. */
+  snapshotMaxFileBytes: 2 * MIB,
+  /** Cumulative snapshot blob bytes per session (full profile) before falling back to stats-only. */
+  sessionSnapshotTotalBytes: 32 * MIB,
+  /** Cumulative snapshot blob bytes per session (lite profile). */
+  liteSessionSnapshotTotalBytes: 8 * MIB,
+  /** Maximum output file entries carried in Sync v3 `hello.outputs` and `outputs` frames. */
+  maxOutputs: 500,
+  /** Bounded LRU cache entries for `(preHash, postHash)` net line-diff stats (full profile). */
+  diffCacheEntries: 256,
+  /** Bounded LRU cache entries for `(preHash, postHash)` net line-diff stats (lite profile). */
+  liteDiffCacheEntries: 64,
+  /** Maximum changed files captured per shell command in `WorkspaceObserver`. */
+  maxObservedFiles: 200,
+} as const;

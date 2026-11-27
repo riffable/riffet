@@ -144,9 +144,20 @@ data class TimelineRow(
         val changes: List<FileChange>? = null,
     )
 
-    /** A file a subagent's tools wrote or its commands were seen to change; edits to one path add up. */
+    /** A file a conversation or subagent changed, with net (or aggregated) lines gained and lost. */
     @Serializable
-    data class FileChange(val path: String, val added: Long, val removed: Long, val created: Boolean)
+    data class FileChange(
+        val path: String,
+        val added: Long,
+        val removed: Long,
+        val created: Boolean,
+        val status: String? = null,
+        val binary: Boolean? = null,
+        val outsideProject: Boolean? = null,
+        val accuracy: String? = null,
+        val hasSnapshotDiff: Boolean? = null,
+        val updatedAt: String? = null,
+    )
 
     @Serializable
     data class TaskNotificationResult(val id: String, val status: Status, val exitCode: Long? = null, val runningMs: Long? = null) {
@@ -210,6 +221,10 @@ enum class SyncMode(val wire: String) { DELTA("delta"), SNAPSHOT("snapshot"), UN
 @Serializable
 data class SyncOutline(val turnCount: Long, val turns: List<TurnOutlineV3>)
 
+/** Server-aggregated net file outputs for the whole conversation, newest first. */
+@Serializable
+data class SessionOutputsSummary(val items: List<TimelineRow.FileChange>, val total: Long)
+
 /** One SSE event of `GET /api/v3/sessions/:id/sync`, discriminated by `type`. */
 @Serializable(with = SyncFrameSerializer::class)
 sealed interface SyncFrame {
@@ -228,6 +243,8 @@ sealed interface SyncFrame {
         val activities: List<NativeActivity>,
         val context: NativeContext? = null,
         val outline: SyncOutline,
+        /** Server-aggregated net file outputs for the whole conversation (main lane only). */
+        val outputs: SessionOutputsSummary? = null,
         /** The transcript is still being read; a [CaughtUp] follows once it is in the lane. */
         val catchingUp: Boolean = false,
         /** Initial control snapshot. A hello replaces whatever revision the previous stream held. */
@@ -288,6 +305,10 @@ sealed interface SyncFrame {
     @Serializable
     data class SessionUpdate(val session: Session) : SyncFrame
 
+    /** Server-aggregated net file outputs for the whole conversation. */
+    @Serializable
+    data class Outputs(val outputs: SessionOutputsSummary) : SyncFrame
+
     /** The session's control snapshot. A client keeps it only when [SessionControlSnapshot.revision] did not go backwards. */
     @Serializable
     @SerialName("control")
@@ -347,6 +368,7 @@ internal object SyncFrameSerializer : KSerializer<SyncFrame> {
         "run" to SyncFrame.RunUpsert.serializer(),
         "activities" to SyncFrame.Activities.serializer(),
         "outline" to SyncFrame.Outline.serializer(),
+        "outputs" to SyncFrame.Outputs.serializer(),
         "context" to SyncFrame.Context.serializer(),
         "metrics" to SyncFrame.Metrics.serializer(),
         "session" to SyncFrame.SessionUpdate.serializer(),
@@ -366,6 +388,7 @@ internal object SyncFrameSerializer : KSerializer<SyncFrame> {
         is SyncFrame.RunUpsert -> "run"
         is SyncFrame.Activities -> "activities"
         is SyncFrame.Outline -> "outline"
+        is SyncFrame.Outputs -> "outputs"
         is SyncFrame.Context -> "context"
         is SyncFrame.Metrics -> "metrics"
         is SyncFrame.SessionUpdate -> "session"

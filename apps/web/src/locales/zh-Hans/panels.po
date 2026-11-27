@@ -1044,9 +1044,17 @@ msgstr "它太大，删除后无法撤销。"
 msgid "定位当前文件"
 msgstr "定位当前文件"
 
+#: src/app/panels/FileDiffDialog.tsx
+msgid "对比范围"
+msgstr "对比范围"
+
 #: src/app/panels/CodeView.tsx
 msgid "展开"
 msgstr "展开"
+
+#: src/app/panels/FileDiffDialog.tsx
+msgid "工作区"
+msgstr "工作区"
 
 #. placeholder {0}: nameOf(path)
 #: src/app/panels/useFileOperations.ts
@@ -1268,6 +1276,10 @@ msgstr "更多操作"
 msgid "更多视图"
 msgstr "更多视图"
 
+#: src/app/panels/FileDiffDialog.tsx
+msgid "期间含外部改动"
+msgstr "期间含外部改动"
+
 #: src/app/panels/useFileOperations.ts
 msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
 msgstr "未保存的修改会丢失，撤销删除也不会恢复它们。"
@@ -1281,6 +1293,10 @@ msgstr "未提交"
 #: src/app/panels/ByteViews.tsx
 msgid "末尾 {0}，共 {1}"
 msgstr "末尾 {0}，共 {1}"
+
+#: src/app/panels/FileDiffDialog.tsx
+msgid "本会话"
+msgstr "本会话"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法"

@@ -624,6 +624,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     return projectCodexItem(item, turn, {
       sessionId: this.options.sessionId, threadId, runId, createdAt, ...(span ? { span } : {}), ...(commandId ? { commandId } : {}), questions: this.questions,
       ...(this.options.observedChanges ? { observedChanges: this.options.observedChanges } : {}),
+      ...(this.options.fileSnapshots ? { fileSnapshots: this.options.fileSnapshots } : {}),
       ...(main ? { phase: (itemId: string) => this.intake.phaseOf(itemId) } : {}),
     });
   }

@@ -147,10 +147,15 @@ const rowsMin: Array<Min<TimelineRow>> = [
 const turnMax = { turn: 'turn:t1', turnId: 't1', startPos: 1, endPos: 9, status: 'completed', at: at(1), endedAt: at(9), preview: '重构解析器', hasUserMessage: true, hasAttachments: true, rows: 9, runId: 'run-a' } satisfies Required<TurnOutlineV3>;
 const turnMin = { turn: 'turn:t2', turnId: 't2', startPos: 10, status: 'running', at: at(10), rows: 1 } satisfies Min<TurnOutlineV3>;
 
+const outputMax = {
+  path: 'src/parser.ts', added: 12, removed: 3, created: false,
+  status: 'modified' as const, binary: false, outsideProject: false,
+  accuracy: 'exact' as const, hasSnapshotDiff: true, updatedAt: at(2),
+};
 const framesMax: Array<SyncFrameMax> = [
   {
     type: 'hello', protocol: 3, lane: 'main', generation: 'gen-1', headSeq: 42, mode: 'delta', session: sessionMax, status: fixtureStatus, interaction: fixtureInteraction,
-    runs: [...fixtureRuns, queuedRun], activities: [activityMax], context: fixtureContext, outline: { turnCount: 120, turns: [turnMax] }, catchingUp: true,
+    runs: [...fixtureRuns, queuedRun], activities: [activityMax], context: fixtureContext, outline: { turnCount: 120, turns: [turnMax] }, outputs: { items: [outputMax], total: 1 }, catchingUp: true,
   },
   { type: 'snapshot', generation: 'gen-1', asOfSeq: 42, part: 2, final: true, rows: rowsMax, hasBefore: true },
   { type: 'rows', generation: 'gen-1', from: 43, to: 44, upserts: rowsMax.slice(1, 3), deletes: ['tool:bash-0'] },
@@ -161,6 +166,7 @@ const framesMax: Array<SyncFrameMax> = [
   { type: 'run', run: queuedRun },
   { type: 'activities', live: [activityMax] },
   { type: 'outline', turnCount: 121, turns: [turnMax] },
+  { type: 'outputs', outputs: { items: [outputMax], total: 1 } },
   { type: 'context', context: fixtureContext },
   { type: 'metrics', metrics: stepMetrics, run: runMetrics, runId: 'run-a', nativeMessageId: 'chat-1:t1:user' },
   { type: 'session', session: sessionMax },
@@ -181,6 +187,7 @@ const framesMin: Array<Min<SyncFrame>> = [
   { type: 'run', run: appRun('run-1', 'queued', '') },
   { type: 'activities', live: [] },
   { type: 'outline', turnCount: 1, turns: [turnMin] },
+  { type: 'outputs', outputs: { items: [], total: 0 } },
   { type: 'context' },
   { type: 'metrics', metrics: { stepId: 'step-1', outputTokens: 0, tokens: 'provider', durationMs: 0, window: 'stream', live: false } },
   { type: 'session', session: sessionMin },

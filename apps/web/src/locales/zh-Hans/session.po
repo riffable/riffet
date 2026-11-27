@@ -26,10 +26,8 @@ msgid "{0} 个提交"
 msgstr "{0} 个提交"
 
 #. placeholder {0}: diff.files.length
-#. placeholder {0}: outputs.length
 #. placeholder {0}: stats.files
 #: src/app/session/Attempts.tsx
-#: src/app/session/SessionAside.tsx
 #: src/app/session/TimelineTools.tsx
 msgid "{0} 个文件"
 msgstr "{0} 个文件"
@@ -135,6 +133,10 @@ msgstr "{skipped} 行未改动"
 #: src/app/session/Markdown.tsx
 msgid "{title} · 预览不可用"
 msgstr "{title} · 预览不可用"
+
+#: src/app/session/SessionAside.tsx
+msgid "{totalCount} 个文件"
+msgstr "{totalCount} 个文件"
 
 #: src/app/session/ComposerDock.tsx
 msgid "{used} / {budget} token"
@@ -405,6 +407,10 @@ msgstr "主会话模型"
 #: src/app/session/Timeline.tsx
 msgid "主对话"
 msgstr "主对话"
+
+#: src/app/session/SessionAside.tsx
+msgid "二进制"
+msgstr "二进制"
 
 #: src/app/session/ToolsPicker.tsx
 msgid "互联机器"
@@ -1245,6 +1251,10 @@ msgstr "已停用"
 #: src/app/session/ToolsPicker.tsx
 msgid "已关 {n}"
 msgstr "已关 {n}"
+
+#: src/app/session/SessionAside.tsx
+msgid "已删除"
+msgstr "已删除"
 
 #: src/app/session/ComposerPickers.tsx
 msgid "已压缩的对话"

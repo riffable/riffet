@@ -6,6 +6,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- The conversation sidebar's Outputs list now tracks net file changes across the whole conversation (including nested subagents, deleted and binary files, and Claude `MultiEdit` / `NotebookEdit`) on the server instead of summing truncated rows in the loaded window; net-zero edits cancel out, duplicate file names show parent folders, and clicking an output on Web opens this conversation's own net diff by default with a toggle to compare against the current working tree (Web, Mac).
 - A message replaced with Send now before the agent recorded it now stays in the conversation, shown as interrupted, instead of disappearing from it. Applies to messages sent after the update.
 - A notice that a background task ended now says what ended and how: "Background command finished", the command's gist (`./scripts/build.sh test`, without redirections and log tails) or its description, how long it ran, and the exit code when it failed. Opened, it shows the end of the output and can take you to the call that started the task (Web; Mac, Android and iPhone show the new title).
 - When Send now falls back to stopping the current turn first because the CLI cannot take the message yet, the message now goes out as soon as the turn stops instead of about 1.5 seconds later.

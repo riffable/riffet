@@ -1044,8 +1044,16 @@ msgstr ""
 msgid "定位当前文件"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
+msgid "对比范围"
+msgstr ""
+
 #: src/app/panels/CodeView.tsx
 msgid "展开"
+msgstr ""
+
+#: src/app/panels/FileDiffDialog.tsx
+msgid "工作区"
 msgstr ""
 
 #. placeholder {0}: nameOf(path)
@@ -1268,6 +1276,10 @@ msgstr ""
 msgid "更多视图"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
+msgid "期间含外部改动"
+msgstr ""
+
 #: src/app/panels/useFileOperations.ts
 msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
 msgstr ""
@@ -1280,6 +1292,10 @@ msgstr ""
 #. placeholder {1}: formatBytes(size)
 #: src/app/panels/ByteViews.tsx
 msgid "末尾 {0}，共 {1}"
+msgstr ""
+
+#: src/app/panels/FileDiffDialog.tsx
+msgid "本会话"
 msgstr ""
 
 #: src/app/panels/FilesPanel.tsx

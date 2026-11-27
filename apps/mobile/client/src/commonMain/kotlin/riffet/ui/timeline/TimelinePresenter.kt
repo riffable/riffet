@@ -18,6 +18,7 @@ import riffet.contracts.OutputRate
 import riffet.contracts.RunMetrics
 import riffet.contracts.RunMetricsTokenSource
 import riffet.contracts.SessionGoal
+import riffet.contracts.SessionOutputsSummary
 import riffet.i18n.L10n
 import riffet.core.StoredSubagent
 import riffet.core.SubagentEntry
@@ -25,6 +26,7 @@ import riffet.core.SubagentState
 import riffet.core.SessionOutput
 import riffet.core.SessionOutputsCache
 import riffet.core.SubagentTranscript
+import riffet.core.sessionOutputOf
 import riffet.core.sessionOutputs
 import riffet.core.TimelineItem
 import riffet.core.subagentEntries
@@ -151,6 +153,7 @@ class TimelinePresenter(
         val activity: NativeActivitySummary?,
         val stopping: Set<String>,
         val goal: SessionGoal?,
+        val syncOutputs: SessionOutputsSummary?,
     )
 
     private var previous: TimelineGrouping? = null
@@ -172,18 +175,24 @@ class TimelinePresenter(
         Live(byRun, status?.outputRate?.takeIf { connection is RiffetConnectionState.Live }, status?.activeTurnId, status?.activity)
     }
 
-    private class Transcript(val opened: OpenedTimeline, val subagents: List<StoredSubagent>, val stopping: Set<String>, val goal: SessionGoal?)
+    private class Transcript(
+        val opened: OpenedTimeline,
+        val subagents: List<StoredSubagent>,
+        val stopping: Set<String>,
+        val goal: SessionGoal?,
+        val syncOutputs: SessionOutputsSummary?,
+    )
 
     /** The server keeps the goal on the session; only a change of it, not every session frame, re-presents. */
     private val goal = store.selected.map { it?.id to it?.goal }.distinctUntilChanged()
 
-    private val transcript = combine(store.openedTimeline, store.subagents, store.stoppingActivities, goal) { opened, subagents, stopping, (goalSession, goal) ->
-        Transcript(opened, subagents, stopping, goal.takeIf { goalSession == opened.sessionId })
+    private val transcript = combine(store.openedTimeline, store.subagents, store.stoppingActivities, goal, store.outputs) { opened, subagents, stopping, (goalSession, goal), syncOutputs ->
+        Transcript(opened, subagents, stopping, goal.takeIf { goalSession == opened.sessionId }, syncOutputs)
     }
 
     val presentation: StateFlow<TimelinePresentation?> = combine(transcript, store.queued, store.working, speedInputs, L10n.changes) { transcript, queued, working, live, _ ->
         val opened = transcript.opened
-        Input(opened.sessionId, opened.loaded, opened.timeline, queued.mapTo(HashSet()) { it.id }, working, live.byRun, live.outputRate, live.activeTurnId, transcript.subagents, live.activity, transcript.stopping, transcript.goal)
+        Input(opened.sessionId, opened.loaded, opened.timeline, queued.mapTo(HashSet()) { it.id }, working, live.byRun, live.outputRate, live.activeTurnId, transcript.subagents, live.activity, transcript.stopping, transcript.goal, transcript.syncOutputs)
     }
         .conflate()
         .map { ClientPerf.measure("client.present") { present(it) } }
@@ -206,7 +215,10 @@ class TimelinePresenter(
                 subagents = subagentEntries(input.timeline, input.subagents),
                 dock = activityDock(input.activity, timelineActivities(input.timeline)),
                 stoppingActivities = input.stopping,
-                outputs = if (withOutputs) sessionOutputs(input.timeline, null, outputsCache) else emptyList(),
+                outputs = if (withOutputs) {
+                    input.syncOutputs?.items?.map(::sessionOutputOf)
+                        ?: sessionOutputs(input.timeline, null, outputsCache)
+                } else emptyList(),
             )
             .also { previous = it.grouping; prepare(it.grouping) }
     }

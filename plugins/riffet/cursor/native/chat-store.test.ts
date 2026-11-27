@@ -319,7 +319,7 @@ describe('transcript mapping', () => {
     expect(shell[0]!.data).toMatchObject({ kind: 'execute', title: 'echo hi', status: 'in_progress' });
     expect(shell[1]!.data).toMatchObject({ status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'hi' } }] });
     const edit = events.filter((event) => event.data.toolCallId === 't4').at(-1)!;
-    expect(edit.data.content).toEqual([{ type: 'diff', path: '/p/a.ts', oldText: 'x\na\n', newText: 'x\nb\n' }]);
+    expect(edit.data.content).toEqual([{ type: 'diff', path: '/p/a.ts', oldText: 'x\na\n', newText: 'x\nb\n', status: 'modified', created: false }]);
   });
 
   it('gives a tool result the run its call was issued with, even when no turn existed yet', () => {

@@ -5926,6 +5926,25 @@
       ],
       "futureField": 4
     },
+    "outputs": {
+      "items": [
+        {
+          "path": "text",
+          "added": 1,
+          "removed": 1,
+          "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text",
+          "futureField": 4
+        }
+      ],
+      "total": 1,
+      "futureField": 4
+    },
     "catchingUp": true,
     "control": {
       "revision": 1,
@@ -6880,6 +6899,29 @@
     "futureField": 4
   },
   "SyncFrame#$=branch11": {
+    "type": "outputs",
+    "outputs": {
+      "items": [
+        {
+          "path": "text",
+          "added": 1,
+          "removed": 1,
+          "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text",
+          "futureField": 4
+        }
+      ],
+      "total": 1,
+      "futureField": 4
+    },
+    "futureField": 4
+  },
+  "SyncFrame#$=branch12": {
     "type": "context",
     "context": {
       "used": 1,
@@ -6898,7 +6940,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch12": {
+  "SyncFrame#$=branch13": {
     "type": "metrics",
     "metrics": {
       "stepId": "text",
@@ -6924,7 +6966,7 @@
     "nativeMessageId": "text",
     "futureField": 4
   },
-  "SyncFrame#$=branch13": {
+  "SyncFrame#$=branch14": {
     "type": "session",
     "session": {
       "id": "text",
@@ -7052,7 +7094,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch14": {
+  "SyncFrame#$=branch15": {
     "type": "control",
     "control": {
       "revision": 1,
@@ -7285,7 +7327,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch15": {
+  "SyncFrame#$=branch16": {
     "type": "error",
     "code": "text",
     "message": "text",
@@ -7528,6 +7570,12 @@
           "added": 1,
           "removed": 1,
           "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text",
           "futureField": 4
         }
       ],
@@ -10044,6 +10092,23 @@
           "runId": "text"
         }
       ]
+    },
+    "outputs": {
+      "items": [
+        {
+          "path": "text",
+          "added": 1,
+          "removed": 1,
+          "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text"
+        }
+      ],
+      "total": 1
     },
     "catchingUp": true,
     "control": {

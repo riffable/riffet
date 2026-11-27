@@ -1598,6 +1598,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           <ActivityContext.Provider value={activityControls}>
           <SessionAside
             projectId={session.projectId}
+            sessionId={session.id}
             outlineRef={setOutlineSlot}
             goal={goal}
             todos={todoEntries}
@@ -1608,6 +1609,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             subagentBriefs={subagentBriefs}
             memberRuns={memberRuns}
             onOpenSession={onOpenSession}
+            syncOutputs={native.outputs}
             timeline={visibleTimeline}
             timelineVersion={native.timelineVersion}
             root={root}

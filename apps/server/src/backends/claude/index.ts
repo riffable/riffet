@@ -557,6 +557,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
         promptText: prompt => runtime()?.rewrites.get(rewriteKey(prompt)),
         putBlob: text => host.journal?.putSessionBlob(session.id, Buffer.from(text)),
         observedChanges: toolUseId => this.observer?.changes(session.id, toolUseId),
+        fileSnapshots: toolUseId => this.observer?.snapshots(session.id, toolUseId),
       },
     });
   }

@@ -31,6 +31,8 @@ export interface CodexItemContext {
   compaction?(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'startedAt' | 'status' | 'items'>, settled: boolean): NativeActivity;
   /** What a command changed in the working tree, by its tool call id (`observation.ts`). */
   observedChanges?: ObservedChanges;
+  /** Exact before/after snapshots recorded around a command or fileChange (`file-snapshots.ts`). */
+  fileSnapshots?: import('./transcript.js').ObservedSnapshots;
   /** The text of a user message, for the conversation's first-message title. */
   onUserText?(text: string): void;
 }
@@ -118,7 +120,7 @@ export function projectCodexItem(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'star
     const activity = context.compaction(item, turn, isFinalTurnStatus(turn.status));
     return [event(activity.id, ACTIVITY_EVENT_TYPE, { sessionUpdate: 'activity', activity })];
   }
-  if (isCodexToolItem(item)) return projectToolItem(item, event, base, context.observedChanges);
+  if (isCodexToolItem(item)) return projectToolItem(item, event, base, context.observedChanges, context.fileSnapshots);
   // TRAE CLI items Codex does not have. Each becomes the notice row other backends already use for
   // background work, rather than a turn that silently loses part of what happened.
   if (item.type === 'taskNotification') {

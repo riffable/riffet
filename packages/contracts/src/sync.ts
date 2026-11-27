@@ -40,13 +40,62 @@ export type TimelineRow = RowBase & (
   | { kind: 'status'; tone: 'danger' | 'muted'; text: string; detail?: string }
   | { kind: 'task_notification'; taskId?: string; taskKind: string; status: TaskNotificationStatus; sourceStatus?: string; title: string; command?: string; detail?: string; jobResult?: TaskNotificationResult; subagentToolCallId?: string; tokens?: number; durationMs?: number }
   | { kind: 'activity'; activity: NativeActivity });
-/** A file a subagent's tools wrote or its commands were seen to change, with the lines it gained and lost; edits to one path add up. */
-export interface FileChange { path: string; added: number; removed: number; created: boolean }
+/** Final state of a file changed by a conversation. */
+export type FileChangeStatus = 'created' | 'modified' | 'deleted';
+/** Whether a file's output stats came from exact before/after file snapshots or from tool diff blocks. */
+export type OutputAccuracy = 'exact' | 'estimated';
+/** Per-tool-call file snapshot record persisted on tool updates and aggregated by the server. */
+export interface FileSnapshotRecord {
+  path: string;
+  /** SHA-256 hash in `session_blobs` before this tool call; `null` if absent, `undefined` if not captured. */
+  preHash?: string | null;
+  /** SHA-256 hash in `session_blobs` after this tool call; `null` if deleted, `undefined` if not captured. */
+  postHash?: string | null;
+  status: FileChangeStatus;
+  binary?: boolean;
+  added: number;
+  removed: number;
+  /** Captured on disk around a command rather than reported by an edit tool. */
+  observed?: boolean;
+  bytes?: number;
+}
+/** A file a conversation or subagent changed, with net (or aggregated) lines gained and lost. */
+export interface FileChange {
+  path: string;
+  added: number;
+  removed: number;
+  created: boolean;
+  status?: FileChangeStatus;
+  binary?: boolean;
+  outsideProject?: boolean;
+  accuracy?: OutputAccuracy;
+  hasSnapshotDiff?: boolean;
+  updatedAt?: string;
+}
+/** Server-aggregated outputs for the whole conversation, newest first. */
+export interface SessionOutputsSummary {
+  items: FileChange[];
+  total: number;
+}
+/** Net diff for one output file reconstructed from the conversation's own snapshots (`GET /api/v3/sessions/:id/outputs/diff`). */
+export interface SessionOutputDiff {
+  path: string;
+  before: string;
+  after: string;
+  binary?: boolean;
+  truncated?: boolean;
+  status: FileChangeStatus;
+  source: 'session';
+  /** True when another writer edited the file between this conversation's own edits. */
+  externalEdits?: boolean;
+}
 export interface TurnOutlineV3 { turn: string; turnId: string; startPos: number; endPos?: number; status: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'outcome_unknown'; at: string; endedAt?: string; preview?: string; hasUserMessage?: boolean; hasAttachments?: boolean; rows: number; runId?: string }
 /** One SSE event of `GET /api/v3/sessions/:id/sync`; the SSE `event:` is `type`. */
 export type SyncFrame =
   | { type: 'hello'; protocol: 3; lane: SyncLane; generation: string; headSeq: number; mode: 'delta' | 'snapshot'; session: Session; status: NativeStatus;
       interaction: NativeInteraction | null; runs: Run[]; activities: NativeActivity[]; context?: NativeContext; outline: { turnCount: number; turns: TurnOutlineV3[] };
+      /** Server-aggregated net file outputs for the whole conversation (main lane only). */
+      outputs?: SessionOutputsSummary;
       /** The transcript is still being read: rows up to a later `caughtUp` are history the reader missed, not live. */
       catchingUp?: boolean; control?: SessionControlSnapshot }
   | { type: 'caughtUp'; generation: string; headSeq: number }
@@ -55,7 +104,9 @@ export type SyncFrame =
   | { type: 'reset'; generation: string; reason: 'rebuilt' | 'promoted' | 'fold' }
   | { type: 'status'; status: NativeStatus } | { type: 'interaction'; interaction: NativeInteraction | null }
   | { type: 'runs'; runs: Run[] } | { type: 'run'; run: Run } | { type: 'activities'; live: NativeActivity[] }
-  | { type: 'outline'; turnCount: number; turns: TurnOutlineV3[] } | { type: 'context'; context?: NativeContext }
+  | { type: 'outline'; turnCount: number; turns: TurnOutlineV3[] }
+  | { type: 'outputs'; outputs: SessionOutputsSummary }
+  | { type: 'context'; context?: NativeContext }
   | { type: 'metrics'; metrics: StepMetrics; run?: RunMetrics; runId?: string; nativeMessageId?: string } | { type: 'session'; session: Session }
   | { type: 'control'; control: SessionControlSnapshot }
   | { type: 'error'; code: string; message: string; retryable: boolean };

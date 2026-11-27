@@ -13,7 +13,8 @@ verify:
 - `launch-input.ts#SessionLaunchInput`：影响启动或工具列表的会话字段，只在这里列一次。
 - `wait-for.ts#waitFor`：等另一个进程做完某件事的统一原语，约定见 docs/DELIVERY.md。
 - `codex-app-server.ts#CodexAppServer`：App Server 进程、socket 与 JSON-RPC。
-- `workspace-observer.ts#WorkspaceObserver`：shell 命令改了哪些文件。
+- `workspace-observer.ts#WorkspaceObserver`：shell 命令改了哪些文件（`--raw -z` 与 `--numstat -z` 解耦统计与 patch，覆盖二进制与超长文件）。
+- `file-snapshots.ts#SessionFileSnapshots`：编辑工具与观测命令的单文件前后快照账本，正文复用 `journal` 的 `session_blobs` 并受 `OUTPUT_BUDGET` 约束（docs/SESSION-OUTPUTS.md）。
 - `command-actions.ts#commandActions`：只读的 shell 命令读了、搜了什么，形状同 Codex 的 `commandActions`；词法在 `shell-words.ts#shellSegments`，与 `readsOnly` 共用。
 - `model-source.ts#prepareSource`：把已存的模型源名称加上配置覆盖解析成启动所需的事实。
 - `trace-requests.ts#TraceRequestsBuilder`：各驱动读请求内容（docs/TRACE.md §2.1）的公共部分：按内容去重、按预算截断、流式只解析含关键字的行。

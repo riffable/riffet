@@ -193,7 +193,24 @@ export const NativeStatusSchema = z.object({
   queue: NativeQueueSchema.optional(),
 });
 
-export const FileChangeSchema = z.object({ path: z.string(), added: z.number(), removed: z.number(), created: z.boolean() });
+export const FileChangeStatusSchema = z.enum(['created', 'modified', 'deleted']);
+export const OutputAccuracySchema = z.enum(['exact', 'estimated']);
+export const FileChangeSchema = z.object({
+  path: z.string(),
+  added: z.number(),
+  removed: z.number(),
+  created: z.boolean(),
+  status: FileChangeStatusSchema.optional(),
+  binary: z.boolean().optional(),
+  outsideProject: z.boolean().optional(),
+  accuracy: OutputAccuracySchema.optional(),
+  hasSnapshotDiff: z.boolean().optional(),
+  updatedAt: z.string().optional(),
+});
+export const SessionOutputsSummarySchema = z.object({
+  items: z.array(FileChangeSchema),
+  total: z.number(),
+});
 export const TurnOutlineStatusSchema = z.enum(['running', 'completed', 'failed', 'cancelled', 'interrupted', 'outcome_unknown']).meta({ open: true });
 
 const RowBaseSchema = z.object({
@@ -370,6 +387,7 @@ export const SyncFrameSchema = z.discriminatedUnion('type', [
     activities: z.array(NativeActivitySchema),
     context: NativeContextSchema.optional(),
     outline: SyncOutlineSchema,
+    outputs: SessionOutputsSummarySchema.optional(),
     catchingUp: z.boolean().optional(),
     control: SessionControlSnapshotSchema.optional(),
   }),
@@ -402,6 +420,7 @@ export const SyncFrameSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('run'), run: RunSchema }),
   z.object({ type: z.literal('activities'), live: z.array(NativeActivitySchema) }),
   z.object({ type: z.literal('outline'), turnCount: z.number(), turns: z.array(TurnOutlineV3Schema) }),
+  z.object({ type: z.literal('outputs'), outputs: SessionOutputsSummarySchema }),
   z.object({ type: z.literal('context'), context: NativeContextSchema.optional() }),
   z.object({
     type: z.literal('metrics'),

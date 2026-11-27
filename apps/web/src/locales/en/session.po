@@ -26,10 +26,8 @@ msgid "{0} 个提交"
 msgstr "{0, plural, one {# commit} other {# commits}}"
 
 #. placeholder {0}: diff.files.length
-#. placeholder {0}: outputs.length
 #. placeholder {0}: stats.files
 #: src/app/session/Attempts.tsx
-#: src/app/session/SessionAside.tsx
 #: src/app/session/TimelineTools.tsx
 msgid "{0} 个文件"
 msgstr "{0, plural, one {# file} other {# files}}"
@@ -135,6 +133,10 @@ msgstr "{skipped} unchanged lines"
 #: src/app/session/Markdown.tsx
 msgid "{title} · 预览不可用"
 msgstr "{title} · Preview unavailable"
+
+#: src/app/session/SessionAside.tsx
+msgid "{totalCount} 个文件"
+msgstr "{totalCount} files"
 
 #: src/app/session/ComposerDock.tsx
 msgid "{used} / {budget} token"
@@ -405,6 +407,10 @@ msgstr "Main conversation model"
 #: src/app/session/Timeline.tsx
 msgid "主对话"
 msgstr "Main conversation"
+
+#: src/app/session/SessionAside.tsx
+msgid "二进制"
+msgstr "Binary"
 
 #: src/app/session/ToolsPicker.tsx
 msgid "互联机器"
@@ -1245,6 +1251,10 @@ msgstr "Disabled"
 #: src/app/session/ToolsPicker.tsx
 msgid "已关 {n}"
 msgstr "{n} off"
+
+#: src/app/session/SessionAside.tsx
+msgid "已删除"
+msgstr "Deleted"
 
 #: src/app/session/ComposerPickers.tsx
 msgid "已压缩的对话"

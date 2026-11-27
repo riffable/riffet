@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { appendFileSync, closeSync, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { lstat, readdir, readFile, rm } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve } from 'node:path';
+import { OUTPUT_BUDGET } from '../../../../../packages/contracts/src/budgets.js';
+import type { FileChangeStatus, FileSnapshotRecord } from '../../../../../packages/contracts/src/sync.js';
 import { exec, ExecError } from '../../exec.js';
+import { isBinaryBuffer, sessionFileSnapshots, type SessionFileSnapshots } from './file-snapshots.js';
 import { shellSegments } from './shell-words.js';
 import { splitUnifiedDiff, type DiffHunk } from './unified-diff.js';
 
@@ -44,7 +47,7 @@ const PRUNE_MS = 30_000;
 const MAX_TIMEOUTS = 3;
 const PAUSE_MS = 10 * 60_000;
 /** At most this many files, and this much patch text, per command. */
-const MAX_FILES = 50;
+const MAX_FILES = OUTPUT_BUDGET.maxObservedFiles;
 const MAX_FILE_PATCH = 64 * 1024;
 const MAX_PATCH = 512 * 1024;
 /** Loose snapshots are pruned after this many attempts, once no window is open. */
@@ -54,6 +57,9 @@ const MAX_WINDOWS = 256;
 const STALE_MS = 30 * 60_000;
 const MAX_LOGS = 64;
 const MAX_EDITS = 1024;
+const ZERO_OID = /^0+$/;
+/** At most this many files per shell command read full blobs for exact snapshots; the rest keep exact `--numstat` stats. */
+const MAX_OBSERVED_SNAPSHOT_BLOBS = 32;
 
 export type ObservedDiff = {
   type: 'diff';
@@ -62,6 +68,13 @@ export type ObservedDiff = {
   newText: string;
   lineOffset?: number;
   newLineOffset?: number;
+  /** File-level status from `git diff-tree --raw` (`A`/`M`/`D`), avoiding false `created` on partial hunks. */
+  status?: FileChangeStatus;
+  /** True for binary files (no text hunks, still reported in session outputs). */
+  binary?: boolean;
+  /** Exact `--numstat` counts carried when patch hunks are absent (binary or over patch budget). */
+  added?: number;
+  removed?: number;
   /** Seen in the working tree around a command, not reported by the tool. */
   observed: true;
 };
@@ -93,13 +106,22 @@ interface Repo {
  * the only one open across a change, but never the one that names a file.
  */
 interface Window {
-  key: string; repo: Repo; seq: number; shown: string; cwd: string; command?: string; startedAt: number;
+  key: string; repo: Repo; seq: number; shown: string; cwd: string; command?: string; scope?: string; startedAt: number;
   /** What an earlier end of another window settled as this one's, by interval, for this window's own end. */
-  held: Array<{ interval: number; diffs: ObservedDiff[] }>;
+  held: Array<{ interval: number; diffs: ObservedDiff[]; snapshots: FileSnapshotRecord[] }>;
 }
 
 /** A changed file of one interval, as git names it under the working tree. */
-type Changed = { path: string; hunks: DiffHunk[] };
+type Changed = {
+  path: string;
+  status: FileChangeStatus;
+  binary: boolean;
+  added: number;
+  removed: number;
+  oidA: string;
+  oidB: string;
+  hunks: DiffHunk[];
+};
 
 /** Programs that write nothing in the working tree, given none of the arguments `readerArgsWrite` refuses. */
 const READERS = new Set([
@@ -233,14 +255,30 @@ export class WorkspaceObserver {
   private readonly logs = new Map<string, Map<string, ObservedDiff[]>>();
   /** Files edit tools reported, with when: a command's window leaves them to the tool. */
   private readonly edits = new Map<string, number>();
+  private snapshotStore?: SessionFileSnapshots;
 
   constructor(private readonly dir: string) {}
+
+  /** Connects the per-session snapshot ledger so shell-observed changes also persist exact snapshots. */
+  attachSnapshots(store: SessionFileSnapshots): void {
+    this.snapshotStore = store;
+  }
+
+  /** Access to the paired single-file snapshot ledger, when attached. */
+  get fileSnapshots(): SessionFileSnapshots | undefined {
+    return this.snapshotStore;
+  }
+
+  /** Reads back exact snapshot records (from edit tools or shell observation) for a tool call. */
+  snapshots(scope: string, key: string): FileSnapshotRecord[] | undefined {
+    return this.snapshotStore?.snapshots(scope, key);
+  }
 
   /**
    * Snapshots the working tree `cwd` belongs to before command `key` runs. Resolves once taken or given up on.
    * A `command` that only reads opens no window: what changes meanwhile is another writer's.
    */
-  async begin(key: string, cwd: string, command?: string): Promise<void> {
+  async begin(key: string, cwd: string, command?: string, scope?: string): Promise<void> {
     this.discard(key);
     if (command !== undefined && readsOnly(command)) return;
     this.sweep();
@@ -253,7 +291,12 @@ export class WorkspaceObserver {
         if (gaveUp) return undefined;
         const tree = await this.snapshot(repo);
         if (!tree || gaveUp) return undefined;
-        const taken: Window = { key, repo, seq: repo.seq, shown: spelled(cwd, repo.root), cwd, ...(command !== undefined ? { command } : {}), startedAt: Date.now(), held: [] };
+        const taken: Window = {
+          key, repo, seq: repo.seq, shown: spelled(cwd, repo.root), cwd,
+          ...(command !== undefined ? { command } : {}),
+          ...(scope !== undefined ? { scope } : {}),
+          startedAt: Date.now(), held: [],
+        };
         repo.open.set(key, taken);
         return taken;
       });
@@ -264,19 +307,25 @@ export class WorkspaceObserver {
   }
 
   /** What changed in the working tree since `begin(key)` that is this command's; undefined when the command was not observed. */
-  async end(key: string): Promise<ObservedDiff[] | undefined> {
+  async end(key: string, scope?: string): Promise<ObservedDiff[] | undefined> {
     const pending = this.windows.get(key);
     if (!pending) return undefined;
     this.windows.delete(key);
     const window = await pending;
     if (!window || window.repo.open.get(key) !== window) return undefined;
+    if (scope && !window.scope) window.scope = scope;
     const { repo } = window;
     try {
       const found = await deadline(this.queue(repo, async () => {
-        const ordered = (entries: Window['held']) => entries.sort((a, b) => a.interval - b.interval).flatMap(entry => entry.diffs);
+        const orderedDiffs = (entries: Window['held']) => entries.sort((a, b) => a.interval - b.interval).flatMap(entry => entry.diffs);
+        const orderedSnapshots = (entries: Window['held']) => entries.sort((a, b) => a.interval - b.interval).flatMap(entry => entry.snapshots);
         const after = await this.snapshot(repo);
         // What other ends settled as this command's stands; the rest is left to the windows still open across it.
-        if (!after) return window.held.length ? ordered([...window.held]) : undefined;
+        if (!after) {
+          const heldSnapshots = orderedSnapshots([...window.held]);
+          if (window.scope && heldSnapshots.length) this.snapshotStore?.record(window.scope, key, heldSnapshots);
+          return window.held.length ? orderedDiffs([...window.held]) : undefined;
+        }
         // The intervals of this window no earlier end settled, as runs of adjacent ones with the same windows open across them.
         const runs: Array<{ from: number; to: number; open: Window[] }> = [];
         for (let interval = window.seq; interval < repo.seq; interval += 1) {
@@ -288,19 +337,44 @@ export class WorkspaceObserver {
           else runs.push({ from: interval, to: interval + 1, open });
         }
         const own = [...window.held];
+        // Leave headroom before the `2 * SNAPSHOT_MS` deadline so large commands never time out fetching full blobs.
+        const blobDeadline = Date.now() + SNAPSHOT_MS;
+        let blobBudget = MAX_OBSERVED_SNAPSHOT_BLOBS;
         for (const { from, to, open } of runs) {
           const base = repo.trees.get(from), head = repo.trees.get(to);
           if (!base || !head || base === head) continue;
           const since = repo.takenAt.get(from) ?? window.startedAt;
-          for (const { path, hunks } of await this.diff(repo, base, head) ?? []) {
-            if ([repo.root, ...open.map(candidate => candidate.shown)].some(root => (this.edits.get(join(root, path)) ?? 0) >= since)) continue;
-            const owner = attribute(path, open);
+          for (const item of await this.diff(repo, base, head) ?? []) {
+            if ([repo.root, ...open.map(candidate => candidate.shown)].some(root => (this.edits.get(join(root, item.path)) ?? 0) >= since)) continue;
+            const owner = attribute(item.path, open);
             if (!owner) continue;
-            const diffs = hunks.map(hunk => ({ type: 'diff' as const, path: join(owner.shown, path), ...hunk, observed: true as const }));
-            (owner === window ? own : owner.held).push({ interval: from, diffs });
+            const fullPath = join(owner.shown, item.path);
+            const diffs: ObservedDiff[] = item.hunks.length
+              ? item.hunks.map(hunk => ({ type: 'diff' as const, path: fullPath, ...hunk, status: item.status, observed: true as const }))
+              : [{
+                type: 'diff' as const,
+                path: fullPath,
+                oldText: '',
+                newText: '',
+                status: item.status,
+                ...(item.binary ? { binary: true } : {}),
+                added: item.added,
+                removed: item.removed,
+                observed: true as const,
+              }];
+            const snapshots: FileSnapshotRecord[] = [];
+            if (owner.scope && this.snapshotStore) {
+              const fetchBlobs = blobBudget > 0 && Date.now() < blobDeadline;
+              if (fetchBlobs && !item.binary) blobBudget -= 1;
+              const snap = await this.buildObservedSnapshot(repo, owner.scope, fullPath, item, fetchBlobs);
+              if (snap) snapshots.push(snap);
+            }
+            (owner === window ? own : owner.held).push({ interval: from, diffs, snapshots });
           }
         }
-        return ordered(own);
+        const finalSnapshots = orderedSnapshots(own);
+        if (window.scope && finalSnapshots.length) this.snapshotStore?.record(window.scope, key, finalSnapshots);
+        return orderedDiffs(own);
       }), 2 * SNAPSHOT_MS);
       return found;
     } finally {
@@ -343,6 +417,7 @@ export class WorkspaceObserver {
   forget(scope: string): void {
     this.logs.delete(scope);
     rmSync(this.logFile(scope), { force: true });
+    this.snapshotStore?.forget(scope);
   }
 
   /**
@@ -370,6 +445,9 @@ export class WorkspaceObserver {
         await rm(full, { force: true }).catch(() => undefined);
         result.prunedChanges += 1;
       }
+    }
+    if (this.snapshotStore) {
+      result.prunedChanges += await this.snapshotStore.maintain(liveSessionIds, options);
     }
 
     const reposDir = join(this.dir, 'repos');
@@ -546,29 +624,125 @@ export class WorkspaceObserver {
     }
   }
 
+  private async readGitBlob(repo: Repo, oid: string): Promise<Buffer | undefined> {
+    if (!oid || ZERO_OID.test(oid)) return undefined;
+    try {
+      const sizeText = (await this.git(repo, ['cat-file', '-s', oid])).trim();
+      const size = Number(sizeText);
+      if (!Number.isFinite(size) || size > OUTPUT_BUDGET.snapshotMaxFileBytes) return undefined;
+      const stdout = await this.git(repo, ['cat-file', '-p', oid], { maxBuffer: OUTPUT_BUDGET.snapshotMaxFileBytes + 64 * 1024 });
+      return Buffer.from(stdout, 'utf8');
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async buildObservedSnapshot(repo: Repo, scope: string, fullPath: string, item: Changed, fetchBlobs: boolean): Promise<FileSnapshotRecord | undefined> {
+    if (!this.snapshotStore) return undefined;
+    let preHash: string | null | undefined = ZERO_OID.test(item.oidA) ? null : undefined;
+    let postHash: string | null | undefined = ZERO_OID.test(item.oidB) ? null : undefined;
+    let binary = item.binary;
+    if (!binary && fetchBlobs) {
+      if (preHash === undefined) {
+        const beforeBuf = await this.readGitBlob(repo, item.oidA);
+        if (beforeBuf) {
+          if (isBinaryBuffer(beforeBuf)) binary = true;
+          else preHash = this.snapshotStore.persistBlob(scope, beforeBuf, false);
+        }
+      }
+      if (!binary && postHash === undefined) {
+        const afterBuf = await this.readGitBlob(repo, item.oidB);
+        if (afterBuf) {
+          if (isBinaryBuffer(afterBuf)) binary = true;
+          else postHash = this.snapshotStore.persistBlob(scope, afterBuf, false);
+        }
+      }
+    }
+    if (binary) {
+      // Binary files keep distinct non-null sentinel hashes from git OIDs so net-zero detection still works without storing large binaries.
+      preHash = ZERO_OID.test(item.oidA) ? null : `git:${item.oidA}`;
+      postHash = ZERO_OID.test(item.oidB) ? null : `git:${item.oidB}`;
+    }
+    return {
+      path: fullPath,
+      ...(preHash !== undefined ? { preHash } : {}),
+      ...(postHash !== undefined ? { postHash } : {}),
+      status: item.status,
+      ...(binary ? { binary: true } : {}),
+      added: binary ? 0 : item.added,
+      removed: binary ? 0 : item.removed,
+      observed: true,
+    };
+  }
+
   private async diff(repo: Repo, base: string, after: string): Promise<Changed[] | undefined> {
     try {
-      const fields = (await this.git(repo, ['diff-tree', '-r', '-z', '--numstat', '--no-renames', base, after])).split('\0');
-      // `added\tremoved\tpath`, `-\t-\tpath` for a binary file, which has no lines to show.
-      const paths = fields.flatMap(field => {
-        const match = /^(\d+|-)\t(\d+|-)\t([\s\S]+)$/.exec(field.replace(/^\n/, ''));
-        return match && match[1] !== '-' && (match[1] !== '0' || match[2] !== '0') ? [match[3]!] : [];
-      }).slice(0, MAX_FILES);
-      if (!paths.length) return [];
-      const patch = await this.git(repo, ['--literal-pathspecs', 'diff-tree', '-r', '-p', '-U3', '--no-renames', '--no-color', '--no-ext-diff', base, after, '--', ...paths], { maxBuffer: 16 * 1024 * 1024 });
-      // A section is named by its header: a file that became a link has two, and one whose name git quotes is skipped.
-      const named = new Map(paths.map(path => [`diff --git a/${path} b/${path}`, path]));
-      const changed: Changed[] = [];
-      let budget = MAX_PATCH;
-      for (const section of patch.split(/^(?=diff --git )/m)) {
-        const path = named.get(section.slice(0, section.indexOf('\n')));
-        if (!path || budget <= 0) continue;
-        const text = section.length > Math.min(MAX_FILE_PATCH, budget) ? section.slice(0, section.lastIndexOf('\n', Math.min(MAX_FILE_PATCH, budget))) : section;
-        budget -= text.length;
-        const hunks = splitUnifiedDiff(text).filter(hunk => hunk.oldText || hunk.newText);
-        if (hunks.length) changed.push({ path, hunks });
+      const [rawOut, numstatOut] = await Promise.all([
+        this.git(repo, ['diff-tree', '-r', '-z', '--raw', '--no-renames', base, after]),
+        this.git(repo, ['diff-tree', '-r', '-z', '--numstat', '--no-renames', base, after]),
+      ]);
+      // `--raw -z` pairs: `:<modeA> <modeB> <oidA> <oidB> <status>\0<path>\0`
+      const rawTokens = rawOut.split('\0');
+      const rawEntries = new Map<string, { status: FileChangeStatus; oidA: string; oidB: string }>();
+      for (let i = 0; i + 1 < rawTokens.length; i += 2) {
+        const meta = rawTokens[i]!.replace(/^\n/, '');
+        const path = rawTokens[i + 1]!;
+        if (!meta.startsWith(':') || !path) continue;
+        const parts = meta.slice(1).split(/\s+/);
+        if (parts.length < 5) continue;
+        const oidA = parts[2]!;
+        const oidB = parts[3]!;
+        const code = parts[4]![0];
+        const status: FileChangeStatus = code === 'A' ? 'created' : code === 'D' ? 'deleted' : 'modified';
+        rawEntries.set(path, { status, oidA, oidB });
       }
-      return changed;
+      // `--numstat -z` entries: `<added>\t<removed>\t<path>\0` (`-\t-\t<path>` for binary).
+      const stats = new Map<string, { added: number; removed: number; binary: boolean }>();
+      for (const field of numstatOut.split('\0')) {
+        const match = /^(\d+|-)\t(\d+|-)\t([\s\S]+)$/.exec(field.replace(/^\n/, ''));
+        if (!match) continue;
+        const binary = match[1] === '-' || match[2] === '-';
+        const added = binary ? 0 : Number(match[1]);
+        const removed = binary ? 0 : Number(match[2]);
+        stats.set(match[3]!, { added, removed, binary });
+      }
+      const selected: Array<{ path: string; status: FileChangeStatus; oidA: string; oidB: string; added: number; removed: number; binary: boolean }> = [];
+      for (const [path, raw] of rawEntries) {
+        if (selected.length >= MAX_FILES) break;
+        const stat = stats.get(path) ?? { added: 0, removed: 0, binary: false };
+        // Skip mode-only no-op changes for modified text files with 0 line delta.
+        if (raw.status === 'modified' && !stat.binary && stat.added === 0 && stat.removed === 0 && raw.oidA === raw.oidB) continue;
+        selected.push({ path, ...raw, ...stat });
+      }
+      if (!selected.length) return [];
+
+      const textPaths = selected.filter(item => !item.binary).map(item => item.path);
+      const hunksByPath = new Map<string, DiffHunk[]>();
+      if (textPaths.length) {
+        const patch = await this.git(repo, ['--literal-pathspecs', 'diff-tree', '-r', '-p', '-U3', '--no-renames', '--no-color', '--no-ext-diff', base, after, '--', ...textPaths], { maxBuffer: 16 * 1024 * 1024 });
+        const named = new Map(textPaths.map(path => [`diff --git a/${path} b/${path}`, path]));
+        let budget = MAX_PATCH;
+        for (const section of patch.split(/^(?=diff --git )/m)) {
+          const headerLine = section.slice(0, section.indexOf('\n'));
+          const path = named.get(headerLine);
+          if (!path || budget <= 0) continue;
+          const text = section.length > Math.min(MAX_FILE_PATCH, budget) ? section.slice(0, section.lastIndexOf('\n', Math.min(MAX_FILE_PATCH, budget))) : section;
+          budget -= text.length;
+          const hunks = splitUnifiedDiff(text).filter(hunk => hunk.oldText || hunk.newText);
+          if (hunks.length) hunksByPath.set(path, hunks);
+        }
+      }
+
+      return selected.map(item => ({
+        path: item.path,
+        status: item.status,
+        binary: item.binary,
+        added: item.added,
+        removed: item.removed,
+        oidA: item.oidA,
+        oidB: item.oidB,
+        hunks: hunksByPath.get(item.path) ?? [],
+      }));
     } catch {
       return undefined;
     }
@@ -592,6 +766,10 @@ const observers = new Map<string, WorkspaceObserver>();
 /** The one observer of a state directory: windows of every conversation in a working tree share its snapshots. */
 export function workspaceObserver(stateDir: string): WorkspaceObserver {
   let observer = observers.get(stateDir);
-  if (!observer) observers.set(stateDir, observer = new WorkspaceObserver(join(stateDir, 'workspace-observer')));
+  if (!observer) {
+    observer = new WorkspaceObserver(join(stateDir, 'workspace-observer'));
+    observer.attachSnapshots(sessionFileSnapshots(stateDir));
+    observers.set(stateDir, observer);
+  }
   return observer;
 }

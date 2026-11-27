@@ -1,4 +1,4 @@
-import type { LaneFind, SyncFrame, SyncLane, TimelinePage, TimelineRow, TurnOutlineV3 } from '@contracts';
+import type { LaneFind, SessionOutputsSummary, SyncFrame, SyncLane, TimelinePage, TimelineRow, TurnOutlineV3 } from '@contracts';
 import { reconnectDelay } from '@/lib/utils';
 import { blobPath, findUrl, outlineUrl, parseFrame, routeMissing, SYNC_PROTOCOL, syncUrl, timelineUrl, type Place, type SyncTransport } from './protocol';
 import { isRow, LaneWindow, type PageMode, type WindowLimit } from './window';
@@ -78,6 +78,8 @@ export class LaneSync {
   current = false;
   error: { code: string; message: string } | undefined;
   outline: LaneOutline = { turnCount: 0, turns: [] };
+  /** Server-aggregated net file outputs for the whole conversation (undefined on older servers). */
+  outputs: SessionOutputsSummary | undefined;
 
   private retryableError = false;
   /** The backend's last reported history state; only a change to `ready` says a read succeeded. */
@@ -348,6 +350,9 @@ export class LaneSync {
         this.settle();
         return;
       case 'outline': this.mergeOutline(frame); break;
+      case 'outputs':
+        if (frame.outputs && Array.isArray(frame.outputs.items)) this.outputs = frame.outputs;
+        break;
       case 'status': {
         const state = frame.status.history?.state;
         if (state === 'ready' && this.historyState !== 'ready') this.recoverTranscriptRead();
@@ -368,6 +373,7 @@ export class LaneSync {
     this.historyState = frame.status.history?.state;
     if (this.retryableError && this.error?.code !== 'TRANSCRIPT_READ_FAILED' && this.connection !== 'failed') { this.error = undefined; this.retryableError = false; }
     this.outline = { turnCount: frame.outline?.turnCount ?? 0, turns: Array.isArray(frame.outline?.turns) ? frame.outline.turns : [] };
+    if (frame.outputs && Array.isArray(frame.outputs.items)) this.outputs = frame.outputs;
     // A stream the browser redialed itself opens with a hello too. An older server never catches up
     // out loud: its hello's own rows are all there is.
     this.current = false;

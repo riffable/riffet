@@ -49,6 +49,7 @@ import riffet.contracts.Session
 import riffet.contracts.SyncFrame
 import riffet.contracts.SyncLane
 import riffet.contracts.SyncMode
+import riffet.contracts.SessionOutputsSummary
 import riffet.contracts.SyncOutline
 import riffet.contracts.TimelinePage
 import riffet.contracts.TimelineRow
@@ -163,6 +164,9 @@ internal class SessionSync(
     private val _outline = MutableStateFlow<SyncOutlineState?>(null)
     val outline: StateFlow<SyncOutlineState?> = _outline.asStateFlow()
 
+    private val _outputs = MutableStateFlow<SessionOutputsSummary?>(null)
+    val outputs: StateFlow<SessionOutputsSummary?> = _outputs.asStateFlow()
+
     private val _head = MutableStateFlow(0L)
 
     /** The lane seq the main window is current to; it moves as the stream adds rows (find re-asks on it). */
@@ -205,6 +209,7 @@ internal class SessionSync(
             hooks.conversationChanged()
             releaseLanes()
             _outline.value = null
+            _outputs.value = null
             _truncated.value = emptyMap()
             _liveActivities.value = emptyList()
             hooks.liveMetrics.value = emptyMap()
@@ -267,6 +272,7 @@ internal class SessionSync(
         hooks.conversationChanged()
         releaseLanes()
         _outline.value = null
+        _outputs.value = null
         _truncated.value = emptyMap()
         _liveActivities.value = emptyList()
     }
@@ -405,6 +411,7 @@ internal class SessionSync(
                 pruneMetrics(frame.runs)
                 _liveActivities.value = frame.activities
                 _outline.value = SyncOutlineState(frame.outline.turnCount, frame.outline.turns)
+                _outputs.value = frame.outputs
                 if (lock.withLock { lane.rows.hello(frame) }) caughtUp(token, lane)
             }
             is SyncFrame.Snapshot -> {
@@ -453,6 +460,7 @@ internal class SessionSync(
                 val known = held?.turns.orEmpty().mapTo(HashSet()) { it.turn }
                 SyncOutlineState(frame.turnCount, (kept + frame.turns.filter { it.turn !in known && it.rows > 0 }).sortedBy { it.startPos })
             }
+            is SyncFrame.Outputs -> _outputs.value = frame.outputs
             is SyncFrame.Context -> {
                 core.reduceDial(token) { it.copy(context = measuredContext(it.selected, it.sessionId, frame.context)) }
                 scheduleSave(lane)

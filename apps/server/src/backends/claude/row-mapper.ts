@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path';
-import type { NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
+import type { FileSnapshotRecord, NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
 import { describeCommandActions } from '../../../../../packages/timeline/src/toolTitle.js';
 import { commandActions } from '../shared/command-actions.js';
 import { isImagePath, toolImageContent } from '../shared/tool-images.js';
@@ -71,6 +71,8 @@ export interface ClaudeTranscriptHooks {
   onToolResult?: (toolUseId: string, failed: boolean) => void;
   /** What a command changed in the working tree, seen around it (`workspace-observer.ts`); appended to its result. */
   observedChanges?: (toolUseId: string) => readonly Record<string, unknown>[] | undefined;
+  /** Exact before/after per-file snapshots captured around an edit tool or shell command (`file-snapshots.ts`). */
+  fileSnapshots?: (toolUseId: string) => readonly FileSnapshotRecord[] | undefined;
   onModel?: (model: string) => void;
   /** Read-only exports associate the response model with its original message identity. */
   onMessageModel?: (nativeId: string, model: string) => void;
@@ -83,12 +85,49 @@ export interface ClaudeTranscriptHooks {
   precedingConfigDir?: string;
 }
 
+function structuredPatchDiffs(path: string, patch: unknown, resultType: unknown, unbounded: boolean): Array<Record<string, unknown>> | undefined {
+  if (!Array.isArray(patch) || !patch.length) return undefined;
+  const status = resultType === 'create' ? 'created' : 'modified';
+  const blocks: Array<Record<string, unknown>> = [];
+  for (const raw of patch) {
+    const hunk = record(raw);
+    if (!hunk || !Array.isArray(hunk.lines)) continue;
+    const oldLines: string[] = [];
+    const newLines: string[] = [];
+    for (const item of hunk.lines) {
+      if (typeof item !== 'string' || !item.length) continue;
+      const marker = item[0];
+      const body = item.slice(1);
+      if (marker === '-') oldLines.push(body);
+      else if (marker === '+') newLines.push(body);
+      else if (marker === ' ') { oldLines.push(body); newLines.push(body); }
+    }
+    if (!oldLines.length && !newLines.length) continue;
+    const oldStart = typeof hunk.oldStart === 'number' ? hunk.oldStart : 0;
+    const newStart = typeof hunk.newStart === 'number' ? hunk.newStart : 0;
+    const oldCount = typeof hunk.oldLines === 'number' ? hunk.oldLines : oldLines.length;
+    const newCount = typeof hunk.newLines === 'number' ? hunk.newLines : newLines.length;
+    const lineOffset = oldStart > 0 ? Math.max(0, oldStart - (oldCount ? 1 : 0)) : 0;
+    const newLineOffset = newStart > 0 ? Math.max(0, newStart - (newCount ? 1 : 0)) : 0;
+    blocks.push({
+      type: 'diff',
+      path,
+      oldText: clip(oldLines.join('\n'), unbounded ? Infinity : EDIT_LIMIT),
+      newText: clip(newLines.join('\n'), unbounded ? Infinity : EDIT_LIMIT),
+      status,
+      ...(lineOffset ? { lineOffset } : {}),
+      ...(newLineOffset !== lineOffset ? { newLineOffset } : {}),
+    });
+  }
+  return blocks.length ? blocks : undefined;
+}
+
 /**
  * A subagent call carries the title the CLI itself shows for it. Claude Code called this tool
  * `Task` through 2.1.x and `Agent` after, so both names are the same thing here.
  */
 export function describeTool(name: string, input: Record<string, unknown>, unbounded = false): Record<string, unknown> {
-  const path = string(input.file_path) ?? string(input.path) ?? string(input.target_file);
+  const path = string(input.file_path) ?? string(input.notebook_path) ?? string(input.path) ?? string(input.target_file);
   const subagent = name === 'Task' || name === 'Agent';
   /**
    * `Bash` sends only a command string, where Codex reports what its commands do (`commandActions`).
@@ -119,22 +158,40 @@ export function describeTool(name: string, input: Record<string, unknown>, unbou
                 : ['Grep', 'Glob', 'WebSearch'].includes(name) ? 'search' : 'other';
   /**
    * The reader asked to see what a file edit did, and the CLI's own input carries both sides of it:
-   * `Edit` sends the replaced and the replacement text, `Write` sends the new file whole. Every
-   * other backend turns that into a `diff` block here (`chat-store.ts`, `droid/events.ts`); without
-   * it the UI has nothing to draw and an edit renders as its title alone — three `Edit a.ts` rows
-   * with no visible change. The transcript's `toolUseResult.structuredPatch` would give hunk line
-   * numbers too, but it is not reachable from here and is absent on some rows, so the input is what
-   * this reads.
+   * `Edit` sends the replaced and the replacement text, `Write` sends the new file whole,
+   * `MultiEdit` carries `edits[]`, and `NotebookEdit` carries `new_source`. When the tool result
+   * later brings `toolUseResult.structuredPatch` or `type`, `mapRow` upgrades the diff block.
    */
-  const oldText = string(input.old_string) ?? string(input.old_str);
-  const newText = string(input.new_string) ?? string(input.new_str) ?? string(input.content);
-  const edited = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) && (oldText !== undefined || newText !== undefined);
+  const limit = unbounded ? Infinity : EDIT_LIMIT;
+  let editDiffs: Array<Record<string, unknown>> | undefined;
+  if (name === 'MultiEdit' && Array.isArray(input.edits)) {
+    const blocks = input.edits.flatMap((raw) => {
+      const entry = record(raw);
+      const oldPart = string(entry?.old_string) ?? string(entry?.old_str);
+      const newPart = string(entry?.new_string) ?? string(entry?.new_str);
+      return oldPart !== undefined || newPart !== undefined
+        ? [{ type: 'diff', path, oldText: clip(oldPart ?? '', limit), newText: clip(newPart ?? '', limit), status: 'modified' }]
+        : [];
+    });
+    if (blocks.length) editDiffs = blocks;
+  } else if (name === 'NotebookEdit') {
+    const newSource = string(input.new_source);
+    if (newSource !== undefined) {
+      editDiffs = [{ type: 'diff', path, oldText: '', newText: clip(newSource, limit), status: 'modified' }];
+    }
+  } else if (['Write', 'Edit', 'MultiEdit'].includes(name)) {
+    const oldText = string(input.old_string) ?? string(input.old_str);
+    const newText = string(input.new_string) ?? string(input.new_str) ?? string(input.content);
+    if (oldText !== undefined || newText !== undefined) {
+      editDiffs = [{ type: 'diff', path, oldText: clip(oldText ?? '', limit), newText: clip(newText ?? '', limit), ...(name === 'Edit' ? { status: 'modified' } : {}) }];
+    }
+  }
   const actionPaths = [...new Set((actions ?? []).flatMap(action => action.path && !/[*?[$~]/.test(action.path) ? [action.path] : []))];
   return {
     kind, title,
     ...(path ? { locations: [{ path }] } : actionPaths.length ? { locations: actionPaths.map(item => ({ path: item })) } : {}),
     rawInput: described ? { ...input, commandActions: actions } : input,
-    ...(edited ? { content: [{ type: 'diff', path, oldText: clip(oldText ?? '', unbounded ? Infinity : EDIT_LIMIT), newText: clip(newText ?? '', unbounded ? Infinity : EDIT_LIMIT) }] } : {}),
+    ...(editDiffs ? { content: editDiffs } : {}),
     // The plan is prose the model wrote for the reader to approve, so it rides the call as Markdown
     // rather than as a `plan` event: that channel carries todo entries, and a client reading it for
     // `entries` drops a body it finds there.
@@ -339,13 +396,26 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         continue;
       }
       const observed = hooks.observedChanges?.(toolUseId) ?? [];
+      const snapshots = hooks.fileSnapshots?.(toolUseId) ?? [];
       const receipt = call?.name === 'SendMessage' && !failed;
       const answered = call?.name === 'AskUserQuestion' && !failed && toolResults.length === 1 ? questionAnswers(call, rowResult) : undefined;
-      const resultContent = [...(receipt ? [] : answered ?? toolResultContent(part.content, call, failed, hooks.unbounded)), ...observed];
+      const editPath = call && ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(call.name)
+        ? string(rowResult.filePath) ?? string(call.input.file_path) ?? string(call.input.notebook_path) ?? string(call.input.path)
+        : undefined;
+      const patchedDiffs = editPath && !failed && toolResults.length === 1
+        ? structuredPatchDiffs(editPath, rowResult.structuredPatch, rowResult.type, Boolean(hooks.unbounded))
+        : undefined;
+      // When `Write` overwrote an existing file without a structuredPatch, mark it `modified` so it is not mislabeled as newly created.
+      const overwriteDiff = !patchedDiffs && editPath && !failed && toolResults.length === 1 && call?.name === 'Write' && rowResult.type === 'update' && string(call.input.content) !== undefined
+        ? [{ type: 'diff', path: editPath, oldText: '', newText: clip(string(call.input.content)!, hooks.unbounded ? Infinity : EDIT_LIMIT), status: 'modified', created: false }]
+        : undefined;
+      const baseResultContent = receipt ? [] : answered ?? toolResultContent(part.content, call, failed, hooks.unbounded);
+      const resultContent = [...(patchedDiffs ?? overwriteDiff ?? []), ...baseResultContent, ...observed];
       events.push({ ...resultBase(index, call), type: 'tool_call_update', data: {
         sessionUpdate: 'tool_call_update', toolCallId: toolUseId, status: failed ? 'failed' : 'completed',
         ...(call ? { toolName: call.name } : { contextMissing: true }),
         ...(resultContent.length ? { content: resultContent } : {}),
+        ...(snapshots.length ? { fileSnapshots: snapshots } : {}),
       } });
       // A call that returned at once and left a task running (a background Bash, a Monitor, an Agent, a Workflow).
       if (call && !failed && state.activities && toolResults.length === 1) {

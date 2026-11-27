@@ -53,7 +53,7 @@ export interface ClaudeTranscriptSourceOptions {
   /** A draft its transcript text contradicted: the screen's layout has likely changed (`live/screen.ts`). */
   drift?(drift: LiveDrift): void;
   /** What a running conversation knows about its rows; nothing that acts on the CLI. */
-  hooks?: Pick<ClaudeTranscriptHooks, 'additionalContext' | 'commandForUserMessage' | 'promptText' | 'putBlob' | 'observedChanges'> & {
+  hooks?: Pick<ClaudeTranscriptHooks, 'additionalContext' | 'commandForUserMessage' | 'promptText' | 'putBlob' | 'observedChanges' | 'fileSnapshots'> & {
     /** Persisted input fences survive the runtime and the journal's read cursor. */
     inputRuns?: () => readonly Run[];
     inputReceipt?: (event: NativeWorkbenchEvent) => void;

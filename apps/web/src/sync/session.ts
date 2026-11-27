@@ -1,4 +1,4 @@
-import type { NativeActivity, NativeContext, NativeInteraction, NativeInteractionResponse, NativeStatus, LaneFind, Run, RunMetrics, Session, SessionControlSnapshot, StepMetrics, SyncLane, TimelineRow } from '@contracts';
+import type { NativeActivity, NativeContext, NativeInteraction, NativeInteractionResponse, NativeStatus, LaneFind, Run, RunMetrics, Session, SessionControlSnapshot, SessionOutputsSummary, StepMetrics, SyncLane, TimelineRow } from '@contracts';
 import { createStore, type Store } from '@/lib/store';
 import type { SyncCache } from './cache';
 import { LaneSync, type ControlFrame, type LaneConnection, type LaneOutline, type PageResult } from './lane';
@@ -53,6 +53,8 @@ export interface SessionSyncState {
   context?: NativeContext;
   session?: Session;
   outline: LaneOutline;
+  /** Server-aggregated net file outputs for the whole conversation; undefined when talking to an older server. */
+  outputs?: SessionOutputsSummary;
   /** Output speed per run, from `metrics` frames. */
   metrics: ReadonlyMap<string, RunMetrics>;
   step?: StepMetrics;
@@ -282,6 +284,7 @@ export class SessionSync {
         this.store.set({
           status: frame.status, statusKnown: true, interaction: frame.interaction ?? null, runs: Array.isArray(frame.runs) ? frame.runs : [],
           activities: Array.isArray(frame.activities) ? frame.activities : [], context: frame.context, session: frame.session, outline: this.main.outline,
+          outputs: this.main.outputs,
           // This connection's baseline, including a snapshot that omits control or restarts the revision.
           control: frame.control,
         });
@@ -296,6 +299,7 @@ export class SessionSync {
       case 'run': this.store.set((state) => ({ runs: upsertRun(state.runs, frame.run) })); break;
       case 'activities': this.store.set({ activities: frame.live }); break;
       case 'outline': this.store.set({ outline: this.main.outline }); break;
+      case 'outputs': this.store.set({ outputs: this.main.outputs }); break;
       case 'context': this.store.set({ context: frame.context }); this.options.cache?.rememberContext(this.options.sessionId, frame.context, this.cacheEpoch); break;
       case 'metrics':
         this.store.set((state) => {
@@ -319,7 +323,7 @@ export class SessionSync {
       // A stream that ended will bring nothing more: what shows is all there is.
       catchingUp: !main.current && !['failed', 'outdated', 'closed'].includes(main.connection),
       generation: main.generation, hasBefore: main.window.hasBefore, hasAfter: main.window.hasAfter,
-      loadingBefore: main.loadingBefore, loadingAfter: main.loadingAfter, outline: main.outline,
+      loadingBefore: main.loadingBefore, loadingAfter: main.loadingAfter, outline: main.outline, outputs: main.outputs,
     });
   }
 

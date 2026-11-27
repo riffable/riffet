@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { SERVER_BUDGET, STORAGE_BUDGET, type NativeActivity, type NativeJob, type NativeWorkbenchEvent, type Run, type WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
-import { SYNC_BUDGET, type FileChange, type LaneFind, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import { OUTPUT_BUDGET, SERVER_BUDGET, STORAGE_BUDGET, type NativeActivity, type NativeJob, type NativeWorkbenchEvent, type Run, type WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { SYNC_BUDGET, type FileChange, type LaneFind, type SessionOutputDiff, type SessionOutputsSummary, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 import { buildTimeline } from '../../../../packages/timeline/src/buildTimeline.js';
 import { projectEvents } from '../../../../packages/timeline/src/projectEvents.js';
 import { rowContent, type RowContent } from '../../../../packages/timeline/src/rows.js';
@@ -13,8 +13,8 @@ import { reclaimFreePages } from '../sqlite-storage.js';
 import { materializeRowImages, type BlobWriter } from './budget.js';
 import { generationOf, LaneFold, rowFrames, timelineRuns, type FoldContext, type FoldInputs, type ResetReason, type RowEntry, type TimelineChange } from './fold.js';
 import { LaneFinder } from './find.js';
+import { aggregateSessionOutputs, OutputDiffCache, readSessionOutputDiff, summaryChangesToOutputs, type StoredRowOutput } from './outputs.js';
 import { rowOf, TimelineTables, type StoredSubagentSummary } from './tables.js';
-import { toolFileChanges } from '../../../../packages/timeline/src/lineDiff.js';
 
 export { FOLD_VERSION, type ResetReason, type TimelineChange } from './fold.js';
 
@@ -51,6 +51,10 @@ export interface TimelineDeps {
   stepRows?: number;
   /** Lanes kept folded in memory; a lane past it folds its open turn again when next needed. */
   hotLanes?: number;
+  /** Project root (`project.cwd`) for a conversation, used to normalize session output paths. */
+  projectRoot?(sessionId: string): string | undefined;
+  /** Bounded LRU cap for `(preHash, postHash)` net line-diff calculations; defaults to `OUTPUT_BUDGET.diffCacheEntries`. */
+  outputDiffCacheEntries?: number;
   /** Bounded LRU cap for subagent summaries and file-change digests; defaults to `SERVER_BUDGET.timelineSummaryEntries`. */
   summaryEntries?: number;
   /** Bounded LRU cap for expanded truncated row payloads; defaults to `STORAGE_BUDGET`. */
@@ -133,10 +137,15 @@ export class TimelineService {
   /** Bounded LRU of on-demand expanded truncated rows, keyed by `${sessionId}\n${hash}`. */
   private readonly expandedCache = new Map<string, Buffer>();
   private expandedCacheBytes = 0;
+  /** Bounded LRU of `(preHash, postHash)` exact net line-diff counts. */
+  private readonly outputDiffCache: OutputDiffCache;
+  /** Bounded LRU of aggregated session outputs, invalidated by `tables.revision(sessionId)`. */
+  private readonly outputsCache = new Map<string, { rev: string; root: string | undefined; summary: SessionOutputsSummary }>();
 
   constructor(private readonly deps: TimelineDeps) {
     this.tables = new TimelineTables(deps.db);
     this.finder = new LaneFinder(this.tables);
+    this.outputDiffCache = new OutputDiffCache(deps.outputDiffCacheEntries ?? OUTPUT_BUDGET.diffCacheEntries);
     const put = deps.putBlob ?? ((sessionId: string, bytes: Buffer, type: string) => deps.journal.putSessionBlob(sessionId, bytes, type));
     const release = deps.releaseBlobs ?? ((sessionId: string, hashes: string[]) => deps.journal.releaseSessionBlobs(sessionId, hashes));
     this.context = { journal: deps.journal, tables: this.tables, put, release, subagent: (sessionId, toolCallId) => this.summary(sessionId, toolCallId) };
@@ -225,6 +234,73 @@ export class TimelineService {
     if (!places.length) return { generation, rows: [], hasBefore: false, hasAfter: false };
     const low = places[0]!.pos, high = places.at(-1)!.pos;
     return { generation, rows: this.tables.rowsBetween(sessionId, lane, low, high), hasBefore: this.tables.hasBefore(sessionId, lane, low), hasAfter: this.tables.hasAfter(sessionId, lane, high) };
+  }
+
+  /** Server-aggregated net file outputs for the whole conversation (main + all subagent depths). */
+  outputs(sessionId: string, root?: string): SessionOutputsSummary {
+    const resolvedRoot = root ?? this.deps.projectRoot?.(sessionId);
+    const rev = this.tables.revision(sessionId);
+    const cached = this.outputsCache.get(sessionId);
+    if (cached && cached.rev === rev && cached.root === resolvedRoot) {
+      this.outputsCache.delete(sessionId);
+      this.outputsCache.set(sessionId, cached);
+      return cached.summary;
+    }
+    const records = this.collectSessionOutputs(sessionId);
+    const summary = aggregateSessionOutputs(records, {
+      root: resolvedRoot,
+      readBlob: hash => this.deps.journal.sessionBlob(sessionId, hash)?.bytes(),
+      diffCache: this.outputDiffCache,
+    });
+    const cap = this.deps.summaryEntries ?? SERVER_BUDGET.timelineSummaryEntries;
+    this.outputsCache.delete(sessionId);
+    this.outputsCache.set(sessionId, { rev, root: resolvedRoot, summary });
+    while (this.outputsCache.size > cap) {
+      const oldest = this.outputsCache.keys().next().value as string | undefined;
+      if (!oldest) break;
+      this.outputsCache.delete(oldest);
+    }
+    return summary;
+  }
+
+  /** Reconstructs the session's net diff for one file from its stored CAS snapshots. */
+  outputDiff(sessionId: string, path: string, root?: string): SessionOutputDiff | undefined {
+    const resolvedRoot = root ?? this.deps.projectRoot?.(sessionId);
+    const records = this.collectSessionOutputs(sessionId);
+    return readSessionOutputDiff(records, path, {
+      root: resolvedRoot,
+      readBlob: hash => this.deps.journal.sessionBlob(sessionId, hash)?.bytes(),
+    });
+  }
+
+  /**
+   * Collects pre-truncation file outputs across every lane of a session in chronological order so
+   * alternating main/subagent edits to the same file chain seamlessly into net segments.
+   */
+  private collectSessionOutputs(sessionId: string): StoredRowOutput[] {
+    const rows = this.tables.sessionRowOutputs(sessionId);
+    const entries: Array<{ order: number; lane: SyncLane; at: string; laneRank: number; pos: number; key: string; output: StoredRowOutput }> = [];
+    let order = 0;
+    for (const row of rows) {
+      const laneRank = row.lane === 'main' ? 0 : 1;
+      for (const output of row.outputs) {
+        entries.push({ order: order++, lane: row.lane, at: output.updatedAt ?? '', laneRank, pos: row.pos, key: row.key, output });
+      }
+    }
+    // Include cold-dropped subagent lanes whose rows were evicted into `timeline_heads.summary`.
+    for (const head of this.tables.lanesOf(sessionId)) {
+      if (head.lane === 'main' || head.headSeq !== 0 || head.epoch <= 0 || !head.summary?.changes.length) continue;
+      for (const output of summaryChangesToOutputs(head.summary.changes)) {
+        entries.push({ order: order++, lane: head.lane, at: output.updatedAt ?? head.updatedAt ?? '', laneRank: 1, pos: 0, key: head.lane, output });
+      }
+    }
+    entries.sort((a, b) => {
+      // Preserve folded `pos` order strictly within the same lane; interleave across lanes by timestamp.
+      if (a.lane === b.lane) return a.pos - b.pos || (a.key < b.key ? -1 : a.key > b.key ? 1 : a.order - b.order);
+      if (a.at && b.at && a.at !== b.at) return a.at < b.at ? -1 : 1;
+      return a.laneRank - b.laneRank || a.pos - b.pos || (a.key < b.key ? -1 : a.key > b.key ? 1 : a.order - b.order);
+    });
+    return entries.map(entry => entry.output);
   }
 
   /**
@@ -629,13 +705,14 @@ export class TimelineService {
     }
     for (const id of [...this.summaries.keys()]) if (id.startsWith(`${sessionId}\n`)) { this.summaries.delete(id); this.staleSummaries.delete(id); }
     for (const id of [...this.laneFileChanges.keys()]) if (owned(id)) this.laneFileChanges.delete(id);
+    this.outputsCache.delete(sessionId);
     if (queued) for (const id of [...this.dropping]) if (owned(id)) this.dropping.delete(id);
   }
 
   /** Observability snapshot for `ServerCacheRegistry`. */
   cacheStats(): { count: number; bytes: number; limitBytes: number } {
     return {
-      count: this.hot.size + this.summaries.size + this.laneFileChanges.size + this.expandedCache.size,
+      count: this.hot.size + this.summaries.size + this.laneFileChanges.size + this.expandedCache.size + this.outputsCache.size + this.outputDiffCache.size,
       bytes: this.expandedCacheBytes,
       limitBytes: this.deps.expandedRowCacheBytes ?? STORAGE_BUDGET.expandedRowCacheBytes,
     };
@@ -647,6 +724,8 @@ export class TimelineService {
     this.summaries.clear();
     this.staleSummaries.clear();
     this.laneFileChanges.clear();
+    this.outputsCache.clear();
+    this.outputDiffCache.clear();
     for (const id of [...this.hot.keys()]) {
       if (this.listeners.has(id) || this.work.has(id) || this.pendingResets.has(id)) continue;
       this.hot.delete(id);
@@ -797,6 +876,7 @@ export class TimelineService {
     this.hot.set(id, hot);
     this.evict();
     const changes = hot.fold.take();
+    const outputsDirty = hot.fold.takeOutputsDirty();
     const pendingReset = this.pendingResets.get(id);
     let reset: TimelineChange | undefined;
     if (pendingReset && caughtUp) {
@@ -804,10 +884,20 @@ export class TimelineService {
       this.pendingResets.delete(id);
     }
     const holdingReset = this.pendingResets.has(id);
-    if (reset || (!holdingReset && changes.length)) this.clearExpandedFor(sessionId);
+    if (reset || (!holdingReset && (changes.length || outputsDirty))) {
+      this.clearExpandedFor(sessionId);
+      if (reset || outputsDirty) this.outputsCache.delete(sessionId);
+    }
     const listeners = this.listeners.get(id);
     if (reset) for (const listener of listeners ?? []) listener(reset);
     else if (!holdingReset) for (const change of changes) for (const listener of listeners ?? []) listener(change);
+    if (!holdingReset && !reset && outputsDirty) {
+      const mainListeners = this.listeners.get(laneId(sessionId, 'main'));
+      if (mainListeners?.size) {
+        const frame: TimelineChange = { type: 'outputs', outputs: this.outputs(sessionId) };
+        for (const listener of mainListeners) listener(frame);
+      }
+    }
     if (lane !== 'main' && !holdingReset) this.subagentLaneChanged(sessionId, lane, hot.fold);
     return caughtUp;
   }
@@ -884,38 +974,33 @@ export class TimelineService {
   }
 
   /**
-   * The files a subagent changed, carried by the parent's tool row: the conversation's outputs list only reads
-   * the lane it shows, and a subagent's lane is loaded when it is opened. Read from the lane's folded tool rows,
-   * so it holds for any backend and for a subagent still running; a path last touched later moves to the end.
+   * The files a subagent (and any nested subagents it spawned) changed, read from pre-truncation
+   * `timeline_row_outputs` so 16 KiB / 64 KiB row clipping never distorts counts; oldest first,
+   * with a path touched again moving to the end.
    */
   private subagentFileChanges(sessionId: string, lane: SyncLane): FileChange[] {
-    const id = laneId(sessionId, lane);
-    const known = this.laneFileChanges.get(id);
-    const read = new Map<string, { digest: string; changes: FileChange[] }>();
-    const byPath = new Map<string, FileChange>();
-    for (const { key, digest } of this.tables.toolDigests(sessionId, lane)) {
-      let entry = known?.get(key);
-      if (entry?.digest !== digest) {
-        const stored = this.tables.row(sessionId, lane, key);
-        const row = stored && rowOf(stored.payload, stored.seq, stored.rev);
-        entry = { digest, changes: row?.kind === 'tool' ? toolFileChanges(row.event.data) : [] };
+    const collected: StoredRowOutput[] = [];
+    const visited = new Set<string>();
+    const walk = (current: SyncLane): void => {
+      if (visited.has(current)) return;
+      visited.add(current);
+      const head = this.tables.head(sessionId, current);
+      if (head && head.headSeq === 0 && head.epoch > 0 && head.summary?.changes.length) {
+        collected.push(...summaryChangesToOutputs(head.summary.changes));
+        return;
       }
-      read.set(key, entry);
-      for (const change of entry.changes) {
-        const current = byPath.get(change.path);
-        byPath.delete(change.path);
-        byPath.set(change.path, current ? { ...current, added: current.added + change.added, removed: current.removed + change.removed } : change);
-      }
-    }
-    const cap = this.deps.summaryEntries ?? SERVER_BUDGET.timelineSummaryEntries;
-    this.laneFileChanges.delete(id);
-    this.laneFileChanges.set(id, read);
-    while (this.laneFileChanges.size > cap) {
-      const oldest = this.laneFileChanges.keys().next().value as string | undefined;
-      if (!oldest) break;
-      this.laneFileChanges.delete(oldest);
-    }
-    return [...byPath.values()].slice(-MAX_SUBAGENT_CHANGES);
+      collected.push(...this.tables.laneRowOutputs(sessionId, current));
+      for (const child of this.tables.laneSubagentLanes(sessionId, current)) walk(child);
+    };
+    walk(lane);
+    if (!collected.length) return [];
+    const aggregated = aggregateSessionOutputs(collected, {
+      readBlob: hash => this.deps.journal.sessionBlob(sessionId, hash)?.bytes(),
+      diffCache: this.outputDiffCache,
+      maxOutputs: MAX_SUBAGENT_CHANGES,
+    });
+    // `subagent.changes` preserves oldest-touched-first order (newest at the tail).
+    return aggregated.items.reverse();
   }
 
   private evict(): void {

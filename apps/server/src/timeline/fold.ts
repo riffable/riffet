@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { NativeActivity, NativeJob, NativeWorkbenchEvent, Run, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
-import { PENDING_ROW_POS, SYNC_BUDGET, type SyncLane, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import { PENDING_ROW_POS, SYNC_BUDGET, type SessionOutputsSummary, type SyncLane, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 import { buildTimeline, IncrementalTimeline } from '../../../../packages/timeline/src/buildTimeline.js';
 import { nativeTaskOutcome } from '../../../../packages/timeline/src/failures.js';
 import type { TimelineItem } from '../../../../packages/timeline/src/model.js';
@@ -11,6 +11,7 @@ import { activityOfEvent, isLiveActivity } from '../journal/activity.js';
 import { hasTurnEnded, servingKey, subagentMetaId, turnMetaId, type TurnEndStatus } from '../journal/ingest.js';
 import { DRAFT_KIND, META_PREFIX, TOMBSTONE_KIND, type Journal, type JournalRow } from '../journal/journal.js';
 import { fitRow, type BlobWriter } from './budget.js';
+import { extractDirectRowOutputs } from './outputs.js';
 import type { RowState, TimelineTables } from './tables.js';
 
 /*
@@ -27,7 +28,7 @@ import type { RowState, TimelineTables } from './tables.js';
  */
 
 /** Bumped when a change to the fold rules must refold every lane: it changes every lane's generation. */
-export const FOLD_VERSION = 17;
+export const FOLD_VERSION = 18;
 const READ_BATCH = 2000;
 const PREVIEW_CHARS = 120;
 const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);
@@ -43,7 +44,8 @@ export type ResetReason = 'rebuilt' | 'promoted' | 'fold';
 export type TimelineChange =
   | { type: 'rows'; generation: string; from: number; to: number; upserts: TimelineRow[]; deletes: string[] }
   | { type: 'reset'; generation: string; reason: ResetReason }
-  | { type: 'outline'; generation: string; turnCount: number; turns: TurnOutlineV3[] };
+  | { type: 'outline'; generation: string; turnCount: number; turns: TurnOutlineV3[] }
+  | { type: 'outputs'; outputs: SessionOutputsSummary };
 
 /** A row's latest change: its content, or the key of a row that left. */
 export type RowEntry = { seq: number; row: TimelineRow } | { seq: number; key: string };
@@ -157,6 +159,8 @@ export class LaneFold {
   private chatId: string | undefined;
   /** Changes made since the last `take`, for subscribers. */
   private out: { upserts: TimelineRow[]; deletes: Array<{ key: string; seq: number }>; turns: Map<string, TurnOutlineV3> } = { upserts: [], deletes: [], turns: new Map() };
+  /** Whether any tool row's pre-truncation file outputs changed since the last `takeOutputsDirty`. */
+  private outputsDirty = false;
 
   private constructor(private readonly ctx: FoldContext, readonly sessionId: string, readonly lane: SyncLane) {}
 
@@ -349,6 +353,13 @@ export class LaneFold {
     const changes: TimelineChange[] = entries.length ? rowFrames(this.generation, entries[0]!.seq, entries.at(-1)!.seq, entries) : [];
     if (turns.size) changes.push({ type: 'outline', generation: this.generation, turnCount: this.ctx.tables.turnCount(this.sessionId, this.lane), turns: [...turns.values()] });
     return changes;
+  }
+
+  /** Whether pre-truncation file outputs changed in this lane since the last check. */
+  takeOutputsDirty(): boolean {
+    const dirty = this.outputsDirty;
+    this.outputsDirty = false;
+    return dirty;
   }
 
   // ---- loading -----------------------------------------------------------------------------
@@ -718,6 +729,10 @@ export class LaneFold {
   private write(row: RowContent, digest: string, previous: RowState | undefined, released: string[]): RowState {
     const seq = ++this.headSeq;
     const rev = (previous?.rev ?? 0) + 1;
+    // Extract pre-truncation file outputs before `fitRow` clips diffs or strips internal snapshot hashes.
+    if (this.ctx.tables.putRowOutputs(this.sessionId, this.lane, row.key, row.pos, extractDirectRowOutputs(row))) {
+      this.outputsDirty = true;
+    }
     // Rows backed by a bounded set of journal entities can be reconstructed on demand when expanded;
     // `auto` still persists if last-resort guarding truncates `sourceIds` or metadata.
     const reconstructible = row.event.sourceIds.length > 0 && row.event.sourceIds.length <= 64 && row.kind !== 'status' && !(row.kind === 'tool' && row.job) && !(row.kind === 'user' && row.pending);
@@ -872,6 +887,7 @@ export class LaneFold {
         const state: RowState = { ...rest, seq: ++this.headSeq, rev: previous.rev + 1, deleted: true, digest: '', bytes: 0 };
         const superseded = previous.truncatedHash ?? tables.truncatedBlobOf(this.sessionId, this.lane, key);
         tables.putRow(this.sessionId, this.lane, state, '');
+        if (tables.deleteRowOutputs(this.sessionId, this.lane, key)) this.outputsDirty = true;
         if (superseded) released.push(superseded);
         this.emitted.delete(key);
         this.out.deletes.push({ key, seq: state.seq });

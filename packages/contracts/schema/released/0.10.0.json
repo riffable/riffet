@@ -5046,6 +5046,71 @@
                   "turns"
                 ]
               },
+              "outputs": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "removed": {
+                          "type": "number"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "modified",
+                            "deleted"
+                          ]
+                        },
+                        "binary": {
+                          "type": "boolean"
+                        },
+                        "outsideProject": {
+                          "type": "boolean"
+                        },
+                        "accuracy": {
+                          "type": "string",
+                          "enum": [
+                            "exact",
+                            "estimated"
+                          ]
+                        },
+                        "hasSnapshotDiff": {
+                          "type": "boolean"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "added",
+                        "removed",
+                        "created"
+                      ]
+                    }
+                  },
+                  "total": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "items",
+                  "total"
+                ]
+              },
               "catchingUp": {
                 "type": "boolean"
               },
@@ -6842,6 +6907,33 @@
                                   },
                                   "created": {
                                     "type": "boolean"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "created",
+                                      "modified",
+                                      "deleted"
+                                    ]
+                                  },
+                                  "binary": {
+                                    "type": "boolean"
+                                  },
+                                  "outsideProject": {
+                                    "type": "boolean"
+                                  },
+                                  "accuracy": {
+                                    "type": "string",
+                                    "enum": [
+                                      "exact",
+                                      "estimated"
+                                    ]
+                                  },
+                                  "hasSnapshotDiff": {
+                                    "type": "boolean"
+                                  },
+                                  "updatedAt": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
@@ -8459,6 +8551,33 @@
                                   },
                                   "created": {
                                     "type": "boolean"
+                                  },
+                                  "status": {
+                                    "type": "string",
+                                    "enum": [
+                                      "created",
+                                      "modified",
+                                      "deleted"
+                                    ]
+                                  },
+                                  "binary": {
+                                    "type": "boolean"
+                                  },
+                                  "outsideProject": {
+                                    "type": "boolean"
+                                  },
+                                  "accuracy": {
+                                    "type": "string",
+                                    "enum": [
+                                      "exact",
+                                      "estimated"
+                                    ]
+                                  },
+                                  "hasSnapshotDiff": {
+                                    "type": "boolean"
+                                  },
+                                  "updatedAt": {
+                                    "type": "string"
                                   }
                                 },
                                 "required": [
@@ -11205,6 +11324,84 @@
             "properties": {
               "type": {
                 "type": "string",
+                "const": "outputs"
+              },
+              "outputs": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "removed": {
+                          "type": "number"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "modified",
+                            "deleted"
+                          ]
+                        },
+                        "binary": {
+                          "type": "boolean"
+                        },
+                        "outsideProject": {
+                          "type": "boolean"
+                        },
+                        "accuracy": {
+                          "type": "string",
+                          "enum": [
+                            "exact",
+                            "estimated"
+                          ]
+                        },
+                        "hasSnapshotDiff": {
+                          "type": "boolean"
+                        },
+                        "updatedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "added",
+                        "removed",
+                        "created"
+                      ]
+                    }
+                  },
+                  "total": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "items",
+                  "total"
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "outputs"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
                 "const": "context"
               },
               "context": {
@@ -13621,6 +13818,33 @@
                         },
                         "created": {
                           "type": "boolean"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "modified",
+                            "deleted"
+                          ]
+                        },
+                        "binary": {
+                          "type": "boolean"
+                        },
+                        "outsideProject": {
+                          "type": "boolean"
+                        },
+                        "accuracy": {
+                          "type": "string",
+                          "enum": [
+                            "exact",
+                            "estimated"
+                          ]
+                        },
+                        "hasSnapshotDiff": {
+                          "type": "boolean"
+                        },
+                        "updatedAt": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -15217,6 +15441,33 @@
                               },
                               "created": {
                                 "type": "boolean"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "created",
+                                  "modified",
+                                  "deleted"
+                                ]
+                              },
+                              "binary": {
+                                "type": "boolean"
+                              },
+                              "outsideProject": {
+                                "type": "boolean"
+                              },
+                              "accuracy": {
+                                "type": "string",
+                                "enum": [
+                                  "exact",
+                                  "estimated"
+                                ]
+                              },
+                              "hasSnapshotDiff": {
+                                "type": "boolean"
+                              },
+                              "updatedAt": {
+                                "type": "string"
                               }
                             },
                             "required": [
@@ -16845,6 +17096,33 @@
                               },
                               "created": {
                                 "type": "boolean"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "created",
+                                  "modified",
+                                  "deleted"
+                                ]
+                              },
+                              "binary": {
+                                "type": "boolean"
+                              },
+                              "outsideProject": {
+                                "type": "boolean"
+                              },
+                              "accuracy": {
+                                "type": "string",
+                                "enum": [
+                                  "exact",
+                                  "estimated"
+                                ]
+                              },
+                              "hasSnapshotDiff": {
+                                "type": "boolean"
+                              },
+                              "updatedAt": {
+                                "type": "string"
                               }
                             },
                             "required": [

@@ -102,7 +102,7 @@ export class SyncService {
     const offs: Array<() => void> = [];
     let opened = false;
     // What went out last, so an unchanged value is not sent again.
-    const sent = { status: '', interaction: '', context: '', session: '', activities: '' };
+    const sent = { status: '', interaction: '', context: '', session: '', activities: '', outputs: '' };
     // Control revisions count emitted frames only. Dedup ignores `revision`, so a quiet session
     // does not repeat the same snapshot under a new number.
     let controlRevision = 0;
@@ -123,6 +123,11 @@ export class SyncService {
     const liveList = () => [...live.values()].slice(-SYNC_BUDGET.liveActivities);
     const sendActivities = () => { const list = liveList(); if (changed('activities', list)) connection.control({ type: 'activities', live: list }); };
     const sendOutline = () => { const outline = timeline.outline(sessionId, lane, SYNC_BUDGET.outlineTurns); connection.control({ type: 'outline', turnCount: outline.turnCount, turns: outline.turns }); };
+    const sendOutputs = (next?: ReturnType<TimelineService['outputs']>) => {
+      if (!main) return;
+      const outputs = next ?? timeline.outputs(sessionId);
+      if (changed('outputs', outputs)) connection.control({ type: 'outputs', outputs });
+    };
     offs.push(timeline.subscribe(sessionId, lane, change => {
       if (!opened) return;
       if (change.type === 'rows') {
@@ -141,6 +146,9 @@ export class SyncService {
         sendOutline();
         loadActivities();
         sendActivities();
+        sendOutputs();
+      } else if (change.type === 'outputs') {
+        sendOutputs(change.outputs);
       } else connection.control({ type: 'outline', turnCount: change.turnCount, turns: change.turns });
     }));
 
@@ -248,6 +256,7 @@ export class SyncService {
         ? timeline.resume(sessionId, lane, { generation: request.generation, after: request.after, ...request.budget }) : undefined;
       const snapshot = resumed ? undefined : timeline.snapshot(sessionId, lane, request.budget);
       const outline = timeline.outline(sessionId, lane, SYNC_BUDGET.outlineTurns);
+      const outputs = main ? timeline.outputs(sessionId) : undefined;
       loadActivities();
       const activities = liveList();
       changed('status', status);
@@ -255,6 +264,7 @@ export class SyncService {
       changed('context', context);
       changed('session', session);
       changed('activities', activities);
+      if (outputs) changed('outputs', outputs);
       const initialControl = takeControl();
       connection.control({
         type: 'hello', protocol: 3, lane,
@@ -264,6 +274,7 @@ export class SyncService {
         session, status, interaction: status.interaction ?? null, runs: this.deps.runs(sessionId), activities,
         ...(context ? { context } : {}),
         outline: { turnCount: outline.turnCount, turns: outline.turns },
+        ...(outputs ? { outputs } : {}),
         ...(catchingUp ? { catchingUp } : {}),
         ...(initialControl ? { control: initialControl } : {}),
       });

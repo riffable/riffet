@@ -336,7 +336,10 @@ export class CodexEventLog {
     return projectCodexItem(item, turn, {
       sessionId: this.ctx.sessionId, threadId, runId, createdAt, ...(commandId ? { commandId } : {}), questions: this.ctx.questions(),
       ...(span ? { span } : {}),
-      ...(this.ctx.observation ? { observedChanges: (toolCallId: string) => this.ctx.observation?.changes(this.ctx.sessionId, toolCallId) } : {}),
+      ...(this.ctx.observation ? {
+        observedChanges: (toolCallId: string) => this.ctx.observation?.changes(this.ctx.sessionId, toolCallId),
+        fileSnapshots: (toolCallId: string) => this.ctx.observation?.snapshots(this.ctx.sessionId, toolCallId),
+      } : {}),
       // A child thread's first message names the child, not this conversation; its compactions are its own.
       ...(options.childThreadId ? {} : {
         onUserText: (text: string) => this.ctx.nameFromMessage(text),

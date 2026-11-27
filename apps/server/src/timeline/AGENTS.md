@@ -22,6 +22,7 @@ co-change:
 - `fold.ts#LaneFold`：一条车道的折叠窗口，只持有未结束回合的尾部。
 - `tables.ts#TimelineTables`：`timeline_rows`、`timeline_heads`、`timeline_turns` 三张表的读写。
 - `budget.ts#fitRow`：单行预算的截断，截断行带 `truncated.blobRef`；assistant、thought 行不截断。
+- `outputs.ts#aggregateSessionOutputs`：截断前提取工具行与子 Agent 的文件变更并落 `timeline_row_outputs`，按快照连续段算整场会话净产出与净 Diff（docs/SESSION-OUTPUTS.md）。
 - `find.ts#LaneFinder`：车道内查找，按 head 计数。
 
 ## 不变量

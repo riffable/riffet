@@ -155,6 +155,7 @@ export class ClaudeSessionRuntime {
       promptText: prompt => this.sends.rewrites.get(rewriteKey(prompt)),
       putBlob: text => this.host.journal?.putSessionBlob(this.session.id, Buffer.from(text)),
       observedChanges: toolUseId => this.observer?.changes(this.session.id, toolUseId),
+      fileSnapshots: toolUseId => this.observer?.snapshots(this.session.id, toolUseId),
       onToolUse: (id, name, input) => this.interactions.onToolUse(id, name, input),
       onToolResult: (toolUseId, failed) => this.interactions.onToolResult(toolUseId, failed),
       // Transcript `model` is a display name ("Sonnet 4.5"), not the alias or id `--model` accepts, so

@@ -5318,6 +5318,23 @@
         }
       ]
     },
+    "outputs": {
+      "items": [
+        {
+          "path": "text",
+          "added": 1,
+          "removed": 1,
+          "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text"
+        }
+      ],
+      "total": 1
+    },
     "catchingUp": true,
     "control": {
       "revision": 1,
@@ -6168,6 +6185,26 @@
     ]
   },
   "SyncFrame#$=branch11": {
+    "type": "outputs",
+    "outputs": {
+      "items": [
+        {
+          "path": "text",
+          "added": 1,
+          "removed": 1,
+          "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text"
+        }
+      ],
+      "total": 1
+    }
+  },
+  "SyncFrame#$=branch12": {
     "type": "context",
     "context": {
       "used": 1,
@@ -6183,7 +6220,7 @@
       "breakdownEstimated": true
     }
   },
-  "SyncFrame#$=branch12": {
+  "SyncFrame#$=branch13": {
     "type": "metrics",
     "metrics": {
       "stepId": "text",
@@ -6206,7 +6243,7 @@
     "runId": "text",
     "nativeMessageId": "text"
   },
-  "SyncFrame#$=branch13": {
+  "SyncFrame#$=branch14": {
     "type": "session",
     "session": {
       "id": "text",
@@ -6322,7 +6359,7 @@
       "updatedAt": "text"
     }
   },
-  "SyncFrame#$=branch14": {
+  "SyncFrame#$=branch15": {
     "type": "control",
     "control": {
       "revision": 1,
@@ -6529,7 +6566,7 @@
       "transcript": "ok"
     }
   },
-  "SyncFrame#$=branch15": {
+  "SyncFrame#$=branch16": {
     "type": "error",
     "code": "text",
     "message": "text",
@@ -6749,7 +6786,13 @@
           "path": "text",
           "added": 1,
           "removed": 1,
-          "created": true
+          "created": true,
+          "status": "created",
+          "binary": true,
+          "outsideProject": true,
+          "accuracy": "exact",
+          "hasSnapshotDiff": true,
+          "updatedAt": "text"
         }
       ]
     }

@@ -1146,3 +1146,10 @@
 - **否决**：保留描边底槽，只换选中块的颜色（仍是两种做法拼在一起）；选中段也描边（框套框）；去掉底槽只留一排胶囊（看不出是一组）；白色滑块上的文字用 `accent`（一处次要设置不需要主题色）。
 - **范围**：Web 与 Mac 的 `SegmentedTrack`（原来是 `bgSubtle` 底槽上的 `accentSoft` 选中块）。设置窗口里的 `FormSegmented` 仍是系统分段控件。
 - **规则**：[输入](system/components/inputs.md)「Segmented」；代码 `apps/web/src/components/ui/controls.tsx`、`apps/macos/Riffet/Theme/FormStyle.swift`。
+
+## 2026-11-28 · 「产出」改由服务端全量聚合，并按单文件快照计算会话净变更
+
+- **决定**：补充 2026-11-13 与 2026-11-16 两条「产出」决定。「产出」的口径明确为整场会话的**净文件产出**（覆盖主线程与多层嵌套子 Agent，支持 `created`/`modified`/`deleted`/`binary`，净变更归零默认隐藏），由服务端在 `fitRow` 截断前全量聚合，经 Sync v3 的 `hello.outputs` 与 `outputs` 帧下发给 Web 和 Mac；编辑工具前后与 `WorkspaceObserver` 复用 `journal` 的 CAS `session_blobs` 记录单文件快照（含连续段检测，避免把中途外部手工编辑算进 Agent 产出）。Web 点击产出项默认打开 `GET /api/v3/sessions/:id/outputs/diff` 展示本会话净 Diff，顶栏可切换查看当前工作区 Git 改动；同名文件复用 `shortFileLabels` 补父目录。
+- **原因**：原先由客户端在当前分页窗口（默认 300 行）内扫经过 16KB/64KB 截断的 diff 块做简单累加，导致长会话漏掉早期产出、大文件行数失真或丢文件、来回修改虚高、覆写文件或多 hunk 插入误标「新建」、未审批编辑提前入账、嵌套子 Agent 漏算，且点击后看到的当前 Git 工作区 diff 与列表统计经常对不上。
+- **否决**：继续在客户端逐行跑 LCS 累加；为产出另建独立于 `journal` 的文件存储引擎；强制所有会话都用当前 Git 状态替代会话归属（无法区分同工作区并发会话，commit 后也无法回看）。
+- **规则**：[SESSION-OUTPUTS.md](../SESSION-OUTPUTS.md)；代码 `packages/contracts/src/sync.ts`、`apps/server/src/backends/shared/file-snapshots.ts`、`apps/server/src/timeline/outputs.ts`、`apps/web/src/app/session/SessionAside.tsx`、`apps/web/src/app/panels/FileDiffDialog.tsx`。

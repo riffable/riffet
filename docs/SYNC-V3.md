@@ -21,6 +21,7 @@ GET /api/v3/sessions/:id/sync?lane=main|sub:<toolCallId>&generation=&after=&budg
 GET /api/v3/sessions/:id/timeline?lane&generation&(before|from|around)=<pos>&budget&rows   → TimelinePage
 GET /api/v3/sessions/:id/timeline/changes?lane&generation&after&budget                    → TimelineChanges（预取、补洞）
 GET /api/v3/sessions/:id/outline?lane&generation
+GET /api/v3/sessions/:id/outputs/diff?path=<规范路径>                                     → SessionOutputDiff（本会话单文件净 Diff，基于快照账本；无快照返回 404，客户端回退工作区 Git Diff）
 GET /api/v3/sessions/:id/find?lane&generation&q=<查询>                                   → LaneFind（会话内查找：整条车道按 pos 排序的命中行；客户端以 around=<pos> 翻到未加载的命中）
 GET /api/sessions/:id/blobs/:hash                                                          不变
 ```
@@ -46,14 +47,14 @@ export type TimelineRow = RowBase & (
 export interface TurnOutlineV3 { turn: string; turnId: string; startPos: number; endPos?: number; status: 'running' | 'completed' | 'failed' | 'cancelled'; at: string; endedAt?: string; preview?: string; hasUserMessage?: boolean; hasAttachments?: boolean; rows: number; runId?: string }
 export type SyncFrame =
   | { type: 'hello'; protocol: 3; lane: SyncLane; generation: string; headSeq: number; mode: 'delta' | 'snapshot'; session: Session; status: NativeStatus;
-      interaction: NativeInteraction | null; runs: Run[]; activities: NativeActivity[]; context?: NativeContext; outline: { turnCount: number; turns: TurnOutlineV3[] }; catchingUp?: boolean }
+      interaction: NativeInteraction | null; runs: Run[]; activities: NativeActivity[]; context?: NativeContext; outline: { turnCount: number; turns: TurnOutlineV3[] }; outputs?: SessionOutputsSummary; catchingUp?: boolean }
   | { type: 'caughtUp'; generation: string; headSeq: number }
   | { type: 'snapshot'; generation: string; asOfSeq: number; part: number; final: boolean; rows: TimelineRow[]; hasBefore: boolean }
   | { type: 'rows'; generation: string; from: number; to: number; upserts: TimelineRow[]; deletes?: string[] }
   | { type: 'reset'; generation: string; reason: 'rebuilt' | 'promoted' | 'fold' }
   | { type: 'status'; status: NativeStatus } | { type: 'interaction'; interaction: NativeInteraction | null }
   | { type: 'runs'; runs: Run[] } | { type: 'run'; run: Run } | { type: 'activities'; live: NativeActivity[] }
-  | { type: 'outline'; turnCount: number; turns: TurnOutlineV3[] } | { type: 'context'; context?: NativeContext }
+  | { type: 'outline'; turnCount: number; turns: TurnOutlineV3[] } | { type: 'outputs'; outputs: SessionOutputsSummary } | { type: 'context'; context?: NativeContext }
   | { type: 'metrics'; metrics: StepMetrics; run?: RunMetrics; runId?: string; nativeMessageId?: string } | { type: 'session'; session: Session }
   | { type: 'error'; code: string; message: string; retryable: boolean };
 export interface TimelinePage { generation: string; rows: TimelineRow[]; hasBefore: boolean; hasAfter: boolean }

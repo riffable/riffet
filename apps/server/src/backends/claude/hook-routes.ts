@@ -18,11 +18,15 @@ import { ClaudeTerminalBinding } from './binding.js';
 import { ClaudeTranscriptReads } from './transcript-reads.js';
 import { ClaudeScreenWatch } from './screen-watch.js';
 
-/** The file an edit tool's call writes, from its hook payload. */
-function editedPath(payload: Record<string, unknown>): string | undefined {
+/** The file an edit tool's call writes, resolved against the hook's working directory when relative. */
+function editedPath(payload: Record<string, unknown>, fallbackCwd?: string): string | undefined {
   if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(string(payload.tool_name) ?? '')) return undefined;
   const input = asRecord(payload.tool_input);
-  return string(input?.file_path) ?? string(input?.notebook_path);
+  const raw = string(input?.file_path) ?? string(input?.notebook_path);
+  if (!raw) return undefined;
+  if (isAbsolute(raw)) return raw;
+  const base = string(payload.cwd) ?? fallbackCwd;
+  return base ? resolve(base, raw) : raw;
 }
 
 /** A prompt as the CLI echoes it back: without the paste wrapper newer versions add, and trimmed. */
@@ -286,12 +290,20 @@ export class ClaudeHookRoutes {
     // transcript mapping appends what was recorded here to that row.
     const observedId = string(payload.tool_use_id);
     // A file an edit tool changed is that tool's to report, not a command's that ran beside it.
-    const edited = event === 'PostToolUse' ? editedPath(payload) : undefined;
+    const editTool = editedPath(payload, this.deps.project.cwd);
+    const edited = event === 'PostToolUse' ? editTool : undefined;
+    const sessionId = this.deps.session().id;
     if (edited) this.deps.observer?.noteEdit(edited);
-    if (observedId && event === 'PermissionDenied') this.deps.observer?.discard(observedId);
-    else if (observedId && this.deps.observer) {
-      const diffs = await this.deps.observer.end(observedId);
-      if (diffs?.length) this.deps.observer.record(this.deps.session().id, observedId, diffs);
+    if (observedId && event === 'PermissionDenied') {
+      this.deps.observer?.discard(observedId);
+      this.deps.observer?.fileSnapshots?.discardEdit(sessionId, observedId);
+    } else if (observedId && this.deps.observer) {
+      if (editTool) {
+        await this.deps.observer.fileSnapshots?.finishEdit(sessionId, observedId, { applied: event === 'PostToolUse', rawPath: editTool });
+      } else {
+        const diffs = await this.deps.observer.end(observedId, sessionId);
+        if (diffs?.length) this.deps.observer.record(sessionId, observedId, diffs);
+      }
     }
     this.deps.interactions.confirmHookInteraction(event, payload);
     if (matchesTurn && event === 'PostToolUseFailure' && payload.is_interrupt === true) {
@@ -334,12 +346,16 @@ export class ClaudeHookRoutes {
       this.deps.interactions.announceToolUse(toolName, asRecord(payload.tool_input) ?? {}, toolId);
     }
     // Noted before the edit as well: a command in another conversation that ends before this PostToolUse leaves the file alone.
-    const editing = editedPath(payload);
-    if (editing) this.deps.observer?.noteEdit(editing);
+    const editing = editedPath(payload, this.deps.project.cwd);
+    const sessionId = this.deps.session().id;
+    if (editing) {
+      this.deps.observer?.noteEdit(editing);
+      if (toolId) await this.deps.observer?.fileSnapshots?.beginEdit(sessionId, toolId, editing);
+    }
     // A shell command reports no edits; what it changed is seen around it, a subagent's as well as the main thread's.
     // One left running in the background outlives its call, so it is not observed.
     if (toolId && toolName === 'Bash' && asRecord(payload.tool_input)?.run_in_background !== true) {
-      await this.deps.observer?.begin(toolId, string(payload.cwd) ?? this.deps.project.cwd, string(asRecord(payload.tool_input)?.command));
+      await this.deps.observer?.begin(toolId, string(payload.cwd) ?? this.deps.project.cwd, string(asRecord(payload.tool_input)?.command), sessionId);
     }
     return {};
   }

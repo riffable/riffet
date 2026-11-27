@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '@lingui/core/macro';
-import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, LaneFind, Run, Session, SessionControlSnapshot, SyncLane, TimelineRow, TurnOutlineV3 } from '@contracts';
+import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, LaneFind, Run, Session, SessionControlSnapshot, SessionOutputsSummary, SyncLane, TimelineRow, TurnOutlineV3 } from '@contracts';
 import { api, listNativeSendRequests, removeNativeSendRequest } from '@/lib/api';
 import { createStore, useStore } from '@/lib/store';
 import { confirmSessionGone } from '@/lib/session-deletion';
@@ -49,11 +49,13 @@ export interface SyncExtras {
   loadPlace: (pos: number, signal?: AbortSignal) => Promise<boolean>;
   /** Background tasks still running, as the server's control frames report them. */
   activities: NativeActivity[];
+  /** Server-aggregated net file outputs for the whole conversation; undefined on older servers. */
+  outputs?: SessionOutputsSummary;
 }
 
 /** What the transcript reads of the engine, published at most once per frame. */
-interface SyncView { rows: readonly TimelineRow[]; resetVersion: number; hasBefore: boolean; hasAfter: boolean; loadingAfter: boolean; activities: NativeActivity[]; outline: LaneOutline; generation?: string; resumable: boolean; control?: SessionControlSnapshot }
-const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasBefore: false, hasAfter: false, loadingAfter: false, activities: [], outline: { turnCount: 0, turns: [] }, resumable: false, control: undefined });
+interface SyncView { rows: readonly TimelineRow[]; resetVersion: number; hasBefore: boolean; hasAfter: boolean; loadingAfter: boolean; activities: NativeActivity[]; outline: LaneOutline; outputs?: SessionOutputsSummary; generation?: string; resumable: boolean; control?: SessionControlSnapshot }
+const blankView = (): SyncView => ({ rows: [], resetVersion: 0, hasBefore: false, hasAfter: false, loadingAfter: false, activities: [], outline: { turnCount: 0, turns: [] }, outputs: undefined, resumable: false, control: undefined });
 
 /** Where an outline turn the rows do not hold stands in the turn list, until its rows are loaded. */
 const OUTLINE_TURN = 'outline-turn:';
@@ -379,9 +381,10 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
       const syncFlush = document.visibilityState === 'visible'
         && (frame.type === 'hello' || frame.type === 'runs' || frame.type === 'run' || frame.type === 'control' || frame.type === 'outline' || phaseChanged);
       if (syncFlush && sync.rows() !== view.get().rows) publish.flush();
-      else if (frame.type === 'hello') view.set({ control: sync.store.get().control, outline: sync.store.get().outline });
+      else if (frame.type === 'hello') view.set({ control: sync.store.get().control, outline: sync.store.get().outline, outputs: sync.store.get().outputs });
       else if (frame.type === 'control') view.set({ control: sync.store.get().control });
       else if (frame.type === 'outline') view.set({ outline: sync.store.get().outline });
+      else if (frame.type === 'outputs') view.set({ outputs: sync.store.get().outputs });
     };
     const sync = new SessionSync({
       sessionId: session.id, transport: source?.transport ?? browserTransport, cache, visibility: documentVisibility, onControl: control, onClosed: () => { void confirmSessionGone(session.id); },
@@ -414,7 +417,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
         return {
           rows: sync.rows(), resetVersion: current.resetVersion, hasBefore: current.hasBefore, hasAfter: current.hasAfter, loadingAfter: current.loadingAfter,
           activities: sameActivities(activities, previous.activities) ? previous.activities : activities,
-          outline: current.outline, ...(current.generation ? { generation: current.generation } : {}),
+          outline: current.outline, outputs: current.outputs, ...(current.generation ? { generation: current.generation } : {}),
           resumable: sync.main.resumable,
           control: current.control,
         };
@@ -655,7 +658,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   }, [session.id, tracking]);
 
   const extras: SyncExtras = {
-    hasMoreLater: synced.hasAfter, loadingLater: synced.loadingAfter, loadLater, readerAtEnd, jumpToLatest, loadTurn, expandRow, findInLane, loadPlace, activities: synced.activities,
+    hasMoreLater: synced.hasAfter, loadingLater: synced.loadingAfter, loadLater, readerAtEnd, jumpToLatest, loadTurn, expandRow, findInLane, loadPlace, activities: synced.activities, outputs: synced.outputs,
   };
   // A conversation just created here has nothing before its first prompt, which this tab already
   // holds: it is whole from the first frame rather than loading until the stream's hello, so the
