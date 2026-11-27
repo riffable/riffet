@@ -32,7 +32,7 @@ import { laneTurnOf } from '@/sync/rows';
 import { FailureDetails } from './FailureDetails';
 import { ChapterNavigation } from './ChapterNavigation';
 import { useViewPrefs } from './viewPrefs';
-import { createRowObserver, isSettledNewTopic, PageProbe, SETTLE_MS, FRESH_MS, TranscriptRowView, type Fresh, type RowContext } from './TranscriptRowView';
+import { createRowObserver, isSettledNewTopic, outlinePromptText, PageProbe, SETTLE_MS, FRESH_MS, TranscriptRowView, type Fresh, type RowContext } from './TranscriptRowView';
 import { TranscriptFindBar, useTranscriptFind } from './transcriptFind';
 import { useTranscriptFocus } from './useTranscriptFocus';
 
@@ -281,17 +281,17 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   }, [newTopicDivider, timeline, timelineVersion]);
   const turns = useMemo<Turn[]>(() => {
     if (suppliedTurns) {
-      if (!newTopicDivider) return suppliedTurns;
       let changed = false;
       const mapped = suppliedTurns.map((turn) => {
-        const settled = settledNewTopicKeys?.has(turn.key) || (turn.key.startsWith('outline-turn:') && turn.text.trim() === '/new');
-        if (!settled) return turn;
+        const settled = newTopicDivider && (settledNewTopicKeys?.has(turn.key) || (turn.key.startsWith('outline-turn:') && turn.text.trim() === '/new'));
+        const text = settled ? t`新话题` : outlinePromptText(turn.text);
+        if (text === turn.text) return turn;
         changed = true;
-        return { ...turn, text: t`新话题` };
+        return { ...turn, text };
       });
       return changed ? mapped : suppliedTurns;
     }
-    return timeline.flatMap((item) => (item.kind === 'user' ? [{ key: item.key, text: newTopicDivider && isSettledNewTopic(item) ? t`新话题` : item.text.trim() || (item.attachments.length ? t`附件` : ''), at: item.event.createdAt }] : []));
+    return timeline.flatMap((item) => (item.kind === 'user' ? [{ key: item.key, text: newTopicDivider && isSettledNewTopic(item) ? t`新话题` : outlinePromptText(item.text.trim()) || (item.attachments.length ? t`附件` : ''), at: item.event.createdAt }] : []));
   }, [suppliedTurns, timeline, timelineVersion, newTopicDivider, settledNewTopicKeys, t]);
   const latestTopicIndex = useMemo(() => {
     if (!newTopicDivider || hasMoreLater) return -1;

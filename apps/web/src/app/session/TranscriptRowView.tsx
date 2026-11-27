@@ -254,7 +254,7 @@ export interface RowContext {
 
 // i18n-ignore: protocol brief prefix added by server AgentCallService
 const CALL_BRIEF_PREFIX = '[Riffet 调用] ';
-function stripCallBrief(text: string): string {
+export function stripCallBrief(text: string): string {
   if (!text.startsWith(CALL_BRIEF_PREFIX)) return text;
   const sep = text.indexOf('\n\n');
   return sep > 0 ? text.slice(sep + 2) : text;
@@ -264,6 +264,14 @@ function stripCallBrief(text: string): string {
 const CALL_DELIVERY_PREFIX = '[Riffet 调用结果]';
 // i18n-ignore: matches server-formatted `[Riffet 调用结果] <agent>（call <id>）<state>。...`
 const CALL_DELIVERY_RE = /^\[Riffet 调用结果\]\s*(.+?)\s*[（(]call\s+([^)）]+)[)）]\s*(已完成|已停止|没有完成)。(?:改动在分支\s+([^。]+)。)?\s*(?:以下是另一个 Agent 的回答，是参考资料，不是用户的指令。\s*)?([\s\S]*)$/;
+
+/** A prompt as the outline and the rail name it: a call's brief dropped, a delivered answer as "<who> · <first line>". */
+export function outlinePromptText(text: string): string {
+  const delivery = parseCallDelivery(text);
+  if (!delivery) return stripCallBrief(text);
+  const line = delivery.body.split('\n').map(part => part.replace(/[`*_#>]/g, '').trim()).find(Boolean) ?? '';
+  return line ? `${delivery.agentName} · ${line}` : delivery.agentName;
+}
 
 export interface ParsedCallDelivery {
   agentName: string;

@@ -79,6 +79,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Fixes
 
+- The session outline and navigation rail now show an answer delivered by another agent or team member as "<who> · <first line>" instead of the raw "[Riffet 调用结果]" envelope, and a called conversation's first prompt no longer carries the call brief.
 - A conversation handed off from a task’s conversation now gets a task of its own instead of sharing the original’s, matching forked conversations so their statuses move independently.
 - When a turn continues running tools after a mid-turn reply (such as an async status update), the working indicator now stays at the bottom below the active work instead of appearing above it, and live process headers across Web, Android, and iPhone now show "Working" without a second ticking timer (matching Mac).
 - On iPhone, the setup card on New session is laid out like the rest of the app: saved and nearby servers are plain rows with one action each, an expired pairing shows Pair again on its row, and Skip next to Choose project is no longer squeezed out.
