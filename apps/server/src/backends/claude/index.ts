@@ -31,6 +31,7 @@ import { ClaudeScreenFeed } from './live/feed.js';
 import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 import { readClaudeRequests } from './request-records.js';
+import { ClaudeAutoModeChecks } from './auto-mode.js';
 import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability, readClaudeOwnerGateway, STANDING_ISOLATION } from './launch.js';
 import { normalizeClaudeModel, selectedModel, validateModelSelection, gatewayCatalogs, claudeGatewayModels, claudeModels } from './models.js';
 import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, ClaudeSessionRuntime } from './runtime.js';
@@ -190,9 +191,11 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
 
   /** What a shell command changed, seen around it; only a served state directory keeps snapshots. */
   private readonly observer?: WorkspaceObserver;
+  private readonly autoMode: ClaudeAutoModeChecks;
 
   constructor(options: { stateDir?: string } = {}) {
     this.bridge = new ClaudeHookBridge(options);
+    this.autoMode = new ClaudeAutoModeChecks(options.stateDir);
     if (options.stateDir) this.observer = workspaceObserver(options.stateDir);
     // The descriptor is how a CLI that outlived the previous server finds this one, so it is published as soon as
     // the server is up, not when the first conversation happens to open. Never blocks start-up.
@@ -303,13 +306,13 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     return readClaudeOwnerGateway(profile);
   }
 
-  capabilities(): NativeBackendCapabilities {
+  capabilities(_host?: NativeBackendHost, profile?: NativeBackendProfileConfig): NativeBackendCapabilities {
     return {
       supportsSessionReferences: true,
       // Consulted by another Agent (docs/AGENT-CALLS.md §5): reads and read-only commands go through; anything that
       // needs permission is refused rather than asked, since nobody watches a consultation (`ask` stopped it in the probe).
       consultPermission: 'dontAsk',
-      backendId, label: this.label, modes: [], permissions: CLAUDE_PERMISSIONS,
+      backendId, label: this.label, modes: [], permissions: profile ? this.autoMode.permissions(profile) : CLAUDE_PERMISSIONS,
       interactionTransport: 'both', supportsResume: true, supportsInterrupt: true,
       supportsSteer: true, supportsHistory: true, supportsModelSelection: true, supportsModeSelection: false,
       supportsPermissionSelection: true, supportsTerminal: true, supportsPrewarm: true,
@@ -746,7 +749,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     }
     const task = (async () => {
       const nativeSessionId = session.nativeSessionId ?? randomUUID();
-      const runtime = new ClaudeSessionRuntime(host, { ...session, nativeSessionId }, project, profile, resumeRequested, this.bridge, launchNotice, this.changes, this.observer);
+      const runtime = new ClaudeSessionRuntime(host, { ...session, nativeSessionId }, project, profile, resumeRequested, this.bridge, launchNotice, this.changes, this.observer, this.autoMode);
       this.runtimes.set(session.id, runtime);
       try {
         // Publishing the id synchronously rebinds the watch. It must find this launch's runtime.

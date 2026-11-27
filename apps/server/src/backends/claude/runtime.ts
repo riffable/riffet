@@ -10,6 +10,7 @@ import { waitFor } from '../shared/wait-for.js';
 import { ClaudeStepMetering } from './metering.js';
 import { ClaudeTranscript, findClaudeTranscript, type ClaudeTranscriptLifecycle } from './history.js';
 import { CLAUDE_TURN_FAILED } from './rows.js';
+import type { ClaudeAutoModeChecks } from './auto-mode.js';
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
 import { activeTurnOf, initialState, phaseOf, reduce, replay, type ClaudeProcess, type ClaudeSessionState, type ClaudeSignal, type Transition } from './session-state.js';
 import { executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, configDirOf } from './launch.js';
@@ -95,7 +96,7 @@ export class ClaudeSessionRuntime {
   private readonly reads: ClaudeTranscriptReads;
   private readonly watch: ClaudeScreenWatch;
   private readonly hooks: ClaudeHookRoutes;
-  constructor(private readonly host: NativeBackendHost, session: Session, private readonly project: Project, profile: NativeBackendProfileConfig, private readonly resumeRequested: boolean, private readonly bridge: ClaudeHookBridge, launchNotice?: string, private readonly changes?: ClaudeTranscriptChanges, private readonly observer?: WorkspaceObserver) {
+  constructor(private readonly host: NativeBackendHost, session: Session, private readonly project: Project, profile: NativeBackendProfileConfig, private readonly resumeRequested: boolean, private readonly bridge: ClaudeHookBridge, launchNotice?: string, private readonly changes?: ClaudeTranscriptChanges, private readonly observer?: WorkspaceObserver, private readonly autoMode?: ClaudeAutoModeChecks) {
     this.session = session;
     this.launchGuard = new LaunchCrashGuard({
       host,
@@ -471,6 +472,10 @@ export class ClaudeSessionRuntime {
     if (transition.queue) this.sends.onQueue(transition.queue);
     if (signal.type === 'process') this.onProcess(signal.process);
     if (signal.type === 'compact_boundary' || signal.type === 'agents_killed') this.noteActivity();
+    if (signal.type === 'auto_mode_unchecked') {
+      const profile = this.binding.profile;
+      this.autoMode?.note(profile, id => this.host.findProfile ? this.host.findProfile(profile.backendId, id) !== undefined : true);
+    }
     // The boundary completes the compaction its hook started; one a remap of the file lost track of is completed with it.
     if (signal.type === 'compact_boundary') {
       for (const activity of this.transcript.activities()) if (activity.kind === 'compaction' && isLiveActivity(activity)) this.reads.publishActivity({ ...activity, status: 'completed' });

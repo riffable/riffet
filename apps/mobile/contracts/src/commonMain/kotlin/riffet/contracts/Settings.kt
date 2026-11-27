@@ -131,6 +131,8 @@ data class NativeBackendOption(
     /** The name a toolbar shows when [label] would not fit beside the model. */
     val shortLabel: String? = null,
     val description: String? = null,
+    /** `warning`: on this profile the option will not work as its name says ([description] says why). */
+    val tone: String? = null,
 )
 
 /** Public profile metadata. Runtime secrets and provider-specific settings stay on the server. */

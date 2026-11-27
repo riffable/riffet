@@ -83,6 +83,8 @@ export type ClaudeSignal =
   | { type: 'command_output' }
   | { type: 'queue'; operation: 'enqueue' | 'dequeue' | 'remove' | 'clear'; text?: string; reason?: string }
   | { type: 'agents_killed' }
+  /** Auto mode can't check actions in this session (`rows.ts#AUTO_MODE_UNCHECKED`): a fact about the profile, not the turn. */
+  | { type: 'auto_mode_unchecked' }
   | { type: 'background'; agents: BackgroundAgent[] }
   | { type: 'background_done'; toolUseId: string }
   /**
@@ -242,6 +244,7 @@ export function reduce(state: ClaudeSessionState, signal: ClaudeSignal): Transit
       return turn ? end(state, turn, 'command') : { state };
     }
     case 'queue': return queue(state, signal);
+    case 'auto_mode_unchecked': return { state };
     case 'agents_killed': {
       // The CLI stops its background agents; shells, monitors and workflows are stopped one at a time and report on their own.
       const killed = state.background.filter(agent => agent.kind === undefined || agent.kind === 'agent');

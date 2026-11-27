@@ -25,6 +25,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - `rows.ts#claudeRowSignals`、`row-mapper.ts#mapRow`：一行转录分别给状态机的信号和给时间线的事件。两处读同一行，改一处的行类型判断时看另一处；`rows.ts` 不导入 `row-mapper.ts`、`step-meter.ts`、`history.ts`。
 - `hook-bridge.ts#ClaudeHookBridge`：本服务所有 CLI 共用的一个回环端点，按 `session_id` 路由。
 - `live/screen.ts#CLAUDE_SCREEN_LAYOUT`：屏幕读取所依赖的版面约定。
+- `auto-mode.ts#ClaudeAutoModeChecks`：记下 CLI 报告过 auto 模式无法检查的 profile，权限列表据此给 Auto 标 `tone: warning`。
 - `request-records.ts#readClaudeRequests`：会话追踪的请求内容（docs/TRACE.md §2.1），读转写里的 `api-request*` 行。
 
 ## 不变量
@@ -59,6 +60,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - 转写 JSONL 里的异步辅助行（`attachment`、`queue-operation`、`file-history-delta` 等）可能乱序写入、时间戳早于或晚于紧邻的 `assistant` 行；`step-meter.ts#ClaudeStepMeter` 测速时只认 `api-request`、`user`、`assistant` 三类对话边界且优先取紧邻的 `api-request`，忽略辅助行，避免耗时归零、倒挂或虚高。
 - 回合在模型输出前被手动中断后，Claude Code 恢复会话时会在转写里补写一条非 API 错误的合成 `assistant` 占位行（`model: "<synthetic>"`、`isApiErrorMessage: false`、正文 `No response requested.`、`usage` 全为 0）来闭合未答复的 `user` 行；`rows.ts#isClaudeSyntheticPlaceholder` 将其跳过，避免在「已停止」下方多出一条孤立回复或计入测速。
 - 停止键（2.1.322 实测）：Esc 在模型生成、工具执行、工具审批框上都会结束回合，审批框上是拒绝并中断，转写写 `[Request interrupted by user for tool use]`；空闲时按一次 Esc 没有反应，连按两次打开回退列表。`C-c` 在工具审批框上完全没有反应，空闲时连按两次会退出 CLI。后台 agent 仍用 `C-c` 停止，CLI 回 `agents_killed`（`stops.ts#stopBackground`）。停止时挂着的 PermissionRequest hook 以 `deny` 加 `interrupt: true` 作答（`interactions.ts#cancelPending`），不带 `interrupt` 时 CLI 只拒绝这个工具，回合会继续。停止等待确认期间，屏幕上还没关掉的审批框不再发布成卡片（`screen-watch.ts#refreshScreenState`），否则会闪回一次「等你确认」。
+- auto 模式的安全检查在服务端做；网关不放行时，CLI 先弹全屏说明（`screen-dialog.ts` 的 `AUTO_MODE_TITLE`），选留在 auto 后在转写写一行 `system`/`informational`，正文以 `rows.ts#AUTO_MODE_UNCHECKED` 开头并点名网关，之后需要检查的操作逐个弹审批框。读到这一行时把当前 profile 记进数据目录（`auto-mode.ts#ClaudeAutoModeChecks`，文件名 claude-auto-mode.json；存 profile 的 `apiEndpoint` 与 `modelSource` 的哈希，不存地址原文），这个 profile 的 Auto 从此带说明并标 `warning`。地址或模型源一改，或者 profile 被删，记录就失效。同样经网关，有的网关会放行检查，所以只按 CLI 的报告标，不按是否用了网关猜。
 - `AskUserQuestion` 的结果正文只是一句 `The user answered: "问题"="回答", …`；作答在同一行的 `toolUseResult.answers` 里，按问题原文作键，多选用 `, ` 连成一个字符串，没答的问题不出现。`row-mapper.ts#questionAnswers` 从这里生成 `question_answer`，标题取第一个问题的 `header`，和 Codex、Cursor 的提问行一致；只读正文会让提问行既看不出问了什么，也看不出答了什么。
 - 转写里的 `api-request-shape` / `api-request` / `api-request-blob` 是 Claude Code 的私有记录（2.1.322 起见到），没有文档承诺；`api-request` 的消息是上一请求的前 `keep` 条加 `tail` 哈希，`tail` 里只有非对话消息有 blob。格式变了追踪显示 `unrecognized`，改 `request-records.ts` 并补 `../shared/trace-requests.test.ts`。
 

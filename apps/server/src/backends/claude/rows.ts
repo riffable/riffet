@@ -29,6 +29,12 @@ export const INTERRUPTED_MARKER = '[Request interrupted by user';
 /** How Claude Code words a Stop hook's blocking reason, as the meta row it hands the model (2.1.302: `Stop hook feedback:\n…`). */
 export const STOP_HOOK_FEEDBACK = 'Stop hook feedback:';
 
+/**
+ * The start of the `system`/`informational` row Claude Code writes once its auto mode falls back to asking: the safety
+ * check runs server-side, and a gateway that does not pass it through leaves each checked action to the user.
+ */
+export const AUTO_MODE_UNCHECKED = "Auto mode can't check actions in this session";
+
 /** How a failed turn ends when the CLI gives no words of its own. */
 export const CLAUDE_TURN_FAILED = 'Claude Code could not finish the response.';
 
@@ -216,6 +222,7 @@ export function claudeRowSignals(row: ClaudeRow, parents?: Map<string, string>, 
     }
     if (row.subtype === 'compact_boundary') return [{ type: 'compact_boundary' }];
     if (row.subtype === 'agents_killed') return [{ type: 'agents_killed' }];
+    if (row.subtype === 'informational' && string(row.content)?.startsWith(AUTO_MODE_UNCHECKED)) return [{ type: 'auto_mode_unchecked' }];
     return [];
   }
   if (failure) return [{ type: 'turn_end', source: 'transcript', reason: 'stop_failure', error: failure, ...(owner ? { promptId: owner } : {}) }];

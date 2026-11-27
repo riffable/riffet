@@ -39,6 +39,8 @@ export function usePermissionIconStyle(): PermissionIconStyle {
 }
 
 const riskyModes = ['unrestricted', 'bypassPermissions', 'danger-full-access', 'always-proceed', 'never', 'high'];
+/** Shown in the warning colour: a mode that lets everything through, or one the server marks as not working on this profile. */
+const warned = (options: NativeBackendOption[], mode: string) => riskyModes.includes(mode) || options.find((option) => option.id === mode)?.tone === 'warning';
 
 /**
  * Maps every backend's permission id onto one of 7 semantic tiers so no two choices in the same
@@ -178,7 +180,7 @@ export function ApprovalSummary({ mode, options }: { mode: string; options: Nati
     <PermissionIcon
       mode={mode}
       aria-label={label}
-      className={cn('size-3.5 shrink-0', riskyModes.includes(mode) && 'text-warning')}
+      className={cn('size-3.5 shrink-0', warned(options, mode) && 'text-warning')}
     />
   );
 }
@@ -206,7 +208,10 @@ export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 
   const option = options.find((mode) => mode.id === value);
   const current = option ?? { id: value, label: value === 'custom' ? t`自定义` : value || t`权限模式` };
   const name = (compact && option?.shortLabel) || current.label;
-  const risky = riskyModes.includes(current.id);
+  const risky = warned(options, current.id);
+  // A mode that will not work here says why without opening the menu.
+  const caution = option?.tone === 'warning' ? option.description : undefined;
+  const tip = caution ? <span className="flex flex-col gap-0.5"><span>{t`权限模式：${current.label}`}</span><span>{caution}</span></span> : t`权限模式：${current.label}`;
   const trigger = (
     <DropdownMenuTrigger
       aria-label={t`权限模式：${current.label}`}
@@ -230,13 +235,13 @@ export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 
   );
   return (
     <DropdownMenu>
-      <Tip label={t`权限模式：${current.label}`} disabled={!compact && name === current.label}>{trigger}</Tip>
+      <Tip label={tip} disabled={!caution && !compact && name === current.label}>{trigger}</Tip>
       <DropdownMenuContent side={side} align={size === 'xs' ? 'end' : 'start'} className="max-h-[min(60dvh,420px)] w-[min(22rem,calc(100vw-24px))] overflow-y-auto">
         {note && <div className="px-2 pb-1 pt-1.5 text-xs text-fg-3">{note}</div>}
         <DropdownMenuLabel>{t`权限模式`}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={current.id} onValueChange={onChange}>
           {options.map((mode) => {
-            const modeRisky = riskyModes.includes(mode.id);
+            const modeRisky = warned(options, mode.id);
             return (
               <Tip key={mode.id} label={mode.description} side="right">
                 <DropdownMenuRadioItem value={mode.id} textValue={mode.label} className="h-auto items-start gap-2.5 py-2.5 md:py-2.5">
