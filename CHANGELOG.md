@@ -6,6 +6,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Workbench
 
+- Riffet recognizes Claude Code 2.1.332’s background task list, so you can stop a background shell from its conversation.
+
 - Antigravity's skill list now includes shared skills from `~/.agents/skills`. Riffet retries a slow Codex or TRAE CLI startup probe before marking the CLI unavailable.
 
 - Opening a linked server's web page from Settings › Links in a browser on this server's own machine now goes through the link's encrypted tunnel, so the other server's access token and conversations no longer cross the network in plain text; servers linked over SSH can now be opened this way too. Both servers need this version, and the other server must allow this one to operate it.

@@ -1,0 +1,33 @@
+ ▐▛███▛█   Claude Code v2.1.332
+▝▜██████▀  Sonnet 4.6 · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ OK
+
+✻ Baked for 0s · done 2:33 AM
+
+❯ RIFFET_BACKGROUND_SHELL: run sleep 180 once as a background shell named long job. Say LAUNCHED.
+
+⏺ Bash(sleep 180)
+  ⎿  Running in the background (↓ to manage)
+
+⏺ Bash(sleep 181)
+  ⎿  Running in the background (↓ to manage)
+
+⏺ LAUNCHED
+
+✻ Worked for 4s · done 2:34 AM · 2 shells still running
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Background
+  2 shells
+
+  ❯ ⏺ sleep 181   running
+    ⏺ sleep 180   running
+
+      Earlier in this session (0)
+
+  ↑/↓ to navigate · x to stop · Enter to view · Esc to close

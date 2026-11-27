@@ -1,0 +1,24 @@
+ ▐▛███▛█   Claude Code v2.1.332
+▝▜██████▀  Sonnet 4.6 · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ OK
+
+✻ Cogitated for 1s · done 2:30 AM
+
+❯ RIFFET_BACKGROUND_SHELL: run sleep 180 once as a background shell named long job. Say LAUNCHED.
+
+⏺ Bash(sleep 180)
+  ⎿  Running in the background (↓ to manage)
+
+⏺ LAUNCHED
+
+✻ Sautéed for 1s · done 2:30 AM · 1 shell still running
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on · 1 shell · ← for agents · ↓ to manage                 ● high · /effort

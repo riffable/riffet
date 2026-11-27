@@ -352,8 +352,8 @@ export function claudeBackgroundScreen(screen: string | undefined): ClaudeBackgr
     // page is still known by its title and status, and keeps its keys (x stops it, Esc closes it).
     return /^\S+ details$/.test(panel[0] ?? '') && /^Status:\s+\S/.test(panel[1] ?? '') ? { kind: 'task', closable: true } : undefined;
   }
-  if (/↑\/↓ to select/.test(footer) && panel[0] === 'Background') {
-    const active = /^(\d+) active\b/.exec(panel[1] ?? '')?.[1];
+  if (/↑\/↓ to (?:select|navigate)/.test(footer) && panel[0] === 'Background') {
+    const active = /^(\d+) (?:active|shells?|monitors?|workflows?|tasks?)\b/.exec(panel[1] ?? '')?.[1];
     return { kind: 'list', ...(active ? { active: Number(active) } : {}), closable };
   }
   return { kind: 'task', closable };
