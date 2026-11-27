@@ -242,16 +242,15 @@ export function ApprovalPicker({ value, onChange, disabled, size = 'sm', side = 
         <DropdownMenuRadioGroup value={current.id} onValueChange={onChange}>
           {options.map((mode) => {
             const modeRisky = warned(options, mode.id);
+            // The description wraps in full: a tooltip does not open on a menu item, and touch has none.
             return (
-              <Tip key={mode.id} label={mode.description} side="right">
-                <DropdownMenuRadioItem value={mode.id} textValue={mode.label} className="h-auto items-start gap-2.5 py-2.5 md:py-2.5">
-                  <PermissionIcon mode={mode.id} className={cn('mt-0.5 size-4', modeRisky ? 'text-warning' : 'text-fg-3')} />
-                  <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className={cn('break-words font-medium leading-snug', modeRisky && 'text-warning')}>{mode.label}</span>
-                    {mode.description && <span className="truncate text-xs leading-normal text-fg-3">{mode.description}</span>}
-                  </span>
-                </DropdownMenuRadioItem>
-              </Tip>
+              <DropdownMenuRadioItem key={mode.id} value={mode.id} textValue={mode.label} className="h-auto items-start gap-2.5 py-2.5 md:py-2.5">
+                <PermissionIcon mode={mode.id} className={cn('mt-0.5 size-4', modeRisky ? 'text-warning' : 'text-fg-3')} />
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className={cn('break-words font-medium leading-snug', modeRisky && 'text-warning')}>{mode.label}</span>
+                  {mode.description && <span className="break-words text-xs leading-normal text-fg-3">{mode.description}</span>}
+                </span>
+              </DropdownMenuRadioItem>
             );
           })}
         </DropdownMenuRadioGroup>
