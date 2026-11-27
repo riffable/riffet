@@ -9,8 +9,8 @@ options:
   developmentLanguage: zh-Hans
 settings:
   base:
-    MARKETING_VERSION: 0.10.0
-    CURRENT_PROJECT_VERSION: 26112201
+    MARKETING_VERSION: 0.11.0
+    CURRENT_PROJECT_VERSION: 26112701
     SWIFT_VERSION: "5.0"
     SWIFT_STRICT_CONCURRENCY: minimal
     ARCHS: arm64

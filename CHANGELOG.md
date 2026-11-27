@@ -4,6 +4,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+## 0.11.0 - 2026-11-27
+
 ### Workbench
 
 - Team member and personal assistant conversations on Web now surface recent background runs (queued, running, silent, reported, needs input, or failed) in the wide right aside and narrow session info panel, with direct links to each run's transcript and a back-to-member banner; `tell` and `ask` outcomes also appear as dismissible Markdown summary cards above the composer.

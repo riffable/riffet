@@ -1,7 +1,7 @@
 {
   "name": "riffet",
-  "version": "0.10.0",
-  "buildNumber": 26112201,
+  "version": "0.11.0",
+  "buildNumber": 26112701,
   "private": true,
   "type": "module",
   "description": "A self-hosted workbench and personal assistant for Cursor, Codex, Claude Code, Antigravity, TRAE CLI, Factory Droid, DeepSeek Harness and pi, reachable from a browser, Mac, phone or Feishu",
