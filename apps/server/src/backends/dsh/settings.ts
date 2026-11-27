@@ -114,10 +114,10 @@ export function validateDshNativeSessionId(value: string): void {
 }
 
 /**
- * The bridge is written against dsh 0.2.0-rc.2 (0.1.x is incompatible); 0.2.1-rc.2 is the newest
- * run end to end.
+ * The bridge is written against dsh 0.2.0-rc.2. 0.2.2-rc.5 has been exercised through approval,
+ * interrupt, and recovery of a conversation created by 0.2.1-rc.2.
  */
-export const DSH_CLI_VERSIONS: CliVersionRange = { minimum: '0.2.0-rc.2', testedThrough: '0.2.1-rc.2' };
+export const DSH_CLI_VERSIONS: CliVersionRange = { minimum: '0.2.0-rc.2', testedThrough: '0.2.2-rc.5' };
 const DSH_MINIMUM = DSH_CLI_VERSIONS.minimum!;
 
 /** Finds a compatible configured CLI without writing profiles or installing packages. */

@@ -59,5 +59,6 @@ export function extensionLayout(): AgentExtensionLayout {
     },
     ruleFiles: { user: ['AGENTS.md', 'GEMINI.md'], project: ['AGENTS.md', 'GEMINI.md'] },
     create: { user: [], project: [] },
+    sharedRoot: { directories: { skill: ['.agents/skills'], command: [] }, create: [] },
   };
 }

@@ -1,0 +1,143 @@
+{
+  "usage": [
+    {
+      "stepId": "turn:<id-1>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 14,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "outputTokens": 6,
+      "reasoningTokens": 0,
+      "tokenSource": "provider"
+    }
+  ],
+  "context": {
+    "used": 10,
+    "size": 258400,
+    "breakdown": [
+      {
+        "id": "input",
+        "label": "输入",
+        "tokens": 7
+      },
+      {
+        "id": "output",
+        "label": "输出",
+        "tokens": 3
+      }
+    ]
+  },
+  "plan": null,
+  "compaction": null,
+  "share": {
+    "events": [
+      {
+        "sequence": 1,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:web:command-1:user",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Run `ls` in the current directory, then reply with the number of entries only."
+          },
+          "commandId": "command-1"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 2,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:call_riffet_upgrade_1:call",
+        "type": "tool_call",
+        "data": {
+          "sessionUpdate": "tool_call",
+          "toolCallId": "call_riffet_upgrade_1",
+          "toolName": "List files",
+          "kind": "search",
+          "title": "List files",
+          "status": "in_progress",
+          "rawInput": {
+            "command": "ls",
+            "originalCommand": "/bin/zsh -lc ls",
+            "cwd": "/workspace/project",
+            "commandActions": [
+              {
+                "type": "listFiles",
+                "cmd": "ls",
+                "path": null,
+                "command": "ls",
+                "input": {
+                  "type": "shell",
+                  "command": [
+                    "/bin/zsh",
+                    "-lc",
+                    "ls"
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 3,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:call_riffet_upgrade_1:result",
+        "type": "tool_call_update",
+        "data": {
+          "sessionUpdate": "tool_call_update",
+          "toolCallId": "call_riffet_upgrade_1",
+          "status": "completed",
+          "content": [
+            {
+              "type": "content",
+              "content": {
+                "type": "text",
+                "text": "README.md\nnotes.txt\n"
+              }
+            }
+          ],
+          "exitCode": 0
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 4,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:msg_upgrade_2:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "done"
+          }
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 5,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-2>:<id-1>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      }
+    ],
+    "children": []
+  }
+}

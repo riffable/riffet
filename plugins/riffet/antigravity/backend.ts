@@ -52,7 +52,7 @@ export class AntigravityBackend implements AgentBackend {
   readonly id = 'antigravity' as const;
   readonly label = 'Antigravity';
   readonly protocolVersion = AGENT_PROTOCOL_VERSION;
-  readonly cliVersions = { minimum: '1.5.6', testedThrough: '1.5.10' };
+  readonly cliVersions = { minimum: '1.5.6', testedThrough: '1.5.18' };
   readonly readOnlyHistory = true;
   readonly traits = {
     survivesRestart: true,

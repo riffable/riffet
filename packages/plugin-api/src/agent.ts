@@ -124,6 +124,8 @@ export interface AgentTraits {
   offlineMayBeRunning?: boolean;
   /** A stop leaves a message held in the Agent's input box or queue. */
   stopKeepsPendingInput?: boolean;
+  /** An unconfirmed stop can be sent again to the same target without affecting a later turn. */
+  repeatableStop?: boolean;
   /** Subagents run on their own and do not keep the conversation busy. */
   detachedSubagents?: boolean;
   /** The plugin keeps session state, statistics and screen dialogs itself; only then may it write `state` and `error` of its sessions. */

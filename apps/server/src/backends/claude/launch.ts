@@ -22,9 +22,9 @@ const execFileAsync = promisify(execFile);
 
 const probes = new Map<string, Promise<ClaudeCliProbe>>();
 /**
- * The local interaction bridge needs 2.1.200; 2.1.322 is the newest run end to end.
+ * The local interaction bridge needs 2.1.200. The verification record is in the module guide.
  */
-export const CLAUDE_CLI_VERSIONS: CliVersionRange = { minimum: '2.1.200', testedThrough: '2.1.322' };
+export const CLAUDE_CLI_VERSIONS: CliVersionRange = { minimum: '2.1.200', testedThrough: '2.1.332' };
 
 /**
  * What keeps a standing conversation (docs/ASSISTANT.md §4) on its own directory: the owner's settings, instructions,

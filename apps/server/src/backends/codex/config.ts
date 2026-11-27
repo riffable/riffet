@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { execFile, type ExecException } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
@@ -174,6 +174,17 @@ export function supportsSteerVersion(version: string | undefined, flavor: CodexF
   return Boolean(match && versionAtLeast(match[1], STEER_MIN_VERSIONS[flavor]));
 }
 
+async function probeCliCommand(executable: string, args: string[], maxBuffer: number) {
+  const options = { timeout: 5_000, maxBuffer, encoding: 'utf8' as const };
+  try {
+    return await execFileAsync(executable, args, options);
+  } catch (error) {
+    // Large CLI binaries can miss the first deadline while macOS verifies or pages them in.
+    if (!(error as ExecException).killed) throw error;
+    return await execFileAsync(executable, args, options);
+  }
+}
+
 export async function probeAppServer(executable: string): Promise<AppServerProbe> {
   // Global npm installs replace the launcher at the same path, sometimes with a preserved mtime.
   // As with Claude's probe, cache the installed file identity, never the command path alone.
@@ -188,9 +199,9 @@ export async function probeAppServer(executable: string): Promise<AppServerProbe
   const task = (async () => {
     try {
       const [versionResult, appResult, tuiResult] = await Promise.all([
-        execFileAsync(executable, ['--version'], { timeout: 5_000, maxBuffer: 128 * 1024, encoding: 'utf8' }),
-        execFileAsync(executable, ['app-server', '--help'], { timeout: 5_000, maxBuffer: 512 * 1024, encoding: 'utf8' }),
-        execFileAsync(executable, ['resume', '--help'], { timeout: 5_000, maxBuffer: 512 * 1024, encoding: 'utf8' }),
+        probeCliCommand(executable, ['--version'], 128 * 1024),
+        probeCliCommand(executable, ['app-server', '--help'], 512 * 1024),
+        probeCliCommand(executable, ['resume', '--help'], 512 * 1024),
       ]);
       return readProbe(
         `${versionResult.stdout}${versionResult.stderr}`,
@@ -199,8 +210,12 @@ export async function probeAppServer(executable: string): Promise<AppServerProbe
       );
     } catch (error) {
       probes.delete(key);
-      const executableNotFound = (error as NodeJS.ErrnoException).code === 'ENOENT';
-      return { appServer: false, unixSocket: false, wsAuth: false, remoteUnix: false, remoteWs: false, noAltScreen: false, ...(executableNotFound ? { executableNotFound: true } : {}) };
+      const failure = error as NodeJS.ErrnoException & Pick<ExecException, 'killed'>;
+      return {
+        appServer: false, unixSocket: false, wsAuth: false, remoteUnix: false, remoteWs: false, noAltScreen: false,
+        ...(failure.code === 'ENOENT' ? { executableNotFound: true } : {}),
+        ...(failure.killed ? { timedOut: true } : {}),
+      };
     }
   })();
   probes.set(key, task);

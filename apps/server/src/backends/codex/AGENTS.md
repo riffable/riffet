@@ -40,6 +40,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 
 - reasoning 是旁白还是思考看内容，不看字段（`drafts.ts#reasoningChannel`）：OpenAI 的 summary 每段以粗体标题开头，算旁白平铺；兼容 Responses 的网关会把别家模型（DeepSeek）的原始思维链放进 `summary_text`，没有标题，按思考折叠。
 - App Server JSON-RPC：入口是 `runtime.ts#onNotification` 和 `runtime.ts#onServerRequest`。录制数据按 CLI 版本存放在 `fixtures/app-server/` 下，场景见 `recording.ts#CODEX_SCENARIOS`；TRAE CLI（`traex`）录制 answer 与 command，放在 `fixtures/traex/`，不含 hook，用 `pnpm record traex <场景>`。
+- Codex 0.172.0 和 TRAE CLI 0.217.0 的录制使用真实 CLI 和回环模型服务。Codex 场景包括命令、审批、中断和 App Server 重连，TRAE 包括回复和 Bash。两者都用新版继续过上一版本写入的线程，历史条目 id 保留。
 - rollout JSONL（`$CODEX_HOME/sessions/`）：用量、计划与分享读取，解析入口 `rollout-records.ts#rolloutRows`。录制数据在 `fixtures/rollout/`，只保留解析器读取的记录类型。
 - `imageGeneration`（rollout 中为 `Extension` + `kind: 'image_gen.generation'`，app-server 提升为顶层 `ThreadItem`）：按 `kind: 'image_generation'` 工具项投影，优先引用 `savedPath`，在 `raw` 与分享 rollout 中剥离超大内联 `result` base64；计入 `metering.ts` 的工具等待，完成通知补写 `title`/`rawInput`/`locations` 与实时项对齐。
 - 打断后，未完成的回答不在 CLI 的定稿副本里（`thread/turns/list` 只返回用户消息），会话日志里也就没有这段回答。
@@ -53,6 +54,7 @@ Codex 与 TRAE CLI（同一套 App Server 协议，`flavors.ts`）的驱动：�
 ## 排障
 
 - 新会话菜单里找不到 Codex 或 TRAE CLI：`availability.ts#availabilityOf` 会在启动探测收到 `ENOENT` 后核对可执行文件是否存在。文件存在但缺少解释器时仍会列出 Agent。
+- CLI 升级后首次探测超时：`config.ts#probeAppServer` 只重跑撞到 5 秒时限的命令。再次超时会单独报告，并释放按可执行文件缓存的探测结果。检查提示和 CLI 的 `app-server --help`，即可区分启动超时与协议能力缺失。
 - 流式回答的最后一行轮流闪现片段：查该会话 `journal_events` 中 `kind='draft'` 的行。nativeId 以 `-draft:<n>` 结尾的是运行时写的片段，以 `:assistant` 结尾的是转写源写的累积版本；前者出现，说明有运行时在没有 `host.transcript` 的路径上被创建。
 - 回合正文缺失或回合不结束：`riffet logs --scope codex-history,codex-journal`，确认是否读到了定稿副本。
 - 线程归属冲突、启动或恢复失败：`riffet logs --scope codex-recovery`。

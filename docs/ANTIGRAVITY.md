@@ -991,6 +991,10 @@ frame-summary.json                     捕获帧的分片与错误复放
 
 ### 26.4 保留的限制
 
+1.5.18 实测使用独立状态目录、真实 TUI 和本机 Gemini 测试服务。Riffet 收到输入回执、流式回复与回合结束，服务重启后行序号和 generation 保持一致。Agent 模式的工作区写入弹出审批，拒绝后文件未创建。Auto 模式下观察到工作区文件直接写入，也遇到过原生审批；Riffet 以 CLI 的实际请求为准。
+
+从 1.5.16 起，原生 CLI 也读 `~/.agents/skills`。扩展清单保留每个文件的来源；同名时 CLI 优先使用 `~/.gemini` 下的技能。
+
 原生协议没有 execution compare-and-cancel，因此精确定向取消仍关闭。本地 RPC 的 `--csrf_token` 只能经命令行传给 agy，同机其他用户可经 `ps` 看到；多用户机器上这是已知暴露面。粘贴在 fence 之后未被确认时，Run 进入 `uncertain`，已粘贴的内容留在 composer 里，需要用户在终端清除后才能继续发送或应用配置；agy 的清空按键未验证，没有自动清除。外部原生会话原地续接、任意 custom/nested 子 Agent MCP、多选/自由文本提问、RPC SendUserCascadeMessage、warmup、复杂符号链接与外部 manifest 迁移未开放。原生 OAuth 在私有根下需要由用户在 TUI 完成登录，本次模型调用只验收 API Key 路径。
 
 常规定制仅在新会话创建时复制；恢复保留私有修改，没有自动三方同步 donor 更新。现有 source 能展示确认 parent linkage 的单个子会话；每个调用返回多个子会话暂不展开全部 lane。内联媒体只有元数据时不补造本地文件，缓存输入计费口径未确认时不伪造未缓存 token。超大历史采用有界整分支读取，尚未做分页优化。

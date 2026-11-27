@@ -1,0 +1,135 @@
+{
+  "usage": [
+    {
+      "stepId": "turn:<id-1>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 7,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "outputTokens": 3,
+      "reasoningTokens": 0,
+      "tokenSource": "provider"
+    },
+    {
+      "stepId": "turn:<id-2>",
+      "model": "synthetic-model-001",
+      "startedAt": "<n>",
+      "inputTokens": 7,
+      "cacheReadTokens": 0,
+      "cacheWriteTokens": 0,
+      "outputTokens": 3,
+      "reasoningTokens": 0,
+      "tokenSource": "provider"
+    }
+  ],
+  "context": {
+    "used": 10,
+    "size": 258400,
+    "breakdown": [
+      {
+        "id": "input",
+        "label": "输入",
+        "tokens": 7
+      },
+      {
+        "id": "output",
+        "label": "输出",
+        "tokens": 3
+      }
+    ]
+  },
+  "plan": null,
+  "compaction": null,
+  "share": {
+    "events": [
+      {
+        "sequence": 1,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-3>:<id-1>:web:command-1:user",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Remember the word maple. Reply with exactly: ok"
+          },
+          "commandId": "command-1"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 2,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-3>:<id-1>:msg_upgrade_10:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "ok"
+          }
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 3,
+        "sessionId": "recording-session",
+        "runId": "<id-1>",
+        "nativeTurnId": "<id-1>",
+        "nativeId": "<id-3>:<id-1>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 4,
+        "sessionId": "recording-session",
+        "runId": "<id-2>",
+        "nativeTurnId": "<id-2>",
+        "nativeId": "<id-3>:<id-2>:web:command-2:user",
+        "type": "user_message_chunk",
+        "data": {
+          "sessionUpdate": "user_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "Which word did I ask you to remember? Reply with the word only."
+          },
+          "commandId": "command-2"
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 5,
+        "sessionId": "recording-session",
+        "runId": "<id-2>",
+        "nativeTurnId": "<id-2>",
+        "nativeId": "<id-3>:<id-2>:msg_upgrade_11:assistant",
+        "type": "agent_message_chunk",
+        "data": {
+          "sessionUpdate": "agent_message_chunk",
+          "content": {
+            "type": "text",
+            "text": "maple"
+          }
+        },
+        "createdAt": "<time>"
+      },
+      {
+        "sequence": 6,
+        "sessionId": "recording-session",
+        "runId": "<id-2>",
+        "nativeTurnId": "<id-2>",
+        "nativeId": "<id-3>:<id-2>:end",
+        "type": "run_completed",
+        "data": {},
+        "createdAt": "<time>"
+      }
+    ],
+    "children": []
+  }
+}

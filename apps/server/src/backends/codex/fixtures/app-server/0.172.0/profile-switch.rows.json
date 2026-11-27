@@ -1,0 +1,122 @@
+[
+  {
+    "kind": "meta.turn_started",
+    "nativeId": "meta:turn:<id-1>:started",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "user_message_chunk",
+    "nativeId": "<id-2>:<id-1>:web:command-1:user",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "user_message_chunk",
+      "data": {
+        "sessionUpdate": "user_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Remember the word maple. Reply with exactly: ok"
+        },
+        "commandId": "command-1"
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:web:command-1:user",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-1>:msg_upgrade_18:assistant",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "ok"
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:msg_upgrade_18:assistant",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "meta.turn_ended",
+    "nativeId": "meta:turn:<id-1>:ended",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>",
+      "status": "completed"
+    }
+  },
+  {
+    "kind": "meta.turn_started",
+    "nativeId": "meta:turn:<id-3>:started",
+    "rev": 1,
+    "turnId": "<id-3>",
+    "payload": {
+      "turnId": "<id-3>"
+    }
+  },
+  {
+    "kind": "user_message_chunk",
+    "nativeId": "<id-2>:<id-3>:web:command-2:user",
+    "rev": 1,
+    "turnId": "<id-3>",
+    "payload": {
+      "runId": "<id-3>",
+      "type": "user_message_chunk",
+      "data": {
+        "sessionUpdate": "user_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Which word did I ask you to remember? Reply with the word only."
+        },
+        "commandId": "command-2"
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-3>:web:command-2:user",
+      "nativeTurnId": "<id-3>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-3>:msg_upgrade_19:assistant",
+    "rev": 1,
+    "turnId": "<id-3>",
+    "payload": {
+      "runId": "<id-3>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "maple"
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-3>:msg_upgrade_19:assistant",
+      "nativeTurnId": "<id-3>"
+    }
+  },
+  {
+    "kind": "meta.turn_ended",
+    "nativeId": "meta:turn:<id-3>:ended",
+    "rev": 1,
+    "turnId": "<id-3>",
+    "payload": {
+      "turnId": "<id-3>",
+      "status": "completed"
+    }
+  }
+]

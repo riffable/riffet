@@ -19,11 +19,14 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { CLIENT_FEATURES_HEADER } from '../packages/contracts/src/protocol.js';
 import type { NativeBackendId, Run, SyncFrame, SyncLane, TimelineChanges, TimelineRow, TurnOutlineV3 } from '../packages/contracts/src/index.js';
 import { createApp } from '../apps/server/src/app.js';
 
 export interface ProbeArgs { model?: string; timeoutSeconds: number; keep: boolean; out?: string; prompts?: string[]; profile?: string }
 export interface Check { name: string; ok: boolean; detail?: unknown }
+
+const agentHeaders = { [CLIENT_FEATURES_HEADER]: 'pi-agent,antigravity-agent,plugin-agents' };
 
 const started = Date.now();
 export const log = (message: string) => console.error(`[${((Date.now() - started) / 1000).toFixed(0).padStart(4)}s] ${message}`);
@@ -84,7 +87,7 @@ export async function bootServer(stateDir: string, options: { cliPath?: string }
   await services.app.listen({ host: '127.0.0.1', port: 0 });
   const port = (services.app.server.address() as { port: number }).port;
   // Auth off still signs every request in with a local cookie, and a mutation carries its CSRF token.
-  const origin = { host: '127.0.0.1:4317', origin: 'http://127.0.0.1:4317' };
+  const origin = { ...agentHeaders, host: '127.0.0.1:4317', origin: 'http://127.0.0.1:4317' };
   const status = await services.app.inject({ url: '/api/auth/status', headers: origin });
   const cookie = String(status.headers['set-cookie']).split(';')[0]!;
   const headers = { ...origin, cookie, 'x-csrf-token': String(status.json().csrfToken) };
@@ -120,7 +123,7 @@ export function openLane(server: Pick<ProbeServer, 'port' | 'cookie'>, sessionId
   const frames: SyncFrame[] = [];
   let generation: string | undefined, head = -1;
   const query = new URLSearchParams({ lane, rows: '1000', ...(resume ? { generation: resume.generation, after: String(resume.after) } : {}) });
-  const request = httpRequest({ host: '127.0.0.1', port: server.port, path: `/api/v3/sessions/${sessionId}/sync?${query}`, headers: { host: '127.0.0.1:4317', cookie: server.cookie, accept: 'text/event-stream' } }, (response: IncomingMessage) => {
+  const request = httpRequest({ host: '127.0.0.1', port: server.port, path: `/api/v3/sessions/${sessionId}/sync?${query}`, headers: { ...agentHeaders, host: '127.0.0.1:4317', cookie: server.cookie, accept: 'text/event-stream' } }, (response: IncomingMessage) => {
     response.setEncoding('utf8');
     let buffer = '';
     response.on('data', (chunk: string) => {

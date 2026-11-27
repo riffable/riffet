@@ -39,9 +39,10 @@ function defaultProfile(): NativeBackendProfileConfig {
 export const DROID_TRAITS: NativeBackendTraits = { offlineMayBeRunning: true, riffetTools: true };
 
 /**
- * No release is known to break the adapter; the help probe gates `stream-jsonrpc`.
+ * The help probe gates `stream-jsonrpc`. 1.21.1 has been exercised through Riffet's queued sends,
+ * targeted interrupt, and recovery of a conversation created by 1.6.0.
  */
-export const DROID_CLI_VERSIONS: CliVersionRange = { testedThrough: '0.243.0' };
+export const DROID_CLI_VERSIONS: CliVersionRange = { testedThrough: '1.21.1' };
 
 export class DroidBackendAdapter implements NativeBackendDriver {
   readonly stored: NativeDriverStored = {

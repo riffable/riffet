@@ -50,7 +50,7 @@ export const PI_TRAITS: NativeBackendTraits = {
 };
 
 /** The RPC commands this adapter relies on first shipped together in 1.4.0. */
-export const PI_CLI_VERSIONS: CliVersionRange = { minimum: PI_MINIMUM_VERSION, testedThrough: PI_MINIMUM_VERSION };
+export const PI_CLI_VERSIONS: CliVersionRange = { minimum: PI_MINIMUM_VERSION, testedThrough: '1.7.0' };
 
 /** The provider/model an assistant entry recorded, when it names one. */
 function modelOf(entry: PiEntry): string | undefined {

@@ -108,3 +108,25 @@ it('refreshes the CLI probe after installation at the same path and retries a pr
     expect((await readFile(calls, 'utf8')).trim().split('\n')).toHaveLength(6);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+it('retries the TRAE help command that timed out during cold startup', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'riffet-trae-probe-'));
+  const executable = join(directory, 'traex');
+  const calls = join(directory, 'calls');
+  try {
+    await writeFile(executable, `#!/usr/bin/env node
+const fs = require('node:fs');
+const command = process.argv[2];
+const calls = ${JSON.stringify(calls)};
+fs.appendFileSync(calls, command + '\\n');
+if (command === '--version') console.log('traecli 0.217.0');
+else if (command === 'resume') console.log('Usage: resume --remote <ADDR> --remote-auth-token-env VAR');
+else if (fs.readFileSync(calls, 'utf8').split('app-server').length === 2) setTimeout(() => {}, 30_000);
+else console.log('Usage: app-server --listen ws:// --ws-auth capability-token --ws-token-file FILE');
+`, { mode: 0o755 });
+    const current = { ...profile(traexFlavor), config: { executable } };
+    expect(await availabilityOf(traexFlavor, current)).toEqual({ available: true, version: 'traecli 0.217.0' });
+    expect((await readFile(calls, 'utf8')).trim().split('\n').sort())
+      .toEqual(['--version', 'app-server', 'app-server', 'resume']);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

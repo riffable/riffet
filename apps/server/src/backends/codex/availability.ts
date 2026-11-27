@@ -67,7 +67,9 @@ export async function availabilityOf(flavor: CodexFlavor, profile: NativeBackend
     const detail = resolution.resolved ? ` (${typeof code === 'string' ? code : 'process error'})` : `${describeSearch(resolution)} Set this profile’s executable to an absolute path.`;
     return { available: false, reason: `${flavor.label} could not be started from “${executable}”.${detail}` };
   }
-  const reason = flavor.unavailableReason(probe, executable);
+  const reason = probe.timedOut
+    ? `Checking ${flavor.label} capabilities timed out at “${executable}”.`
+    : flavor.unavailableReason(probe, executable);
   const version = probe.version ? { version: probe.version } : {};
   if (reason) {
     const cliMissing = probe.executableNotFound && isCliMissing(resolution);

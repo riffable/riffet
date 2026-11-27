@@ -78,9 +78,11 @@ try {
   runs.push(await settle(task.id, 240_000));
 
   const long = await post<Run>(`/api/sessions/${sessionId}/native/send`, { commandId: randomUUID(), text: 'Do not use tools. Write the integers from 1 to 3000, one per line, without abbreviating.' });
-  await until('busy turn', () => server.services.nativeBackends.status(sessionId).phase === 'busy' && server.services.store.getRun(long.id).native?.nativeMessageId !== undefined);
+  await until('busy turn', () => server.services.nativeBackends.status(sessionId).phase === 'busy' && server.services.store.getRun(long.id).native?.delivery === 'observed');
   await sleep(1500);
-  await post(`/api/sessions/${sessionId}/cancel`, {});
+  const nativeSessionId = server.services.store.getSession(sessionId).nativeSessionId;
+  if (!nativeSessionId) throw new Error('Droid did not bind the running turn to a native session');
+  await post(`/api/sessions/${sessionId}/cancel`, { requestId: randomUUID(), nativeSessionId });
   const stopped = await settle(long.id, 30_000);
   await until('idle after interrupt', () => server.services.nativeBackends.status(sessionId).phase === 'idle', 15_000);
   check('interrupt cancelled the run', stopped.state === 'cancelled' || stopped.state === 'interrupted', { state: stopped.state });
@@ -111,7 +113,7 @@ try {
   check('resumed turn completed in the same native session', three.state === 'completed' && server.services.store.getSession(sessionId).nativeSessionId === session.nativeSessionId);
 
   const doomed = await post<Run>(`/api/sessions/${sessionId}/native/send`, { commandId: randomUUID(), text: 'Do not use tools. Write the integers from 1 to 3000, one per line, without abbreviating.' });
-  await until('busy turn before crash', () => server.services.nativeBackends.status(sessionId).phase === 'busy' && server.services.store.getRun(doomed.id).native?.nativeMessageId !== undefined);
+  await until('busy turn before crash', () => server.services.nativeBackends.status(sessionId).phase === 'busy' && server.services.store.getRun(doomed.id).native?.delivery === 'observed');
   await sleep(1000);
   execFileSync('pkill', ['-9', '-f', `droid exec.*${basename(dirs.root)}`]);
   const crashed = await settle(doomed.id, 15_000);

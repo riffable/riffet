@@ -1,0 +1,21 @@
+ ▐▛███▛█   Claude Code v2.1.332
+▝▜██████▀  Sonnet 4.6 · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+› From main
+❯ Run the Bash command sleep 70 and reply DONE.
+
+  Bash(printf 'STARTING\n'; sleep 70; printf 'DONE\n')
+  ⎿  Running…
+
+✻ Computing… (7s · ↓ 75 tokens)
+  ⎿  Tip: Use /memory to view and manage Claude memory
+
+────────────────────────────────────────────────────────────────────────────────────── Run sleeper ─
+❯ Message @sleeper…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ↑/↓ to select
+
+  ◯ main
+❯ ⏺ sleeper  Run sleeper                                                          6s · ↓ 75 tokens

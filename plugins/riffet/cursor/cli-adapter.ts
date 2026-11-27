@@ -4,11 +4,8 @@ import type { ApprovalMode } from '@contracts';
 import { stripTerminalSequences, type CliVersionRange } from '@riffet/plugin-api/kit';
 import { approvalArgs } from './cli-driver.js';
 
-/**
- * cursor-agent's date versions carry a build id (`2026.10.01-e373342`). No release is known to
- * break the adapter; the newest verified is from docs/STEER.md.
- */
-export const CURSOR_CLI_VERSIONS: CliVersionRange = { testedThrough: '2026.10.01' };
+/** Verified with the native login, a gateway, shell approval, same-turn steering and history recovery. */
+export const CURSOR_CLI_VERSIONS: CliVersionRange = { testedThrough: '2026.11.22-e9042b2' };
 
 /** How the terminal driver launches cursor-agent and finds the file an accepted turn is appended to. */
 export interface CursorAgentAdapter {

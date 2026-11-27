@@ -16,8 +16,9 @@
  * (scripts/probe-sync-e2e-lib.ts): seq contiguous and unique, the last answer of every turn delivered,
  * and every interaction card after the text in front of it.
  *
- * Isolation: its own temp stateDir (hence its own tmux socket), a temp git project, auth disabled,
- * no port bound. It never touches the running Riffet service (port 4337, ~/.local/share/riffet).
+ * Isolation: a private state directory, tmux socket, Git project and ephemeral loopback port.
+ * When testing restart takeover, the directory lives under the user's home so closing the test
+ * server leaves its tmux sessions alive. Cleanup removes the directory and its tmux server.
  * The real Claude config dir is still used (credentials); transcripts of the temp project land in
  * `<config>/projects/<encoded temp cwd>` and are left there.
  *
@@ -74,7 +75,10 @@ const log = (message: string) => console.error(`[${((Date.now() - started) / 100
 // ---------------------------------------------------------------------------------------------
 // Isolated environment
 // ---------------------------------------------------------------------------------------------
-const directory = await realpath(await mkdtemp(join(tmpdir(), 'riffet-claude-e2e-')));
+const testsRestart = only.size === 0 || only.has(6);
+const directory = await realpath(await mkdtemp(testsRestart
+  ? join(homedir(), '.riffet-claude-e2e-')
+  : join(tmpdir(), 'riffet-claude-e2e-')));
 const stateDir = join(directory, 'state');
 const projectDir = join(directory, 'project');
 await mkdir(projectDir);
@@ -86,7 +90,7 @@ description: Runs a long sleep in the background. Use only when explicitly asked
 tools: Bash
 background: true
 ---
-Run the Bash command \`sleep 70\` and then reply with only the word DONE.
+Run the Bash command \`printf 'STARTING\\n'; sleep 70; printf 'DONE\\n'\` and then reply with only the word DONE.
 `);
 execFileSync('git', ['-c', 'user.email=probe@example.invalid', '-c', 'user.name=probe', 'commit', '--allow-empty', '-qm', 'init'], { cwd: projectDir });
 
@@ -413,7 +417,7 @@ function digest(rows: Row[], since: number, filter: (row: any) => boolean, limit
 function kindList(rows: Row[], since: number): string[] {
   return [...summarizeRows(rows, since).keys].map(([key, { n, first }]) => `${key}x${n}@${rel(first)}`);
 }
-function subagentMetas(sessionId: string): string[] {
+function subagentMetas(sessionId: string, activeBackgroundOnly = false): string[] {
   const file = transcriptFile(services.store.getSession(sessionId).nativeSessionId);
   if (!file) return [];
   const dir = join(file.replace(/\.jsonl$/, ''), 'subagents');
@@ -423,9 +427,10 @@ function subagentMetas(sessionId: string): string[] {
     if (!name.endsWith('.meta.json')) continue;
     try {
       const meta = JSON.parse(readFileSync(join(dir, name), 'utf8')) as Record<string, unknown>;
+      if (activeBackgroundOnly && (meta.requestShape !== 'background' || meta.finished || meta.stoppedByUser)) continue;
       const status = Object.entries(meta).filter(([key, value]) => /status|state|type|kind|depth|background|async/i.test(key) && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')).map(([key, value]) => `${key}=${snip(String(value), 40)}`);
       lines.push(`  ${name.slice(0, 18)}…: fields[${Object.keys(meta).join(',')}] ${status.join(' ')}`);
-    } catch { lines.push(`  ${name}: unreadable`); }
+    } catch { if (!activeBackgroundOnly) lines.push(`  ${name}: unreadable`); }
   }
   return lines;
 }
@@ -932,7 +937,7 @@ async function s5(ctx: Ctx) {
   const elapsed = (Date.now() - launchedAt) / 1000;
   const pingNow = services.store.getRun(ping.id);
   ctx.note(`before stop (${elapsed.toFixed(0)}s after launch, sleep ${SLEEPER_SECONDS}): PING Run=${pingNow.state}/${pingNow.native?.delivery} ${rel(Date.now() - pingAt)} after the send; launch Run=${services.store.getRun(run.id).state}; ${statusLine(id)}`);
-  const bgAlive = elapsed < SLEEPER_SECONDS - 10;
+  const bgAlive = elapsed < SLEEPER_SECONDS - 10 && subagentMetas(id, true).length > 0;
   ctx.check('background task still running at stop time', bgAlive, `elapsed=${elapsed.toFixed(0)}s`, 'limit');
   const panes = () => {
     const terminalId = services.store.getSession(id).terminalId;
@@ -953,6 +958,7 @@ async function s5(ctx: Ctx) {
   await sleep(8000);
   const rows = readRows(id);
   const killed = rows.filter(({ row }) => row.type === 'system' && row.subtype === 'agents_killed');
+  ctx.check('the CLI reported that it stopped the background agent', killed.length > 0, `rows=${killed.length}`);
   ctx.note(`system/agents_killed rows: ${killed.length}${killed[0] ? ` first=${snip(killed[0].row, 240)}` : ''}`);
   ctx.note(`8s after stop: ${statusLine(id)}`);
   ctx.check('phase idle after stop', ctx.phase(id) === 'idle', `phase=${ctx.phase(id)}`);
@@ -1389,7 +1395,7 @@ async function captureAgentScreens(ctx: Ctx, sessionId: string): Promise<void> {
  */
 async function captureBackgroundTasks(ctx: Ctx, sessionId: string): Promise<void> {
   if (!captureDir) return;
-  const list = (screen: string) => claudeBackgroundScreen(screen)?.kind === 'list';
+  const taskPanel = (screen: string) => claudeBackgroundScreen(screen)?.kind;
   // Riffet's Stop hook answers before the CLI's other Stop hooks: its spinner (`✶ Infusing… (running Stop hooks…`) may still run.
   if (!await paneUntil(sessionId, screen => claudeComposer(screen) !== undefined && !/^\S \S+… \(/m.test(screen), 30_000)) ctx.note('background-list: the CLI still shows a running spinner');
   const idle = paneScreen(sessionId);
@@ -1400,11 +1406,14 @@ async function captureBackgroundTasks(ctx: Ctx, sessionId: string): Promise<void
   else if (footerFocused(sessionId)) ctx.note('tasks-entry-focused: the focused tasks entry is drawn in reverse video only, so its plain screen equals the idle one; not captured');
   if (footerFocused(sessionId)) {
     paneKeys(sessionId, 'Enter');
-    const shown = await paneUntil(sessionId, list, 4000);
+    const shown = await paneUntil(sessionId, screen => ['list', 'task'].includes(taskPanel(screen) ?? ''), 4000);
     if (shown) {
-      await capture('background-list', shown);
-      paneKeys(sessionId, 'Enter');
-      const page = await paneUntil(sessionId, screen => claudeBackgroundScreen(screen)?.kind === 'task', 4000);
+      const isList = taskPanel(shown) === 'list';
+      if (isList) {
+        await capture('background-list', shown);
+        paneKeys(sessionId, 'Enter');
+      }
+      const page = isList ? await paneUntil(sessionId, screen => taskPanel(screen) === 'task', 4000) : shown;
       if (page) await capture('background-task', page);
       else ctx.note(`background-task: Enter on the list opened no task page; pane tail ${snip(paneScreen(sessionId).split('\n').filter(line => line.trim()).slice(-10), 500)}`);
     } else ctx.note(`background-list: the tasks entry opened no list; pane tail ${snip(paneScreen(sessionId).split('\n').filter(line => line.trim()).slice(-10), 500)}`);

@@ -1,0 +1,29 @@
+ ▐▛███▛█   Claude Code v2.1.332
+▝▜██████▀  Sonnet 4.6 · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ OK
+
+✻ Crunched for 1s · done 2:20 AM
+
+❯ Use the Agent tool to launch the "sleeper" subagent (subagent_type sleeper, run_in_background
+  true) with the prompt "go". As soon as it is launched, end your turn by replying only LAUNCHED.
+  Do not wait for it and do not use any other tool.
+
+⏺ sleeper(Run sleeper)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ LAUNCHED
+
+✻ Waiting for 1 background agent to finish
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ↓ to manage
+
+  ⏺ main
+  ◯ sleeper  Run sleeper                                                          4s · ↓ 75 tokens

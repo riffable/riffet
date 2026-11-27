@@ -199,6 +199,8 @@ A–C 已实现；D 中编排目标已接入，gateway 配置既可使用 pi 本
 
 官方依据锁定 [v1.4.0](https://github.com/earendil-works/pi/releases/tag/v1.4.0)：[RPC](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc.md)、[RPC commands](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc-commands.md)、[JSON events](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/json.md)、[Session format](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/session-format.md)、[Extension UI](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/rpc-extension-ui.md)。provider 的官方依据：[自定义模型](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/models.md)、[registerProvider 扩展接口](https://github.com/earendil-works/pi/blob/v1.4.0/packages/coding-agent/docs/extensions.md)、[模型 API 类型](https://github.com/earendil-works/pi/blob/v1.4.0/packages/ai/src/types.ts)。
 
+升级到 [v1.7.0](https://github.com/earendil-works/pi/releases/tag/v1.7.0) 后，使用相同的隔离方式验证了工具调用、消息回执、时间线和重启续聊。将 1.4.0 建立的会话切到 1.7.0 后，原生会话 ID、旧回复及其时间线行标识都保留。
+
 ### 自定义 provider
 
 - 通过 HTTP 设置接口保存四种协议的 provider 后，下一条消息切换生效，原生会话 identity 保持，Key 不回显、不写入生成的扩展，原 pi 配置不变。

@@ -9,6 +9,8 @@ export interface AppServerProbe {
   version?: string;
   /** The OS could not start the executable because a path was missing. */
   executableNotFound?: boolean;
+  /** A help or version command exceeded its deadline on both attempts. */
+  timedOut?: boolean;
   appServer: boolean;
   /** `app-server --listen unix://…` */
   unixSocket: boolean;
@@ -70,9 +72,8 @@ export const codexFlavor: CodexFlavor = {
   profileName: 'Codex CLI',
   executableEnv: 'CODEX_CLI',
   command: 'codex',
-  // No release is known to break the adapter; the help probe gates what it needs. Newest verified:
-  // docs/STEER.md.
-  cliVersions: { testedThrough: '0.167.2' },
+  // The help probe gates the capabilities. Newest recording: fixtures/app-server/0.172.0.
+  cliVersions: { testedThrough: '0.172.0' },
   messageTag: { request: 'clientUserMessageId', echo: 'clientId' },
   modes: [],
   contextUsage: false,
@@ -142,8 +143,8 @@ export const traexFlavor: CodexFlavor = {
   profileName: 'TRAE CLI',
   executableEnv: 'TRAEX_CLI',
   command: 'traex',
-  // As for Codex; newest verified: docs/TRAEX.md §11.
-  cliVersions: { testedThrough: '0.211.1' },
+  // The help probe gates the capabilities. Newest recording: fixtures/traex/app-server/0.217.0.
+  cliVersions: { testedThrough: '0.217.0' },
   messageTag: { request: 'userMessageId', echo: 'id' },
   contextUsage: true,
   backgroundTerminalStop: 'thread/backgroundTerminals/stop',

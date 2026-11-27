@@ -1,0 +1,32 @@
+ ▐▛███▛█   Claude Code v2.1.332
+▝▜██████▀  Sonnet 4.6 · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ OK
+
+✻ Baked for 1s · done 2:21 AM
+
+❯ First write two plain sentences announcing that you are about to ask the user a question, and
+  then, in that same reply, call the AskUserQuestion tool exactly once (a reply without the tool
+  call is wrong) with one single-select question (header "Letter", question "Which letter do you
+  pick?", exactly two options labelled "Alpha" and "Beta" with short descriptions). Do not call any
+  other tool. After the answer arrives, reply with only PICKED_B: followed by the chosen answer.
+
+⏺ I am about to ask a question. Please pick the letter.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Letter
+
+Which letter do you pick?
+
+❯ 1. Alpha
+     The first letter
+  2. Beta
+     The second letter
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

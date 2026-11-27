@@ -1,0 +1,113 @@
+[
+  {
+    "kind": "meta.turn_started",
+    "nativeId": "meta:turn:<id-1>:started",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "user_message_chunk",
+    "nativeId": "<id-2>:<id-1>:web:command-1:user",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "user_message_chunk",
+      "data": {
+        "sessionUpdate": "user_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "Create a file named hello.txt containing the single word hi, then reply with: done"
+        },
+        "commandId": "command-1"
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:web:command-1:user",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call",
+    "nativeId": "<id-2>:<id-1>:call_riffet_upgrade_3:call",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call",
+      "data": {
+        "sessionUpdate": "tool_call",
+        "toolCallId": "call_riffet_upgrade_3",
+        "toolName": "Command",
+        "kind": "execute",
+        "title": "printf hi > hello.txt",
+        "status": "in_progress",
+        "rawInput": {
+          "command": "printf hi > hello.txt",
+          "originalCommand": "/bin/zsh -lc 'printf hi > hello.txt'",
+          "cwd": "/workspace/project",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "printf hi > hello.txt"
+            }
+          ]
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:call_riffet_upgrade_3:call",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "tool_call_update",
+    "nativeId": "<id-2>:<id-1>:call_riffet_upgrade_3:result",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "tool_call_update",
+      "data": {
+        "sessionUpdate": "tool_call_update",
+        "toolCallId": "call_riffet_upgrade_3",
+        "status": "completed",
+        "exitCode": 0
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:call_riffet_upgrade_3:result",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "agent_message_chunk",
+    "nativeId": "<id-2>:<id-1>:msg_upgrade_4:assistant",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "runId": "<id-1>",
+      "type": "agent_message_chunk",
+      "data": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": {
+          "type": "text",
+          "text": "done"
+        }
+      },
+      "createdAt": "<time>",
+      "nativeId": "<id-2>:<id-1>:msg_upgrade_4:assistant",
+      "nativeTurnId": "<id-1>"
+    }
+  },
+  {
+    "kind": "meta.turn_ended",
+    "nativeId": "meta:turn:<id-1>:ended",
+    "rev": 1,
+    "turnId": "<id-1>",
+    "payload": {
+      "turnId": "<id-1>",
+      "status": "completed"
+    }
+  }
+]
