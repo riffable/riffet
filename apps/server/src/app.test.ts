@@ -1493,6 +1493,14 @@ describe('app route surface after ACP removal', () => {
     expect(cursorModel.json().profiles.find((item: { id: string }) => item.id === 'default')).toMatchObject({ defaultModel: 'cursor-profile-model' });
     const cursorProfiles = await call('GET', '/api/backends/cursor/profiles');
     expect(cursorProfiles.json().profiles.find((item: { id: string }) => item.id === 'default')).toMatchObject({ defaultModel: 'cursor-profile-model' });
+    // Profiles beside the built-in one are stored like any backend's; the built-in one stays.
+    const cursorGateway = await call('POST', '/api/backends/cursor/profiles', { id: 'gateway', name: 'Gateway', apiEndpoint: 'https://gateway.example.com', apiKey: 'gateway-key' });
+    expect(cursorGateway.statusCode).toBe(200);
+    expect(cursorGateway.json().profiles.map((item: { id: string }) => item.id).sort()).toEqual(['default', 'gateway']);
+    expect(cursorGateway.json().profiles.find((item: { id: string }) => item.id === 'gateway')).toMatchObject({ apiEndpoint: 'https://gateway.example.com', hasApiKey: true });
+    expect((await call('DELETE', '/api/backends/cursor/profiles/default')).statusCode).toBe(400);
+    expect((await call('PATCH', '/api/backends/cursor/profiles/default', { name: 'Renamed' })).statusCode).toBe(400);
+    expect((await call('DELETE', '/api/backends/cursor/profiles/gateway')).json().profiles.map((item: { id: string }) => item.id)).toEqual(['default']);
   });
 });
 

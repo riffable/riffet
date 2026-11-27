@@ -129,6 +129,9 @@ function changedFields(profile: NativeBackendProfileSettings, draft: Draft): Dra
   return patch as Draft;
 }
 
+/** Cursor's built-in provider is stored in `cursor-cli.json`, which keeps neither a name nor a model selection, and stays. */
+const cursorBuiltin = (provider: NativeBackendProfileSettings) => provider.backendId === 'cursor' && provider.id === 'default';
+
 /** The name the Agent switch and the provider lines use, shorter than the full one for two CLIs. */
 function shortLabel(id: NativeBackendId): string {
   if (id === 'claude') return 'Claude';
@@ -187,6 +190,7 @@ export function BackendProfilesSection({ settings, project, initialTarget, onTar
     claude: { placeholder: 'https://gateway.example.com', hint: t`需兼容 Anthropic Messages API，地址不要带 /v1` },
     codex: { placeholder: 'https://gateway.example.com/v1', hint: t`需兼容 OpenAI Responses API，地址要带 /v1` },
     dsh: { placeholder: 'https://api.deepseek.com', hint: t`需兼容 DeepSeek 接口` },
+    cursor: { placeholder: 'https://gateway.example.com', hint: t`需兼容 Cursor 接口` },
   };
   // Writes to the per-backend defaults go through the settings store's queue, which builds each one from the latest defaults.
   const { settings: settingsStore } = useStores();
@@ -535,7 +539,7 @@ export function BackendProfilesSection({ settings, project, initialTarget, onTar
                   {isOpen && (
                     <div className="flex flex-col edge-t [&>*+*]:edge-t px-4 max-md:px-3">
                       <SettingsRow title={t`名称`}>
-                        <Input aria-label={t`名称`} className="h-8 w-64 max-md:h-11 max-md:w-full" value={draft.name ?? ''} disabled={busy} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
+                        <Input aria-label={t`名称`} className="h-8 w-64 max-md:h-11 max-md:w-full" value={draft.name ?? ''} disabled={busy || cursorBuiltin(provider)} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
                       </SettingsRow>
                       {extra.endpoint !== false && (
                         <>
@@ -587,10 +591,12 @@ export function BackendProfilesSection({ settings, project, initialTarget, onTar
                             <Button size="icon-xs" variant="ghost" aria-label={t`重新检测`} disabled={busy || status.kind === 'loading'} onClick={() => setReload((value) => value + 1)}><IconRefreshCw /></Button>
                           </div>
                         </div>
-                        <ProviderModelList
+                        {!cursorBuiltin(provider) && <ProviderModelList
                           backendId={backendId}
                           profileId={provider.id}
                           apiProtocol={backendId === 'antigravity' ? 'google-generative-ai' : backendId === 'pi' ? draft.apiProtocol ?? 'openai-completions' : undefined}
+                          // Cursor's catalog comes from its CLI once the provider is saved; its gateways do not answer a model listing.
+                          probe={backendId !== 'cursor'}
                           apiEndpoint={draft.apiEndpoint ?? ''}
                           apiKey={apiKey}
                           clearKey={clearKey || credentialsSourceChanged}
@@ -610,7 +616,7 @@ export function BackendProfilesSection({ settings, project, initialTarget, onTar
                             savedWindows: baseline?.modelContextWindows ?? {},
                             onWindowsChange: (next: ModelContextWindows) => setDraft((current) => ({ ...current, modelContextWindows: next })),
                           } : {})}
-                        />
+                        />}
                       </div>
 
                       <SettingsRow title={t`默认模型`} description={t`留空则沿用 CLI 自己的默认值。`}>
@@ -635,7 +641,7 @@ export function BackendProfilesSection({ settings, project, initialTarget, onTar
                         {provider.id === defaultProviderId
                           ? <span className="inline-flex items-center gap-1.5 text-xs text-fg-2"><StatusDot tone="success" /><Trans>新会话默认</Trans></span>
                           : <Button size="sm" variant="secondary" disabled={busy || dirty} onClick={() => void makeDefault(provider)}><Trans>设为默认</Trans></Button>}
-                        <Button size="sm" variant="danger-ghost" disabled={busy} onClick={() => void remove(provider)}><IconTrash2 /><Trans context="settings-delete-action">删除</Trans></Button>
+                        {!cursorBuiltin(provider) && <Button size="sm" variant="danger-ghost" disabled={busy} onClick={() => void remove(provider)}><IconTrash2 /><Trans context="settings-delete-action">删除</Trans></Button>}
                         <Button size="sm" variant="primary" className="ml-auto" disabled={loading || !dirty || !draft.name?.trim() || needsEndpoint} onClick={() => void save()} busy={saving}><IconSave /><Trans>保存</Trans></Button>
                       </div>
                     </div>

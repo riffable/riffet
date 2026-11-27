@@ -173,5 +173,6 @@ M 改归 W 要在 [设计决定](../design/DECISIONS.md) 追加一条，写明�
 - 窗口截图没有共享的大小上限：设备文件的上限只写在服务端（`apps/server/src/workspace/index.ts` 的 `MAX_ATTACHMENT_BYTES`），不在 `budgets.ts` 里。Mac 先传 PNG，靠服务端的 413 逐级降档；编码后超过请求体上限的图可能直接失败而不降档。
 - Agent 调用（W 类，[AGENT-CALLS.md](../AGENT-CALLS.md)）在 Mac 上没有原生实现：输入框不能 @ Agent，`agent_call` 画成普通工具行，被调用的会话在列表里平铺。
 - Code Studio（W 类，[CODE-STUDIO.md](../CODE-STUDIO.md)）在 Mac 上没有原生页面，视图只声明 `web`。
+- Cursor 的提供商在 Mac 上仍是冻结的原生页（`riffet.cursor/provider`，只声明 `macos`），只显示内置的「Cursor CLI」；Web 已改用通用的提供商列表，另加的 Cursor 提供商在 Mac 设置里看不到。
 - Mac 作为设备只到 T0。代码里没有辅助功能、事件注入和音频采集的调用（§5 第 2、4 项）。
 - 只开了「允许助理修改本机外观」的 Mac，在各端的设备列表和「技能与工具」里显示成可操作的设备，调用任何设备工具都会得到 `DEVICE_CAPABILITY_MISSING`：`allowControl` 没有区分这两个开关。

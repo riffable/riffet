@@ -12,14 +12,6 @@ export function normalizeCliSettings(value?: CursorCliSettings): DraftPayload {
   };
 }
 
-export function hasSeparateAgentEndpoint(value?: CursorCliSettings): boolean {
-  return (value?.agentEndpoint?.trim() ?? '') !== (value?.apiEndpoint?.trim() ?? '');
-}
-
-export function updateGateway(value: CursorCliSettings, gateway: string, separateAgentEndpoint: boolean): CursorCliSettings {
-  return { ...value, apiEndpoint: gateway, ...(!separateAgentEndpoint ? { agentEndpoint: gateway } : {}) };
-}
-
 export function cliSettingsPatch(value: CursorCliSettings, saved?: CursorCliSettings, scope: 'connection' | 'launch' | 'all' = 'all'): CursorCliSettingsUpdate {
   const next = normalizeCliSettings(value);
   const previous = normalizeCliSettings(saved);

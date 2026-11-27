@@ -45,7 +45,8 @@ export interface NativeLaunchExtras {
 
 export interface NativeRuntimeManagerOptions {
   port: CursorPort;
-  prepareModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>): Promise<string | undefined>;
+  /** `session` is the conversation being started, whose profile's catalog names the model; a warmup has none. */
+  prepareModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>, session?: AgentSessionView): Promise<string | undefined>;
   cliPath: string;
   profile?: CursorLaunchProfile;
   configDir?: string;
@@ -234,7 +235,7 @@ export class NativeRuntimeManager {
     let launchModel = session.model;
     if (!session.resumePicker) {
       const started = this.now();
-      launchModel = await this.options.prepareModel(session.model, project);
+      launchModel = await this.options.prepareModel(session.model, project, session);
       this.recordStage('prepareModel', started);
       if (launchModel !== session.model) {
         session = this.port.updateSession(session.id, { model: launchModel });

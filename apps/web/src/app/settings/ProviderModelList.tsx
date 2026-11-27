@@ -32,7 +32,7 @@ function formatWindow(tokens: number): string {
   return formatTokens(tokens);
 }
 
-export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, clearKey, modelSource, apiProtocol, catalog, value, onChange, inputs, onInputsChange, windows, savedWindows, onWindowsChange, disabled }: {
+export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, clearKey, modelSource, apiProtocol, probe: canProbe = true, catalog, value, onChange, inputs, onInputsChange, windows, savedWindows, onWindowsChange, disabled }: {
   backendId: NativeBackendId;
   profileId?: string;
   /** Empty when the provider uses the CLI's own login, which has no endpoint to interrogate. */
@@ -56,6 +56,8 @@ export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, c
   savedWindows?: ModelContextWindows;
   onWindowsChange?: (next: ModelContextWindows) => void;
   disabled?: boolean;
+  /** Whether the address can be asked for its models before a save; `false` for a gateway that has no model listing. */
+  probe?: boolean;
 }) {
   const { t } = useLingui();
   const INPUT_LABELS: Record<ModelInputModality, string> = { text: t`文本`, image: t({ message: '图片', context: 'settings-image-modality' }) };
@@ -149,7 +151,7 @@ export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, c
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        {(apiEndpoint.trim() || modelSource) && (
+        {canProbe && (apiEndpoint.trim() || modelSource) && (
           <Button size="xs" variant="secondary" disabled={disabled} onClick={() => void probe()} busy={probing}><IconRefreshCw /><Trans>获取模型列表</Trans></Button>
         )}
         <span className="text-xs text-fg-3">{value === null ? t`全部 ${candidates.length} 个` : t`已选 ${value.length} / ${candidates.length} 个`}</span>

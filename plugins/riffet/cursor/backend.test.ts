@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -95,6 +95,37 @@ describe('CursorBackend.start', () => {
     await closed.close();
     expect(() => closed.start(host, context.profile)).toThrow(expect.objectContaining({ code: 'AGENT_BACKEND_CLOSED' }));
     await backend.close();
+  });
+});
+
+describe('CursorBackend profiles', () => {
+  it('runs a gateway profile in a directory of its own and keeps the login profile in the login directory', async () => {
+    const stateDir = mkdtempSync(join(tmpdir(), 'riffet-cursor-profiles-'));
+    const loginDir = join(stateDir, 'login');
+    mkdirSync(loginDir);
+    // Account state stays behind; preferences come along; the gateway's transport is its own.
+    writeFileSync(join(loginDir, 'cli-config.json'), JSON.stringify({ permissions: { allow: ['Read'] }, authInfo: { email: 'user@example.com' }, network: { useHttp1ForAgent: false }, selectedModel: 'gpt-5' }));
+    vi.stubEnv('RIFFET_CONFIG_DIR', loginDir);
+    const host = new FakeHost({ sessions: [session], projects: [project] });
+    const backend = new CursorBackend({ stateDir });
+    const login = { id: 'default', name: 'Cursor CLI', config: {} };
+    const gateway = { id: 'gateway', name: 'Gateway', config: { apiEndpoint: 'https://gateway.example.com', apiKey: 'gateway-key' } };
+    try {
+      backend.start(host, login);
+      const loginSpec = await backend.loginLaunch(host, project, login);
+      const gatewaySpec = await backend.loginLaunch(host, project, gateway);
+      const gatewayDir = join(stateDir, 'cursor-profiles', 'gateway');
+      expect(loginSpec.env?.CURSOR_CONFIG_DIR).toBe(loginDir);
+      expect(loginSpec.secretEnv?.CURSOR_API_KEY).toBeUndefined();
+      expect(gatewaySpec.env?.CURSOR_CONFIG_DIR).toBe(gatewayDir);
+      expect(gatewaySpec.env?.AGENT_CLI_CREDENTIAL_STORE).toBe('memory');
+      expect(gatewaySpec.args).toEqual(expect.arrayContaining(['--endpoint', 'https://gateway.example.com', '--agent-endpoint', 'https://gateway.example.com']));
+      expect(JSON.parse(readFileSync(join(gatewayDir, 'cli-config.json'), 'utf8'))).toEqual({ permissions: { allow: ['Read'] }, network: { useHttp1ForAgent: true } });
+    } finally {
+      await backend.close();
+      vi.unstubAllEnvs();
+      rmSync(stateDir, { recursive: true, force: true });
+    }
   });
 });
 

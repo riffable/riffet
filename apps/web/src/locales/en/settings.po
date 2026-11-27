@@ -10159,6 +10159,10 @@ msgid "需兼容 Anthropic Messages API，地址不要带 /v1"
 msgstr "Must be compatible with the Anthropic Messages API; don't include /v1 in the address"
 
 #: src/app/settings/BackendProfilesSection.tsx
+msgid "需兼容 Cursor 接口"
+msgstr "Must be compatible with the Cursor API"
+
+#: src/app/settings/BackendProfilesSection.tsx
 msgid "需兼容 DeepSeek 接口"
 msgstr "Must be compatible with the DeepSeek API"
 

@@ -5,6 +5,7 @@ import { atomicWritePrivateFile, readPrivateSettingsFile, validateApiKey } from 
 
 const BACKEND = 'cursor';
 const PROFILE = 'default';
+const DEFAULT_NAME = 'Cursor CLI';
 const SETTING_KEYS = ['executable', 'configDir', 'apiEndpoint', 'agentEndpoint', 'disableAutoUpdate'] as const;
 
 export interface StoredCursorCli { settings: CursorCliSettings; apiKey?: string; exists: boolean }
@@ -12,9 +13,10 @@ export interface StoredCursorCli { settings: CursorCliSettings; apiKey?: string;
 /**
  * Cursor was the only backend before there were several, so what it stored keeps its place: the private
  * `cursor-cli.json` (the legacy `settings.json.cursorCli` is read until the file exists), `AppSettings.cursorCli`
- * with `hasApiKey`, the top-level `defaultModel`/`defaultMode`, and one built-in profile `default` that
- * maps onto them. This holds the structure of that data only; whether the CLI can launch with it is the
- * driver's `validateProfileConfig`, asked before a save.
+ * with `hasApiKey`, the top-level `defaultModel`/`defaultMode`, and the built-in profile `default` that
+ * maps onto them. Further Cursor profiles are stored like any other backend's; only `default` is handled
+ * here. This holds the structure of that data only; whether the CLI can launch with it is the driver's
+ * `validateProfileConfig`, asked before a save.
  */
 export class CursorSettingsCompat {
   readonly path: string;
@@ -106,12 +108,14 @@ export class CursorSettingsCompat {
   /** The profile a backend uses when settings name none. */
   defaultProfileId(backendId: NativeBackendId): string | undefined { return backendId === BACKEND ? PROFILE : undefined; }
 
-  /** Adds the built-in profile, made from `cursorCli`, to a listing that has no stored profile of that id. */
+  /** Puts the built-in profile, made from `cursorCli`, first in a listing that has no stored profile of that id. */
   addDefaultProfile(backendId: NativeBackendId, profiles: NativeBackendProfileSettings[], saved: AppSettings, defaultProfileId: string | undefined): void {
     if (backendId !== BACKEND || profiles.some(profile => profile.id === PROFILE)) return;
     const { hasApiKey, ...cli } = saved.cursorCli ?? {};
-    const defaultModel = saved.nativeBackendDefaults?.cursor?.model ?? saved.defaultModel;
-    profiles.push({ id: PROFILE, backendId, name: 'Cursor CLI', ...cli, ...(defaultModel ? { defaultModel } : {}), hasApiKey: Boolean(hasApiKey), isDefault: defaultProfileId === PROFILE });
+    // The new-session model is the default provider's; once another provider is the default, the built-in keeps only what it remembered.
+    const defaults = saved.nativeBackendDefaults?.cursor;
+    const defaultModel = !defaults?.profileId || defaults.profileId === PROFILE ? defaults?.model ?? saved.defaultModel : defaults.profileModels?.[PROFILE];
+    profiles.unshift({ id: PROFILE, backendId, name: DEFAULT_NAME, ...cli, ...(defaultModel ? { defaultModel } : {}), hasApiKey: Boolean(hasApiKey), isDefault: defaultProfileId === PROFILE });
   }
 
   /** The built-in profile's config, when `profileId` names it. */
@@ -119,25 +123,29 @@ export class CursorSettingsCompat {
     return backendId === BACKEND && profileId === PROFILE ? this.config(this.read(legacy())) : undefined;
   }
 
-  refuseDelete(backendId: NativeBackendId): void {
-    if (backendId === BACKEND) throw new AppError('INVALID_BACKEND_PROFILE', 'Cursor keeps a single built-in profile');
+  refuseDelete(backendId: NativeBackendId, profileId: string): void {
+    if (backendId === BACKEND && profileId === PROFILE) throw new AppError('INVALID_BACKEND_PROFILE', 'The built-in Cursor profile cannot be removed');
   }
 
   /** `cursorCli` has no room for a curated model list. */
-  refuseCuratedModels(backendId: NativeBackendId, values: Record<string, unknown>): void {
-    if (backendId === BACKEND && values.enabledModels !== undefined) throw new AppError('INVALID_BACKEND_PROFILE', 'Cursor does not support a curated model list');
+  refuseCuratedModels(backendId: NativeBackendId, profileId: string, values: Record<string, unknown>): void {
+    if (backendId === BACKEND && profileId === PROFILE && values.enabledModels !== undefined) throw new AppError('INVALID_BACKEND_PROFILE', 'The built-in Cursor profile does not support a curated model list');
   }
 
-  /** What a save of the built-in profile changes (`cursorCli`, and the default model); undefined when the backend is not Cursor. */
+  /** What a save of the built-in profile changes (`cursorCli`, and the default model); undefined for any other profile. */
   profileUpdate(backendId: NativeBackendId, profileId: string, create: boolean, values: Record<string, unknown>, current: () => CursorCliSettings | undefined): { cursorCli: Record<string, unknown>; defaultModel?: string } | undefined {
-    if (backendId !== BACKEND) return undefined;
-    if (profileId !== PROFILE) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'Cursor uses its existing single CLI profile; choose its default profile', 404);
+    if (backendId !== BACKEND || profileId !== PROFILE) return undefined;
     if (create) throw new AppError('NATIVE_PROFILE_EXISTS', 'Cursor default profile already exists', 409);
+    // `cursorCli` keeps no name, so a rename would be dropped without a word.
+    if (typeof values.name === 'string' && values.name.trim() && values.name.trim() !== DEFAULT_NAME) throw new AppError('INVALID_BACKEND_PROFILE', 'The built-in Cursor profile cannot be renamed');
     const next: Record<string, unknown> = { ...(current() ?? {}) }; delete next.hasApiKey;
+    // An agent endpoint equal to the API endpoint follows it, as the Cursor provider page saved the pair.
+    const linked = (next.agentEndpoint ?? '') === (next.apiEndpoint ?? '');
     for (const key of ['executable', 'configDir', 'apiEndpoint', 'agentEndpoint', 'disableAutoUpdate'] as const) {
       if (values[key] === undefined) continue;
       next[key] = values[key] === null ? '' : values[key];
     }
+    if (values.apiEndpoint !== undefined && values.agentEndpoint === undefined && linked) next.agentEndpoint = next.apiEndpoint;
     if (Object.prototype.hasOwnProperty.call(values, 'apiKey')) next.apiKey = values.apiKey;
     return { cursorCli: next, ...(values.defaultModel !== undefined ? { defaultModel: typeof values.defaultModel === 'string' ? values.defaultModel.trim() : '' } : {}) };
   }

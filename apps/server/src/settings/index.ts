@@ -187,7 +187,7 @@ export class SettingsService {
   }
 
   deleteNativeBackendProfile(backendId:NativeBackendId,profileId:string):NativeBackendProfilesResponse {
-    this.cursor.refuseDelete(backendId);
+    this.cursor.refuseDelete(backendId,profileId);
     const profiles=this.readNativeProfiles();
     const items=profiles[backendId]??[];
     if(!items.some(item=>item.id===profileId))throw new AppError('NATIVE_PROFILE_NOT_FOUND','Native backend profile does not exist',404);
@@ -209,7 +209,7 @@ export class SettingsService {
     const values=input as Record<string,unknown>;
     const allowed=new Set(['name','description','executable','configDir','sourceDir','apiEndpoint','agentEndpoint','apiProtocol','disableAutoUpdate','defaultModel','enabledModels','modelInputModalities','modelContextWindows','modelSource','apiKey']);
     for(const key of Object.keys(values))if(!allowed.has(key))throw new AppError('INVALID_BACKEND_PROFILE',`Unknown native profile setting: ${key}`);
-    this.cursor.refuseCuratedModels(backendId,values);
+    this.cursor.refuseCuratedModels(backendId,profileId,values);
     // Only backends that pass this metadata to the native model may store it.
     if(backendId!=='dsh'&&backendId!=='pi'&&values.modelInputModalities!==undefined)throw new AppError('INVALID_BACKEND_PROFILE','This backend does not consume declared model input types');
     if(backendId!=='claude'&&backendId!=='pi'&&values.modelContextWindows!==undefined)throw new AppError('INVALID_BACKEND_PROFILE','This backend does not consume declared model context windows');

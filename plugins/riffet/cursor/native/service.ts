@@ -41,6 +41,8 @@ export interface NativeServiceOptions {
   live?: CursorLive;
   /** Resolves the chat-store config directory for a project/session (standing conversations use an isolated dir). */
   configDirFor?(project: AgentProjectView, session?: AgentSessionView): string;
+  /** The launch profile of the Riffet profile a conversation runs on; `profile` when it names none of its own. */
+  profileFor?(session: AgentSessionView): CursorLaunchProfile | undefined;
   /** Extra profile, CLI args, and env for restarts (hooks, Riffet tools, standing isolation). */
   restartLaunch?(session: AgentSessionView, project: AgentProjectView): Promise<{ profile?: CursorLaunchProfile; args?: string[]; env?: Record<string, string>; paneEnv?: Record<string, string> } | undefined>;
 }
@@ -729,14 +731,14 @@ export class NativeService {
     if (watch && !watch.closed) await this.updateStatus(watch, current);
   }
 
-  /** Native variants constrain capabilities advertised by the shared parameterized catalog. */
-  private modelResourceKey(project: Pick<AgentProjectView, 'cwd'>): string {
-    return JSON.stringify([this.options.profile?.identityKey??this.options.cliPath, this.options.configDir, project.cwd]);
+  /** Native variants constrain capabilities advertised by the shared parameterized catalog. `launch` is the profile's own, the service's by default. */
+  private modelResourceKey(project: Pick<AgentProjectView, 'cwd'>, launch = this.options.profile): string {
+    return JSON.stringify([launch?.identityKey??this.options.cliPath, launch?.configDir ?? this.options.configDir, project.cwd]);
   }
 
   /** Why the latest model list for this project came back empty, if it did. */
-  modelListError(project: Pick<AgentProjectView, 'cwd'>): string | undefined {
-    return this.modelResources?.get(this.modelResourceKey(project))?.error;
+  modelListError(project: Pick<AgentProjectView, 'cwd'>, launch?: CursorLaunchProfile): string | undefined {
+    return this.modelResources?.get(this.modelResourceKey(project, launch))?.error;
   }
 
   /**
@@ -744,9 +746,9 @@ export class NativeService {
    * seconds and a projectless task is a new directory every time; a first launch there uses this
    * one while its own list is read behind it.
    */
-  private siblingModels(key: string): Array<{ value: string; name: string }> | undefined {
+  private siblingModels(key: string, launch?: CursorLaunchProfile): Array<{ value: string; name: string }> | undefined {
     // Keys are JSON arrays whose last item is the directory: the same launcher is the same prefix.
-    const launcher = this.modelResourceKey({ cwd: '' }).slice(0, -3);
+    const launcher = this.modelResourceKey({ cwd: '' }, launch).slice(0, -3);
     let best: { models: Array<{ value: string; name: string }>; expiresAt: number } | undefined;
     for (const [other, resource] of this.modelResources ?? []) {
       if (other === key || !other.startsWith(launcher) || !resource.models?.length) continue;
@@ -755,11 +757,12 @@ export class NativeService {
     return best?.models;
   }
 
-  async models(project: Pick<AgentProjectView, 'cwd'>): Promise<Array<{ value: string; name: string }>> {
-    const key = this.modelResourceKey(project);
+  /** The models `launch` (a profile's own launch profile, the service's by default) lists in `project`. */
+  async models(project: Pick<AgentProjectView, 'cwd'>, launch?: CursorLaunchProfile): Promise<Array<{ value: string; name: string }>> {
+    const key = this.modelResourceKey(project, launch);
     this.modelResources ??= new Map();
     let resource = this.modelResources.get(key);
-    const stale = resource?.models?.length ? resource.models : resource ? undefined : this.siblingModels(key);
+    const stale = resource?.models?.length ? resource.models : resource ? undefined : this.siblingModels(key, launch);
     if (resource?.request) return stale ?? resource.request;
     if (resource && resource.expiresAt > Date.now()) return resource.models ?? [];
     // `--list-models` takes seconds; an expired list is still served while it refreshes behind.
@@ -768,7 +771,7 @@ export class NativeService {
     const current = resource;
     const request = (async () => {
       const timeoutMs = 20_000;
-      const cli = this.options.profile ?? this.options.cliPath;
+      const cli = launch ?? this.options.profile ?? this.options.cliPath;
       const list = (endpoint?: string) => runCursor(cli, ['--list-models'], { cwd: project.cwd, timeoutMs, maxOutputBytes: 512 * 1024, ...(endpoint ? { endpoint } : {}) }).catch(() => undefined);
       // The parameter definitions (context windows and their exact launch strings) only come with
       // the CLI's own catalog request; a front that cannot reach the API falls back to a plain run.
@@ -780,7 +783,7 @@ export class NativeService {
       // A run whose catalog request was not seen keeps the definitions read before.
       if (listed.length && tapped?.models) current.parameterized = tapped.models;
       current.models = models;
-      current.error = listed.length ? undefined : describeModelListFailure(result, this.options.profile?.executable ?? this.options.cliPath, timeoutMs);
+      current.error = listed.length ? undefined : describeModelListFailure(result, (launch ?? this.options.profile)?.executable ?? this.options.cliPath, timeoutMs);
       current.expiresAt = Date.now() + (listed.length ? 10 * 60_000 : 3000);
       return models;
     })().finally(() => { current.request = undefined; });
@@ -789,23 +792,25 @@ export class NativeService {
   }
 
   /** Cursor's parameter definitions read with the latest model list for this project, when the CLI's request was seen. */
-  modelParameters(project: Pick<AgentProjectView, 'cwd'>): CursorParameterizedModel[] {
-    const key = this.modelResourceKey(project);
+  modelParameters(project: Pick<AgentProjectView, 'cwd'>, launch?: CursorLaunchProfile): CursorParameterizedModel[] {
+    const key = this.modelResourceKey(project, launch);
     const own = this.modelResources?.get(key)?.parameterized;
     if (own?.length) return own;
     // Like `siblingModels`: the same launcher and data directory describe the same models elsewhere.
-    const launcher = this.modelResourceKey({ cwd: '' }).slice(0, -3);
+    const launcher = this.modelResourceKey({ cwd: '' }, launch).slice(0, -3);
     for (const [other, resource] of this.modelResources ?? []) {
       if (other !== key && other.startsWith(launcher) && resource.parameterized?.length) return resource.parameterized;
     }
     return [];
   }
 
-  async prepareModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>): Promise<string | undefined> {
+  /** `model` as the catalog of `session`'s profile (the service's own without one) names it. */
+  async prepareModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>, session?: AgentSessionView): Promise<string | undefined> {
     if (!model) return undefined;
     if (!MODEL_ID.test(model)) throw new AppError('INVALID_MODEL', 'Model id is invalid');
-    const models = await this.models(project);
-    return normalizeNativeModelSelection(model, models, this.modelParameters(project));
+    const launch = session ? this.options.profileFor?.(session) : undefined;
+    const models = await this.models(project, launch);
+    return normalizeNativeModelSelection(model, models, this.modelParameters(project, launch));
   }
 
   async validateModel(model: string | undefined, project: Pick<AgentProjectView, 'cwd'>): Promise<void> {
@@ -834,7 +839,7 @@ export class NativeService {
     if (patch.model !== undefined && !MODEL_ID.test(patch.model)) throw new AppError('INVALID_MODEL', 'Model id is invalid');
     if (patch.mode !== undefined && !['agent', 'plan', 'ask'].includes(patch.mode)) throw new AppError('INVALID_MODE', 'Choose a supported Cursor mode');
     if (patch.approval !== undefined) approvalArgs(patch.approval);
-    const preparedModel = patch.model === undefined ? undefined : await this.prepareModel(patch.model, this.port.getProject(session.projectId));
+    const preparedModel = patch.model === undefined ? undefined : await this.prepareModel(patch.model, this.port.getProject(session.projectId), session);
     if (patch.model !== undefined && !preparedModel) throw new AppError('INVALID_MODEL', 'Model id is invalid');
     const normalizedPatch = { ...patch, ...(preparedModel !== undefined ? { model: preparedModel } : {}) };
     if (!session.terminalId || (await this.port.terminals.get(session.terminalId)).state === 'exited') {
@@ -946,7 +951,7 @@ export class NativeService {
       throw configureRefusal(verdict);
     }
     const project = this.port.getProject(session.projectId);
-    const model = patch.model === undefined ? session.model : await this.prepareModel(patch.model, project);
+    const model = patch.model === undefined ? session.model : await this.prepareModel(patch.model, project, session);
     const modelPatch = model !== undefined && (patch.model !== undefined || model !== session.model) ? { model } : {};
     const normalizedPatch = { ...patch, ...modelPatch };
     const next = { ...session, ...normalizedPatch };
@@ -954,7 +959,7 @@ export class NativeService {
     try {
       await this.port.terminals.stop(session.terminalId);
       const extras = await this.options.restartLaunch?.(next, project).catch(() => undefined);
-      const launchProfile = extras?.profile ?? this.options.profile ?? this.options.cliPath;
+      const launchProfile = extras?.profile ?? this.options.profileFor?.(next) ?? this.options.profile ?? this.options.cliPath;
       const effectiveConfigDir = extras?.profile?.configDir ?? this.configDirFor(project, next);
       writeChatApproval(effectiveConfigDir, project.cwd, session.nativeSessionId, next.approval);
       // A restart has to say everything again: the mode and the approval mode are launch flags, and

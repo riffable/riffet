@@ -35,14 +35,15 @@ export const cursor: Plugin = {
     contributes: {
       agentBackends: [{ id: 'cursor', title: { en: 'Cursor', 'zh-Hans': 'Cursor' } }],
       // Pages of the settings dialog, reached from the Agent's row on the models page; the client entry is `web/`.
+      // Web lists Cursor's providers like any other Agent's; the Mac keeps its own page for the built-in one.
       views: [
-        { id: 'riffet.cursor/provider', title: { 'zh-Hans': 'Cursor 提供商', en: 'Cursor Provider' }, locations: ['settings'], settingsCategory: 'providers', clients: ['web', 'macos'], instances: 'single' },
+        { id: 'riffet.cursor/provider', title: { 'zh-Hans': 'Cursor 提供商', en: 'Cursor Provider' }, locations: ['settings'], settingsCategory: 'providers', clients: ['macos'], instances: 'single' },
         { id: 'riffet.cursor/cli', title: { 'zh-Hans': 'CLI 管理', en: 'CLI Management' }, locations: ['settings'], settingsCategory: 'agent', clients: ['web', 'macos'], instances: 'single' },
       ],
     },
   },
   async activate(host) {
-    const backend = new CursorBackend({ stateDir: legacyStateRoot(await host.stateDir()) });
+    const backend = new CursorBackend({ stateDir: legacyStateRoot(await host.stateDir()), profiles: () => host.agentProfiles?.('cursor') ?? [] });
     return {
       agentBackends: [backend],
       services: { usage: backend.usageService },

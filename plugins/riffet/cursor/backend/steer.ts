@@ -88,6 +88,8 @@ export class CursorSteerBridge {
     private readonly native: NativeService,
     private readonly stateDir: string,
     private readonly profile: CursorLaunchProfile,
+    /** The launch profile a conversation runs on: where its chats are, and the key its errors are cleaned of. */
+    private readonly profileFor: (session: AgentSessionView) => CursorLaunchProfile = () => profile,
   ) {
     this.steerHost = {
       getSession: sessionId => port.getSession(sessionId),
@@ -445,7 +447,7 @@ export class CursorSteerBridge {
       const diffs = await changes.end(session.id, hookId);
       if (!diffs?.length || typeof input?.command !== 'string' || typeof payload.conversation_id !== 'string') return;
       const project = this.port.getProject(session.projectId);
-      const store = chatStorePath(cursorProjectConfigDir(this.profile.configDir, this.stateDir, project, session), project.cwd, payload.conversation_id);
+      const store = chatStorePath(cursorProjectConfigDir(this.profileFor(session).configDir, this.stateDir, project, session), project.cwd, payload.conversation_id);
       const callId = await resolveShellCall(store, input.command);
       if (callId) changes.record(session.id, callId, diffs);
     } catch { /* observation is best effort */ }
@@ -472,7 +474,7 @@ export class CursorSteerBridge {
     const status = recorded?.status ?? (interrupted ? 'cancelled' : answer.error || owner?.state === 'failed' ? 'failed' : 'completed');
     // A Stop can contain just the status. Its Run's generic fallback must not hide a later pane error.
     const reason = status === 'failed' ? answer.error ?? (!recorded ? owner?.error : undefined) : undefined;
-    const error = recorded?.error ?? (reason ? redactSensitiveText(redactCursorOutput(this.profile, reason)).slice(0, 1000) : undefined);
+    const error = recorded?.error ?? (reason ? redactSensitiveText(redactCursorOutput(this.profileFor(session), reason)).slice(0, 1000) : undefined);
     const outcome: TurnOutcome = { status, at: recorded?.at ?? new Date().toISOString(), ...(error ? { error } : {}) };
     entry.settling = true;
     try {
