@@ -76,8 +76,8 @@ export function markdownLinkTarget(href: string | undefined): { kind: 'web' } | 
   return { kind: 'text' };
 }
 
-/** Inline code the agent writes as `path/to/file.ts:42`: a file it touched, never a command or an identifier. */
-const CODE_FILE_PATH = /^[\w.@~/-]+(?::\d+(?::\d+)?)?$/;
+/** Inline code the agent writes as `path/to/file.ts:42`: a file it touched, never a command or an identifier. Names may be in any script (`困在团里.html`). */
+const CODE_FILE_PATH = /^[\p{L}\p{M}\p{N}_.@~/-]+(?::\d+(?::\d+)?)?$/u;
 
 export function codeFileMention(text: string): { path: string; line?: number } | undefined {
   if (text.length > 300 || !CODE_FILE_PATH.test(text)) return undefined;

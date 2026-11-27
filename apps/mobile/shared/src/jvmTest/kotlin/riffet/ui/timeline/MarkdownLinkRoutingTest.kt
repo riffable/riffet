@@ -76,6 +76,7 @@ class MarkdownLinkRoutingTest {
         assertEquals(LocalFileLink("~/.cursor/rules/global-conventions.mdc", null), codeFileMention("~/.cursor/rules/global-conventions.mdc"))
         assertEquals(LocalFileLink("src/app.ts", 42), codeFileMention("src/app.ts:42:3"))
         assertEquals(LocalFileLink("Makefile", null), codeFileMention("Makefile"))
+        assertEquals(LocalFileLink("困在团里-置身钉内风.md", null), codeFileMention("困在团里-置身钉内风.md"))
         assertNull(codeFileMention("console.log"))
         assertNull(codeFileMention("process.env"))
 

@@ -78,7 +78,8 @@ private val bareFileExtensions = setOf(
     "yml", "yaml", "toml", "ini", "xml", "kt", "kts", "gradle", "swift", "m", "mm", "h", "c", "cc", "cpp", "hpp", "go", "rs", "py",
     "rb", "java", "sh", "bash", "zsh", "sql", "txt", "csv", "lock", "pdf", "png", "jpg", "jpeg", "gif", "svg", "webp", "proto",
 )
-private val codeFilePathPattern = Regex("^[\\w.@~/-]+(?::\\d+(?::\\d+)?)?$")
+// Names may be in any script (`困在团里.html`), so letters, marks and digits are Unicode ones.
+private val codeFilePathPattern = Regex("^[\\p{L}\\p{M}\\p{N}_.@~/-]+(?::\\d+(?::\\d+)?)?$")
 
 private fun fileShaped(path: String): Boolean {
     val name = path.substringAfterLast('/')

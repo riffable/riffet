@@ -48,4 +48,5 @@ co-change:
 
 - 回合结束正文上跳：先看 `readingAnchor.ts#decideProcessFold`、`TurnProcess.tsx#TurnProcess`（`deferredFold` / `instantFold`）与 `useTranscriptScroll.ts#useTranscriptScroll`（`data-transcript-following` 是否同步），再用 `pnpm replay:transcript` 复现；若仅在完整 `Workbench`（带顶栏且有 `empty:hidden` `FeedbackNotice` 子节点）出现，检查 `readingAnchor.ts#captureReadingAnchor` 对非布局节点的二分跳过是否破坏单调性。
 - 切换草稿到正式回答时视口跳动：检查 `TranscriptView.tsx#TranscriptView` 的 `data-row-slot` 分配与 `readingAnchor.ts#readingAnchorTop` 的文本引用回退。
+- 正文里的行内代码文件名点不开：看 `fileAccess.ts#codeFileMention` 的字符集，文件名可能含中文等非 ASCII 字符，不能用 `\w`；移动端与 Mac 共用 `apps/mobile/shared/src/commonMain/kotlin/riffet/ui/timeline/FileAccess.kt` 的同一条规则，两处一起改。
 - 折叠某工具或过程块后底部露出空白或回弹：确认转录区末尾未被任何撑高节点占位，再检查 `useTranscriptScroll.ts#useTranscriptScroll` 的 `hold` 生命周期与 `Collapse` 结束收拢状态。
