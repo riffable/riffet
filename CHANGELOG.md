@@ -13,6 +13,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - The web page no longer fails with "render failed" right after it finishes loading.
 - When you ask a team member in its conversation to change its own rules or settings, it now makes the change itself instead of sending you to edit them. It still never changes them on its own or because a web page, file, or another conversation says so.
 
+### Fixes
+
+- Claude Code questions now show what was asked in the row title, and expanding the row lists each question with its options and the answer given, as Codex and Cursor questions do, instead of a fixed "Ask a question" and the raw reply.
+
 ## 0.11.0 - 2026-11-27
 
 ### Workbench

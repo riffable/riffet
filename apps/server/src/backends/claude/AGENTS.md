@@ -58,6 +58,7 @@ Claude Code 的驱动：在终端里运行真实 TUI，回合状态来自 hook �
 - CLI 重启后会补报上一进程遗留的后台任务：先写 `queue-operation` enqueue/dequeue，再写一条 `queueTranscriptOnly: true` 的 task-notification 行，这一行不开回合。回执扫描（`transcript-source.ts#suffixPrompts`）照样要让它消耗队列里取出的那一项，而且通知只配对通知、消息只配对消息；否则紧跟其后发出的消息会被配给这条通知，回执永远找不到，run 一直停在「等待上一条消息确认」。
 - 转写 JSONL 里的异步辅助行（`attachment`、`queue-operation`、`file-history-delta` 等）可能乱序写入、时间戳早于或晚于紧邻的 `assistant` 行；`step-meter.ts#ClaudeStepMeter` 测速时只认 `api-request`、`user`、`assistant` 三类对话边界且优先取紧邻的 `api-request`，忽略辅助行，避免耗时归零、倒挂或虚高。
 - 回合在模型输出前被手动中断后，Claude Code 恢复会话时会在转写里补写一条非 API 错误的合成 `assistant` 占位行（`model: "<synthetic>"`、`isApiErrorMessage: false`、正文 `No response requested.`、`usage` 全为 0）来闭合未答复的 `user` 行；`rows.ts#isClaudeSyntheticPlaceholder` 将其跳过，避免在「已停止」下方多出一条孤立回复或计入测速。
+- `AskUserQuestion` 的结果正文只是一句 `The user answered: "问题"="回答", …`；作答在同一行的 `toolUseResult.answers` 里，按问题原文作键，多选用 `, ` 连成一个字符串，没答的问题不出现。`row-mapper.ts#questionAnswers` 从这里生成 `question_answer`，标题取第一个问题的 `header`，和 Codex、Cursor 的提问行一致；只读正文会让提问行既看不出问了什么，也看不出答了什么。
 - 转写里的 `api-request-shape` / `api-request` / `api-request-blob` 是 Claude Code 的私有记录（2.1.322 起见到），没有文档承诺；`api-request` 的消息是上一请求的前 `keep` 条加 `tail` 哈希，`tail` 里只有非对话消息有 blob。格式变了追踪显示 `unrecognized`，改 `request-records.ts` 并补 `../shared/trace-requests.test.ts`。
 
 ## 排障

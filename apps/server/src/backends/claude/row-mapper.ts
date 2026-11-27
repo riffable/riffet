@@ -104,7 +104,7 @@ export function describeTool(name: string, input: Record<string, unknown>, unbou
     : name === 'Monitor' ? string(input.description) ?? string(input.command) ?? 'Monitor'
     : name === 'Read' ? `Read ${path?.split(/[\\/]/).at(-1) ?? 'file'}`
       : ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) ? `${name} ${path?.split(/[\\/]/).at(-1) ?? 'file'}`
-        : name === 'AskUserQuestion' ? 'Ask a question'
+        : name === 'AskUserQuestion' ? questionLabel(input) ?? 'Ask a question'
           : name === 'ExitPlanMode' ? 'Review plan'
             : subagent ? string(input.description) ?? 'Subagent'
               : name === 'SendMessage' ? string(input.summary)?.trim() || name : name;
@@ -159,6 +159,31 @@ export function savedScreenshot(text: string): string | undefined {
     const value = string(record(JSON.parse(text))?.screenshot);
     return value && isAbsolute(value) && !/[\r\n]/.test(value) ? value : undefined;
   } catch { return undefined; }
+}
+
+/** What an `AskUserQuestion` call asks, the way Codex titles its question rows: the first question's header, else its first line. */
+function questionLabel(input: Record<string, unknown>): string | undefined {
+  const first = Array.isArray(input.questions) ? record(input.questions[0]) : undefined;
+  return string(first?.header)?.trim() || string(first?.question)?.split('\n')[0]?.trim().slice(0, 80) || undefined;
+}
+
+/**
+ * An answered `AskUserQuestion` as the `question_answer` blocks Codex and Cursor rows carry, read
+ * from the result's `answers` (question text → answer, several choices joined by ", ") and the note
+ * the user may add beside a choice (`annotations[question].notes`). A question without an answer
+ * reads as skipped.
+ */
+function questionAnswers(call: ToolCall, result: Record<string, unknown>): Array<Record<string, unknown>> | undefined {
+  const answers = record(result.answers);
+  const annotations = record(result.annotations);
+  const questions = Array.isArray(call.input.questions) ? call.input.questions.map(record) : [];
+  if (!answers || !questions.length || questions.some(question => !string(question?.question))) return undefined;
+  return questions.map(question => {
+    const text = string(question!.question)!;
+    const given = [string(answers[text])?.trim(), string(record(annotations?.[text])?.notes)?.trim()].filter((value): value is string => Boolean(value));
+    const options = Array.isArray(question!.options) ? question!.options.flatMap(option => string(record(option)?.label) ?? []) : [];
+    return { type: 'question_answer', question: text, answers: given, ...(options.length ? { options } : {}) };
+  });
 }
 
 /** A tool_result is either a string or text/image blocks; Read of an image file answers with the latter. */
@@ -315,7 +340,8 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
       }
       const observed = hooks.observedChanges?.(toolUseId) ?? [];
       const receipt = call?.name === 'SendMessage' && !failed;
-      const resultContent = [...(receipt ? [] : toolResultContent(part.content, call, failed, hooks.unbounded)), ...observed];
+      const answered = call?.name === 'AskUserQuestion' && !failed && toolResults.length === 1 ? questionAnswers(call, rowResult) : undefined;
+      const resultContent = [...(receipt ? [] : answered ?? toolResultContent(part.content, call, failed, hooks.unbounded)), ...observed];
       events.push({ ...resultBase(index, call), type: 'tool_call_update', data: {
         sessionUpdate: 'tool_call_update', toolCallId: toolUseId, status: failed ? 'failed' : 'completed',
         ...(call ? { toolName: call.name } : { contextMissing: true }),
