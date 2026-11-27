@@ -29,7 +29,17 @@ export interface CursorLiveStep {
   lastDeltaAt?: number;
   /** Empty until the model's first output: the run is then only its prompt. */
   parts: Array<{ type: 'reasoning' | 'text'; text: string }>;
+  /** The tap reports the run's end: `ended` or `broken` is set once it is over. Absent from taps that predate it. */
+  turnEnds?: boolean;
+  /** Epoch ms the server ended the run's turn (`InteractionUpdate.turn_ended`, field 14). */
+  ended?: number;
+  /** Epoch ms the stream closed without that end: a stop, a network error, a retry. */
+  broken?: number;
 }
+
+/** Whether the protocol stream says the run is still going: a tap that reports ends, and neither end yet. */
+export const cursorLiveOpen = (step: CursorLiveStep | undefined): boolean =>
+  Boolean(step?.turnEnds && step.ended === undefined && step.broken === undefined);
 
 /**
  * The id a turn's prompt is known by across its draft and its committed copy, whatever place the store
@@ -60,6 +70,8 @@ function parse(value: unknown): (CursorLiveStep & { pid: number }) | undefined {
   if (!parts.length && !(typeof value.prompt === 'string' && value.prompt)) return undefined;
   const firstDeltaAt = typeof value.firstDeltaAt === 'number' && Number.isFinite(value.firstDeltaAt) && value.firstDeltaAt > 0 ? value.firstDeltaAt : undefined;
   const lastDeltaAt = typeof value.lastDeltaAt === 'number' && Number.isFinite(value.lastDeltaAt) && value.lastDeltaAt > 0 ? value.lastDeltaAt : undefined;
+  const instant = (at: unknown) => typeof at === 'number' && Number.isFinite(at) && at > 0 ? at : undefined;
+  const ended = instant(value.ended), broken = instant(value.broken);
   return {
     pid: value.pid as number, turn: value.turn, at: value.at, step: value.step, sealed: value.sealed, parts,
     ...(typeof value.prompt === 'string' && value.prompt ? { prompt: value.prompt } : {}),
@@ -67,6 +79,9 @@ function parse(value: unknown): (CursorLiveStep & { pid: number }) | undefined {
     ...(typeof value.requestedModel === 'string' && value.requestedModel ? { requestedModel: value.requestedModel } : {}),
     ...(firstDeltaAt !== undefined ? { firstDeltaAt } : {}),
     ...(lastDeltaAt !== undefined ? { lastDeltaAt } : {}),
+    ...(value.turnEnds === true ? { turnEnds: true } : {}),
+    ...(ended !== undefined ? { ended } : {}),
+    ...(broken !== undefined ? { broken } : {}),
   };
 }
 

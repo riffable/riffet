@@ -161,6 +161,11 @@ describe('Cursor live tap', () => {
       resume();
       const sealed = await until(() => { const value = read(); return value?.sealed ? value : undefined; });
       expect(sealed).toMatchObject({ step: live.step, parts: [{ type: 'reasoning', text: 'Let me think.' }, { type: 'text', text: 'Hello world' }] });
+      // The server's turn_ended is the run's end; the stream closing after it does not break it.
+      const ended = await until(() => { const value = read(); return value?.ended ? value : undefined; });
+      expect(ended).toMatchObject({ turnEnds: true, ended: expect.any(Number) });
+      expect(ended.broken).toBeUndefined();
+      expect(liveReader.read(conversation)).toMatchObject({ turnEnds: true, ended: ended.ended });
       const observations = await until(() => { const values = liveReader.readUsage(); return values.length ? values : undefined; });
       expect(observations).toHaveLength(1);
       expect(observations[0]!.observation).toEqual({
@@ -178,6 +183,34 @@ describe('Cursor live tap', () => {
       expect(liveReader.readUsage()).toEqual(observations);
     });
   }
+
+  it('marks a run whose stream closes without turn_ended as broken, not ended', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'cursor-live-'));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const dir = join(root, 'live'), cli = join(root, 'cli'), liveReader = new CursorLive(dir);
+    cleanup.push(() => liveReader.close());
+    mkdirSync(dir); mkdirSync(cli);
+    writeFileSync(join(cli, 'index.js'), CLI);
+    const conversation = 'chat-broken';
+    const { server, resume } = scripted('h2', [envelope(textDelta('Working'))], [END]);
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    const child = spawn(process.execPath, [join(cli, 'index.js'), 'h2', String(port), conversation], {
+      env: { ...process.env, CURSOR_INVOKED_AS: 'agent', RIFFET_CURSOR_LIVE: dir, RIFFET_CURSOR_USAGE: liveReader.usageDir,
+        NODE_OPTIONS: `--require "${CURSOR_LIVE_TAP}"`, RUN_REQUEST: runRequest(conversation, 'run-9', 'go').toString('base64') },
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
+    cleanup.push(() => child.kill());
+    const file = join(dir, `${conversation}.json`);
+    const read = () => (existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : undefined);
+    const open = await until(() => { const value = read(); return value?.parts?.length ? value : undefined; });
+    expect(open).toMatchObject({ turnEnds: true, turn: 'run-9' });
+    expect(open.ended ?? open.broken).toBeUndefined();
+    resume();
+    const broken = await until(() => { const value = read(); return value?.broken ? value : undefined; });
+    expect(broken.ended).toBeUndefined();
+    child.stdin.end();
+  });
 
   it('captures concurrent streams independently of live text ownership, including a child conversation', async () => {
     const root = mkdtempSync(join(tmpdir(), 'cursor-usage-streams-'));

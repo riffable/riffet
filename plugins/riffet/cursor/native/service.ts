@@ -15,7 +15,7 @@ import type { CursorParameterizedModel } from './model-parameters.js';
 import { withAvailableModelsTap } from './model-tap.js';
 import { MODEL_ID, parseModelList, describeModelListFailure } from './model-list.js';
 import { Transcript, visible } from './transcript.js';
-import type { CursorLive } from './live.js';
+import { cursorLiveOpen, type CursorLive } from './live.js';
 import {
   Watch, SCAN_INTERVAL_MS, LEFT_WATCH_MS, PASSIVE_POLL_MS, IDLE_WATCH_POLL_MS, IDLE_WATCH_AFTER_MS, SUBAGENT_POLL_MS, SUBAGENT_IDLE_MS, OPEN_STORES_GRACE_MS, subagentWorking,
   STATE_SWEEP_MS, transcriptWorking, subviewPhase, stateForPhase, JOB_LOG_MS, jobPayload, latestTranscriptActivity, type Listener, type SubagentWatch,
@@ -204,7 +204,8 @@ export class NativeService {
       if (watchChatId !== chatId) continue;
       watch.metrics.observeLiveStep(step);
       watch.lastBusyAt = Date.now();
-      if (!step.sealed) this.scheduleWatchTick(watch);
+      // A run's end (or broken stream) is news for the turn even though its step is sealed.
+      if (!step.sealed || step.ended !== undefined || step.broken !== undefined) this.scheduleWatchTick(watch);
       if (!step.sealed && step.turn && this.stoppedLiveSteps.get(watch.sessionId) !== step.step) {
         this.turnObserver?.requestStarted?.(watch.sessionId, chatId, step.turn, false);
       }
@@ -229,7 +230,7 @@ export class NativeService {
       const session = this.port.getSession(sessionId);
       if (!session.nativeSessionId) return false;
       const step = this.options.live?.read(session.nativeSessionId);
-      return Boolean(step && !step.sealed && this.stoppedLiveSteps.get(sessionId) !== step.step);
+      return Boolean(step && ((!step.sealed && this.stoppedLiveSteps.get(sessionId) !== step.step) || cursorLiveOpen(step)));
     } catch { return false; }
   }
 
@@ -724,10 +725,13 @@ export class NativeService {
     const liveStep = current.nativeSessionId ? this.options.live?.read(current.nativeSessionId) : undefined;
     if (liveStep) this.stoppedLiveSteps.set(session.id, liveStep.step);
     const watch = this.watches.get(session.id);
-    // Keeps a store write from the aborted turn from satisfying `transcriptWorking`
-    // (`lastActivityAt > paneBusyAt + TRANSCRIPT_SETTLE_MS`). The unsealed live step is remembered
-    // above so that same idle pane is not reported busy.
-    if (watch) watch.paneBusyAt = Date.now();
+    // The stopped turn is fenced by its identity, not by the time of the stop (docs/TURN-LIFECYCLE.md T5): its late
+    // store writes do not make a hidden turn, while the next turn's writes do from the first one. Its error under
+    // the footer was about it, so it is no longer the current one either.
+    if (watch) {
+      watch.stoppedTurn = watch.chat?.turnId();
+      watch.cliError = undefined;
+    }
     if (watch && !watch.closed) await this.updateStatus(watch, current);
   }
 
@@ -1251,9 +1255,14 @@ export class NativeService {
           const ignoreStopped = effectiveParsedPhase === 'idle' && stoppedLiveStep !== undefined && liveStep?.step === stoppedLiveStep;
           const liveStreaming = Boolean(liveStep && !ignoreStopped && ((!liveStep.sealed && liveStep.parts.length > 0)
             || (booting && !configBoot && liveStep.step.endsWith(':0') && Boolean(liveStep.prompt))));
-          const hiddenTurn = !configBoot && (effectiveParsedPhase === 'idle' || booting) && !currentError && !outcomeKnown
-            && (liveStreaming || (watch.chat !== undefined
-              && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt })));
+          // The protocol stream is the first word on a turn (docs/TURN-LIFECYCLE.md §4.6): open means working, whatever
+          // the pane shows or which turn the store has reached. Only without it does the store's growth stand in.
+          const protocolOpen = cursorLiveOpen(liveStep);
+          const protocolKnowsTurn = Boolean(liveStep?.turnEnds && liveStep.turn === turnId);
+          const storeWorking = !protocolKnowsTurn && watch.chat !== undefined && watch.chat.turnId() !== watch.stoppedTurn
+            && transcriptWorking({ awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt, paneBusyAt: watch.paneBusyAt });
+          const hiddenTurn = !configBoot && (effectiveParsedPhase === 'idle' || booting) && !currentError
+            && (protocolOpen || (!outcomeKnown && (liveStreaming || storeWorking)));
           let phase: NativeStatus['phase'] = interaction ? 'attention'
             : subview ? subviewPhase({ working: subview.working, previous: watch.status.phase, ...(watch.chat ? { transcript: { awaitingReply: watch.chat.awaitingReply(), lastActivityAt: watch.chat.lastActivityAt } } : {}) })
             : effectiveParsedPhase === 'busy' || hiddenTurn ? 'busy' : booting && !stalled ? 'starting' : effectiveParsedPhase;
@@ -1337,6 +1346,20 @@ export class NativeService {
     const chat = watch.chat;
     const rootId = chat?.rootId;
     const turnId = chat?.turnId();
+    // Layer 1 (docs/TURN-LIFECYCLE.md §4.6): the stream of the turn the store names says whether it is over.
+    const live = session.nativeSessionId ? this.options.live?.read(session.nativeSessionId) : undefined;
+    const protocol = live?.turnEnds && turnId && live.turn === turnId ? live : undefined;
+    if (protocol?.ended !== undefined) {
+      watch.idleTurn = undefined;
+      this.settleEndedTurn(watch, session, protocol.ended, activeTurnId);
+      return;
+    }
+    // Still streaming: an idle pane or an answered-looking store between steps says nothing. A CLI error shown for
+    // it, or a broken stream (layer 2), leaves the decision to what the pane and the store show.
+    if (protocol && protocol.broken === undefined && !idlePane?.error) {
+      watch.idleTurn = undefined;
+      return;
+    }
     if (!idlePane || !chat || chat.status !== 'ok' || !rootId || !chat.events.length || chat.chatId !== session.nativeSessionId
       || session.state === 'cancelling' || (turnId && activeTurnId && turnId !== activeTurnId)) {
       watch.idleTurn = undefined;
@@ -1362,6 +1385,27 @@ export class NativeService {
       if (watch.closed || watch.idleTurn !== idle || watch.chat !== chat || chat.status !== 'ok'
         || chat.rootId !== rootId || chat.turnId() !== turnId || paneBusyAt !== watch.paneBusyAt
         || lastActivityAt !== chat.lastActivityAt || !canSettle()) return false;
+      const current = this.port.getSession(session.id);
+      const terminal = this.port.findTerminal(terminalId);
+      return !current.archivedAt && current.state !== 'cancelling'
+        && current.nativeSessionId === nativeSessionId && current.terminalId === terminalId
+        && terminal !== undefined && terminal.state !== 'exited';
+    });
+  }
+
+  /**
+   * The server ended the turn the store names (`ended`, field 14). Settles it as soon as the store holds its answer,
+   * without waiting for the pane: the pane can show a prompt mid-turn or a spinner after it.
+   */
+  private settleEndedTurn(watch: Watch, session: AgentSessionView, ended: number, activeTurnId: string | undefined): void {
+    const answered = this.turnObserver?.answered;
+    const chat = watch.chat;
+    const rootId = chat?.rootId, turnId = chat?.turnId(), nativeSessionId = session.nativeSessionId, terminalId = session.terminalId;
+    if (!answered || !chat || chat.status !== 'ok' || !rootId || !turnId || !chat.events.length || chat.chatId !== nativeSessionId
+      || !terminalId || session.state === 'cancelling' || (activeTurnId && turnId !== activeTurnId) || !chat.answered()) return;
+    answered(session, { nativeSessionId, rootId, turnId }, () => {
+      if (watch.closed || watch.chat !== chat || chat.status !== 'ok' || chat.rootId !== rootId || chat.turnId() !== turnId
+        || this.options.live?.read(nativeSessionId)?.ended !== ended) return false;
       const current = this.port.getSession(session.id);
       const terminal = this.port.findTerminal(terminalId);
       return !current.archivedAt && current.state !== 'cancelling'

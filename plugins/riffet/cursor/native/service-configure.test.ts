@@ -4,6 +4,7 @@ import type { AgentLaunchSpec, AgentSessionView, AgentTerminalView } from '@riff
 import { cursorPort } from '../host-port.js';
 import { FakeHost } from '../testing/fake-host.js';
 import { adoptableApproval, approvalFromFooter, configureGate, NativeService, Transcript, type SettledCursorTurn } from './service.js';
+import type { CursorLiveStep } from './live.js';
 import { Watch } from './watch.js';
 
 /** A footer the CLI painted: prompt bar above the model/context/permission line above the workspace. */
@@ -251,6 +252,61 @@ it('waits for a continuously idle Cursor prompt before settling the same turn', 
     expect(stopped).toMatchObject({ turnId: 'successor', rootId: 'incomplete-tool-root', error: undefined });
     expect(stillStopped()).toBe(true);
     expect(watch.status.phase).toBe('idle');
+  } finally {
+    watch.close();
+    vi.useRealTimers();
+  }
+});
+
+// docs/TURN-LIFECYCLE.md §4.6: the tap's stream says when the turn the store names is over. The pane decides
+// nothing while it is open, and only stands in again once it broke without an end.
+it('lets the protocol stream settle a turn the tap follows, whatever the pane shows', async () => {
+  const session = fakeSession();
+  const host = new FakeHost({ sessions: [session], projects: [project], terminals: [terminalRecord('terminal-1')], screen: idleScreen });
+  let step: CursorLiveStep | undefined = { turn: 'generation', at: '', step: 'request:1', sealed: true, parts: [{ type: 'text', text: 'between steps' }], turnEnds: true };
+  const service = new NativeService(cursorPort(host), { configDir: '/tmp/riffet-test', cliPath: 'cursor-agent', live: { read: () => step } as never });
+  services.push(service);
+  const watch = new Watch(session.id);
+  const chat = new Transcript(session.nativeSessionId!, '/tmp/riffet-test-unused/store.db', session.id);
+  chat.status = 'ok';
+  chat.rootId = 'root';
+  chat.events = [{ type: 'agent_message_chunk', nativeId: 'answer', sessionId: session.id, sequence: 1, data: {}, createdAt: '' }];
+  const turn = vi.spyOn(chat, 'turnId').mockReturnValue('generation');
+  vi.spyOn(chat, 'answered').mockReturnValue(true);
+  watch.chat = chat;
+  const answered = vi.fn<(_session: AgentSessionView, answer: SettledCursorTurn, stillIdle: () => boolean) => void>();
+  service.useTurnObserver({ answered, activeTurn: () => undefined, offline: vi.fn(), recordedOutcome: () => undefined });
+  const poll = (clock: number) => {
+    vi.setSystemTime(new Date(clock));
+    return (service as unknown as { updateStatus(watch: Watch, session: AgentSessionView): Promise<void> }).updateStatus(watch, session);
+  };
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    // An idle prompt and an answered-looking store between two steps: the stream is still open.
+    await poll(1000);
+    await poll(9000);
+    expect(answered).not.toHaveBeenCalled();
+    expect(watch.status.phase).toBe('busy');
+
+    // The server ends the turn while the pane still shows a spinner: settled at once, by the store's turn.
+    step = { ...step, ended: 9500 };
+    host.screen = busyScreen;
+    await poll(9600);
+    expect(answered).toHaveBeenCalledTimes(1);
+    const [, answer, stillCurrent] = answered.mock.calls[0]!;
+    expect(answer).toMatchObject({ turnId: 'generation', rootId: 'root' });
+    expect(stillCurrent()).toBe(true);
+    step = { ...step, ended: undefined, parts: [{ type: 'text', text: 'went on' }] };
+    expect(stillCurrent()).toBe(false);
+
+    // A stream that broke without an end leaves the turn to the pane and the store again.
+    turn.mockReturnValue('next');
+    chat.rootId = 'next-root';
+    step = { turn: 'next', at: '', step: 'request:2', sealed: true, parts: [], prompt: 'next', turnEnds: true, broken: 12000 };
+    host.screen = idleScreen;
+    await poll(12100);
+    await poll(15200);
+    expect(answered.mock.calls[1]?.[1]).toMatchObject({ turnId: 'next', rootId: 'next-root' });
   } finally {
     watch.close();
     vi.useRealTimers();

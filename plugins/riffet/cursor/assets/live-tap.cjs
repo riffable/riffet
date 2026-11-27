@@ -7,7 +7,7 @@
  * stream, so Riffet loads this module into the CLI (`NODE_OPTIONS=--require`, launches it makes only)
  * and it writes the step in flight to `$RIFFET_CURSOR_LIVE/<conversation id>.json`:
  *
- *     { v, pid, turn, at, prompt?, step, sealed, parts: [{ type: 'reasoning' | 'text', text }] }
+ *     { v, pid, turn, at, prompt?, step, sealed, turnEnds, ended?, broken?, parts: [{ type: 'reasoning' | 'text', text }] }
  *
  * - `turn` is the request id the store files the turn's prompt under; `prompt` is that prompt, which
  *   the store only records at the step's checkpoint as well. A run with a prompt is written as soon as
@@ -15,6 +15,10 @@
  * - `step` names the step; `sealed` says its checkpoint arrived or the run ended, so the store has (or
  *   is about to have) all of it. The file is replaced by the conversation's next step and removed when
  *   the CLI exits.
+ * - `ended` is when the server ended the run's turn (`InteractionUpdate.turn_ended`); `broken` is when
+ *   the stream closed without that, which a stop, a network error or a retry does. `turnEnds` says this
+ *   tap writes both, so a reader can tell an open turn from a tap that predates them
+ *   (docs/TURN-LIFECYCLE.md §4.6).
  *
  * The stream is Connect over HTTP/2 (`/agent.v1.AgentService/Run`), or over HTTP/1.1 when the CLI is
  * set to (`network.useHttp1ForAgent`): the server's half streams from `/agent.v1.AgentService/RunSSE`
@@ -165,6 +169,8 @@ class Live {
     this.lastDeltaAt = undefined;
     this.timer = undefined;
     this.closed = false;
+    this.ended = undefined;
+    this.broken = undefined;
   }
 
   /** The run's request became known: which conversation, and the prompt that began it. */
@@ -196,7 +202,8 @@ class Live {
         if (text) this.append(number === 1 ? 'text' : 'reasoning', text);
       } else if (number === 14) {
         this.turnEnded(value);
-        this.seal();
+        this.ended ??= Date.now();
+        this.settle();
       } else if (number === 16 || number === 17) this.seal();
     }
   }
@@ -237,6 +244,8 @@ class Live {
 
   append(type, text) {
     if (this.closed) return;
+    // Output after an end means the run went on: its turn is not over after all.
+    this.ended = undefined;
     if (this.sealed) {
       this.step += 1;
       this.sealed = false;
@@ -266,6 +275,12 @@ class Live {
     this.flush();
   }
 
+  /** Seals the step and writes the file even when the step was sealed already: the run's end is news. */
+  settle() {
+    if (this.sealed) this.flush();
+    else this.seal();
+  }
+
   flush() {
     clearTimeout(this.timer);
     this.timer = undefined;
@@ -280,7 +295,10 @@ class Live {
       ...(this.info.requestedModel ? { requestedModel: this.info.requestedModel } : {}),
       ...(this.firstDeltaAt !== undefined ? { firstDeltaAt: this.firstDeltaAt } : {}),
       ...(this.lastDeltaAt !== undefined ? { lastDeltaAt: this.lastDeltaAt } : {}),
-      step: `${this.request}:${this.step}`, sealed: this.sealed, parts: this.parts,
+      step: `${this.request}:${this.step}`, sealed: this.sealed, turnEnds: true,
+      ...(this.ended !== undefined ? { ended: this.ended } : {}),
+      ...(this.broken !== undefined ? { broken: this.broken } : {}),
+      parts: this.parts,
     };
     const temporary = path.join(this.dir, `.${conversation}.${process.pid}.tmp`);
     try {
@@ -291,7 +309,8 @@ class Live {
 
   close() {
     if (this.closed) return;
-    this.seal();
+    if (this.ended === undefined) this.broken ??= Date.now();
+    this.settle();
     this.closed = true;
   }
 }

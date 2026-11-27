@@ -83,8 +83,10 @@ export class Watch {
   chat: Transcript | undefined;
   context: NativeContext | undefined;
   status: NativeStatus = { phase: 'offline' };
-  /** Last moment the pane itself accounted for the CLI's work: it showed busy, or a stop settled. */
+  /** Last moment the pane itself accounted for the CLI's work: it showed busy. */
   paneBusyAt = 0;
+  /** The store's turn when a stop was confirmed: its late writes are the stopped turn's, not a hidden one. */
+  stoppedTurn: string | undefined;
   /**
    * The CLI error under the footer and the turn it was first seen in. The line can stay on screen
    * through later turns, including one whose busy frames fell between captures.

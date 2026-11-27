@@ -1,6 +1,6 @@
 # 用户输入与回合生命周期：单一事实来源
 
-日期：2026-11-27。状态：方案已确认；P0–P3 已实施，P4 未实施。
+日期：2026-11-27。状态：P0–P4 已实施；P4 的验收（§4.6 对照重跑）要等升级后新启动的 Cursor CLI 跑满一段时间。
 
 本文补齐 [SESSION-JOURNAL.md](SESSION-JOURNAL.md) 不变量 4、5 和 [DISPATCH-ARCHITECTURE.md](DISPATCH-ARCHITECTURE.md) A1 在实现上留下的缺口：经 Riffet 发出的用户输入不在日志里，回合终态可以绕过日志直接写进 Run。两份文档的其余约定不变，[DELIVERY.md](DELIVERY.md) 的 S1–S3、L1–L4 不变。
 
@@ -103,7 +103,7 @@ dispatch 日志只记 `cause: observation`，不记是哪条观测、来自哪�
 - 证据按回合归属（`actor-observations.ts#ownTurn`）：状态的 `activeTurn`、输出事件的回合 ID 与 Run 的回合不同就不计入；Run 还没有回合 ID 时，指向我们另一条消息的回合也不计入。
 - 状态点名的回合属于更早的消息（`actor-observations.ts#earlierTurn`）时，这条状态落后于那一回合的结束：不据此把较新的消息判为「被后续回合取代」，也不因它推迟空闲收敛。
 - P2 之后这些证据不再决定结局，`busyAt`、`firstOutputAt` 只用于统计（首字耗时）和旧客户端的忙碌判断；隔离的作用是让它们和「被取代」的判断不被前一回合污染。
-- Cursor `interrupt` 结束时对 `paneBusyAt` 的重置移到 P4：把这个时间栅栏换成回合栅栏，要能说出被停下的是哪一回合，而 CLI 没记下的提示（样本中的 a）只有 live tap 的 request id 能指明，这正是 P4 重写的状态推导。P2 之后它最多让被隐藏的回合在空闲 60 s 后显示结果未确认，不再造成提前完成。
+- Cursor `interrupt` 结束时对 `paneBusyAt` 的重置在 P4 换成了回合栅栏（§4.6）。
 
 ### 4.5 替换回合
 
@@ -127,6 +127,15 @@ a「未被 CLI 记录」的判定由后端驱动给出（Cursor：store 和 live
 2. **协议流中断与 CLI 报错**：流关闭而没有字段 14 时，live tap 记下该 request id 的流已中断；画面上的 CLI 错误文本（`watch.cliError`，已按 store 回合归属）给出失败原因。两者合起来结束为失败。
 3. **store**：该回合已答完（`Transcript.turnState` 为 `answered` 或 `superseded`），用于服务重启后的对账和 live tap 缺失时（CLI 不是由 Riffet 启动、未注入 tap）。
 4. **画面**：只用于对话框识别和进程存活，不参与回合开始和结束。
+
+P4 的实现：
+
+- live tap（`plugins/riffet/cursor/assets/live-tap.cjs`）在每个 run 的 live 文件里写 `turnEnds: true`，收到字段 14 时写 `ended`，流在此之前关闭（停止、网络错误、重试）时写 `broken`。旧 tap 写的文件没有 `turnEnds`：升级前启动的 CLI 照旧走第 3、4 层，直到它重启。
+- 第 1 层（`native/service.ts#observeSettledTurn`、`settleEndedTurn`）：live 文件的回合就是 store 最后的回合、并且 `ended` 已写时，store 一有答案就结束这一回合，不等画面空闲和 3 s 静默；流仍开着时，画面空闲、store 看似答完都不结束它。
+- 第 2 层：流 `broken`，或画面上出现这一回合的 CLI 错误时，交回原来的画面加 store 判断，错误文本给出失败原因。
+- 状态：流开着就是忙（`live.ts#cursorLiveOpen`），不管画面和 store 走到哪一回合；只有 tap 不跟这一回合时，才用 store 的增长推断被隐藏的回合（`transcriptWorking`）。
+- 停止后的栅栏改按回合：记下停止时 store 的回合（`Watch.stoppedTurn`），它后来的写入不算隐藏回合，下一回合的写入从第一条起就算；它留在画面上的错误一并作废。删除了把 `paneBusyAt` 设为停止时刻的重置。
+- 字段 14 本来就在解析（用量记录），协议解析没有变化，不需要补 `pnpm record` 录制。
 
 #### 实测：字段 14 的到达率（2026-11-27）
 
@@ -166,7 +175,7 @@ dispatch 日志的 `event=run` 带 `turn`（Run 绑定的回合）和 `source`�
 | chat | 自己写的回答记录带状态 | 是 | 带 `commandId` | 进程内；启动时把未结束回合记为中断 | 否 | 无 |
 | Droid | JSONL `agent_turn_outcome`、实时 `agent_turn_completed` | 是，回合 ID 为发起它的用户消息 ID | `commandId` 在 `nativeAliases` | 不跨重启 | **是**（未声明 `completesOnTurnEvent`） | 只需删除通用规则，信号已具备 |
 | DSH | 会话记录 `turn/end`（`reason.kind`） | 是：结束事件带 `commandId`，日志的回合结束带回合 ID（`dsh/journal-source.ts`） | 带 `commandId` | 不跨重启 | **是** | 无（核对后确认已指明 Run） |
-| Cursor | hook（经网关时只有本地工具 hook）；`answered`：画面空闲 + store 答完 + 静默 3 s | hook 是；`answered` 结束 store 的回合，带 `commandId` 和回合 ID（`cursor/backend/steer.ts`），画面只决定何时去看 | 文本匹配（`untaggedEcho`） | CLI 继续运行；无 hook 记忆时从前台 Run 推断活跃回合 | 是（回合未被命名时） | P4：§4.6 分层，回合结束不再等画面空闲 |
+| Cursor | hook（经网关时只有本地工具 hook）；协议流的字段 14；流中断或无 tap 时：画面空闲 + store 答完 + 静默 3 s | 是：都结束 store 的回合，带 `commandId` 和回合 ID（`cursor/backend/steer.ts`） | 文本匹配（`untaggedEcho`） | CLI 继续运行；无 hook 记忆时从前台 Run 推断活跃回合 | 是（回合未被命名时） | P4 已实施（§4.6） |
 | Antigravity | 守护进程轨迹步骤的终态（`_DONE`、`_ERROR`、`_CANCELED`） | 是，`executionId` | 服务端写的回执带 `commandId` 和回合 | 守护进程独立运行，重读轨迹补出结束 | 否（`completesOnTurnEvent`） | 无 |
 
 要点：
@@ -189,7 +198,7 @@ dispatch 日志的 `event=run` 带 `turn`（Run 绑定的回合）和 `source`�
 | P1（已实施） | `meta.input` 写入与 `inputEntry`；有 `inputEntry` 的 Run 按日志位置放置；客户端占位行键已是 `user:<commandId>`，无需改动 | 对有 `inputEntry` 的 Run 不再使用时间比较；旧规则只服务旧 Run | P0 时间线用例改为 `it` 并通过；`sync/sent-input.test.ts` 检查记录先于回显、只记一次 |
 | P2（已实施） | dispatch 日志加 `source`、`turn`（§4.7）；结局只来自指明回合或 Run 的结束事件；空闲收敛合并为一档，结果未确认留在 Run 上（§4.3）；Claude 转写读不到时按 `commandId` 报 hook 的结束 | 通用空闲完成规则；`completesOnTurnEvent`、`reportsTurnOutcome`、`expectsTurnOutcome` 不再参与判断（保留为已废弃字段）；`hookedTurns` 改为只服务「被后续回合取代」的 `namedTurns`；`IDLE_OUTCOME_GRACE_MS` | P0 调度用例改为 `it` 并通过；`dispatch.property.test.ts` 的模拟终端 CLI 按回合报结束；各后端测试 |
 | P3（已实施） | 证据按写入和回合归属（§4.4）；核对 `replaceTurn` 与 §4.5 一致 | 写入前（`dispatching`）的忙碌证据；落后状态对「被取代」的触发 | `dispatch.property.test.ts` 加「停止后立刻发送」：停下的回合仍有输出、状态仍点名它，检查证据不串到下一条、下一条不被判为结果未确认；「回合开始前画面空闲」由 P0 的 `hide` 覆盖 |
-| P4 | Cursor 按 §4.6 分层；live tap 记录流中断；`paneBusyAt` 的时间栅栏换成回合栅栏 | 画面参与回合判定的路径；`interrupt` 对 `paneBusyAt` 的重置 | 重跑 §4.6 的对照：提前或滞后结算 0 次；`pnpm record` 补录制 |
+| P4（已实施） | Cursor 按 §4.6 分层；live tap 记录回合结束与流中断；`paneBusyAt` 的时间栅栏换成回合栅栏 | tap 跟着的回合不再由画面判定；`interrupt` 对 `paneBusyAt` 的重置 | `live-tap.test.ts`（结束与中断）、`service-configure.test.ts`（流开着不结算、结束即结算、中断交回画面）；待做：升级并让 CLI 重启后，按 §4.6 的方法重跑对照，目标提前或滞后结算 0 次 |
 
 每个阶段删除对应的旧规则，不与新规则并存。
 
