@@ -92,10 +92,33 @@ fun paramsFromOptions(options: List<ModelConfigOption>): List<ModelParam> = opti
 /** `catalogParams`: the parameters of [model], with valid [overrides] applied on top. */
 fun catalogParams(catalog: List<ModelInfo>, model: String, overrides: Map<String, String>): List<ModelParam> {
     val info = catalog.firstOrNull { it.value == model } ?: return emptyList()
+    val normalized = normalizeEffortAlias(info, overrides)
     return paramsFromOptions(info.configOptions).map { param ->
-        val override = overrides[param.id]
+        val override = normalized[param.id]
         if (override != null && param.options.any { it.value == override }) param.copy(value = override) else param
     }
+}
+
+/**
+ * Translates CLI-specific effort aliases (`reasoning_effort` on Gemini, `reasoning` on GPT) to the
+ * catalog's shared `effort` control, mirroring `packages/contracts/src/model-selection.ts`'s
+ * `resolveCatalogSelection`. Without this, a normalized Cursor selector such as
+ * `gemini-4-neon[context=1m,reasoning_effort=high]` fails to match the `effort` option and falls
+ * back to `currentValue` (e.g. `low`).
+ */
+private fun normalizeEffortAlias(info: ModelInfo, params: Map<String, String>): Map<String, String> {
+    if ("reasoning_effort" !in params && "reasoning" !in params) return params
+    val hasEffortOption = info.nativeVariants?.isNotEmpty() == true ||
+        info.configOptions.any { it.id == "effort" }
+    if (!hasEffortOption) return params
+    if (info.configOptions.any { it.id == "reasoning_effort" || it.id == "reasoning" }) return params
+    val effort = params["effort"] ?: params["reasoning_effort"] ?: params["reasoning"]
+    val out = LinkedHashMap<String, String>(params.size)
+    for ((key, value) in params) {
+        if (key != "reasoning_effort" && key != "reasoning") out[key] = value
+    }
+    if (effort != null) out["effort"] = effort
+    return out
 }
 
 private fun isBoolean(param: ModelParam): Boolean =
@@ -277,7 +300,7 @@ fun serializeSelection(model: String, params: Map<String, String>): String =
     if (params.isEmpty()) {
         model
     } else {
-        model + "[" + params.entries.joinToString(",") { (key, value) -> "$key=$value" } + "]"
+        model + "[" + params.entries.sortedBy { it.key }.joinToString(",") { (key, value) -> "$key=$value" } + "]"
     }
 
 /** The catalog entry's own display name, or the id when the catalog does not know it. */
@@ -323,17 +346,21 @@ fun modelSelectionSummary(catalog: List<ModelInfo>, selection: String?): String 
  */
 fun resolveModelSelection(catalog: List<ModelInfo>, selection: String?): ParsedSelection {
     val parsed = parseSelection(selection)
-    if (parsed.model.isEmpty() || catalog.any { it.value == parsed.model }) return parsed
+    if (parsed.model.isEmpty()) return parsed
+    catalog.firstOrNull { it.value == parsed.model }?.let { info ->
+        return ParsedSelection(info.value, normalizeEffortAlias(info, parsed.params))
+    }
     // A provider can keep the selector a session saved before a rename. Its parameters are the
     // reader's own, so only the model identity moves to the catalog's current value.
     catalog.firstOrNull { parsed.model in it.aliases.orEmpty() }?.let { info ->
-        return ParsedSelection(info.value, parsed.params)
+        return ParsedSelection(info.value, normalizeEffortAlias(info, parsed.params))
     }
     if (parsed.model.endsWith("[1m]", ignoreCase = true)) {
         val base = parsed.model.replace(Regex("(?:\\[1m\\])+$", RegexOption.IGNORE_CASE), "")
         val info = catalog.firstOrNull { it.value == base }
         if (info?.configOptions?.any { it.id == "context" && it.options.any { option -> option.value == "1m" } } == true) {
-            return ParsedSelection(base, linkedMapOf("context" to "1m").apply { putAll(parsed.params) })
+            val merged = linkedMapOf("context" to "1m").apply { putAll(normalizeEffortAlias(info, parsed.params)) }
+            return ParsedSelection(base, merged)
         }
     }
     for (info in catalog) {
@@ -345,7 +372,7 @@ fun resolveModelSelection(catalog: List<ModelInfo>, selection: String?): ParsedS
         // switches have to read it, otherwise a variant that turned thinking off would look on.
         params["thinking"] = slots.thinking.toString()
         params["fast"] = slots.fast.toString()
-        params.putAll(parsed.params)
+        params.putAll(normalizeEffortAlias(info, parsed.params))
         return ParsedSelection(info.value, params)
     }
     return parsed
@@ -450,12 +477,13 @@ fun catalogSelection(
     preferredParam: String? = null,
 ): String {
     val info = catalog.firstOrNull { it.value == model } ?: return serializeSelection(model, overrides)
+    val normalizedOverrides = normalizeEffortAlias(info, overrides)
     val params = LinkedHashMap<String, String>()
     for (option in info.configOptions) {
         if (option.type != "select" || option.id.isEmpty()) continue
         val allowed = option.options.map { it.value }.filter { it.isNotEmpty() }
         if (allowed.isEmpty()) continue
-        val override = overrides[option.id]
+        val override = normalizedOverrides[option.id]
         params[option.id] = when {
             override != null && override in allowed -> override
             option.currentValue in allowed -> option.currentValue
@@ -463,7 +491,7 @@ fun catalogSelection(
         }
     }
     val variant = selectNativeVariant(info, params, preferredParam)
-    if (variant != null && overrides.keys.none { it in params && it !in NATIVE_VARIANT_PARAMS }) return variant
+    if (variant != null && normalizedOverrides.keys.none { it in params && it !in NATIVE_VARIANT_PARAMS }) return variant
     return serializeSelection(if (variant != null) info.value else model, params)
 }
 
