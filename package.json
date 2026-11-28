@@ -27,6 +27,7 @@
     "aif": "tsx scripts/aif.ts",
     "verify": "tsx scripts/aif.ts verify",
     "record": "tsx scripts/record.ts",
+    "cli:compat": "tsx scripts/cli-compat/cli.ts",
     "check:public-artifacts": "node scripts/check-public-artifacts.mjs",
     "check:mobile-strings": "node scripts/check-mobile-strings.mjs",
     "check:compose": "node scripts/check-compose-pitfalls.mjs",

@@ -88,6 +88,28 @@ export function cliVersionStatus(range: CliVersionRange | undefined, found: CliV
   return 'supported';
 }
 
+/**
+ * How much of a backend adapter's automation is safe to run against a CLI version:
+ * - `blocked`: below `minimum`; the adapter refuses to start.
+ * - `full`: within `[minimum, testedThrough]`; all L1 and L2 automation is enabled.
+ * - `conservative`: above `testedThrough` or unreadable; L1 basic messaging stays enabled while
+ *   L2 fragile automation (multi-step TUI walking, screen layout inference) degrades safely.
+ */
+export type CliCapabilityMode = 'full' | 'conservative' | 'blocked';
+
+/** Runtime capability gate for a CLI's reported version against its adapter's declared range. */
+export function cliCapabilityMode(range: CliVersionRange | undefined, found: CliVersion | string | undefined): CliCapabilityMode {
+  const status = cliVersionStatus(range, found);
+  if (status === 'too-old') return 'blocked';
+  if (status === 'supported') return 'full';
+  return 'conservative';
+}
+
+/** Whether a CLI version falls within the adapter's verified `[minimum, testedThrough]` range. */
+export function isVerifiedCliVersion(range: CliVersionRange | undefined, found: CliVersion | string | undefined): boolean {
+  return cliCapabilityMode(range, found) === 'full';
+}
+
 /** The public report for a CLI's raw `--version` output, or for none when it could not be read. */
 export function cliVersionReport(range: CliVersionRange | undefined, output: string | undefined): NativeCliVersion {
   const version = parseVersion(output);

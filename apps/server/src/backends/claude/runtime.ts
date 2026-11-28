@@ -3,7 +3,7 @@ import { AppError } from '../../errors.js';
 import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest, NativeRuntimeControl, NativeStatus, NativeStopRequest, NativeTurnTarget, Project, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { isLiveActivity, withActivity } from '../../journal/activity.js';
 import { DeferredSteerInputs } from '../shared/deferred-steer.js';
-import { cliVersionStatus, type CliVersionRange } from '../shared/cli-version.js';
+import { isVerifiedCliVersion, type CliVersionRange } from '../shared/cli-version.js';
 import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRequest, NativeControlMessage } from '../types.js';
 import { ClaudeHookBridge } from './hook-bridge.js';
 import { waitFor } from '../shared/wait-for.js';
@@ -345,13 +345,13 @@ export class ClaudeSessionRuntime {
    */
   private async untestedVersion(): Promise<string | undefined> {
     const probe = await runHelp(executableOf(this.binding.profile)).catch(() => undefined);
-    return cliVersionStatus(CLAUDE_CLI_VERSIONS, probe?.parsed) === 'supported' ? undefined : probe?.parsed.text ?? 'of an unknown version';
+    return isVerifiedCliVersion(CLAUDE_CLI_VERSIONS, probe?.parsed) ? undefined : probe?.parsed.text ?? 'of an unknown version';
   }
 
   /** The CLI draws its footer the way screen convergence reads it (`SCREEN_CONVERGENCE_VERSIONS`). */
   private async screenConvergenceSupported(): Promise<boolean> {
     const probe = await runHelp(executableOf(this.binding.profile)).catch(() => undefined);
-    return cliVersionStatus(SCREEN_CONVERGENCE_VERSIONS, probe?.parsed) === 'supported';
+    return isVerifiedCliVersion(SCREEN_CONVERGENCE_VERSIONS, probe?.parsed);
   }
 
   /** Nothing is running, waiting or queued: relaunching the CLI would end nothing. `endingBackground`: but for background work. */
