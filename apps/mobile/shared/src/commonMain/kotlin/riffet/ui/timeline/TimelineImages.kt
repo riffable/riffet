@@ -191,6 +191,9 @@ internal object RiffetImageAuth {
     /** What [baseUrl] would return, if that is known without suspending. */
     fun knownBaseUrl(): String? = apiProvider?.let { it()?.baseUrl } ?: storedBaseUrl
 
+    /** Routes an `/api/...` path to the linked server that owns its object id, when applicable. */
+    fun resolvePath(path: String): String = apiProvider?.let { it()?.resolvePath(path) } ?: path
+
     /** A host API controls both capabilities and authentication; standalone previews retain stored auth. */
     suspend fun headersFor(url: String): Map<String, String> {
         val provider = apiProvider
@@ -221,8 +224,9 @@ internal data class AttachmentMetadata(
  */
 internal suspend fun fetchAttachmentMetadata(id: String): AttachmentMetadata? {
     val base = RiffetImageAuth.baseUrl()?.takeIf { it.isNotBlank() } ?: return null
+    val path = RiffetImageAuth.resolvePath("/api/attachments/${id.encodeURLPathPart()}/metadata")
     val response = runCatching {
-        imageHttpClient.get("${base.trimEnd('/')}/api/attachments/${id.encodeURLPathPart()}/metadata")
+        imageHttpClient.get("${base.trimEnd('/')}$path")
     }.getOrNull() ?: return null
     if (!response.status.isSuccess()) return null
     val attachment = runCatching {
@@ -235,8 +239,9 @@ internal suspend fun fetchAttachmentMetadata(id: String): AttachmentMetadata? {
 internal suspend fun fetchServerPreview(path: String, parameters: List<Pair<String, String>> = emptyList()): String {
     require(path in setOf("/diagram", "/content-preview") || path.startsWith("/api/attachments/") || (path.startsWith("/api/projects/") && path.endsWith("/file/raw")))
     val base = RiffetImageAuth.baseUrl()?.takeIf { it.isNotBlank() } ?: error(getString(Res.string.timeline_not_connected))
+    val resolved = RiffetImageAuth.resolvePath(path)
     val query = parameters.joinToString("&") { (key, value) -> "${key.encodeURLParameter()}=${value.encodeURLParameter()}" }
-    val response = imageHttpClient.get("${base.trimEnd('/')}$path${if (query.isEmpty()) "" else "?$query"}")
+    val response = imageHttpClient.get("${base.trimEnd('/')}$resolved${if (query.isEmpty()) "" else "?$query"}")
     check(response.status.isSuccess()) { getString(Res.string.timeline_preview_status_failed, response.status.value) }
     check(response.headers[HttpHeaders.ContentType]?.substringBefore(';')?.trim() == "text/html") { getString(Res.string.timeline_preview_not_html) }
     // Renderer pages are megabytes; decoding them on the caller's (main) dispatcher cost whole frames.
@@ -390,11 +395,11 @@ private fun resolveImageUrl(source: ImageSource, server: String?): ResolvedUrl {
     return when {
         base.isNullOrBlank() -> ResolvedUrl.Unavailable
         // `encodeURLPathPart` is the same percent-encoding `RiffetApi` uses; an id can hold `/`.
-        source is ImageSource.Remote -> ResolvedUrl.Ready("$base/api/attachments/${source.id.orEmpty().encodeURLPathPart()}")
+        source is ImageSource.Remote -> ResolvedUrl.Ready("$base${RiffetImageAuth.resolvePath("/api/attachments/${source.id.orEmpty().encodeURLPathPart()}")}")
         source is ImageSource.ProjectFile -> ResolvedUrl.Ready(
-            "$base/api/projects/${source.projectId.encodeURLPathPart()}/file/image?path=${source.path.encodeURLParameter()}",
+            "$base${RiffetImageAuth.resolvePath("/api/projects/${source.projectId.encodeURLPathPart()}/file/image")}?path=${source.path.encodeURLParameter()}",
         )
-        source is ImageSource.ServerPath && source.path.startsWith("/api/") -> ResolvedUrl.Ready("$base${source.path}")
+        source is ImageSource.ServerPath && source.path.startsWith("/api/") -> ResolvedUrl.Ready("$base${RiffetImageAuth.resolvePath(source.path)}")
         else -> ResolvedUrl.Unavailable
     }
 }

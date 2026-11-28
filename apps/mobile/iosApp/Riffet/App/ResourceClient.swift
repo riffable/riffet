@@ -38,7 +38,7 @@ final class ResourceClient {
     func data(for url: URL) async throws -> Data {
         if url.scheme == "data", let comma = url.absoluteString.firstIndex(of: ","),
            let data = Data(base64Encoded: String(url.absoluteString[url.absoluteString.index(after: comma)...])) { return data }
-        let attachment = ServerAddress.sameOrigin(url, baseURL) && url.query == nil && url.path.hasPrefix("/api/attachments/") && !url.path.hasSuffix("/metadata")
+        let attachment = ServerAddress.sameOrigin(url, baseURL) && url.query == nil && (url.path.hasPrefix("/api/attachments/") || (url.path.hasPrefix("/api/servers/") && url.path.contains("/attachments/"))) && !url.path.hasSuffix("/metadata")
         var request = try await request(for: url)
         if attachment { request.cachePolicy = .returnCacheDataElseLoad }
         let (body, response) = try await (attachment ? attachmentSession : session).data(for: request)
@@ -89,8 +89,9 @@ final class ResourceClient {
         endpoint("/api/projects/\(projectID)/file/\(image ? "image" : "raw")", query: [URLQueryItem(name: "path", value: path)])
     }
     func endpoint(_ path: String, query: [URLQueryItem] = []) -> URL? {
+        let resolved = host.api?.resolvePath(path: path, query: []) ?? path
         var value = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
-        value?.path = path
+        value?.path = resolved
         value?.queryItems = query.isEmpty ? nil : query
         return value?.url
     }

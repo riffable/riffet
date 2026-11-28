@@ -52,7 +52,8 @@ suspend fun RiffetApi.serverSpeaksSync(): Boolean? = try {
  */
 fun RiffetApi.syncStream(id: String, lane: SyncLane, window: SyncWindow, initial: SyncCursor?): SyncStream {
     val base = buildString {
-        append("$baseUrl/api/v3/sessions/${id.enc()}/sync?lane=${lane.encodeURLParameter()}")
+        append(resolveUrl("/api/v3/sessions/${id.enc()}/sync"))
+        append("?lane=${lane.encodeURLParameter()}")
         window.snapshotBytes?.let { append("&budget=$it") }
         window.snapshotRows?.let { append("&rows=$it") }
     }

@@ -516,6 +516,19 @@ class SessionStore(
     @Throws(Exception::class)
     suspend fun openDirectory(path: String): Project = lists.openDirectory(path)
 
+    /** [openDirectory] targeting a specific linked peer ([serverId] null or empty targets the entry server). */
+    @Throws(Exception::class)
+    suspend fun openDirectory(path: String, serverId: String?): Project = lists.openDirectory(path, serverId)
+
+    /** The linked server that owns [objectId] (`projectId` / `sessionId` / `terminalId`), or null for the entry server. */
+    fun serverOf(objectId: String?): String? = api.serverOf(objectId)
+
+    /** Re-reads `GET /api/servers` after the entry lists stream announces link changes. */
+    fun refreshServers() = lists.refreshServers()
+
+    /** Handles a `changed` revision push from a linked peer's lists stream. */
+    fun peerListsChanged(serverId: String, data: String?) = lists.peerListsChanged(serverId, data)
+
     /**
      * Writes session metadata (rename, pin, archive, tags) and folds the server's copy into the list
      * and, when it is the open one, into [selected]. Throws on failure; nothing is guessed locally.
@@ -729,7 +742,7 @@ class SessionStore(
                 attachments = attachments.takeIf { it.isNotEmpty() }?.map { AttachmentRef(it.id) },
                 context = context.fileReferences(),
                     references = context.sessionReferences()),
-        ))
+        ), targetServerId = projectId?.let(api::serverOf))
     }
 
     @Throws(Exception::class)
@@ -745,7 +758,7 @@ class SessionStore(
     @Throws(Exception::class)
     suspend fun createPreparedSession(request: PendingSessionCreation): Session {
         creations.requirePending(request)
-        return lists.createPreparedSession(request.body)
+        return lists.createPreparedSession(request.body, request.targetServerId)
     }
 
     /** Call only after the UI has durably cleared its submitted draft and pending pointer. */

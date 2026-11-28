@@ -46,6 +46,8 @@ internal fun ProjectPickerSheet(
     onDismiss: () -> Unit,
     allLabel: String? = null,
     onChooseDirectory: (() -> Unit)? = null,
+    /** Project id → linked server label when projects from multiple servers are listed together. */
+    serverNames: Map<String, String> = emptyMap(),
 ) {
     var browse by remember { mutableStateOf(false) }
     PickerSheetFrame(onDismiss = { onDismiss(); if (browse) onChooseDirectory?.invoke() }) {
@@ -84,11 +86,13 @@ internal fun ProjectPickerSheet(
                 )
                 if (allLabel != null && query.isBlank()) Separator()
                 shown.forEach { (project, nested) ->
+                    val hint = if (project.worktree != null) null else directoryHint(project)
+                    val server = serverNames[project.id]
+                    val description = listOfNotNull(server, hint).joinToString(" · ").takeIf { it.isNotEmpty() }
                     Box(if (nested && query.isBlank()) Modifier.padding(start = metrics.rowPadding) else Modifier) {
                         OptionRow(
                             label = project.worktree?.branch?.takeIf { nested } ?: project.name,
-                            // A worktree's path is a long generated one; its branch already says which.
-                            description = if (project.worktree != null) null else directoryHint(project),
+                            description = description,
                             icon = if (nested) RiffetIcons.Branch else RiffetIcons.Folder,
                             selected = project.id == selectedId,
                             onClick = { pick(project) },

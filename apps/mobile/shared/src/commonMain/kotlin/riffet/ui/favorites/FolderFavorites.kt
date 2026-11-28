@@ -117,12 +117,12 @@ internal class FolderFavoritesState(private val api: RiffetApi, val projectId: S
     }
 }
 
-/** Remembered per scope and read once on entry. */
+/** Remembered per scope and read once on entry when [enabled]. */
 @Composable
-internal fun rememberFolderFavorites(api: RiffetApi, projectId: String? = null): FolderFavoritesState {
+internal fun rememberFolderFavorites(api: RiffetApi, projectId: String? = null, enabled: Boolean = true): FolderFavoritesState {
     val scope = rememberCoroutineScope()
     val state = remember(api, projectId) { FolderFavoritesState(api, projectId, scope) }
-    LaunchedEffect(state) { state.load() }
+    LaunchedEffect(state, enabled) { if (enabled) state.load() }
     return state
 }
 

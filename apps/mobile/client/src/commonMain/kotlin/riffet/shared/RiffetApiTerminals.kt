@@ -28,14 +28,16 @@ suspend fun RiffetApi.createShellTerminal(
     title: String?,
     profileId: String?,
     cwd: String?,
-): TerminalInfo =
-    post("/api/terminals", buildJsonObject {
+): TerminalInfo {
+    val target = targetServerId ?: locator.serverOf(projectId)
+    return forServer(target).post("/api/terminals", buildJsonObject {
         put("projectId", projectId)
         put("kind", "shell")
         title?.let { put("title", it) }
         profileId?.let { put("profileId", it) }
         cwd?.let { put("cwd", it) }
-    }).decode()
+    }).decode<TerminalInfo>().also { locator.locateOne(it.id, target) }
+}
 
 /** This device's theme for the pane; the server may answer with a relaunched terminal of the same conversation. */
 @Throws(Exception::class)
@@ -61,7 +63,7 @@ suspend fun RiffetApi.interruptTerminal(id: String): TerminalInfo = post("/api/t
 @Throws(Exception::class)
 suspend fun RiffetApi.terminalSocket(id: String, block: suspend DefaultClientWebSocketSession.() -> Unit) {
     val token = readToken()
-    val url = baseUrl.replaceFirst(Regex("^http"), "ws") + "/api/terminals/${id.enc()}/ws?protocol=$TERMINAL_BINARY_PROTOCOL"
+    val url = baseUrl.replaceFirst(Regex("^http"), "ws") + resolvePath("/api/terminals/${id.enc()}/ws") + "?protocol=$TERMINAL_BINARY_PROTOCOL"
     http.webSocket(url, request = {
         if (!token.isNullOrEmpty()) header(HttpHeaders.Authorization, "Bearer $token")
         if (config.features.isNotEmpty()) header(FeaturesHeader, config.features.joinToString(","))

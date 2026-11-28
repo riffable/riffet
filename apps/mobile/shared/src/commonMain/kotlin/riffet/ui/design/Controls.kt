@@ -404,6 +404,46 @@ internal fun ChipButton(
 ) = ChipFrame(label, selected = active, enabled = enabled, role = Role.Button, onClick = onClick,
     leadingIcon = icon, trailingIcon = trailingIcon, onLongClick = onLongClick, leadingTint = iconTint)
 
+/** Compact icon-only chip button sharing [ChipButton]'s height, fill and active state (e.g. task list server scope). */
+@Composable
+internal fun IconChipButton(
+    icon: ImageVector,
+    contentDescription: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    val metrics = LocalInterfaceStyle.current.metrics
+    val motion = LocalRiffetMotion.current
+    val glyph = metrics.smallIconSize * 0.9f
+    val colors = LocalRiffetColors.current
+    val s = surfaces
+    val tint by animateColorAsState(when {
+        !enabled -> s.disabledContent
+        active -> s.selectedContent
+        else -> colors.fg2
+    }, motion.effects(), label = "icon-chip")
+    val fill by animateColorAsState(if (active) s.selected else s.press, motion.effects(), label = "icon-chip-fill")
+    Box(
+        modifier = Modifier
+            .height(metrics.controlHeight)
+            .clip(RoundedCornerShape(metrics.controlRadius))
+            .drawBehind {
+                drawRoundRect(
+                    fill,
+                    topLeft = Offset(0f, ((metrics.controlHeight - metrics.segmentedHeight) / 2).coerceAtLeast(0.dp).toPx()),
+                    size = Size(size.width, metrics.segmentedHeight.toPx()),
+                    cornerRadius = CornerRadius(metrics.controlRadius.toPx()),
+                )
+            }
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = metrics.controlInset),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(glyph))
+    }
+}
+
 /**
  * An on/off option as a chip (Fast, Max): the selected fill while [selected], nothing else — one
  * mark for one state (mobile.md §1.1). The same chip as [ChipButton], without the chevron.

@@ -290,6 +290,9 @@ struct SessionHomeView: View {
     @State private var collapsedProjects: Set<String>
     @State private var tag: String?
     @State private var showingProjects = false
+    @State private var showingServers = false
+    @State private var serverScope: ServerScopeKind = .relevant
+    @State private var serverScopePeerID: String?
     @State private var renaming: Session?
     @State private var title = ""
     @State private var tagging: Session?
@@ -315,6 +318,31 @@ struct SessionHomeView: View {
         _collapsedProjects = State(initialValue: Set(defaults.stringArray(forKey: key + "collapsedProjects") ?? []))
         _tag = State(initialValue: defaults.string(forKey: key + "tag"))
     }
+    private var peerServers: [ServerInfo] {
+        workbench.list.servers.filter { !$0.isSelf && $0.outbound && $0.compatible }
+    }
+    private var effectiveServerScope: ServerScopeKind {
+        if peerServers.isEmpty { return .all }
+        if serverScope == .peer && !peerServers.contains(where: { $0.id == serverScopePeerID }) { return .relevant }
+        return serverScope
+    }
+    private var effectiveServerPeerID: String? { effectiveServerScope == .peer ? serverScopePeerID : nil }
+    private var serverScopeLabel: String? {
+        switch effectiveServerScope {
+        case .relevant: nil
+        case .all: String(localized: "全部服务器", bundle: .riffet)
+        case .local: String(localized: "仅本机", bundle: .riffet)
+        case .peer: peerServers.first { $0.id == effectiveServerPeerID }?.name
+        }
+    }
+    private var projectServerNames: [String: String] {
+        guard !peerServers.isEmpty else { return [:] }
+        var map: [String: String] = [:]
+        for project in workbench.list.projects {
+            if let badge = workbench.serverBadge(for: project.id) { map[project.id] = badge.label }
+        }
+        return map
+    }
     private var sessions: [Session] {
         let names = Dictionary(uniqueKeysWithValues: workbench.list.projects.map { ($0.id, $0.name) })
         let archivedProjects = Set(workbench.list.projects.filter { $0.archivedAt != nil }.map(\.id))
@@ -323,8 +351,13 @@ struct SessionHomeView: View {
         // project scope adds the archived ones; every other filter leaves them out.
         let chats = chatProject?.id
         let withChats = filter == .quickChat || (filter == .archived && scope == nil)
+        let activeScope = effectiveServerScope
+        let activePeer = effectiveServerPeerID
+        let selfServerID = workbench.list.selfServerId
+        let objectServers = workbench.list.objectServers
         return order.sorted(workbench.list).filter {
             !isTeamSession($0, memberProjects) &&
+            ($0.id == openSessionID || activeScope == .all || HomeServersKt.inServerScope(session: $0, scope: activeScope, peerId: activePeer, selfServerId: selfServerID, objectServers: objectServers)) &&
             ($0.projectId == chats ? withChats : filter != .quickChat) &&
             (($0.archivedAt != nil || archivedProjects.contains($0.projectId)) == (filter == .archived)) &&
             (scope == nil || $0.projectId == scope || ($0.projectId == chats && filter == .quickChat)) &&
@@ -410,7 +443,14 @@ struct SessionHomeView: View {
     /// A filter's title with how many sessions need the reader or are working, when that is a count to act on.
     private func filterTitle(_ filter: HomeFilter) -> String {
         let memberProjects = self.memberProjects
-        let live = workbench.list.sessions.filter { $0.archivedAt == nil && !isTeamSession($0, memberProjects) }
+        let activeScope = effectiveServerScope
+        let activePeer = effectiveServerPeerID
+        let selfServerID = workbench.list.selfServerId
+        let objectServers = workbench.list.objectServers
+        let live = workbench.list.sessions.filter {
+            $0.archivedAt == nil && !isTeamSession($0, memberProjects) &&
+            (activeScope == .all || HomeServersKt.inServerScope(session: $0, scope: activeScope, peerId: activePeer, selfServerId: selfServerID, objectServers: objectServers))
+        }
         let count: Int
         switch filter {
         case .waiting: count = live.count { $0.state == .waiting }
@@ -419,11 +459,32 @@ struct SessionHomeView: View {
         }
         return count > 0 ? "\(filter.title) \(count)" : filter.title
     }
+    private var serverScopeSymbol: String {
+        switch effectiveServerScope {
+        case .local: "laptopcomputer"
+        case .relevant: "link"
+        case .all: "globe"
+        case .peer: "server.rack"
+        }
+    }
+    private var serverChip: some View {
+        RiffetIconChipButton(systemImage: serverScopeSymbol, highlighted: serverScopeLabel != nil) {
+            showingServers = true
+        }
+        .accessibilityLabel(String(localized: "服务器范围", bundle: .riffet))
+        .accessibilityValue(serverScopeLabel ?? String(localized: "本机与本机发起", bundle: .riffet))
+        .accessibilityIdentifier("sessionServerFilter")
+    }
     /// The status chips lead the list and scroll with it; a tag filter and a sync failure follow as quiet lines.
     @ViewBuilder private var controlsHeader: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 0) {
-                projectChip.padding(.leading, RiffetMetrics.pageInset).zIndex(1)
+                if !peerServers.isEmpty {
+                    serverChip.padding(.leading, RiffetMetrics.pageInset).zIndex(1)
+                    projectChip.padding(.leading, RiffetMetrics.terminalInset).zIndex(1)
+                } else {
+                    projectChip.padding(.leading, RiffetMetrics.pageInset).zIndex(1)
+                }
                 // The bar insets its chips by the page margin; pull it back so they follow the project chip closely.
                 RiffetChipBar(items: filters.map { .init(value: $0, title: filterTitle($0)) }, selection: $filter)
                     .padding(.leading, 6 - RiffetMetrics.pageInset).clipped()
@@ -487,8 +548,14 @@ struct SessionHomeView: View {
                 try? await Task.sleep(for: .seconds(1))
                 if !Task.isCancelled { statusShown = true }
             }
+            .sheet(isPresented: $showingServers) {
+                ServerScopeSheet(peers: peerServers, selectedScope: effectiveServerScope, selectedPeerID: effectiveServerPeerID) { nextScope, peerID in
+                    serverScope = nextScope
+                    serverScopePeerID = peerID
+                }
+            }
             .sheet(isPresented: $showingProjects) {
-                ProjectSheet(workbench: workbench, selection: scope, allLabel: String(localized: "全部项目", bundle: .riffet)) { scope = $0?.id }
+                ProjectSheet(workbench: workbench, selection: scope, allLabel: String(localized: "全部项目", bundle: .riffet), serverNames: projectServerNames) { scope = $0?.id }
             }
     }
     private var preferenceHome: some View {
@@ -723,12 +790,25 @@ private struct SessionRowLabel: View {
     var body: some View {
         let name = session.shownTitle.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.shownTitle
         let time = timeText(session)
+        let serverBadge = workbench.serverBadge(for: session.id)
         HStack(spacing: 12) {
             AgentAvatar(backend: (session.backendId ?? .cursor).name, state: avatarState(session))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(name).riffetFont(.headline).foregroundStyle(session.archivedAt == nil ? palette.fg : palette.fg2).lineLimit(1)
                     Spacer(minLength: 0)
+                    if let serverBadge {
+                        if serverBadge.multiPeer || serverBadge.offline {
+                            Text(serverBadge.offline ? "\(serverBadge.alias) · \(String(localized: "离线", bundle: .riffet))" : serverBadge.alias)
+                                .riffetFont(.caption)
+                                .foregroundStyle(serverBadge.offline ? palette.danger : palette.fg3)
+                                .lineLimit(1)
+                        } else {
+                            Image(systemName: "link")
+                                .riffetFont(.caption)
+                                .foregroundStyle(palette.fg3)
+                        }
+                    }
                     if openSessionID != session.id, SidebarModelKt.isDoneUnseen(session: session) {
                         RiffetStatusDot(state: .unread, size: 6).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
                     }

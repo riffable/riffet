@@ -175,8 +175,12 @@ suspend fun RiffetApi.attachmentMetadata(attachmentId: String): Attachment =
     get("/api/attachments/${attachmentId.enc()}/metadata").decode()
 
 @Throws(Exception::class)
-suspend fun RiffetApi.uploadAttachment(projectId: String?, body: UploadAttachmentRequest): Attachment =
-    post(projectId?.let { "/api/projects/${it.enc()}/attachments" } ?: "/api/attachments", wireBody(body)).decode()
+suspend fun RiffetApi.uploadAttachment(projectId: String?, body: UploadAttachmentRequest): Attachment {
+    val target = targetServerId ?: projectId?.let(locator::serverOf)
+    return forServer(target).post(projectId?.let { "/api/projects/${it.enc()}/attachments" } ?: "/api/attachments", wireBody(body))
+        .decode<Attachment>()
+        .also { locator.locateOne(it.id, target) }
+}
 
 @Throws(Exception::class)
 suspend fun RiffetApi.archiveInfo(projectId: String, path: String): ArchiveInfo =

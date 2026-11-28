@@ -46,8 +46,9 @@ struct ConversationComposer: View {
         return Double(context.used) / Double(context.size)
     }
     private var acceptsMessages: Bool {
-        catalog?.capabilities.requiresLiveTerminal?.boolValue != true ||
-            nativeConversationLive(session: session, status: workbench.status, requiresLiveTerminal: true)
+        workbench.serverBadge(for: session.id)?.offline != true &&
+            (catalog?.capabilities.requiresLiveTerminal?.boolValue != true ||
+                nativeConversationLive(session: session, status: workbench.status, requiresLiveTerminal: true))
     }
     private var hasContent: Bool { !draft.text.isEmpty || !draft.attachments.isEmpty || !draft.references.isEmpty || !draft.pendingFiles.isEmpty }
     /// Focused or holding a draft the card grows its footer; otherwise it stays one line.

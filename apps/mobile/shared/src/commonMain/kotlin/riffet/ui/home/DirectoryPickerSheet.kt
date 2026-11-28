@@ -98,6 +98,10 @@ internal fun DirectoryPickerSheet(
     error: String?,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit,
+    /** Host folder favorites belong to the entry server only (`docs/SERVER-LINKS.md §3`). */
+    showFavorites: Boolean = true,
+    /** Server name shown beside the title when browsing a linked server's filesystem. */
+    serverLabel: String? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -112,7 +116,7 @@ internal fun DirectoryPickerSheet(
     // Taps can outrun the server; only the newest request may write, or a slow earlier listing
     // would land on top of the directory the reader has already moved into.
     var request by remember { mutableStateOf(0) }
-    val favorites = rememberFolderFavorites(api)
+    val favorites = rememberFolderFavorites(api, enabled = showFavorites)
 
     fun load(path: String?) {
         val token = ++request
@@ -137,8 +141,9 @@ internal fun DirectoryPickerSheet(
 
     val crumbs = remember(result?.path) { browseCrumbs(result?.path.orEmpty()) }
 
+    val title = if (serverLabel != null) "${stringResource(Res.string.session_choose_directory_title)} · $serverLabel" else stringResource(Res.string.session_choose_directory_title)
     PickerOverlay(
-        title = stringResource(Res.string.session_choose_directory_title),
+        title = title,
         subtitle = result?.let { browseDisplayPath(it.path, it.home) } ?: stringResource(Res.string.session_loading),
         onDismiss = onDismiss,
         fullHeight = true,
@@ -164,7 +169,7 @@ internal fun DirectoryPickerSheet(
                 onClick = { load(result?.parent) },
             )
             Spacer(Modifier.width(8.dp))
-            result?.let { FavoriteToggle(favorites, it.path) }
+            if (showFavorites) result?.let { FavoriteToggle(favorites, it.path) }
             Box(
                 modifier = Modifier
                     .size(metrics.controlHeight)
@@ -208,7 +213,7 @@ internal fun DirectoryPickerSheet(
         }
 
         // Favorite folders, shared with every device: a tap goes there, a long press manages one.
-        FolderFavoriteChips(
+        if (showFavorites) FolderFavoriteChips(
             favorites,
             currentPath = result?.path,
             onOpen = { load(it.path) },
@@ -216,7 +221,7 @@ internal fun DirectoryPickerSheet(
         )
 
         AnimatedSheetNotice(failure, SettingsNoticeKind.ERROR)
-        AnimatedSheetNotice(favorites.error, SettingsNoticeKind.ERROR)
+        if (showFavorites) AnimatedSheetNotice(favorites.error, SettingsNoticeKind.ERROR)
         AnimatedSheetNotice(error, SettingsNoticeKind.ERROR)
 
         // Each directory follows the global page motion, reversing direction when going up.
@@ -255,7 +260,7 @@ internal fun DirectoryPickerSheet(
                         icon = RiffetIcons.Folder,
                         selected = false,
                         onClick = { load(path) },
-                        trailing = { FavoriteToggle(favorites, path) },
+                        trailing = if (showFavorites) ({ FavoriteToggle(favorites, path) }) else null,
                         // Hidden folders are dimmed by the same tone the web gives them, so "why is this
                         // one grey" has an answer without a legend.
                         tone = if (entry.hidden) colors.fg3 else null,

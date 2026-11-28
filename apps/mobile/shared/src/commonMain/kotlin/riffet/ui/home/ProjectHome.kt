@@ -153,9 +153,11 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.shared.backendCatalog
 import riffet.shared.backendUsage
 import riffet.shared.updateSettings
+import riffet.shared.settings as fetchServerSettings
 import riffet.shared.backends
 import riffet.shared.isAssistant
 import riffet.shared.slashCatalog
+import riffet.i18n.L10n
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import riffet_mobile.shared.generated.resources.Res
@@ -253,8 +255,56 @@ fun ProjectHome(
     // one. This mirrors the web, where `Workbench` owns the picker for both callers.
     var pickerOpen by remember { mutableStateOf(false) }
     var projectSheet by remember { mutableStateOf(false) }
+    var serverSheet by remember { mutableStateOf(false) }
+    var pickedServerId by rememberSaveable { mutableStateOf("") }
     var binding by remember { mutableStateOf(false) }
     var bindError by remember { mutableStateOf<String?>(null) }
+
+    val homeServerOptions = remember(list.servers, list.linkedStatus) {
+        buildHomeServerOptions(list.servers, list.linkedStatus)
+    }
+    val projectServerId = project?.takeIf { it.system == null }?.let { list.objectServers[it.id].orEmpty() }
+    val activeServerId = when {
+        homeServerOptions.isEmpty() -> ""
+        pickedServerId.isNotEmpty() && homeServerOptions.any { it.id == pickedServerId && it.usable } -> pickedServerId
+        projectServerId != null -> projectServerId
+        else -> ""
+    }
+    LaunchedEffect(project?.id, list.objectServers, pickedServerId) {
+        if (pickedServerId.isNotEmpty() && project != null && list.objectServers[project.id] == pickedServerId) {
+            pickedServerId = ""
+        }
+    }
+    LaunchedEffect(homeServerOptions, pickedServerId) {
+        if (pickedServerId.isNotEmpty() && homeServerOptions.none { it.id == pickedServerId && it.usable }) {
+            pickedServerId = ""
+        }
+    }
+    val activeServer = homeServerOptions.firstOrNull { it.id == activeServerId } ?: homeServerOptions.firstOrNull()
+    val scopedProjects = remember(list.projects, list.objectServers, activeServerId, homeServerOptions.isNotEmpty()) {
+        if (homeServerOptions.isNotEmpty()) projectsForServer(list.projects, list.objectServers, activeServerId)
+        else list.projects.filter { it.archivedAt == null && !it.isAssistant && it.system != "task-workspace" }
+    }
+    val activeProject = if (homeServerOptions.isEmpty() || (project != null && (list.objectServers[project.id].orEmpty()) == activeServerId)) {
+        project
+    } else {
+        null
+    }
+    val needsRemoteDirectory = activeServerId.isNotEmpty() && activeProject == null
+    val serverUnavailableReason = activeServer?.takeIf { !it.usable }?.reason
+
+    fun selectHomeServer(targetServerId: String) {
+        if (targetServerId == activeServerId) return
+        val owned = preferredProjectForServer(list.projects, list.sessions, list.objectServers, targetServerId)
+        if (owned != null) {
+            pickedServerId = ""
+            onSelectProject(owned)
+            return
+        }
+        pickedServerId = targetServerId
+        bindError = null
+        pickerOpen = true
+    }
 
     /**
      * The web's `startSessionInDirectory`: bind the chosen directory — the server is idempotent per
@@ -263,12 +313,14 @@ fun ProjectHome(
      */
     fun chooseDirectory(path: String) {
         if (api == null || binding) return
+        val targetServer = activeServerId.ifEmpty { null }
         scope.launch {
             binding = true
             bindError = null
             try {
-                val target = store.openDirectory(path)
+                val target = store.openDirectory(path, targetServer)
                 pickerOpen = false
+                pickedServerId = ""
                 onSelectProject(target)
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -282,8 +334,10 @@ fun ProjectHome(
 
     // The configuration follows the server's settings while the page is up; an unchanged key reads
     // nothing, so coming back to the tab costs no request.
-    LaunchedEffect(configs, project?.id, list.settings, list.backendRevision) {
-        project?.let { configs.task.sync(it.id, list.settings, list.backendRevision) }
+    LaunchedEffect(configs, activeProject?.id, list.settings, list.backendRevision, activeServerId) {
+        if (activeProject != null || activeServerId.isNotEmpty()) {
+            configs.task.sync(activeProject?.id, list.settings, list.backendRevision, activeServerId)
+        }
     }
 
     // A Box, so the sheets emitted after the page cover the header too.
@@ -303,15 +357,9 @@ fun ProjectHome(
                 // What the composer was last showing: while it fades out after the project is gone,
                 // it still has something to draw.
                 val last = remember { arrayOfNulls<Project>(1) }
-                project?.let { last[0] = it }
-                // The empty state and the composer replace each other in place (loading, then the
-                // first project, then the composer); the composer's sheets overflow this box over the
-                // system bars, so no size transform and no clip.
-                // Which of the three is shown is the transition's state, not read inside it: the page leaving
-                // must keep drawing what it was. Read inside, the loading page that fades out as the first
-                // project arrives would turn into the setup steps on its way out, a flash on every launch.
+                activeProject?.let { last[0] = it }
                 val shown = when {
-                    project != null -> HomeShown.Composer
+                    activeProject != null || needsRemoteDirectory -> HomeShown.Composer
                     !list.loaded -> HomeShown.Loading
                     list.error != null -> HomeShown.Failed
                     else -> HomeShown.Setup
@@ -325,8 +373,6 @@ fun ProjectHome(
                         // Reading the projects (or failing to) keeps its own state; once they are known the
                         // steps still missing sit in the composer's place.
                         if (state == HomeShown.Loading) {
-                            // The device copy usually lands within a few frames: a loading page shown at once only
-                            // flashes before the composer. It fades in if the read is still going after a moment.
                             var slow by remember { mutableStateOf(false) }
                             LaunchedEffect(Unit) { delay(SLOW_LOAD_MILLIS); slow = true }
                             AnimatedVisibility(visible = slow, enter = fadeIn(LocalRiffetMotion.current.effects())) {
@@ -353,32 +399,55 @@ fun ProjectHome(
                             }) else null,
                         )
                     } else {
-                        val shownTarget = last[0]!!
+                        val shownTarget = if (needsRemoteDirectory) null else (activeProject ?: last[0])
                         HomeContent(
                             store = store,
                             api = api,
                             target = shownTarget,
                             config = configs.task,
                             slot = {
-                                Box(Modifier.fillMaxWidth().height(SlotHeight), contentAlignment = Alignment.CenterStart) {
-                                    if (project != null) ProjectContext(project, onClick = { projectSheet = true })
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().height(SlotHeight),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    if (homeServerOptions.isNotEmpty() && activeServer != null) {
+                                        ServerContextPill(server = activeServer, onClick = { serverSheet = true })
+                                    }
+                                    if (needsRemoteDirectory) {
+                                        ChooseDirectoryPill(onClick = { bindError = null; pickerOpen = true })
+                                    } else if (activeProject != null) {
+                                        ProjectContext(activeProject, onClick = { projectSheet = true }, modifier = Modifier.weight(1f, fill = false))
+                                    }
                                 }
                             },
                             onOpenSession = onOpenSession,
-                            onImport = if (api != null) onImportSession else null,
+                            onImport = if (api != null && activeServerId.isEmpty()) onImportSession else null,
                             onOpenTerminal = onOpenTerminal,
                             contentPadding = contentInsets,
+                            activeServerId = activeServerId,
+                            activeServerName = activeServer?.takeIf { !it.self }?.name,
+                            serverUnavailableReason = serverUnavailableReason,
                         )
                     }
                 }
             }
         }
 
-        if (projectSheet && project != null) {
+        if (serverSheet && homeServerOptions.isNotEmpty()) {
+            ServerPickerSheet(
+                options = homeServerOptions,
+                selectedId = activeServerId,
+                onSelect = ::selectHomeServer,
+                onDismiss = { serverSheet = false },
+            )
+        }
+
+        if (projectSheet && activeProject != null) {
             ProjectPickerSheet(
-                projects = list.projects.filter { it.archivedAt == null && !it.isAssistant && it.system != "task-workspace" },
-                selectedId = project.id,
-                onSelect = { picked -> if (picked != null && picked.id != project.id) onSelectProject(picked) },
+                projects = scopedProjects,
+                selectedId = activeProject.id,
+                onSelect = { picked -> if (picked != null && picked.id != activeProject.id) onSelectProject(picked) },
                 onDismiss = { projectSheet = false },
                 onChooseDirectory = if (api != null) ({
                     bindError = null
@@ -389,12 +458,14 @@ fun ProjectHome(
 
         if (pickerOpen && api != null) {
             DirectoryPickerSheet(
-                api = api,
-                initialPath = project?.cwd,
+                api = api.forServer(activeServerId.ifEmpty { null }),
+                initialPath = activeProject?.cwd,
                 busy = binding,
                 error = bindError,
                 onDismiss = { pickerOpen = false },
                 onPick = ::chooseDirectory,
+                showFavorites = activeServerId.isEmpty(),
+                serverLabel = activeServer?.takeIf { !it.self }?.name,
             )
         }
     }
@@ -408,11 +479,11 @@ private val SlotHeight = 48.dp
  * and a chevron to the project sheet. Text, not a chip: it is context first and a control second.
  */
 @Composable
-private fun ProjectContext(project: Project, onClick: () -> Unit) {
+private fun ProjectContext(project: Project, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Row(
             modifier = Modifier
                 .weight(1f, fill = false)
@@ -427,6 +498,31 @@ private fun ProjectContext(project: Project, onClick: () -> Unit) {
             Text(project.name, style = typography.headline, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false))
         }
+    }
+}
+
+@Composable
+private fun ChooseDirectoryPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val metrics = LocalInterfaceStyle.current.metrics
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    Row(
+        modifier = modifier
+            .height(metrics.controlHeight)
+            .clip(RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = metrics.controlInset),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2),
+    ) {
+        Icon(RiffetIcons.FolderPlus, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(metrics.smallIconSize))
+        Text(
+            text = stringResource(Res.string.session_add_directory),
+            style = typography.headline,
+            color = colors.fg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -539,8 +635,8 @@ internal fun HomeBands(
 private fun HomeContent(
     store: SessionStore,
     api: RiffetApi?,
-    /** The project the next session starts in. */
-    target: Project,
+    /** The project the next session starts in; null while a newly picked linked server has no project yet. */
+    target: Project?,
     config: HomeConfig,
     /** Above the composer: where the session starts. */
     slot: @Composable () -> Unit,
@@ -552,6 +648,9 @@ private fun HomeContent(
     contentPadding: PaddingValues = PaddingValues(),
     /** The assistant's page: its own draft, no terminal tools, the setup cards in their place. */
     assistant: AssistantHomeParts? = null,
+    activeServerId: String = "",
+    activeServerName: String? = null,
+    serverUnavailableReason: String? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -562,6 +661,8 @@ private fun HomeContent(
     val scope = rememberCoroutineScope()
     val pageActive = LocalPageActive.current
     val docked = assistant?.docked
+    val targetApi = remember(api, activeServerId) { api?.forServer(activeServerId.ifEmpty { null }) }
+    val remoteServer = activeServerId.isNotEmpty()
 
     val draftId = assistant?.member?.let { "member:${it.id}" } ?: if (assistant != null) ASSISTANT_DRAFT_ID else HOME_DRAFT_ID
     val drafts = LocalComposerDrafts.current
@@ -580,11 +681,12 @@ private fun HomeContent(
     var error by remember { mutableStateOf<String?>(null) }
     // The project's running shell if it has one, as the iPhone's terminal page opens; otherwise a new one.
     fun openShell() {
-        val client = api ?: return
+        val client = targetApi ?: return
+        val project = target ?: return
         scope.launch {
             runCatching {
-                client.terminals().firstOrNull { it.projectId == target.id && it.kind == TerminalKind.SHELL && it.state != TerminalState.EXITED }
-                    ?: client.createShellTerminal(target.id)
+                client.terminals().firstOrNull { it.projectId == project.id && it.kind == TerminalKind.SHELL && it.state != TerminalState.EXITED }
+                    ?: client.createShellTerminal(project.id)
             }.onSuccess { onOpenTerminal(it.id, it.title) }
                 .onFailure { failure -> if (failure is CancellationException) throw failure else error = failure.message }
         }
@@ -593,23 +695,23 @@ private fun HomeContent(
     // and only the page changes, so the pickers never tear down and remount.
     var sheet by remember { mutableStateOf<HomeSheet?>(null) }
     val catalogReady = config.capabilities != null
-    // The phones the agent may control: offered only where the backend takes tools and there is a phone to pick.
-    val toolsSupported = config.capabilities?.supportsRiffetTools == true
+    // Phone/plugin tools belong to the entry server only (`docs/SERVER-LINKS.md §3`).
+    val toolsSupported = !remoteServer && config.capabilities?.supportsRiffetTools == true
     val toolDevices = rememberToolDevices(api, enabled = toolsSupported)
     val pluginTools = rememberPluginToolGroups(api, enabled = toolsSupported, value = emptyList())
     val pickedTools = offeredPicks(toolDevices, config.toolGroups, pluginTools)
     val phonesShown = toolsSupported && toolsOffered(toolDevices, emptyList(), pluginTools)
     // MCP servers and Skills switched off for this conversation only; a new one starts with everything on.
-    var extensionsOff by remember(config.backendId, config.profileId, target.id) { mutableStateOf(emptyList<String>()) }
+    var extensionsOff by remember(config.backendId, config.profileId, target?.id, activeServerId) { mutableStateOf(emptyList<String>()) }
     val extensions = extensionsPick(
-        api, allowed = true, capabilities = config.capabilities, backendId = config.backendId, profileId = config.profileId,
-        projectId = target.id, off = extensionsOff, onChange = { extensionsOff = ExtensionsOff.clean(it) },
+        targetApi, allowed = target != null, capabilities = config.capabilities, backendId = config.backendId, profileId = config.profileId,
+        projectId = target?.id, off = extensionsOff, onChange = { extensionsOff = ExtensionsOff.clean(it) },
     )
     // Nothing to switch, nothing to show: the row waits only on a list it cannot read yet.
     val extensionsListed = rememberExtensionsListed(extensions)
     val toolsShown = phonesShown || (extensions != null && extensionsListed != false)
-    LaunchedEffect(config, target.id, config.backendId, config.profileId, catalogReady) {
-        if (catalogReady) config.loadSlash(target.id)
+    LaunchedEffect(config, target?.id, config.backendId, config.profileId, catalogReady, activeServerId) {
+        if (catalogReady) config.loadSlash(target?.id, activeServerId)
     }
 
     val attachmentUploadingNotice = stringResource(Res.string.session_attachment_uploading)
@@ -625,7 +727,7 @@ private fun HomeContent(
             }
             return@rememberAttachmentPicker
         }
-        val uploadProject = target.id
+        val uploadProject = target?.id ?: return@rememberAttachmentPicker
         scope.launch {
             uploading = true
             error = null
@@ -647,9 +749,9 @@ private fun HomeContent(
     }
 
     // While the page shows an Agent that keeps a warm CLI (`supportsPrewarm`), one is held for its choice;
-    // leaving the page or choosing otherwise releases it, and a send hands it to the new conversation.
+    // skipped on linked servers (`ProjectHome.tsx:436`).
     val prewarm = remember { PrewarmLease() }
-    val prewarmBody = if (pageActive && assistant == null && config.capabilities?.supportsPrewarm == true) PrewarmBody(
+    val prewarmBody = if (!remoteServer && target != null && pageActive && assistant == null && config.capabilities?.supportsPrewarm == true) PrewarmBody(
         projectId = target.id, backendId = config.backendId, backendProfileId = config.profileId,
         model = config.model.takeIf { it.isNotBlank() }, mode = config.mode, approval = config.approval,
     ) else null
@@ -657,8 +759,9 @@ private fun HomeContent(
     DisposableEffect(prewarm) { onDispose { prewarm.close() } }
 
     fun create() {
+        val project = target ?: return
         val prompt = text.trim()
-        if (prompt.isEmpty() || creating || uploading) return
+        if (prompt.isEmpty() || creating || uploading || serverUnavailableReason != null) return
         creating = true
         error = null
         prewarm.sent()
@@ -667,7 +770,7 @@ private fun HomeContent(
                 val member = assistant?.member
                 val session = if (member != null) store.createMemberSession(
                     agentMemberId = member.id,
-                    projectId = target.id,
+                    projectId = project.id,
                     prompt = prompt,
                     attachments = attachments,
                     backendId = config.backendId,
@@ -680,7 +783,7 @@ private fun HomeContent(
                     toolGroups = if (phonesShown) pickedTools else null,
                     extensionsOff = extensionsOff.takeIf { extensions != null && it.isNotEmpty() },
                 ) else store.createSession(
-                    projectId = target.id,
+                    projectId = project.id,
                     prompt = prompt,
                     attachments = attachments,
                     backendId = config.backendId,
@@ -715,7 +818,7 @@ private fun HomeContent(
     val referenceLimitText = stringResource(Res.string.session_reference_limit)
     val providerGroups = config.providerGroups()
     val caps = config.capabilities
-    val controlsEnabled = api != null && !creating
+    val controlsEnabled = api != null && !creating && serverUnavailableReason == null
     // What the model panel's 更多设置 opens: the settings the panel leaves out.
     val rows = buildList {
         caps?.modes?.takeIf { it.size > 1 }?.let { modes ->
@@ -736,10 +839,17 @@ private fun HomeContent(
         },
         selected = config.backendId.name,
         onSelect = { name ->
-            config.backends.firstOrNull { it.backendId.name == name && it.available }?.let { config.selectBackend(it.backendId, target.id, list.settings) }
+            config.backends.firstOrNull { it.backendId.name == name && it.available }?.let { config.selectBackend(it.backendId, target?.id, list.settings, activeServerId) }
         },
     )
     val agentMark = config.backendId.name.lowercase()
+    val noticeText = error
+        ?: serverUnavailableReason?.let { activeServerName?.let { name -> "$name · $it" } ?: it }
+        ?: if (target == null && activeServerName != null) L10n.uiText("servers.needDirectory", activeServerName) else null
+    val noticeColor = if (error != null || serverUnavailableReason != null) colors.danger else colors.fg3
+    val sameServerSessions = remember(list.sessions, list.objectServers, activeServerId) {
+        list.sessions.filter { (list.objectServers[it.id].orEmpty()) == activeServerId }
+    }
 
     // The viewport's height, written by the layout above the scroll and read only while the bands
     // inside it measure: a new height remeasures them, and composition never reads it.
@@ -751,20 +861,22 @@ private fun HomeContent(
                     Spacer(Modifier.height(10.dp))
                     // Keep the last message during its exit animation.
                     val shownError = remember { arrayOfNulls<String>(1) }
-                    if (error != null) shownError[0] = error
+                    if (noticeText != null) shownError[0] = noticeText
                     val shownText = shownError[0].orEmpty()
-                    AnimatedVisibility(visible = error != null, enter = motion.expandIn(), exit = motion.collapseOut()) {
+                    AnimatedVisibility(visible = noticeText != null, enter = motion.expandIn(), exit = motion.collapseOut()) {
                         Column {
-                            Text(text = shownText, style = typography.caption, color = colors.danger, modifier = Modifier.padding(horizontal = 4.dp))
+                            Text(text = shownText, style = typography.caption, color = noticeColor, modifier = Modifier.padding(horizontal = 4.dp))
                             Spacer(Modifier.height(8.dp))
                         }
                     }
                     if (assistant != null) {
                         Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { assistant.cards(this) }
-                    } else if (onImport != null) {
+                    } else if (target != null && (onImport != null || targetApi != null)) {
                         Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             HomeToolCard(RiffetIcons.Terminal, stringResource(Res.string.session_terminal), ::openShell, Modifier.weight(1f))
-                            HomeToolCard(RiffetIcons.Clock, stringResource(Res.string.external_import_action), onImport, Modifier.weight(1f))
+                            if (onImport != null) {
+                                HomeToolCard(RiffetIcons.Clock, stringResource(Res.string.external_import_action), onImport, Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -784,7 +896,7 @@ private fun HomeContent(
                             attachments = attachments.filterNot { it.id == id }
                             thumbnails = thumbnails - id
                         },
-                        onAttach = if (picker.available) ({ picker.launch() }) else null,
+                        onAttach = if (picker.available && target != null) ({ picker.launch() }) else null,
                         settings = ComposerSettings(
                             label = modelSummary,
                             icon = AgentMarks.vector(agentMark) ?: RiffetIcons.Bot,
@@ -794,16 +906,16 @@ private fun HomeContent(
                             loading = config.catalogLoading,
                             error = config.catalogError != null,
                         ),
-                        sendEnabled = api != null && text.isNotBlank() && !uploading && !creating && !config.catalogLoading,
+                        sendEnabled = api != null && target != null && serverUnavailableReason == null && text.isNotBlank() && !uploading && !creating && !config.catalogLoading,
                         sendBusy = creating,
                         onSend = ::create,
                         dictation = dictation,
                         hero = true,
                         heroMinLines = if (docked != null) 1 else 4,
                         slash = config.slash,
-                        sessionCandidates = if (config.capabilities?.supportsSessionReferences == true) list.sessions else emptyList(),
+                        sessionCandidates = if (config.capabilities?.supportsSessionReferences == true) sameServerSessions else emptyList(),
                         sessionProjects = list.projects,
-                        referenceProjectId = target.id,
+                        referenceProjectId = target?.id,
                         sessionReferences = references.filter { it.kind == "session" },
                         onReferenceSession = if (config.capabilities?.supportsSessionReferences == true) ({ selected ->
                             if (references.count { it.kind == "session" } >= 5) error = referenceLimitText
@@ -859,7 +971,7 @@ private fun HomeContent(
                 HomeSheet.Settings -> SendSettingsPage(
                     notice = config.catalogError?.let { stringResource(Res.string.pickers_catalog_failed, it) },
                     noticeKind = SettingsNoticeKind.ERROR,
-                    noticeAction = stringResource(Res.string.pickers_retry) to { config.load(target.id, list.settings, force = true) },
+                    noticeAction = stringResource(Res.string.pickers_retry) to { config.load(target?.id, list.settings, force = true, serverId = activeServerId) },
                     rows = rows,
                     onBack = { sheet = HomeSheet.Model },
                 )
@@ -868,19 +980,20 @@ private fun HomeContent(
                     catalogLoading = config.catalogLoading,
                     catalogError = config.catalogError,
                     selection = config.model,
-                    disabledReason = null,
+                    disabledReason = serverUnavailableReason,
                     onSelect = { config.model = it; config.rememberPick(store::applySavedSettings) },
                     onParamChange = { config.model = it; config.rememberPick(store::applySavedSettings) },
-                    onRetryCatalog = { config.load(target.id, list.settings, force = true) },
-                    loadUsage = config.usageLoader(target.id),
+                    onRetryCatalog = { config.load(target?.id, list.settings, force = true, serverId = activeServerId) },
+                    loadUsage = config.usageLoader(target?.id),
                     remembered = config.rememberedModels,
                     groups = providerGroups,
                     activeProfileId = config.profileId,
-                    usageScopeKey = "${config.backendId}|${target.id}|${config.profileId ?: ""}",
+                    usageScopeKey = "$activeServerId|${config.backendId}|${target?.id.orEmpty()}|${config.profileId ?: ""}",
                     onSelectChoice = { profileId, selection -> config.selectProviderModel(profileId, selection); config.rememberPick(store::applySavedSettings) },
-                    onRetryGroup = { profileId -> config.retryProviderCatalog(target.id, profileId) },
+                    onRetryGroup = { profileId -> config.retryProviderCatalog(target?.id, profileId) },
                     agents = agents,
                     onMore = if (rows.isNotEmpty()) ({ sheet = HomeSheet.Settings }) else null,
+                    sourceLabel = activeServerName?.let { L10n.uiText("servers.fromServer", it) },
                 )
                 HomeSheet.Mode -> caps?.let {
                     ModePickerPage(
@@ -1144,14 +1257,28 @@ internal class HomeConfig(
     val rememberedModels: Map<String, String>
         get() = settings?.nativeBackendDefaults?.get(backendId)?.profileModels.orEmpty()
 
+    private val remoteHome = preferences?.let(::RemoteHomeStore)
+    private var activeServerId: String = ""
+    private val localBackends = mutableListOf<NativeBackendCatalogEntry>()
+    private val remoteBackends = mutableMapOf<String, List<NativeBackendCatalogEntry>>()
+    private val remoteSettings = mutableMapOf<String, riffet.contracts.AppSettings>()
+    private var loadedServerId: String = ""
+
+    private fun serverApi(serverId: String = activeServerId): RiffetApi? =
+        api?.forServer(serverId.ifEmpty { null })
+
     /**
      * Saves the provider and full selection now in force as the agent's default, through the same
-     * settings write as the settings page; the server records it per provider. [onSaved] gets the
-     * effective settings. A failed write leaves the pick on this composer only.
+     * settings write as the settings page; on a linked server the pick stays local on this device
+     * (`docs/SERVER-LINKS.md §5`) so it never overwrites the entry server's defaults.
      */
     fun rememberPick(onSaved: (riffet.contracts.AppSettings) -> Unit) {
-        val api = api ?: return
         if (!remembersPicks) return
+        if (activeServerId.isNotEmpty()) {
+            remoteHome?.set(activeServerId, backendId, choice.profileId)
+            return
+        }
+        val api = api ?: return
         val backend = backendId
         val profile = choice.profileId
         val model = choice.model
@@ -1270,8 +1397,8 @@ internal class HomeConfig(
     }
 
     /** Reloads one provider's catalog without moving the composer back to the saved default. */
-    fun retryProviderCatalog(projectId: String, profileId: String) {
-        val api = api ?: return
+    fun retryProviderCatalog(projectId: String?, profileId: String) {
+        val targetApi = serverApi() ?: return
         val profile = knownProfiles.firstOrNull { it.id == profileId } ?: return
         val fetch = ++providerFetch
         val version = requestVersion
@@ -1282,7 +1409,7 @@ internal class HomeConfig(
                 if (current.profile.id == profileId) current.copy(models = emptyList(), available = true, reason = null, error = null) else current
             }
             try {
-                val result = readProviderCatalog(api, backend, projectId, profile, catalogReadFailed)
+                val result = readProviderCatalog(targetApi, backend, projectId, profile, catalogReadFailed)
                 if (fetch != providerFetch || version != requestVersion || backend != backendId) return@launch
                 providerCatalogs = knownProfiles.map { known ->
                     when (known.id) {
@@ -1303,11 +1430,11 @@ internal class HomeConfig(
     }
 
     /** Reads quota and load for the backend and profile this composer is on, or null without an API. */
-    fun usageLoader(projectId: String): (suspend () -> riffet.contracts.NativeBackendUsage)? {
-        val api = api ?: return null
+    fun usageLoader(projectId: String?): (suspend () -> riffet.contracts.NativeBackendUsage)? {
+        val targetApi = serverApi() ?: return null
         val backend = backendId
         val profile = profileId
-        return { api.backendUsage(backend, projectId = projectId, profileId = profile) }
+        return { targetApi.backendUsage(backend, projectId = projectId, profileId = profile, global = projectId == null) }
     }
 
     private var seenRevision: Long? = null
@@ -1316,10 +1443,10 @@ internal class HomeConfig(
      * Follows the list's settings and provider revision: an unchanged key reads nothing, a new
      * [backendRevision] (providers edited) reads the catalog again.
      */
-    fun sync(projectId: String, settings: riffet.contracts.AppSettings?, backendRevision: Long) {
+    fun sync(projectId: String?, settings: riffet.contracts.AppSettings?, backendRevision: Long, serverId: String = "") {
         val providersChanged = seenRevision != null && seenRevision != backendRevision
         seenRevision = backendRevision
-        load(projectId, settings, force = providersChanged)
+        load(projectId, settings, force = providersChanged, serverId = serverId)
     }
 
     /** The slash commands for the current backend and profile in the last project asked for. */
@@ -1327,16 +1454,16 @@ internal class HomeConfig(
         private set
     private var slashKey: String? = null
 
-    suspend fun loadSlash(projectId: String) {
-        val api = api ?: return
+    suspend fun loadSlash(projectId: String?, serverId: String = activeServerId) {
+        val targetApi = serverApi(serverId) ?: return
         val backend = backendId
         val profile = profileId
-        val key = "$projectId|$backend|${profile.orEmpty()}"
+        val key = "$serverId|${projectId.orEmpty()}|$backend|${profile.orEmpty()}"
         if (key == slashKey) return
         slashKey = key
         slash = null
         slash = try {
-            api.slashCatalog(backend, projectId = projectId, profileId = profile)
+            targetApi.slashCatalog(backend, projectId = projectId, profileId = profile, global = projectId == null)
         } catch (cancellation: CancellationException) {
             slashKey = null
             throw cancellation
@@ -1346,28 +1473,54 @@ internal class HomeConfig(
         }
     }
 
-    fun load(projectId: String, settings: riffet.contracts.AppSettings?, force: Boolean = false) {
-        val api = api ?: return
-        if (defaultBackendId != settings?.defaultBackendId) userChoseBackend = false
-        defaultBackendId = settings?.defaultBackendId
-        if (!userChoseBackend) backendId = settings?.defaultBackendId ?: backends.firstOrNull { it.available }?.backendId ?: NativeBackendId.CLAUDE
+    fun load(projectId: String?, settings: riffet.contracts.AppSettings?, force: Boolean = false, serverId: String = activeServerId) {
+        val targetApi = serverApi(serverId) ?: return
+        val serverSwitched = serverId != activeServerId
+        activeServerId = serverId
+        if (serverSwitched) {
+            userChoseBackend = false
+            picks = NewSessionDraft()
+            picksBackend = null
+            slashKey = null
+            slash = null
+        }
+        val effectiveSettings = if (serverId.isNotEmpty()) remoteSettings[serverId] else settings
+        val rememberedRemote = if (serverId.isNotEmpty()) remoteHome?.get(serverId) else null
+        if (serverId.isEmpty()) {
+            if (defaultBackendId != effectiveSettings?.defaultBackendId) userChoseBackend = false
+            defaultBackendId = effectiveSettings?.defaultBackendId
+            if (!userChoseBackend) {
+                backendId = effectiveSettings?.defaultBackendId ?: localBackends.firstOrNull { it.available }?.backendId ?: NativeBackendId.CLAUDE
+            }
+        } else if (!userChoseBackend) {
+            val cachedRemoteBackends = remoteBackends[serverId].orEmpty()
+            val validRemembered = rememberedRemote?.takeIf { choice ->
+                cachedRemoteBackends.isEmpty() || cachedRemoteBackends.any { it.backendId == choice.backendId }
+            }
+            val initial = validRemembered ?: initialRemoteHomeChoice(cachedRemoteBackends, effectiveSettings)
+            if (initial != null) {
+                backendId = initial.backendId
+                if (initial.profileId != null && picks.profileId == null) picks = picks.copy(profileId = initial.profileId)
+            }
+        }
         // Another backend has other providers, models and permissions: its picks start over.
         if (backendId != picksBackend) {
             picks = NewSessionDraft()
+            if (serverId.isNotEmpty() && rememberedRemote?.backendId == backendId && rememberedRemote.profileId != null) {
+                picks = picks.copy(profileId = rememberedRemote.profileId)
+            }
             picksBackend = backendId
         }
-        val key = "$projectId:$backendId:${settings?.nativeBackendDefaults?.get(backendId)}:${if (backendId == NativeBackendId.CURSOR) settings?.defaultModel else null}"
+        val key = "$serverId@${projectId.orEmpty()}:$backendId:${effectiveSettings?.nativeBackendDefaults?.get(backendId)}:${if (backendId == NativeBackendId.CURSOR) effectiveSettings?.defaultModel else null}"
         if (!force && loadedKey == key) return
         loadedKey = key
         val version = ++requestVersion
         val fetch = ++providerFetch
-        val requestedBackend = backendId
+        var requestedBackend = backendId
         if (force) loadedConfigs.clear()
         val cached = loadedConfigs[cacheKey(key)]
-        if (cached != null) apply(cached, settings)
-        else if (loadedBackend != requestedBackend) {
-            // Another agent's providers and models are not this one's; within one agent they stay until the new answer.
-            // The model panel holds placeholder rows meanwhile rather than the last agent's list.
+        if (cached != null) apply(cached, effectiveSettings)
+        else if (loadedBackend != requestedBackend || loadedServerId != serverId) {
             knownProfiles = emptyList()
             providerCatalogs = emptyList()
             catalog = emptyList()
@@ -1379,34 +1532,90 @@ internal class HomeConfig(
             catalogError = null
             providerCatalogsLoading = false
             try {
-                val choices = if (backends.isEmpty() || force) {
-                    try { api.backends().filter { offers(it.backendId) } }
-                    catch (cancellation: CancellationException) { throw cancellation }
-                    catch (_: Throwable) { backends }
-                } else backends
-                val defaults = settings?.nativeBackendDefaults?.get(requestedBackend)
-                val entry = choices.firstOrNull { it.backendId == requestedBackend }
+                var resolvedSettings = effectiveSettings
+                val choices = if (serverId.isNotEmpty()) {
+                    val existing = remoteBackends[serverId]
+                    if (existing == null || force) {
+                        val fetchedBackends = targetApi.backends().filter { offers(it.backendId) }
+                        val fetchedSettings = runCatching { targetApi.fetchServerSettings() }.getOrNull()
+                        if (version != requestVersion) return@launch
+                        remoteBackends[serverId] = fetchedBackends
+                        if (fetchedSettings != null) {
+                            remoteSettings[serverId] = fetchedSettings
+                            resolvedSettings = fetchedSettings
+                        }
+                        if (!userChoseBackend) {
+                            val saved = remoteHome?.get(serverId)?.takeIf { choice -> fetchedBackends.any { it.backendId == choice.backendId } }
+                            val initial = saved ?: initialRemoteHomeChoice(fetchedBackends, resolvedSettings)
+                            if (initial != null) {
+                                requestedBackend = initial.backendId
+                                backendId = initial.backendId
+                                picksBackend = initial.backendId
+                                if (initial.profileId != null) picks = picks.copy(profileId = initial.profileId)
+                            }
+                        }
+                        fetchedBackends
+                    } else existing
+                } else {
+                    if (localBackends.isEmpty() || force) {
+                        try {
+                            targetApi.backends().filter { offers(it.backendId) }.also {
+                                localBackends.clear()
+                                localBackends.addAll(it)
+                            }
+                        } catch (cancellation: CancellationException) {
+                            throw cancellation
+                        } catch (_: Throwable) {
+                            localBackends.toList()
+                        }
+                    } else localBackends.toList()
+                }
+                if (choices.isEmpty()) {
+                    if (version != requestVersion) return@launch
+                    backends = emptyList()
+                    catalog = emptyList()
+                    capabilities = null
+                    source = null
+                    listed = null
+                    this@HomeConfig.settings = resolvedSettings
+                    loadedBackend = requestedBackend
+                    loadedServerId = serverId
+                    return@launch
+                }
+                val defaults = resolvedSettings?.nativeBackendDefaults?.get(requestedBackend)
+                val entry = choices.firstOrNull { it.backendId == requestedBackend } ?: choices.first()
+                if (entry.backendId != requestedBackend) {
+                    requestedBackend = entry.backendId
+                    backendId = entry.backendId
+                    picksBackend = entry.backendId
+                }
                 val requestedProfile = picks.requestedProfile(entry, defaults)
-                val loaded = api.backendCatalog(backendId = requestedBackend, profileId = requestedProfile, projectId = projectId)
+                val loaded = targetApi.backendCatalog(
+                    backendId = requestedBackend,
+                    profileId = requestedProfile,
+                    projectId = projectId,
+                    global = projectId == null,
+                )
                 if (version != requestVersion) return@launch
                 backends = choices
                 catalog = loaded.models
                 capabilities = loaded.capabilities
                 source = loaded
                 listed = entry
-                this@HomeConfig.settings = settings
+                this@HomeConfig.settings = resolvedSettings
                 settle()
-                val profiles = entry?.profiles.orEmpty()
+                val profiles = entry.profiles
                 knownProfiles = profiles
                 if (profiles.size < 2) {
                     providerCatalogs = emptyList()
                 } else {
                     val activeProfile = profiles.firstOrNull { it.id == profileId } ?: profiles.firstOrNull { it.isDefault == true }
                     val active = activeProfile?.let { ProviderCatalog(it, loaded.models, loaded.available, loaded.reason, null, loaded) }
-                    loadProviderCatalogs(api, requestedBackend, projectId, profiles, active, version, fetch)
+                    loadProviderCatalogs(targetApi, requestedBackend, projectId, profiles, active, version, fetch)
                 }
                 if (version == requestVersion) {
                     loadedBackend = requestedBackend
+                    loadedServerId = serverId
                     loadedConfigs[cacheKey(key)] = LoadedConfig(choices, loaded, entry, profiles, providerCatalogs)
                 }
             } catch (cancellation: CancellationException) {
@@ -1422,25 +1631,27 @@ internal class HomeConfig(
         }
     }
 
-    fun selectBackend(id: NativeBackendId, projectId: String, settings: riffet.contracts.AppSettings?) {
-        if (id == backendId) return
+    fun selectBackend(id: NativeBackendId, projectId: String?, settings: riffet.contracts.AppSettings?, serverId: String = activeServerId) {
+        if (id == backendId && serverId == activeServerId) return
         userChoseBackend = true
         backendId = id
-        load(projectId, settings)
+        if (serverId.isNotEmpty()) {
+            val savedProfile = remoteSettings[serverId]?.nativeBackendDefaults?.get(id)?.profileId
+            remoteHome?.set(serverId, id, savedProfile)
+        }
+        load(projectId, settings, serverId = serverId)
     }
 
     private suspend fun loadProviderCatalogs(
         api: RiffetApi,
         backend: NativeBackendId,
-        projectId: String,
+        projectId: String?,
         profiles: List<NativeBackendProfile>,
         active: ProviderCatalog?,
         version: Long,
         fetch: Long,
     ) {
         providerCatalogsLoading = true
-        // Each provider is shown as soon as it answers, in configured order: a slow gateway must not hold back the others.
-        // The previous answers stay in place until their replacements land, so the sheet does not blank.
         val read = mutableMapOf<String, ProviderCatalog>()
         providerCatalogs.forEach { previous -> if (profiles.any { it.id == previous.profile.id }) read[previous.profile.id] = previous }
         if (active != null) read[active.profile.id] = active
@@ -1466,11 +1677,11 @@ internal class HomeConfig(
 private suspend fun readProviderCatalog(
     api: RiffetApi,
     backend: NativeBackendId,
-    projectId: String,
+    projectId: String?,
     profile: NativeBackendProfile,
     readFailed: String,
 ): ProviderCatalog = try {
-    val entry = api.backendCatalog(backendId = backend, profileId = profile.id, projectId = projectId)
+    val entry = api.backendCatalog(backendId = backend, profileId = profile.id, projectId = projectId, global = projectId == null)
     ProviderCatalog(profile, entry.models, entry.available, entry.reason, null, entry)
 } catch (cancellation: CancellationException) {
     throw cancellation

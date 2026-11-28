@@ -32,7 +32,12 @@ import riffet.contracts.NativeSlashCatalog
 
 /** `GET /api/backends`: every CLI the workbench knows, with its profiles and model catalog. */
 @Throws(Exception::class)
-suspend fun RiffetApi.backends(): List<NativeBackendCatalogEntry> = get("/api/backends").decode()
+suspend fun RiffetApi.backends(): List<NativeBackendCatalogEntry> = backends(recheckMissing = false)
+
+/** `GET /api/backends?recheck=1`: re-probes missing CLIs when opening an agent picker. */
+@Throws(Exception::class)
+suspend fun RiffetApi.backends(recheckMissing: Boolean): List<NativeBackendCatalogEntry> =
+    get("/api/backends", if (recheckMissing) listOf("recheck" to "1") else emptyList()).decode()
 
 /** `GET /api/backends/:id/profiles`: the saved profiles of one CLI. */
 @Throws(Exception::class)

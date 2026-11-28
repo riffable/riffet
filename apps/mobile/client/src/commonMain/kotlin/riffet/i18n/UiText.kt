@@ -317,6 +317,18 @@ internal object UiText {
         "owner.randomAvatar" to "随机头像",
         "owner.shuffle" to "换一批",
         "owner.history" to "历史头像",
+        // Linked servers (docs/SERVER-LINKS.md)
+        "servers.offline" to "离线",
+        "servers.incompatible" to "版本不兼容",
+        "servers.noOutbound" to "未允许本机操作",
+        "servers.offlineLabel" to "{0} · 离线",
+        "servers.fromServer" to "来自 {0}",
+        "servers.pickerTitle" to "在哪台服务器新建？",
+        "servers.needDirectory" to "先在 {0} 选择一个目录",
+        "servers.scope.relevant" to "本机与本机发起",
+        "servers.scope.all" to "全部服务器",
+        "servers.scope.local" to "仅本机",
+        "servers.current" to "本机",
     )
 
     val en: Map<String, String> = mapOf(
@@ -628,5 +640,17 @@ internal object UiText {
         "owner.randomAvatar" to "Random avatar",
         "owner.shuffle" to "Shuffle",
         "owner.history" to "Recent avatars",
+        // Linked servers (docs/SERVER-LINKS.md)
+        "servers.offline" to "Offline",
+        "servers.incompatible" to "Incompatible version",
+        "servers.noOutbound" to "Outbound access off",
+        "servers.offlineLabel" to "{0} · Offline",
+        "servers.fromServer" to "From {0}",
+        "servers.pickerTitle" to "Which server to start on?",
+        "servers.needDirectory" to "Choose a folder on {0} first",
+        "servers.scope.relevant" to "This server & started here",
+        "servers.scope.all" to "All servers",
+        "servers.scope.local" to "This server only",
+        "servers.current" to "This server",
     )
 }

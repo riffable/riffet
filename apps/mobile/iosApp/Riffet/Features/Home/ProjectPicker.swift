@@ -20,6 +20,8 @@ struct ProjectSheet: View {
     let workbench: Workbench
     let selection: String?
     var allLabel: String?
+    var serverID: String? = nil
+    var serverNames: [String: String] = [:]
     var onBrowse: (() -> Void)?
     let onSelect: (Project?) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -27,7 +29,9 @@ struct ProjectSheet: View {
     @State private var query = ""
 
     private var candidates: [Project] {
-        workbench.list.projects.filter { $0.archivedAt == nil && $0.isTaskTarget }
+        let base = workbench.list.projects.filter { $0.archivedAt == nil && $0.isTaskTarget }
+        guard let serverID else { return base }
+        return base.filter { workbench.serverOf($0.id) == serverID }
     }
     private var searchable: Bool { candidates.count { $0.worktree == nil } > 8 }
     /// Origins in list order, each followed by its worktrees; a worktree whose origin is gone lists on its own.
@@ -59,7 +63,10 @@ struct ProjectSheet: View {
                         if row.nested { Image(systemName: "arrow.triangle.branch").riffetFont(.caption).foregroundStyle(palette.fg3).padding(.leading, 16) }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.nested ? (project.worktree?.branch ?? project.name) : project.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-                            if project.worktree == nil { Text(directoryHint(project)).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head) }
+                            if project.worktree == nil {
+                                let hint = [serverNames[project.id], directoryHint(project)].compactMap { $0 }.joined(separator: " · ")
+                                Text(hint).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head)
+                            }
                         }
                         Spacer(minLength: 8)
                         check(project.id == selection)
@@ -97,6 +104,8 @@ private struct ProjectSearch: ViewModifier {
 struct ProjectPicker: View {
     let workbench: Workbench
     @Binding var selection: String?
+    var serverID: String = ""
+    var serverName: String? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
     @State private var showArchived = false
@@ -110,7 +119,9 @@ struct ProjectPicker: View {
 
     private var projects: [Project] {
         workbench.list.projects.filter {
-            $0.isTaskTarget && (showArchived || $0.archivedAt == nil) &&
+            $0.isTaskTarget &&
+            (serverID.isEmpty ? (workbench.homeServerOptions.isEmpty || workbench.serverOf($0.id).isEmpty) : workbench.serverOf($0.id) == serverID) &&
+            (showArchived || $0.archivedAt == nil) &&
             (search.isEmpty || "\($0.name) \($0.cwd) \(($0.tags ?? []).joined(separator: " "))".localizedCaseInsensitiveContains(search))
         }
     }
@@ -159,7 +170,7 @@ struct ProjectPicker: View {
                     }
                     .frame(maxWidth: .infinity).listRowSeparator(.hidden).listRowBackground(Color.clear)
                 }
-                if search.isEmpty, !favorites.favorites.isEmpty {
+                if serverID.isEmpty, search.isEmpty, !favorites.favorites.isEmpty {
                     Section {
                         ForEach(favorites.favorites, id: \.id) { favorite in
                             Button { Task { await open(favorite) } } label: {
@@ -178,8 +189,8 @@ struct ProjectPicker: View {
                 }
                 Section {
                     NavigationLink {
-                        RemoteDirectoryPicker(workbench: workbench) { project in selection = project.id; dismiss() }
-                    } label: { Label("选择 Mac 上的其他目录", systemImage: "folder.badge.plus") }
+                        RemoteDirectoryPicker(workbench: workbench, serverID: serverID, serverName: serverName) { project in selection = project.id; dismiss() }
+                    } label: { Label(serverName.map { "选择 \($0) 上的目录" } ?? "选择 Mac 上的其他目录", systemImage: "folder.badge.plus") }
                     .disabled(mutating != nil)
                     Toggle("显示已归档项目", isOn: $showArchived).tint(palette.primary)
                 }
@@ -298,6 +309,8 @@ private struct ProjectEditSheet: View {
 
 struct RemoteDirectoryPicker: View {
     let workbench: Workbench
+    var serverID: String = ""
+    var serverName: String? = nil
     let choose: (Project) -> Void
     @State private var directory: BrowseResult?
     @State private var path = ""
@@ -307,9 +320,11 @@ struct RemoteDirectoryPicker: View {
     @State private var favorites = FolderFavoritesModel()
     @State private var renamingFavorite: FolderFavorite?
     @Environment(\.palette) private var palette
+    private var showFavorites: Bool { serverID.isEmpty }
+    private var hostLabel: String { serverName ?? workbench.baseURL.host ?? "Mac" }
     var body: some View {
         RiffetList {
-            if !favorites.favorites.isEmpty {
+            if showFavorites, !favorites.favorites.isEmpty {
                 Section("收藏") {
                     ForEach(favorites.favorites, id: \.id) { favorite in
                         Button { Task { await load(favorite.path) } } label: { FolderFavoriteLabel(favorite: favorite, showsPath: false) }
@@ -348,17 +363,19 @@ struct RemoteDirectoryPicker: View {
                         Task {
                             selecting = true
                             defer { selecting = false }
-                            do { let project = try await workbench.store.openDirectory(path: directory.path); choose(project) }
-                            catch { self.error = error.riffetMessage }
+                            do {
+                                let project = try await workbench.store.openDirectory(path: directory.path, serverId: serverID.isEmpty ? nil : serverID)
+                                choose(project)
+                            } catch { self.error = error.riffetMessage }
                         }
                     }.disabled(selecting || loading)
-                } footer: { Text("目录位于 \(workbench.baseURL.host ?? "Mac")，不是 iPhone 的本机文件。") }
+                } footer: { Text("目录位于 \(hostLabel)，不是 iPhone 的本机文件。") }
             }
         }
-        .navigationTitle(String(localized: "Mac 上的目录", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(serverName.map { "\($0) 上的目录" } ?? String(localized: "Mac 上的目录", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if favorites.favorites.count > 1 { ToolbarItem(placement: .topBarTrailing) { EditButton() } }
-            if let current = directory?.path {
+            if showFavorites, favorites.favorites.count > 1 { ToolbarItem(placement: .topBarTrailing) { EditButton() } }
+            if showFavorites, let current = directory?.path {
                 let starred = favorites.favorite(at: current) != nil
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(starred ? "取消收藏此目录" : "收藏此目录", systemImage: starred ? "star.fill" : "star") { Task { await favorites.toggle(current) } }
@@ -369,15 +386,134 @@ struct RemoteDirectoryPicker: View {
         .modifier(FolderFavoriteRenameAlert(model: favorites, target: $renamingFavorite))
         .task {
             if directory == nil { await load(nil) }
-            await favorites.load(workbench.api)
+            if showFavorites { await favorites.load(workbench.api) }
         }
     }
     private func load(_ requested: String?) async {
         guard !loading else { return }
         loading = true; error = nil
         defer { loading = false }
-        do { directory = try await workbench.api?.browse(path: requested); path = directory?.path ?? requested ?? "" }
+        do { directory = try await workbench.apiForServer(serverID)?.browse(path: requested); path = directory?.path ?? requested ?? "" }
         catch { self.error = error.riffetMessage }
+    }
+}
+
+/// Bottom sheet listing entry + linked servers for new sessions (`docs/SERVER-LINKS.md §10`).
+struct ServerPickerSheet: View {
+    let options: [HomeServerOption]
+    let selectedID: String
+    let onSelect: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(options, id: \.id) { item in
+                    Button {
+                        onSelect(item.id)
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: item.isSelf ? "laptopcomputer" : "server.rack")
+                                .riffetFont(.label, weight: .regular)
+                                .foregroundStyle(item.usable ? palette.fg2 : palette.fg4)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(item.name)
+                                    .riffetFont(.body)
+                                    .foregroundStyle(item.usable ? palette.fg : palette.fg3)
+                                    .lineLimit(1)
+                                if item.reason == nil, !item.subtitle.isEmpty {
+                                    Text(item.subtitle)
+                                        .riffetFont(.caption)
+                                        .foregroundStyle(palette.fg3)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 8)
+                            if let reason = item.reason {
+                                Text(reason).riffetFont(.caption).foregroundStyle(palette.fg3)
+                            } else if item.id == selectedID {
+                                Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent)
+                            } else {
+                                Circle()
+                                    .fill(item.online ? palette.success : palette.fg4)
+                                    .frame(width: 7, height: 7)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .buttonStyle(RiffetRowPressStyle(radius: 10))
+                    .disabled(!item.usable)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                }
+            }
+            .listStyle(.plain).scrollContentBackground(.hidden).background(palette.bg)
+            .navigationTitle(String(localized: "在哪台服务器新建？", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+    }
+}
+
+/// Bottom sheet choosing the session list's server scope (`docs/SERVER-LINKS.md §10`).
+struct ServerScopeSheet: View {
+    let peers: [ServerInfo]
+    let selectedScope: ServerScopeKind
+    let selectedPeerID: String?
+    let onSelect: (ServerScopeKind, String?) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationStack {
+            List {
+                row(title: String(localized: "本机与本机发起", bundle: .riffet), symbol: "link", selected: selectedScope == .relevant) {
+                    onSelect(.relevant, nil); dismiss()
+                }
+                row(title: String(localized: "全部服务器", bundle: .riffet), symbol: "globe", selected: selectedScope == .all) {
+                    onSelect(.all, nil); dismiss()
+                }
+                row(title: String(localized: "仅本机", bundle: .riffet), symbol: "laptopcomputer", selected: selectedScope == .local) {
+                    onSelect(.local, nil); dismiss()
+                }
+                ForEach(peers, id: \.id) { peer in
+                    row(title: peer.name,
+                        detail: peer.note?.isEmpty == false ? peer.note : HomeServersKt.formatServerPlatform(platform: peer.platform),
+                        symbol: "server.rack",
+                        trailing: peer.online ? nil : String(localized: "离线", bundle: .riffet),
+                        selected: selectedScope == .peer && selectedPeerID == peer.id) {
+                        onSelect(.peer, peer.id); dismiss()
+                    }
+                }
+            }
+            .listStyle(.plain).scrollContentBackground(.hidden).background(palette.bg)
+            .navigationTitle(String(localized: "服务器范围", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    private func row(title: String, detail: String? = nil, symbol: String, trailing: String? = nil, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: symbol).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                    if let detail, !detail.isEmpty {
+                        Text(detail).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let trailing { Text(trailing).riffetFont(.caption).foregroundStyle(palette.fg3) }
+                if selected { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent) }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        }
+        .buttonStyle(RiffetRowPressStyle(radius: 10))
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
     }
 }
 

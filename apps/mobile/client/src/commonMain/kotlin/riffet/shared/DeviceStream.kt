@@ -85,6 +85,8 @@ sealed interface ListsStreamEvent {
     data class Notice(val notice: RiffetNotice) : ListsStreamEvent
     /** Every team member, sent whole on any change (created, edited, pinned, archived, a new main conversation). */
     data class Team(val members: List<AgentMember>) : ListsStreamEvent
+    /** Linked servers changed (added, removed, went online/offline, or direction toggled). */
+    data object Servers : ListsStreamEvent
 }
 
 /** The lists stream plus its connection. Collecting [events] dials; [kick] cuts a backoff short. */
@@ -108,6 +110,7 @@ class ListsStreamSource(
                 "notice" -> decode(RiffetNotice.serializer(), event.data)?.let(ListsStreamEvent::Notice)
                 "changed" -> ListsStreamEvent.Changed(event.data.orEmpty())
                 "team" -> decode(AgentMemberList.serializer(), event.data)?.let { ListsStreamEvent.Team(it.members) }
+                "servers" -> ListsStreamEvent.Servers
                 else -> null
             }
         }

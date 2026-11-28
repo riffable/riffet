@@ -412,6 +412,27 @@ struct RiffetChipButton<Leading: View>: View {
     }
 }
 
+/// Compact icon-only chip sharing `RiffetChipButton`'s pill and highlight state.
+struct RiffetIconChipButton: View {
+    let systemImage: String
+    var highlighted = false
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .riffetFont(.label, weight: .medium)
+                .foregroundStyle(highlighted ? palette.fg : palette.fg2)
+                .frame(minWidth: RiffetMetrics.chipHeight + RiffetMetrics.floatingGap, minHeight: RiffetMetrics.chipHeight)
+                .background(Capsule().fill(highlighted ? palette.accentSoft : palette.press))
+                .frame(minHeight: RiffetMetrics.hitTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(RiffetDimPressStyle())
+    }
+}
+
 extension RiffetChipButton where Leading == EmptyView {
     init(title: String, highlighted: Bool = false, action: @escaping () -> Void) {
         self.init(title: title, highlighted: highlighted, leading: { EmptyView() }, action: action)

@@ -65,6 +65,25 @@ final class Workbench {
     private(set) var backendError: String?
     /// The first agent list has been read (or failed); until then "no agent" is not yet an answer.
     private(set) var backendsLoaded = false
+    /// Per-linked-server agents, read-only settings and errors (`docs/SERVER-LINKS.md §5`).
+    private(set) var remoteBackends: [String: [NativeBackendCatalogEntry]] = [:]
+    private(set) var remoteSettings: [String: AppSettings] = [:]
+    private(set) var remoteBackendErrors: [String: String] = [:]
+    private(set) var remoteBackendsLoaded: Set<String> = []
+    @ObservationIgnored private lazy var remoteHomeStore = RemoteHomeStore(preferences: createAppPreferences())
+    /// Linked servers available for new sessions; empty when no links exist.
+    var homeServerOptions: [HomeServerOption] { HomeServersKt.buildHomeServerOptions(servers: list.servers, linkedStatus: list.linkedStatus) }
+    func serverOf(_ objectID: String?) -> String { objectID.flatMap { list.objectServers[$0] } ?? "" }
+    func serverBadge(for objectID: String?) -> ServerBadgeInfo? { HomeServersKt.serverBadgeFor(objectId: objectID, list: list) }
+    func apiForServer(_ serverID: String) -> RiffetApi? { serverID.isEmpty ? api : api?.forServer(serverId: serverID) }
+    func backends(for serverID: String) -> [NativeBackendCatalogEntry] { serverID.isEmpty ? backends : (remoteBackends[serverID] ?? []) }
+    func backendError(for serverID: String) -> String? { serverID.isEmpty ? backendError : remoteBackendErrors[serverID] }
+    func settings(for serverID: String) -> AppSettings? { serverID.isEmpty ? settings : remoteSettings[serverID] }
+    func remoteHomeChoice(for serverID: String) -> RemoteHomeChoice? { serverID.isEmpty ? nil : remoteHomeStore.get(serverId: serverID) }
+    func rememberRemoteHome(serverID: String, backend: NativeBackendId, profileID: String?) {
+        guard !serverID.isEmpty else { return }
+        remoteHomeStore.set(serverId: serverID, backendId: backend, profileId: profileID)
+    }
     /// The owner's personal info on this server (docs/OWNER.md); nil until first loaded.
     private(set) var owner: OwnerInfo?
     var ownerAvatarURL: URL? { owner.flatMap { api?.ownerAvatarUrl(owner: $0) }.flatMap(URL.init(string:)) }
@@ -318,21 +337,38 @@ final class Workbench {
         do { backends = try await api?.backends() ?? []; backendError = nil }
         catch { backendError = error.riffetMessage }
     }
-    /// The catalog [loadCatalog] would answer without a request, so a page can show it in its first pass.
-    func cachedCatalog(_ backend: NativeBackendId, profileID: String?, projectID: String?) -> NativeBackendCatalogEntry? {
-        guard catalogRevision == list.backendRevision else { return nil }
-        return catalogs["\(backend.name)|\(profileID ?? "")|\(projectID ?? "")"]
+    /// Reads a linked server's agents and read-only defaults (`docs/SERVER-LINKS.md §5`).
+    func loadRemoteConfig(serverID: String, reload: Bool = false) async {
+        guard !serverID.isEmpty else { return }
+        if !reload, remoteBackends[serverID] != nil { return }
+        guard let targetApi = apiForServer(serverID) else { return }
+        defer { remoteBackendsLoaded.insert(serverID) }
+        do {
+            let fetched = try await targetApi.backends()
+            remoteBackends[serverID] = fetched
+            remoteBackendErrors[serverID] = nil
+            if let fetchedSettings = try? await targetApi.settings() {
+                remoteSettings[serverID] = fetchedSettings
+            }
+        } catch {
+            remoteBackendErrors[serverID] = error.riffetMessage
+        }
     }
-    func loadCatalog(_ backend: NativeBackendId, profileID: String?, projectID: String?, reload: Bool = false) async throws -> NativeBackendCatalogEntry? {
+    /// The catalog [loadCatalog] would answer without a request, so a page can show it in its first pass.
+    func cachedCatalog(_ backend: NativeBackendId, profileID: String?, projectID: String?, serverID: String = "") -> NativeBackendCatalogEntry? {
+        guard catalogRevision == list.backendRevision else { return nil }
+        return catalogs["\(serverID)|\(backend.name)|\(profileID ?? "")|\(projectID ?? "")"]
+    }
+    func loadCatalog(_ backend: NativeBackendId, profileID: String?, projectID: String?, reload: Bool = false, serverID: String = "") async throws -> NativeBackendCatalogEntry? {
         if catalogRevision != list.backendRevision {
             catalogs.removeAll(keepingCapacity: true)
             catalogRevision = list.backendRevision
         }
-        let key = "\(backend.name)|\(profileID ?? "")|\(projectID ?? "")"
+        let key = "\(serverID)|\(backend.name)|\(profileID ?? "")|\(projectID ?? "")"
         if !reload, let entry = catalogs[key] { return entry }
-        guard let api = api else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
+        guard let targetApi = apiForServer(serverID) else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
         let revision = list.backendRevision
-        let entry = try await api.backendCatalog(backendId: backend, profileId: profileID, projectId: projectID, allModels: false, global: false)
+        let entry = try await targetApi.backendCatalog(backendId: backend, profileId: profileID, projectId: projectID, allModels: false, global: projectID == nil)
         guard revision == list.backendRevision else { throw CancellationError() }
         catalogs[key] = entry
         return entry

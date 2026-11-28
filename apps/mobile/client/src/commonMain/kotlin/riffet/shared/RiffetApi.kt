@@ -33,6 +33,7 @@ import riffet.contracts.AuthStatus
 import riffet.contracts.Bootstrap
 import riffet.contracts.WorkItemSummary
 import riffet.contracts.NativeBackendId
+import riffet.contracts.ServerInfo
 import riffet.contracts.Session
 import riffet.contracts.TerminalInfo
 import riffet.contracts.TerminalAppearance
@@ -66,9 +67,38 @@ class RiffetApi(
     internal val config: RiffetClientConfig = RiffetClientConfig(),
     /** Where response bodies are parsed; tests substitute their scheduler's dispatcher. */
     internal val parseContext: CoroutineContext = Dispatchers.Default,
+    /** Explicit linked peer id (`docs/SERVER-LINKS.md`); null routes entry or auto-located objects. */
+    val targetServerId: String? = null,
+    internal val locator: ObjectServerLocator = ObjectServerLocator(),
 ) {
     /** Current app colours for the next terminal process; existing processes retain theirs. */
     @Volatile var terminalAppearance: TerminalAppearance? = null
+
+    /** A view of this API targeting [serverId] (null or empty targets the entry server), sharing transport and locator. */
+    fun forServer(serverId: String?): RiffetApi {
+        val normalized = serverId?.takeIf { it.isNotEmpty() }
+        if (normalized == targetServerId) return this
+        return RiffetApi(
+            http = http,
+            baseUrl = baseUrl,
+            tokenProvider = tokenProvider,
+            config = config,
+            parseContext = parseContext,
+            targetServerId = normalized,
+            locator = locator,
+        ).also { it.terminalAppearance = terminalAppearance }
+    }
+
+    /** The linked server an object lives on, or null for the entry server. */
+    fun serverOf(objectId: String?): String? = locator.serverOf(objectId)
+
+    /** Resolves an `/api/...` path against [targetServerId] or [locator]. */
+    fun resolvePath(path: String, query: List<Pair<String, String>> = emptyList()): String =
+        resolveServerPath(path, query, targetServerId, locator)
+
+    /** Full URL for an `/api/...` path routed to its owning server. */
+    fun resolveUrl(path: String, query: List<Pair<String, String>> = emptyList()): String =
+        baseUrl + resolvePath(path, query)
 
     private val negotiatedFeatures: String
         get() = (config.features + "session-references-v1").distinct().joinToString(",")
@@ -93,6 +123,10 @@ class RiffetApi(
 
     @Throws(Exception::class)
     suspend fun bootstrap(): Bootstrap = get("/api/bootstrap").decode()
+
+    /** `GET /api/servers`: this server first, then its linked peers (`server-links-v1`). */
+    @Throws(Exception::class)
+    suspend fun servers(): List<ServerInfo> = get("/api/servers").decode<ServersResponse>().servers
 
     /** `GET /api/work-items`, reduced to what the conversation list shows; an older server answers 404. */
     @Throws(Exception::class)
@@ -155,8 +189,9 @@ class RiffetApi(
         multipart: io.ktor.client.request.forms.MultiPartFormDataContent? = null,
     ): HttpResponse {
         val token = readToken()
+        val resolved = resolvePath(path, query)
         val response = try {
-            http.request(baseUrl + path) {
+            http.request(baseUrl + resolved) {
                 configure(method, token, query, body)
                 if (multipart != null) setBody(multipart)
                 if (ifNoneMatch != null) header(HttpHeaders.IfNoneMatch, ifNoneMatch)
@@ -175,10 +210,11 @@ class RiffetApi(
     /** A GET whose redirect is returned rather than followed; any other non-success status is an error. */
     internal suspend fun getRedirect(path: String, query: List<Pair<String, String>>): HttpResponse {
         val token = readToken()
+        val resolved = resolvePath(path, query)
         // A derived client shares the engine and the installed plugins; it must not be closed.
         val noRedirects = http.config { followRedirects = false }
         val response = try {
-            noRedirects.request(baseUrl + path) { configure(HttpMethod.Get, token, query, null) }
+            noRedirects.request(baseUrl + resolved) { configure(HttpMethod.Get, token, query, null) }
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -196,7 +232,7 @@ class RiffetApi(
      */
     internal suspend fun <T> streamGet(path: String, query: List<Pair<String, String>>, read: suspend (HttpResponse) -> T): T {
         val token = readToken()
-        val statement = http.prepareRequest(baseUrl + path) { configure(HttpMethod.Get, token, query, null) }
+        val statement = http.prepareRequest(baseUrl + resolvePath(path, query)) { configure(HttpMethod.Get, token, query, null) }
         return try {
             statement.execute { response ->
                 ensureSuccess(response)
@@ -214,7 +250,7 @@ class RiffetApi(
     /** Streaming POST keeps the response scoped: cancellation closes its channel and connection. */
     internal suspend fun <T> streamPost(path: String, body: JsonElement?, read: suspend (HttpResponse) -> T): T {
         val token = readToken()
-        val statement = http.prepareRequest(baseUrl + path) {
+        val statement = http.prepareRequest(baseUrl + resolvePath(path)) {
             configure(HttpMethod.Post, token, emptyList(), body)
             header(HttpHeaders.Accept, "application/x-ndjson")
             // Draft generation can outlast the ordinary request timeout; socket liveness is kept.
@@ -328,3 +364,6 @@ internal const val FeaturesHeader = "X-Riffet-Features"
 
 @kotlinx.serialization.Serializable
 internal class WorkItemSummaryList(val items: List<WorkItemSummary> = emptyList())
+
+@kotlinx.serialization.Serializable
+internal class ServersResponse(val servers: List<ServerInfo> = emptyList())

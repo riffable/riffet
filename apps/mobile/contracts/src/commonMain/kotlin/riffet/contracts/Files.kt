@@ -177,6 +177,10 @@ data class Bootstrap(
     val workItemSummaries: List<WorkItemSummary>? = null,
     /** Standing team members (docs/TEAM.md); absent from an older server. */
     val teamMembers: List<AgentMember>? = null,
+    /** This server's stable id (`server-links-v1`); absent from older servers or linked replies. */
+    val serverId: String? = null,
+    /** This server first, then its linked peers (`server-links-v1`); absent from older servers or linked replies. */
+    val servers: List<ServerInfo>? = null,
 )
 
 /** A task as the conversation list shows it; [status] stays a string so a new status does not break decoding. */

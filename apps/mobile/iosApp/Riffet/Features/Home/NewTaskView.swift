@@ -14,8 +14,11 @@ struct NewTaskView: View {
     var pageContent: AnyView? = nil
     @State private var assistantPage: AssistantPage?
     @State private var projects = false
+    @State private var servers = false
     @State private var browsing = false
     @State private var directories = false
+    /// Linked server explicitly picked while it has no registered projects yet (`""` is entry).
+    @State private var pickedServerID = ""
     /// 跳过 on the setup card's project step: the composer returns without a project.
     @State private var setupSkipped = false
     /// The model chip's picker panel.
@@ -50,24 +53,61 @@ struct NewTaskView: View {
     /// The quick-chat project, whose sessions are not tasks: a pending creation in it is not this page's.
     /// The assistant keeps its own draft, apart from the task's.
     private var draft: MessageDraft { workbench.drafts.draft(member.map { "member." + $0.id } ?? (assistant != nil ? "assistant" : "new")) }
-    /// The settings the composer's defaults come from: the assistant's own choice stands in for the agent's.
+    private var homeServerOptions: [HomeServerOption] {
+        assistant == nil && member == nil ? workbench.homeServerOptions : []
+    }
+    private var activeServerID: String {
+        guard !homeServerOptions.isEmpty else { return "" }
+        if !pickedServerID.isEmpty, homeServerOptions.contains(where: { $0.id == pickedServerID && $0.usable }) {
+            return pickedServerID
+        }
+        if let id = draft.projectID, let found = workbench.projects.first(where: { $0.id == id }) {
+            return workbench.serverOf(found.id)
+        }
+        return ""
+    }
+    private var activeServer: HomeServerOption? {
+        homeServerOptions.first { $0.id == activeServerID } ?? homeServerOptions.first
+    }
+    private var activeBackends: [NativeBackendCatalogEntry] {
+        activeServerID.isEmpty ? workbench.backends : workbench.backends(for: activeServerID)
+    }
+    private var serverUnavailableReason: String? {
+        activeServer?.usable == false ? activeServer?.reason : nil
+    }
+    /// The settings the composer's defaults come from: the assistant's own choice stands in for the agent's;
+    /// a linked server uses its own read-only defaults (`docs/SERVER-LINKS.md §5`).
     private var settings: AppSettings? {
         if let member { return workbench.memberSettings(member) }
-        return assistant != nil ? AssistantKt.assistantSettings(settings: workbench.settings, backends: workbench.backends) : workbench.settings
+        if assistant != nil { return AssistantKt.assistantSettings(settings: workbench.settings, backends: workbench.backends) }
+        return activeServerID.isEmpty ? workbench.settings : workbench.settings(for: activeServerID)
     }
     private var catalog: NativeBackendCatalogEntry? { loadedCatalog.flatMap { $0.backendId == backend ? $0 : nil } }
     private var backend: NativeBackendId {
-        // The assistant runs only on the agents that isolate it; a draft's other agent gives way to its own.
         let restricted = assistant != nil
+        if !activeServerID.isEmpty {
+            let list = activeBackends
+            if let chosen = list.first(where: { $0.backendId.name == draft.backendName }) { return chosen.backendId }
+            if let saved = workbench.remoteHomeChoice(for: activeServerID),
+               list.contains(where: { $0.backendId == saved.backendId }) { return saved.backendId }
+            if let initial = HomeServersKt.initialRemoteHomeChoice(backends: list, settings: settings) { return initial.backendId }
+            return list.first(where: { $0.available })?.backendId ?? list.first?.backendId ?? .claude
+        }
         return workbench.backends.first { $0.backendId.name == draft.backendName && (!restricted || AssistantKt.isAssistantBackend(id: $0.backendId)) }?.backendId ?? settings?.defaultBackendId ?? workbench.backends.first(where: { $0.available })?.backendId ?? .claude
     }
     private var project: Project? {
         if let member { return workbench.project(member.projectId) }
-        return assistant != nil ? workbench.assistantProject : workbench.projects.first { $0.id == draft.projectID }
+        if assistant != nil { return workbench.assistantProject }
+        guard let found = workbench.projects.first(where: { $0.id == draft.projectID }) else { return nil }
+        if !homeServerOptions.isEmpty, workbench.serverOf(found.id) != activeServerID { return nil }
+        return found
     }
-    /// What a warm CLI is held for: only an Agent that keeps one (Cursor) asks for it.
+    private var needsRemoteDirectory: Bool {
+        assistant == nil && member == nil && !activeServerID.isEmpty && project == nil
+    }
+    /// What a warm CLI is held for: only an Agent that keeps one (Cursor) on the entry server.
     private var prewarmBody: PrewarmBody? {
-        guard let project, let catalog, catalog.capabilities.supportsPrewarm?.boolValue == true else { return nil }
+        guard activeServerID.isEmpty, let project, let catalog, catalog.capabilities.supportsPrewarm?.boolValue == true else { return nil }
         let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: settings)
         return PrewarmBody(projectId: project.id, backendId: backend, backendProfileId: draft.profileID, model: draft.model,
                            mode: choice.mode, approval: choice.approval, agentId: nil, claimId: nil)
@@ -77,63 +117,21 @@ struct NewTaskView: View {
     private var rememberedTools: [String] { remembered ?? ToolGroups.shared.decode(raw: UserDefaults.standard.string(forKey: toolsKey)) }
     private var pickedTools: [String] { ToolsPick.offeredPicks(devices: toolDevices.devices, value: rememberedTools, plugins: toolDevices.plugins) }
     private var phonesShown: Bool {
-        catalog?.capabilities.supportsRiffetTools == true && ToolsPick.offered(devices: toolDevices.devices, value: [], plugins: toolDevices.plugins)
+        activeServerID.isEmpty && catalog?.capabilities.supportsRiffetTools == true && ToolsPick.offered(devices: toolDevices.devices, value: [], plugins: toolDevices.plugins)
     }
     private var extensions: ExtensionsPick? {
-        ExtensionsPick.make(workbench: workbench, allowed: true, capabilities: catalog?.capabilities, backendId: backend,
-                            profileId: draft.profileID, projectId: draft.projectID, off: extensionsOff,
+        ExtensionsPick.make(workbench: workbench, allowed: project != nil, capabilities: catalog?.capabilities, backendId: backend,
+                            profileId: draft.profileID, projectId: project?.id, off: extensionsOff,
                             onChange: { extensionsOff = ExtensionsOff.shared.clean(value: $0) })
     }
-    private var extensionsKey: String { "\(backend.name)|\(draft.profileID ?? "")|\(draft.projectID ?? "")" }
+    private var extensionsKey: String { "\(activeServerID)|\(backend.name)|\(draft.profileID ?? "")|\(project?.id ?? "")" }
     private func pickTools(_ groups: [String]) {
         remembered = ToolGroups.shared.picks(groups: groups)
         UserDefaults.standard.set(ToolGroups.shared.encode(groups: groups), forKey: toolsKey)
     }
-    private var contextKey: String { "\(backend.name)|\(draft.profileID ?? "")|\(draft.projectID ?? "")|\(workbench.list.backendRevision)" }
+    private var contextKey: String { "\(activeServerID)|\(backend.name)|\(draft.profileID ?? "")|\(project?.id ?? "")|\(workbench.list.backendRevision)|\(activeBackends.count)" }
     var body: some View {
-        @Bindable var draft = draft
-        pageBody.riffetTypeBoundary()
-        .navigationTitle(member != nil ? "" : assistant != nil ? String(localized: "个人助理", bundle: .riffet) : String(localized: "新会话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if assistant == nil, let project {
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    NavigationLink { ProjectFilesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "doc") }
-                        .accessibilityLabel(String(localized: "文件", bundle: .riffet))
-                    NavigationLink { ProjectChangesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "arrow.triangle.branch") }
-                        .accessibilityLabel(String(localized: "变更", bundle: .riffet))
-                }
-            }
-        }
-        .sheet(isPresented: $projects, onDismiss: { if browsing { browsing = false; directories = true } }) {
-            ProjectSheet(workbench: workbench, selection: draft.projectID, onBrowse: { browsing = true }) { if let picked = $0 { draft.projectID = picked.id } }
-        }
-        .sheet(item: $assistantPage) { page in
-            if let assistant {
-                NavigationStack {
-                    page.destination(workbench: workbench, setup: assistant)
-                        .toolbar { if page != .rules { ToolbarItem(placement: .confirmationAction) { Button("完成") { assistantPage = nil } } } }
-                }
-            }
-        }
-        .sheet(isPresented: $directories) { ProjectPicker(workbench: workbench, selection: $draft.projectID) }
-        .sheet(isPresented: $importing) { ExternalSessionPicker(workbench: workbench, projectID: draft.projectID, open: onOpenSession) }
-        .riffetPanelSheet(isPresented: $modelPanel) {
-            NewTaskModelPanel(workbench: workbench, draft: draft, catalog: catalog, backend: backend, loading: loadingCatalog, error: catalogError,
-                              retry: { Task { await loadCatalog(reload: true) } }, assistant: assistant != nil,
-                              more: { AnyView(NewTaskOptions(workbench: workbench, draft: draft, catalog: catalog, backend: backend,
-                                  loading: loadingCatalog, error: catalogError, retry: { Task { await loadCatalog(reload: true) } },
-                                  toolDevices: toolDevices.devices, toolPlugins: toolDevices.plugins, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions)) },
-                              close: { modelPanel = false })
-        }
-        .sheet(isPresented: $files) { DocumentAttachmentPicker { picked($0); files = false } }
-        .sheet(isPresented: $photos) { PhotoAttachmentPicker { picked($0); photos = false } }
-        .attachmentDrop(enabled: project != nil && !sending && !draft.uploading && draft.pendingCreationID == nil, picked)
-        .confirmationDialog("停止跟踪这次提交？", isPresented: $discardPending, titleVisibility: .visible) {
-            Button("停止跟踪", role: .destructive) {
-                do { if let id = draft.pendingCreationID { try workbench.store.discardPreparedCreation(id: id) }; draft.pendingCreationID = nil }
-                catch { draft.error = error.riffetMessage }
-            }
-        } message: { Text("任务可能已创建，请先查看会话列表") }
+        presentedBody
         .task {
             // The task draft tracks its unconfirmed submission; a quick chat left by an earlier version is not a task's.
             let task = workbench.drafts.draft("new")
@@ -146,7 +144,13 @@ struct NewTaskView: View {
             if draft.backendName == nil { draft.backendName = backend.name }
             // Project and model are choices the user makes before opening the keyboard.
         }
+        .task(id: activeServerID) {
+            if !activeServerID.isEmpty { await workbench.loadRemoteConfig(serverID: activeServerID) }
+        }
         .task(id: contextKey) { await loadCatalog() }
+        .onChange(of: draft.projectID) { _, id in
+            if !pickedServerID.isEmpty, let id, workbench.serverOf(id) == pickedServerID { pickedServerID = "" }
+        }
         .onAppear { prewarm.hold(api: workbench.api, body: prewarmBody); draft.dropBlankText() }
         .onChange(of: prewarmBody) { _, body in prewarm.hold(api: workbench.api, body: body) }
         .onDisappear { prewarm.close(); voice.teardown() }
@@ -161,6 +165,61 @@ struct NewTaskView: View {
         }
         .onChange(of: extensionsKey) { _, _ in extensionsOff = [] }
         .readsToolDevices(toolDevices, workbench: workbench, enabled: catalog?.capabilities.supportsRiffetTools == true)
+    }
+
+    private var presentedBody: some View {
+        @Bindable var draft = draft
+        let modelSourceLabel: String? = activeServerID.isEmpty ? nil : activeServer.map { String(localized: "来自 \($0.name)", bundle: .riffet) }
+        return pageBody.riffetTypeBoundary()
+        .navigationTitle(member != nil ? "" : assistant != nil ? String(localized: "个人助理", bundle: .riffet) : String(localized: "新会话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if assistant == nil, let project {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink { ProjectFilesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "doc") }
+                        .accessibilityLabel(String(localized: "文件", bundle: .riffet))
+                    NavigationLink { ProjectChangesView(workbench: workbench, project: project).modifier(PushedPageTabBar()) } label: { Image(systemName: "arrow.triangle.branch") }
+                        .accessibilityLabel(String(localized: "变更", bundle: .riffet))
+                }
+            }
+        }
+        .sheet(isPresented: $servers) {
+            ServerPickerSheet(options: homeServerOptions, selectedID: activeServerID) { selectHomeServer($0) }
+        }
+        .sheet(isPresented: $projects, onDismiss: { if browsing { browsing = false; directories = true } }) {
+            ProjectSheet(workbench: workbench, selection: project?.id, serverID: homeServerOptions.isEmpty ? nil : activeServerID, onBrowse: { browsing = true }) {
+                if let picked = $0 { pickedServerID = ""; draft.projectID = picked.id }
+            }
+        }
+        .sheet(item: $assistantPage) { page in
+            if let assistant {
+                NavigationStack {
+                    page.destination(workbench: workbench, setup: assistant)
+                        .toolbar { if page != .rules { ToolbarItem(placement: .confirmationAction) { Button("完成") { assistantPage = nil } } } }
+                }
+            }
+        }
+        .sheet(isPresented: $directories) {
+            ProjectPicker(workbench: workbench, selection: $draft.projectID, serverID: activeServerID, serverName: activeServer?.isSelf == false ? activeServer?.name : nil)
+        }
+        .sheet(isPresented: $importing) { ExternalSessionPicker(workbench: workbench, projectID: project?.id, open: onOpenSession) }
+        .riffetPanelSheet(isPresented: $modelPanel) {
+            NewTaskModelPanel(workbench: workbench, draft: draft, catalog: catalog, backend: backend, loading: loadingCatalog, error: catalogError,
+                              retry: { Task { await loadCatalog(reload: true) } }, assistant: assistant != nil,
+                              serverID: activeServerID, sourceLabel: modelSourceLabel,
+                              more: { AnyView(NewTaskOptions(workbench: workbench, draft: draft, catalog: catalog, backend: backend,
+                                  loading: loadingCatalog, error: catalogError, retry: { Task { await loadCatalog(reload: true) } },
+                                  toolDevices: toolDevices.devices, toolPlugins: toolDevices.plugins, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions)) },
+                              close: { modelPanel = false })
+        }
+        .sheet(isPresented: $files) { DocumentAttachmentPicker { picked($0); files = false } }
+        .sheet(isPresented: $photos) { PhotoAttachmentPicker { picked($0); photos = false } }
+        .attachmentDrop(enabled: project != nil && !sending && !draft.uploading && draft.pendingCreationID == nil, picked)
+        .confirmationDialog("停止跟踪这次提交？", isPresented: $discardPending, titleVisibility: .visible) {
+            Button("停止跟踪", role: .destructive) {
+                do { if let id = draft.pendingCreationID { try workbench.store.discardPreparedCreation(id: id) }; draft.pendingCreationID = nil }
+                catch { draft.error = error.riffetMessage }
+            }
+        } message: { Text("任务可能已创建，请先查看会话列表") }
     }
     /// The page's content: the centred composer under the brand mark, or a fresh member's conversations above a bottom composer.
     @ViewBuilder private var pageBody: some View {
@@ -213,7 +272,7 @@ struct NewTaskView: View {
     private var locked: Bool { sending || draft.pendingCreationID != nil }
     private var hasAttachments: Bool { !draft.attachments.isEmpty || !draft.pendingFiles.isEmpty || !draft.references.isEmpty }
     private var canStart: Bool {
-        !sending && (draft.pendingCreationID != nil || (draft.canSend && project != nil && !loadingCatalog && catalog?.available == true))
+        !sending && serverUnavailableReason == nil && (draft.pendingCreationID != nil || (draft.canSend && project != nil && !loadingCatalog && catalog?.available == true))
     }
     private func openModelPanel() {
         guard !sending, draft.pendingCreationID == nil else { return }
@@ -311,18 +370,61 @@ struct NewTaskView: View {
         .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading)
     }
     private var projectLine: some View {
-        HStack(spacing: 0) {
-            Button { writing = false; projects = true } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "folder").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2)
-                    Text(project?.name ?? String(localized: "选择项目", bundle: .riffet)).riffetFont(.headline).foregroundStyle(palette.fg).lineLimit(1).layoutPriority(1)
+        HStack(spacing: 4) {
+            if let activeServer, !homeServerOptions.isEmpty {
+                Button { writing = false; servers = true } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: activeServer.isSelf ? "laptopcomputer" : "server.rack")
+                            .riffetFont(.caption, weight: .regular)
+                            .foregroundStyle(palette.fg3)
+                        Text(activeServer.name)
+                            .riffetFont(.label, weight: .medium)
+                            .foregroundStyle(palette.fg2)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: 148, alignment: .leading)
+                    .padding(.horizontal, RiffetMetrics.terminalInset).frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
                 }
-                .padding(.horizontal, 4).frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                .buttonStyle(RiffetDimPressStyle())
+                .disabled(hasAttachments || locked)
+                .accessibilityLabel(String(localized: "服务器", bundle: .riffet))
+                .accessibilityIdentifier("newTaskServer")
             }
-            .buttonStyle(RiffetDimPressStyle())
-            .disabled(hasAttachments || locked).accessibilityLabel("项目").accessibilityIdentifier("newTaskProject")
+            if needsRemoteDirectory {
+                Button { writing = false; directories = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder.badge.plus").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2)
+                        Text(String(localized: "选择目录…", bundle: .riffet)).riffetFont(.headline).foregroundStyle(palette.fg).lineLimit(1).layoutPriority(1)
+                    }
+                    .padding(.horizontal, RiffetMetrics.floatingGap / 2).frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                }
+                .buttonStyle(RiffetDimPressStyle())
+                .disabled(locked).accessibilityLabel("选择目录").accessibilityIdentifier("newTaskProject")
+            } else {
+                Button { writing = false; projects = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "folder").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2)
+                        Text(project?.name ?? String(localized: "选择项目", bundle: .riffet)).riffetFont(.headline).foregroundStyle(palette.fg).lineLimit(1).layoutPriority(1)
+                    }
+                    .padding(.horizontal, RiffetMetrics.floatingGap / 2).frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                }
+                .buttonStyle(RiffetDimPressStyle())
+                .disabled(hasAttachments || locked).accessibilityLabel("项目").accessibilityIdentifier("newTaskProject")
+            }
             Spacer(minLength: 8)
         }.buttonStyle(RiffetDimPressStyle())
+    }
+    private func selectHomeServer(_ targetID: String) {
+        guard targetID != activeServerID else { return }
+        draft.backendName = nil; draft.profileID = nil; draft.model = nil; draft.mode = nil; draft.approval = nil
+        if let preferred = HomeServersKt.preferredProjectForServer(projects: workbench.list.projects, sessions: workbench.list.sessions, objectServers: workbench.list.objectServers, serverId: targetID) {
+            pickedServerID = ""
+            draft.projectID = preferred.id
+            return
+        }
+        pickedServerID = targetID
+        draft.projectID = nil
+        directories = true
     }
     private var citesFiles: Bool { assistant == nil && backend != .chat }
     private var citesSessions: Bool { catalog?.capabilities.supportsSessionReferences == true }
@@ -342,11 +444,11 @@ struct NewTaskView: View {
         writing = true
     }
     @ViewBuilder private var menuDock: some View {
-        if let menu, let projectID = draft.projectID, !setupShown {
-            let backend = backend, profileID = draft.profileID
+        if let menu, let projectID = project?.id, !setupShown {
+            let backend = backend, profileID = draft.profileID, serverID = activeServerID
             ComposerMenuDock(workbench: workbench,
-                             source: ComposerMenuSource(key: "\(backend.name)|\(projectID)|\(profileID ?? "")", projectID: projectID) {
-                                 guard let api = workbench.api else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
+                             source: ComposerMenuSource(key: "\(serverID)|\(backend.name)|\(projectID)|\(profileID ?? "")", projectID: projectID) {
+                                 guard let api = workbench.apiForServer(serverID) else { throw ClientFailure(String(localized: "未连接服务器", bundle: .riffet)) }
                                  return try await api.slashCatalog(backendId: backend, projectId: projectID, profileId: profileID, sessionId: nil, global: false).items
                              },
                              draft: draft, token: menu, allowsFiles: citesFiles, allowsSessions: citesSessions, picked: { writing = true })
@@ -414,6 +516,13 @@ struct NewTaskView: View {
     /// Catalog, draft and recovery notes sit under the card.
     @ViewBuilder private var notes: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let reason = serverUnavailableReason {
+                RiffetNotice(kind: .warning, message: activeServer.map { "\($0.name) · \(reason)" } ?? reason, boxed: true)
+            }
+            if needsRemoteDirectory, let name = activeServer?.name {
+                RiffetNotice(kind: .info, message: String(localized: "先在 \(name) 选择一个目录", bundle: .riffet),
+                             actionTitle: String(localized: "选择目录", bundle: .riffet), action: { writing = false; directories = true }, boxed: true)
+            }
             if let reason = catalog?.reason, catalog?.available == false { RiffetNotice(kind: .warning, message: reason, boxed: true) }
             if let error = draft.error { RiffetNotice(kind: .error, message: error, boxed: true) }
             if draft.pendingCreationID != nil {
@@ -429,7 +538,9 @@ struct NewTaskView: View {
             if let project {
                 NavigationLink { TerminalPage(workbench: workbench, projectID: project.id).modifier(PushedPageTabBar()) } label: { toolCard("终端", symbol: "terminal") }
             }
-            Button { writing = false; importing = true } label: { toolCard("继续终端会话", symbol: "clock.arrow.circlepath") }.disabled(locked)
+            if activeServerID.isEmpty {
+                Button { writing = false; importing = true } label: { toolCard("继续终端会话", symbol: "clock.arrow.circlepath") }.disabled(locked)
+            }
         }.buttonStyle(RiffetDimPressStyle())
     }
     /// 记忆, 规则 and 能力 under the composer, before the assistant has a conversation.
@@ -453,26 +564,30 @@ struct NewTaskView: View {
     }
     private var catalogStatus: String { loadingCatalog ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? "" }
     private func loadCatalog(reload: Bool = false) async {
-        guard let projectID = draft.projectID, !projectID.isEmpty else {
+        let serverID = activeServerID
+        let projectID = project?.id
+        if projectID == nil && serverID.isEmpty {
             loadedCatalog = nil; catalogError = nil; loadingCatalog = false
             return
         }
+        if !serverID.isEmpty, activeBackends.isEmpty {
+            await workbench.loadRemoteConfig(serverID: serverID)
+        }
         if draft.profileID == nil, draft.model == nil,
            let savedProfile = settings?.nativeBackendDefaults?[backend]?.profileId,
-           workbench.backends.first(where: { $0.backendId == backend })?.profiles.contains(where: { $0.id == savedProfile }) == true {
+           activeBackends.first(where: { $0.backendId == backend })?.profiles.contains(where: { $0.id == savedProfile }) == true {
             draft.profileID = savedProfile
             return // The context-key task restarts for the saved provider before loading its catalog.
         }
         let key = contextKey
-        // A cached answer replaces the previous context's at once; only a real read shows loading.
-        if !reload, let cached = workbench.cachedCatalog(backend, profileID: draft.profileID, projectID: projectID) {
+        if !reload, let cached = workbench.cachedCatalog(backend, profileID: draft.profileID, projectID: projectID, serverID: serverID) {
             if loadedCatalog !== cached { loadedCatalog = cached }
             loadingCatalog = false; catalogError = nil
         } else {
             loadingCatalog = true; catalogError = nil
         }
         do {
-            guard let loaded = try await workbench.loadCatalog(backend, profileID: draft.profileID, projectID: projectID, reload: reload) else {
+            guard let loaded = try await workbench.loadCatalog(backend, profileID: draft.profileID, projectID: projectID, reload: reload, serverID: serverID) else {
                 throw ClientFailure(String(localized: "Mac 未返回此 Agent 的模型与配置，请重试读取。", bundle: .riffet))
             }
             guard contextKey == key else { return }
@@ -483,7 +598,6 @@ struct NewTaskView: View {
                 return
             }
             loadedCatalog = loaded; loadingCatalog = false
-            // Picks the catalog still offers stay; the rest follow the defaults.
             let choice = NativeConfigurationSummary.choice(catalog: loaded, draft: draft, settings: settings)
             if draft.model != choice.model { draft.model = choice.model }
             if draft.mode != choice.mode { draft.mode = choice.mode }

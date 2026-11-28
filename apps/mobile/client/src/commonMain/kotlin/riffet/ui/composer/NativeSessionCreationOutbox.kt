@@ -15,6 +15,8 @@ data class PendingSessionCreation(
     val serverUrl: String,
     val body: NativeSessionCreateInput,
     val createdAt: String,
+    /** Target linked peer id (`docs/SERVER-LINKS.md`); null targets the entry server. */
+    val targetServerId: String? = null,
 ) {
     val id: String get() = body.clientSessionId
 }
@@ -24,9 +26,9 @@ class NativeSessionCreationOutbox(private val files: LocalFiles, serverUrl: Stri
     private val server = serverUrl.trimEnd('/').lowercase()
     private val root = "pending-creations/${safeName(server)}"
 
-    fun persist(body: NativeSessionCreateInput): PendingSessionCreation {
+    fun persist(body: NativeSessionCreateInput, targetServerId: String? = null): PendingSessionCreation {
         require(body.clientSessionId.isNotBlank() && body.initialMessage?.commandId?.isNotBlank() == true)
-        val request = PendingSessionCreation(server, body, isoUtcNow())
+        val request = PendingSessionCreation(server, body, isoUtcNow(), targetServerId?.takeIf { it.isNotEmpty() })
         files.write(path(request.id), RiffetJson.instance.encodeToString(request))
         return request
     }

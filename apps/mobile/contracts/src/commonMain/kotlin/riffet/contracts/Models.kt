@@ -323,6 +323,7 @@ data class SessionOrigin(
     val templateId: String? = null,
     val scheduleId: String? = null,
     val automationId: String? = null,
+    val serverId: String? = null,
     val discussion: DiscussionOrigin? = null,
 )
 

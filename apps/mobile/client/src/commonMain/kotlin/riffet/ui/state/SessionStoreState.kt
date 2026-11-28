@@ -9,8 +9,10 @@ import riffet.contracts.NativeHistoryState
 import riffet.contracts.NativeInteraction
 import riffet.contracts.NativeStatus
 import riffet.contracts.SessionControlSnapshot
+import riffet.contracts.LinkedServerStatus
 import riffet.contracts.Project
 import riffet.contracts.Run
+import riffet.contracts.ServerInfo
 import riffet.contracts.Session
 import riffet.contracts.WorkItemSummary
 import riffet.core.StoredSubagent
@@ -40,6 +42,14 @@ data class SessionListState(
     val workItems: List<WorkItemSummary>? = null,
     /** Standing team members, archived ones left out (docs/TEAM.md); null until a server with team members answers. */
     val teamMembers: List<AgentMember>? = null,
+    /** This entry server's stable id (`server-links-v1`); null on older servers. */
+    val selfServerId: String? = null,
+    /** This server first, then its linked peers (`server-links-v1`); empty when unlinked or on older servers. */
+    val servers: List<ServerInfo> = emptyList(),
+    /** Reachability of each linked peer's lists read through the entry server. */
+    val linkedStatus: Map<String, LinkedServerStatus> = emptyMap(),
+    /** Object id (`projectId` / `sessionId` / `terminalId`) → owning linked `serverId`; entry objects are absent. */
+    val objectServers: Map<String, String> = emptyMap(),
 )
 
 /** The lifecycle of the one native stream this store holds open. */

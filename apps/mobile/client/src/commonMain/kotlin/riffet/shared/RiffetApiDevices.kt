@@ -76,10 +76,10 @@ fun RiffetApi.deviceStream(beforeDial: suspend () -> Unit): DeviceStreamSession 
     beforeDial = beforeDial,
 ).open()
 
-/** `/api/lists/stream`: `changed` revisions and `notice` events, redialled with the shared backoff. */
+/** `/api/lists/stream`: `changed` revisions, `servers`, `team` and `notice` events, redialled with the shared backoff. */
 fun RiffetApi.listsStream(): ListsStreamSession = ListsStreamSource(
     http = http,
-    url = "$baseUrl/api/lists/stream",
+    url = resolveUrl("/api/lists/stream"),
     tokenProvider = tokenProvider,
     config = config,
 ).open()

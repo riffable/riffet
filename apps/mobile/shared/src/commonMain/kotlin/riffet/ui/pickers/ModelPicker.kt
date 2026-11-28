@@ -199,6 +199,8 @@ internal fun ModelPickerPages(
     agents: ModelPanelAgents? = null,
     /** Opens the settings this panel leaves out (mode, permissions, tools) inside the same sheet. */
     onMore: (() -> Unit)? = null,
+    /** Shown in the header when models come from a linked server (`来自 <服务器名>`). */
+    sourceLabel: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
@@ -291,7 +293,7 @@ internal fun ModelPickerPages(
             // A picker panel (mobile.md §2.5, as iOS's): what the list belongs to fixed at the top, the
             // model's parameters and the way on to the other settings fixed at the bottom, only the
             // models scrolling in between.
-            PickerPage(title = title, fullHeight = true, onBack = onBack, actions = onMore?.let { more -> {
+            PickerPage(title = title, subtitle = sourceLabel, fullHeight = true, onBack = onBack, actions = onMore?.let { more -> {
                 // The rest of the send settings: low use, so a bar action rather than a row or a chip.
                 // The close button's weight and ink: a denser glyph beside it read as the bar's loudest thing.
                 RiffetIconButton(onClick = more, modifier = Modifier.size(metrics.controlHeight)) {

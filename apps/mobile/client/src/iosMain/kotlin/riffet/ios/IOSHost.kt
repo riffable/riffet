@@ -57,7 +57,7 @@ class IOSHost {
     private val scope = MainScope() + failures
     internal val tokens = createDeviceTokenStore()
     internal val appearance = ForegroundAppearance(scope, "ios")
-    internal val clientConfig = RiffetClientConfig(features = listOf("quick-chat", "pi-agent", "antigravity-agent"))
+    internal val clientConfig = RiffetClientConfig(features = listOf("quick-chat", "pi-agent", "antigravity-agent", riffet.contracts.SERVER_LINKS_FEATURE))
 
     private val _store = MutableStateFlow<SessionStore?>(null)
     val store: StateFlow<SessionStore?> = _store.asStateFlow()

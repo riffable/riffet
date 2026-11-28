@@ -186,36 +186,35 @@ struct NewTaskModelPanel: View {
     var error: String?
     var retry: (() -> Void)?
     var assistant = false
+    var serverID: String = ""
+    var sourceLabel: String? = nil
     let more: () -> AnyView
     let close: () -> Void
     @State private var reader = ProfileCatalogs()
 
+    private var activeBackends: [NativeBackendCatalogEntry] { workbench.backends(for: serverID) }
+    private var activeSettings: AppSettings? { workbench.settings(for: serverID) }
     private var agents: [NativeBackendCatalogEntry] {
-        assistant ? workbench.backends.filter { AssistantKt.isStandingMemberBackend(entry: $0) } : workbench.backends
+        assistant ? activeBackends.filter { AssistantKt.isStandingMemberBackend(entry: $0) } : activeBackends
     }
     /// The agent as the app's agent list has it: its providers are known the moment it is picked, before
     /// its own catalog arrives, so the provider row does not appear a moment later.
-    private var agentEntry: NativeBackendCatalogEntry? { workbench.backends.first { $0.backendId == backend } }
+    private var agentEntry: NativeBackendCatalogEntry? { activeBackends.first { $0.backendId == backend } }
     private var profiles: [NativeBackendProfile] { (catalog ?? agentEntry)?.profiles ?? [] }
     private var keys: [String] { profiles.isEmpty ? [""] : profiles.map(\.id) }
-    /// The provider and model the composer's chip shows: the draft's, else the ones remembered for this
-    /// agent, else the catalog's defaults (`NewSessionDraft.resolve`). A kept list carries only the
-    /// catalog's default, so going by it would tick another model until the fresh read arrived.
     private func choice(_ entry: NativeBackendCatalogEntry) -> NewSessionChoice {
-        NativeConfigurationSummary.choice(catalog: entry, draft: draft, settings: workbench.settings)
+        NativeConfigurationSummary.choice(catalog: entry, draft: draft, settings: activeSettings)
     }
     private var effectiveProfile: String {
         draft.profileID ?? (catalog ?? agentEntry).flatMap { choice($0).profileId } ?? profiles.first { $0.isDefault?.boolValue == true }?.id ?? keys[0]
     }
     private var selectedCatalog: NativeBackendCatalogEntry? {
-        (fresh ? reader.catalogs[effectiveProfile] : nil) ?? (draft.profileID == nil ? catalog : nil) ?? reader.kept(backend, draft.projectID, effectiveProfile)
+        (fresh ? reader.catalogs[effectiveProfile] : nil) ?? (draft.profileID == nil ? catalog : nil) ?? reader.kept(backend, draft.projectID, effectiveProfile, serverID: serverID)
     }
-    /// The reader holds this agent's and project's catalogs, not the last ones: until it does, the list
-    /// keeps its placeholders rather than saying there are no models.
     private var fresh: Bool { scope != nil && reader.scope == scope }
     private var selection: String? { draft.model ?? selectedCatalog.flatMap { entry in let model = choice(entry).model; return model.isEmpty ? nil : model } }
     private var scope: ModelUsageScope? {
-        draft.projectID.map { ModelUsageScope(server: ObjectIdentifier(workbench), backend: backend.name, project: $0, profiles: keys, retry: reader.retries) }
+        draft.projectID.map { ModelUsageScope(server: ObjectIdentifier(workbench), linkedServer: serverID, backend: backend.name, project: $0, profiles: keys, retry: reader.retries) }
     }
 
     var body: some View {
@@ -223,11 +222,10 @@ struct NewTaskModelPanel: View {
                    agent: Binding(get: { backend.name }, set: pickAgent),
                    groups: groups, selection: selection, loading: loading || reader.loading || !fresh,
                    error: error ?? agentsError, retry: retryRead,
-                   note: note, enabled: (catalog ?? agentEntry)?.available == true,
+                   note: note, caption: sourceLabel, enabled: (catalog ?? agentEntry)?.available == true,
                    pick: { group, model in
-                       // The list it was picked from: this agent's fresh read or its kept list, never the last agent's read.
-                       guard let picked = (fresh ? reader.catalogs[group.id] : nil) ?? (group.id == effectiveProfile ? catalog : nil) ?? reader.kept(backend, draft.projectID, group.id) else { return }
-                       let remembered = workbench.settings?.nativeBackendDefaults?[backend]?.profileModels?[group.id]
+                       guard let picked = (fresh ? reader.catalogs[group.id] : nil) ?? (group.id == effectiveProfile ? catalog : nil) ?? reader.kept(backend, draft.projectID, group.id, serverID: serverID) else { return }
+                       let remembered = activeSettings?.nativeBackendDefaults?[backend]?.profileModels?[group.id]
                        apply(picked, profile: group.id, value: pickedSelection(catalog: picked.models, model: model.value, currentSelection: selection, remembered: remembered))
                        close()
                    },
@@ -235,20 +233,23 @@ struct NewTaskModelPanel: View {
                    choose: { value in if let selectedCatalog { apply(selectedCatalog, profile: effectiveProfile, value: value) } },
                    more: more)
             .accessibilityElement(children: .contain).accessibilityIdentifier("newTaskModelPanel")
-            // Re-read once the agent's catalog arrives: until then there is nothing to choose from.
             .task(id: ReadKey(scope: scope, ready: catalog?.backendId == backend && catalog?.capabilities.supportsModelSelection == true)) {
                 guard let scope, catalog?.backendId == backend, catalog?.capabilities.supportsModelSelection == true else { return }
-                await reader.load(workbench: workbench, backend: backend, projectID: scope.project, keys: keys, first: effectiveProfile, scope: scope)
+                await reader.load(workbench: workbench, backend: backend, projectID: scope.project, keys: keys, first: effectiveProfile, scope: scope, serverID: serverID)
             }
     }
 
     private struct ReadKey: Hashable { let scope: ModelUsageScope?; let ready: Bool }
 
-    /// The agent list failed and nothing else says what this agent is; once either is known, the panel works.
-    private var agentsError: String? { (catalog ?? agentEntry) == nil ? workbench.backendError : nil }
+    private var agentsError: String? { (catalog ?? agentEntry) == nil ? workbench.backendError(for: serverID) : nil }
     private func retryRead() {
         if error != nil { retry?() }
-        else if agentsError != nil { Task { await workbench.loadBackends() } }
+        else if agentsError != nil {
+            Task {
+                if serverID.isEmpty { await workbench.loadBackends() }
+                else { await workbench.loadRemoteConfig(serverID: serverID, reload: true) }
+            }
+        }
         else { reader.retries += 1 }
     }
 
@@ -261,28 +262,33 @@ struct NewTaskModelPanel: View {
     }
 
     private var groups: [ModelPanelGroup] {
-        // A just-picked agent shows the models this device kept for it, or placeholders, never the last
-        // agent's models, until its catalog arrives.
         guard note == nil, (catalog ?? agentEntry)?.backendId == backend else { return [] }
         return keys.map { key in
-            let entry = (fresh ? reader.catalogs[key] : nil) ?? reader.kept(backend, draft.projectID, key)
+            let entry = (fresh ? reader.catalogs[key] : nil) ?? reader.kept(backend, draft.projectID, key, serverID: serverID)
             return ModelPanelGroup(id: key, title: profiles.first { $0.id == key }?.name, models: entry?.models ?? [],
-                                   isCurrent: key == effectiveProfile, usage: (fresh ? reader.usage(key) : nil) ?? reader.keptUsage(backend, draft.projectID, key),
+                                   isCurrent: key == effectiveProfile, usage: (fresh ? reader.usage(key) : nil) ?? reader.keptUsage(backend, draft.projectID, key, serverID: serverID),
                                    unavailable: entry.flatMap { $0.available ? nil : $0.reason ?? String(localized: "不可用", bundle: .riffet) },
                                    failure: fresh ? reader.failures[key] : nil)
         }
     }
 
     private func pickAgent(_ name: String) {
-        guard name != backend.name, agents.contains(where: { $0.backendId.name == name && $0.available }) else { return }
+        guard name != backend.name, let chosen = agents.first(where: { $0.backendId.name == name && $0.available }) else { return }
         draft.backendName = name
         draft.profileID = nil; draft.model = nil; draft.mode = nil; draft.approval = nil
+        if !serverID.isEmpty {
+            let savedProfile = activeSettings?.nativeBackendDefaults?[chosen.backendId]?.profileId
+            workbench.rememberRemoteHome(serverID: serverID, backend: chosen.backendId, profileID: savedProfile)
+        }
     }
 
     private func apply(_ entry: NativeBackendCatalogEntry, profile: String, value: String) {
         guard let projectID = draft.projectID else { return }
+        if !serverID.isEmpty {
+            workbench.rememberRemoteHome(serverID: serverID, backend: backend, profileID: profile.isEmpty ? nil : profile)
+        }
         NativeConfigurationSummary.pickNewTaskModel(workbench: workbench, draft: draft, backend: backend, catalog: entry, projectID: projectID,
-                                                    profileID: profile.isEmpty ? nil : profile, value: value, remember: !assistant)
+                                                    profileID: profile.isEmpty ? nil : profile, value: value, remember: !assistant && serverID.isEmpty)
     }
 }
 
@@ -420,57 +426,58 @@ struct SessionModelPanel: View {
     /// The quota this device last read for a provider, looked up once: shown with a kept list in the
     /// same frame, before the reading task has seeded this scope's figures.
     @ObservationIgnored private var keptUsages: [String: NativeBackendUsage?] = [:]
-    func keptUsage(_ backend: NativeBackendId, _ projectID: String?, _ key: String) -> NativeBackendUsage? {
+    func keptUsage(_ backend: NativeBackendId, _ projectID: String?, _ key: String, serverID: String = "") -> NativeBackendUsage? {
         guard let projectID else { return nil }
-        let storeKey = Self.storeKey(backend, projectID, key)
+        let storeKey = Self.storeKey(backend, projectID, key, serverID: serverID)
         if let known = keptUsages[storeKey] { return known }
         let value = ModelUsageStore(preferences: createAppPreferences()).load(scope: storeKey)
         keptUsages[storeKey] = value
         return value
     }
 
-    static func storeKey(_ backend: NativeBackendId, _ projectID: String, _ key: String) -> String { "\(backend.name)|\(projectID)|\(key)" }
-    func kept(_ backend: NativeBackendId, _ projectID: String?, _ key: String) -> NativeBackendCatalogEntry? {
+    static func storeKey(_ backend: NativeBackendId, _ projectID: String, _ key: String, serverID: String = "") -> String {
+        serverID.isEmpty ? "\(backend.name)|\(projectID)|\(key)" : "\(serverID)|\(backend.name)|\(projectID)|\(key)"
+    }
+    func kept(_ backend: NativeBackendId, _ projectID: String?, _ key: String, serverID: String = "") -> NativeBackendCatalogEntry? {
         guard let projectID else { return nil }
         if keptLists == nil { keptLists = catalogStore.loadAll() }
-        return keptLists?[Self.storeKey(backend, projectID, key)]
+        return keptLists?[Self.storeKey(backend, projectID, key, serverID: serverID)]
     }
 
-    func load(workbench: Workbench, backend: NativeBackendId, projectID: String, keys: [String], first: String, scope: ModelUsageScope) async {
+    func load(workbench: Workbench, backend: NativeBackendId, projectID: String, keys: [String], first: String, scope: ModelUsageScope, serverID: String = "") async {
         loading = true; failures = [:]; catalogs = [:]
         self.scope = scope
         defer { if !Task.isCancelled { loading = false } }
-        // The last quota read shows with the first models, not a moment after them.
-        seedUsage(backend: backend, projectID: projectID, keys: keys, scope: scope)
-        guard let api = workbench.api else { for key in keys { failures[key] = String(localized: "未连接服务器", bundle: .riffet) }; return }
+        seedUsage(backend: backend, projectID: projectID, keys: keys, scope: scope, serverID: serverID)
+        guard let api = workbench.apiForServer(serverID) else { for key in keys { failures[key] = String(localized: "未连接服务器", bundle: .riffet) }; return }
         let ordered = keys.contains(first) ? [first] + keys.filter { $0 != first } : keys
         for key in ordered {
             do {
                 let entry = try await api.backendCatalog(backendId: backend, profileId: key.isEmpty ? nil : key, projectId: projectID, allModels: false, global: false)
                 try Task.checkCancellation()
                 catalogs[key] = entry
-                catalogStore.save(scope: Self.storeKey(backend, projectID, key), catalog: entry)
-                if entry.available, !entry.models.isEmpty { keptLists?[Self.storeKey(backend, projectID, key)] = entry }
+                catalogStore.save(scope: Self.storeKey(backend, projectID, key, serverID: serverID), catalog: entry)
+                if entry.available, !entry.models.isEmpty { keptLists?[Self.storeKey(backend, projectID, key, serverID: serverID)] = entry }
             } catch is CancellationError { return }
             catch {
                 if Task.isCancelled { return }
                 failures[key] = error.riffetMessage
             }
         }
-        await loadUsage(workbench: workbench, backend: backend, projectID: projectID, keys: ordered, scope: scope)
+        await loadUsage(workbench: workbench, backend: backend, projectID: projectID, keys: ordered, scope: scope, serverID: serverID)
     }
 
-    private func seedUsage(backend: NativeBackendId, projectID: String, keys: [String], scope: ModelUsageScope) {
+    private func seedUsage(backend: NativeBackendId, projectID: String, keys: [String], scope: ModelUsageScope, serverID: String = "") {
         guard usages?.scope != scope else { return }
         let store = ModelUsageStore(preferences: createAppPreferences())
-        usages = (scope, Dictionary(uniqueKeysWithValues: keys.compactMap { key in store.load(scope: "\(backend.name)|\(projectID)|\(key)").map { (key, $0) } }))
+        usages = (scope, Dictionary(uniqueKeysWithValues: keys.compactMap { key in store.load(scope: Self.storeKey(backend, projectID, key, serverID: serverID)).map { (key, $0) } }))
     }
 
-    private func loadUsage(workbench: Workbench, backend: NativeBackendId, projectID: String, keys: [String], scope: ModelUsageScope) async {
+    private func loadUsage(workbench: Workbench, backend: NativeBackendId, projectID: String, keys: [String], scope: ModelUsageScope, serverID: String = "") async {
         let store = ModelUsageStore(preferences: createAppPreferences())
-        func storeKey(_ key: String) -> String { "\(backend.name)|\(projectID)|\(key)" }
-        seedUsage(backend: backend, projectID: projectID, keys: keys, scope: scope)
-        guard let api = workbench.api else { return }
+        func storeKey(_ key: String) -> String { Self.storeKey(backend, projectID, key, serverID: serverID) }
+        seedUsage(backend: backend, projectID: projectID, keys: keys, scope: scope, serverID: serverID)
+        guard let api = workbench.apiForServer(serverID) else { return }
         for key in keys {
             do {
                 let value = try await api.backendUsage(backendId: backend, projectId: projectID, profileId: key.isEmpty ? nil : key, sessionId: nil, global: false)

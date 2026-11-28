@@ -59,7 +59,11 @@ class SessionDeltaAnswer(val delta: SessionListDelta, val etag: String)
 @Throws(Exception::class)
 suspend fun RiffetApi.createSession(body: NativeSessionCreateInput): NativeSessionCreateResult {
     requireReferenceProtocol(body.initialMessage?.references?.isNotEmpty() == true)
-    return post("/api/sessions", wireBody(body)).decode()
+    val target = targetServerId ?: body.projectId?.let(locator::serverOf)
+    return forServer(target).post("/api/sessions", wireBody(body)).decode<NativeSessionCreateResult>().also { result ->
+        locator.locateOne(result.session.id, target)
+        result.project?.let { locator.locateOne(it.id, target) }
+    }
 }
 
 @Throws(Exception::class)
@@ -242,8 +246,9 @@ private suspend fun RiffetApi.startSessionRequest(id: String, fingerprint: Strin
 
 /** A Cursor conversation that opens on the CLI's own session picker (the web's 继续历史会话). */
 @Throws(Exception::class)
-suspend fun RiffetApi.createResumePickerSession(projectId: String, backendId: NativeBackendId, profileId: String?, approval: String?): Session =
-    post(
+suspend fun RiffetApi.createResumePickerSession(projectId: String, backendId: NativeBackendId, profileId: String?, approval: String?): Session {
+    val target = targetServerId ?: locator.serverOf(projectId)
+    return forServer(target).post(
         "/api/sessions",
         buildJsonObject {
             put("projectId", JsonPrimitive(projectId))
@@ -255,7 +260,8 @@ suspend fun RiffetApi.createResumePickerSession(projectId: String, backendId: Na
             put("resumePicker", JsonPrimitive(true))
             if (approval != null) put("approval", JsonPrimitive(approval))
         },
-    ).decode()
+    ).decode<Session>().also { locator.locateOne(it.id, target) }
+}
 
 /** Searches conversations across every project; for file contents see [search]. */
 @Throws(Exception::class)

@@ -267,7 +267,8 @@ struct ConversationView: View {
         return pinnedNotice == nil ? find : noticeTop + noticeHeight + RiffetMetrics.floatingGap
     }
     /// What the title says beside the name: nothing while the connection is healthy.
-    private func connectionCaption(at now: Date) -> String? {
+    private func connectionCaption(at now: Date, serverBadge: ServerBadgeInfo? = nil) -> String? {
+        if serverBadge?.offline == true { return serverBadge?.label }
         if workbench.connection is RiffetConnectionStateFailed { return String(localized: "已断开", bundle: .riffet) }
         if workbench.connection is RiffetConnectionStateReconnecting {
             let minutes = Int(now.timeIntervalSince(offlineSince ?? now) / 60)
@@ -275,7 +276,7 @@ struct ConversationView: View {
         }
         if connectionStatus?.badge?.loading == true { return connectionStatus?.badge?.text }
         if focusSequence != nil && !didFocusMessage && focusError == nil { return String(localized: "正在定位搜索结果…", bundle: .riffet) }
-        return nil
+        return serverBadge?.label
     }
     /// The waiting question, to be docked: the live one, or the one whose answer is still being confirmed.
     private var dockedInteraction: NativeInteraction? {
@@ -762,8 +763,9 @@ struct ConversationView: View {
         // A remedy is the bar's own glass button; a connection that is fine shows nothing.
         // A resume reads as "starting" at once, which ends needsResume; the button stays and spins
         // until the request returns. A restart has its own entry and shows the title's badge instead.
+        let serverBadge = workbench.serverBadge(for: session.id)
         let resumingHere = resuming && !restarting
-        let resumes = resumingHere || (needsResume && catalog?.capabilities.supportsResume == true)
+        let resumes = resumingHere || (needsResume && catalog?.capabilities.supportsResume == true && serverBadge?.offline != true)
         // The principal slot spans from the back button to the trailing buttons; a leading item
         // would only get its content's width and cut the title to a character or two.
         ToolbarItem(placement: .principal) {
@@ -772,8 +774,8 @@ struct ConversationView: View {
                 // The line under it is the phone's connection to the server; a healthy one says nothing.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
                     Group {
-                        if let member { MemberBarTitle(workbench: workbench, member: member, status: resumingHere ? nil : connectionCaption(at: context.date)) }
-                        else { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle, status: resumingHere ? nil : connectionCaption(at: context.date)) }
+                        if let member { MemberBarTitle(workbench: workbench, member: member, status: resumingHere ? nil : connectionCaption(at: context.date, serverBadge: serverBadge)) }
+                        else { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.shownTitle, status: resumingHere ? nil : connectionCaption(at: context.date, serverBadge: serverBadge)) }
                     }
                     .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
                 }

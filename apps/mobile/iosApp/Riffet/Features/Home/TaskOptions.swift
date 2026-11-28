@@ -535,6 +535,7 @@ private struct ModelProvider: Identifiable {
 /// A suspended quota answer belongs to exactly one server, agent and provider selection.
 struct ModelUsageScope: Hashable {
     let server: ObjectIdentifier
+    var linkedServer: String = ""
     let backend: String
     let project: String
     let profiles: [String]

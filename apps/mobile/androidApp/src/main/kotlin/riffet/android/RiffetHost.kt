@@ -82,7 +82,7 @@ object RiffetHost {
     val drafts by lazy { ComposerDrafts(createAppPreferences()) }
     private val tokens by lazy { createDeviceTokenStore() }
     val connection: RiffetConnection by lazy {
-        RiffetConnection(tokens, config = RiffetClientConfig(features = listOf("pi-agent", "antigravity-agent", "projectless-tasks")))
+        RiffetConnection(tokens, config = RiffetClientConfig(features = listOf("pi-agent", "antigravity-agent", "projectless-tasks", riffet.contracts.SERVER_LINKS_FEATURE)))
     }
     var currentOrigin: String? = null
         private set

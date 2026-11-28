@@ -2,9 +2,16 @@ package riffet.ui.sessionlist
 
 import riffet.ui.design.RiffetSearchField
 import riffet.ui.design.ChipButton
+import riffet.ui.design.IconChipButton
 import riffet.ui.design.Notice
 import riffet.ui.design.NoticeKind
 import riffet.ui.home.ProjectPickerSheet
+import riffet.ui.home.ServerBadgeInfo
+import riffet.ui.home.ServerScopeKind
+import riffet.ui.home.ServerScopeSheet
+import riffet.ui.home.inServerScope
+import riffet.ui.home.serverBadgeFor
+import riffet.i18n.L10n
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 
@@ -268,7 +275,17 @@ fun SessionList(
                 }
             }
     }
-    val browseCriteria = listOf(filterName, scope.orEmpty(), layoutName).joinToString("\u0000")
+    val peerServers = remember(list.servers) {
+        list.servers.filter { it.self != true && it.outbound && it.compatible }
+    }
+    var serverScope by rememberSaveable { mutableStateOf(ServerScopeKind.RELEVANT) }
+    var serverScopePeerId by rememberSaveable { mutableStateOf<String?>(null) }
+    var serverScopeSheet by remember { mutableStateOf(false) }
+    val effectiveServerScope = if (peerServers.isEmpty()) ServerScopeKind.ALL
+        else if (serverScope == ServerScopeKind.PEER && peerServers.none { it.id == serverScopePeerId }) ServerScopeKind.RELEVANT
+        else serverScope
+    val effectiveServerPeerId = serverScopePeerId.takeIf { effectiveServerScope == ServerScopeKind.PEER }
+    val browseCriteria = listOf(filterName, scope.orEmpty(), layoutName, effectiveServerScope.name, effectiveServerPeerId.orEmpty()).joinToString("\u0000")
     var shownBrowseCriteria by rememberSaveable { mutableStateOf(browseCriteria) }
     val criteria = "$query\u0000$browseCriteria"
     var shownCriteria by rememberSaveable { mutableStateOf(criteria) }
@@ -309,18 +326,38 @@ fun SessionList(
     // local day rolls over, which is exactly when the bands have to be rebuilt.
     val dayStart = localDayStart(now)
     val environment = rememberResourceEnvironment()
+    val scopedSessions = remember(list.sessions, list.selfServerId, list.objectServers, effectiveServerScope, effectiveServerPeerId, selectedSessionId) {
+        if (effectiveServerScope == ServerScopeKind.ALL) list.sessions
+        else list.sessions.filter { session ->
+            session.id == selectedSessionId ||
+                inServerScope(session, effectiveServerScope, effectiveServerPeerId, list.selfServerId, list.objectServers)
+        }
+    }
     val keptOpen = selectedSessionId.takeIf { filter == SessionFilter.UNREAD }
-    val content = remember(list.projects, list.sessions, query, filter, scope, layout, dayStart, environment, keptOpen) {
-        sessionListContent(list.projects, list.sessions, query, filter, scope, layout, dayStart, keptOpen)
+    val content = remember(list.projects, scopedSessions, query, filter, scope, layout, dayStart, environment, keptOpen) {
+        sessionListContent(list.projects, scopedSessions, query, filter, scope, layout, dayStart, keptOpen)
     }
     val projectNames = remember(list.projects) { list.projects.associate { it.id to it.name } }
+    val projectServerNames = remember(list.projects, list.objectServers, list.servers) {
+        if (peerServers.isEmpty()) emptyMap()
+        else list.projects.mapNotNull { project ->
+            val badge = serverBadgeFor(project.id, list) ?: return@mapNotNull null
+            project.id to badge.label
+        }.toMap()
+    }
     val sessionsById = remember(list.sessions) { list.sessions.associateBy { it.id } }
     // The scope picks one sidebar group; only live ones are offered.
-    val scopes = remember(list.projects, list.sessions, environment) {
-        visibleGroups(list.projects, list.sessions, "", false).map { it.project }
+    val scopes = remember(list.projects, scopedSessions, environment) {
+        visibleGroups(list.projects, scopedSessions, "", false).map { it.project }
     }
     val scopeName = scope?.let { id -> scopes.firstOrNull { it.id == id }?.name }
     var scopeSheet by remember { mutableStateOf(false) }
+    val serverScopeLabel = when (effectiveServerScope) {
+        ServerScopeKind.RELEVANT -> null
+        ServerScopeKind.ALL -> L10n.uiText("servers.scope.all")
+        ServerScopeKind.LOCAL -> L10n.uiText("servers.scope.local")
+        ServerScopeKind.PEER -> peerServers.firstOrNull { it.id == effectiveServerPeerId }?.name
+    }
 
     // Every section renders the same row. A project group already says whose sessions these are,
     // so its rows name their agent instead; everywhere else a row names its project.
@@ -331,6 +368,7 @@ fun SessionList(
                 selected = session.id == selectedSessionId,
                 projectName = group ?: projectNames[session.projectId],
                 showProject = group == null,
+                serverBadge = serverBadgeFor(session.id, list),
                 now = now,
                 modifier = listItemMotion(),
                 onOpen = { onSelectSession(session) },
@@ -546,6 +584,20 @@ fun SessionList(
                             selected = filterName,
                             onSelect = { filterName = it },
                             leading = {
+                                if (peerServers.isNotEmpty()) {
+                                    val scopeIcon = when (effectiveServerScope) {
+                                        ServerScopeKind.LOCAL -> RiffetIcons.Monitor
+                                        ServerScopeKind.RELEVANT -> RiffetIcons.Link
+                                        ServerScopeKind.ALL, ServerScopeKind.PEER -> RiffetIcons.Globe
+                                    }
+                                    IconChipButton(
+                                        icon = scopeIcon,
+                                        contentDescription = serverScopeLabel ?: L10n.uiText("servers.scope.relevant"),
+                                        active = serverScopeLabel != null,
+                                        onClick = { serverScopeSheet = true },
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                }
                                 ChipButton(label = scopeName ?: stringResource(Res.string.session_projects), active = scopeName != null,
                                     icon = RiffetIcons.Folder, onClick = { scopeSheet = true })
                             },
@@ -579,6 +631,19 @@ fun SessionList(
         topBar = { header() },
     ) { chromeInsets -> body(chromeInsets) }
 
+    if (serverScopeSheet && peerServers.isNotEmpty()) {
+        ServerScopeSheet(
+            peers = peerServers,
+            selectedScope = effectiveServerScope,
+            selectedPeerId = effectiveServerPeerId,
+            onSelect = { nextScope, peerId ->
+                serverScope = nextScope
+                serverScopePeerId = peerId
+            },
+            onDismiss = { serverScopeSheet = false },
+        )
+    }
+
     if (scopeSheet) {
         ProjectPickerSheet(
             projects = scopes,
@@ -586,6 +651,7 @@ fun SessionList(
             onSelect = onScope,
             onDismiss = { scopeSheet = false },
             allLabel = stringResource(Res.string.session_all_projects),
+            serverNames = projectServerNames,
         )
     }
 
@@ -854,6 +920,8 @@ internal fun SessionRow(
     showProject: Boolean = true,
     /** Has at least one saved reply (收藏). */
     marked: Boolean = false,
+    /** Linked server badge for remote sessions; null for entry server sessions. */
+    serverBadge: ServerBadgeInfo? = null,
     modifier: Modifier = Modifier,
 ) {
     val motion = LocalRiffetMotion.current
@@ -976,6 +1044,25 @@ internal fun SessionRow(
                     )
                     if (marked) {
                         Icon(RiffetIcons.Bookmark, contentDescription = null, tint = colors.accent, modifier = Modifier.size(14.dp).alignBy { it.measuredHeight })
+                    }
+                    if (serverBadge != null) {
+                        val badgeTint = if (serverBadge.offline) colors.danger else colors.fg3
+                        if (serverBadge.multiPeer || serverBadge.offline) {
+                            Text(
+                                text = if (serverBadge.offline) "${serverBadge.alias} · ${L10n.uiText("servers.offline")}" else serverBadge.alias,
+                                style = timeStyle,
+                                color = badgeTint,
+                                maxLines = 1,
+                                modifier = Modifier.alignByBaseline(),
+                            )
+                        } else {
+                            Icon(
+                                RiffetIcons.Link,
+                                contentDescription = serverBadge.name,
+                                tint = badgeTint,
+                                modifier = Modifier.size(13.dp).align(Alignment.CenterVertically),
+                            )
+                        }
                     }
                     if (plain && running) {
                         RiffetProgressIndicator(

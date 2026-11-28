@@ -688,6 +688,9 @@ fun SessionScreen(
                 deferBody = false,
                 topBar = {
                     Column {
+                        val serverBadge by remember(store, current.id) {
+                            store.list.map { riffet.ui.home.serverBadgeFor(current.id, it) }.distinctUntilChanged()
+                        }.collectAsState(initial = riffet.ui.home.serverBadgeFor(current.id, store.list.value))
                         if (findOpen) SessionFindBar(store.find, readingKey = readingPos) else SessionTopBar(
                             session = current,
                             connection = connection,
@@ -699,7 +702,8 @@ fun SessionScreen(
                             onRetry = { store.retry() },
                             onResume = resume,
                             resuming = resuming,
-                            resumeEnabled = !restartingProfile,
+                            resumeEnabled = !restartingProfile && serverBadge?.offline != true,
+                            serverBadge = serverBadge,
                         )
                         if (LocalInterfaceStyle.current.components.navigation.pageBarLine && !materialBackdropEnabled) HorizontalDivider(color = colors.line)
 
@@ -770,6 +774,9 @@ fun SessionScreen(
 
                         // The composer is always mounted, even while the stream is down: a draft is still useful,
                         // and the send button reports the disconnected state instead of disappearing.
+                        val remoteOffline by remember(store, current.id) {
+                            store.list.map { riffet.ui.home.serverBadgeFor(current.id, it)?.offline == true }.distinctUntilChanged()
+                        }.collectAsState(initial = riffet.ui.home.serverBadgeFor(current.id, store.list.value)?.offline == true)
                         Composer(
                             store = store,
                             session = current,
@@ -780,7 +787,7 @@ fun SessionScreen(
                             supportsSessionReferences = detail?.capabilities?.supportsSessionReferences == true,
                             supportsInterrupt = detail?.capabilities?.supportsInterrupt != false,
                             supportsTargetedStop = detail?.capabilities?.supportsTargetedStop == true,
-                            acceptsMessages = detail?.capabilities?.requiresLiveTerminal != true || conversation.live,
+                            acceptsMessages = !remoteOffline && (detail?.capabilities?.requiresLiveTerminal != true || conversation.live),
                             settings = ComposerSettings(
                                 label = currentModelSummary.ifEmpty { stringResource(Res.string.session_select_model) },
                                 icon = null,
@@ -1171,6 +1178,7 @@ private fun SessionTopBar(
     onResume: (() -> Unit)? = null,
     resuming: Boolean = false,
     resumeEnabled: Boolean = true,
+    serverBadge: riffet.ui.home.ServerBadgeInfo? = null,
 ) {
     val colors = LocalRiffetColors.current
     Row(
@@ -1198,15 +1206,26 @@ private fun SessionTopBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-            } else Text(
-                text = if (onOpenMenu != null) stringResource(Res.string.assistant_title) else session.shownTitle,
-                // A title someone else wrote, often long: a row title's size, not a page heading's.
-                style = LocalRiffetTypography.current.headline,
-                color = colors.fg,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            } else Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.Center) {
+                Text(
+                    text = if (onOpenMenu != null) stringResource(Res.string.assistant_title) else session.shownTitle,
+                    // A title someone else wrote, often long: a row title's size, not a page heading's.
+                    style = LocalRiffetTypography.current.headline,
+                    color = colors.fg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (serverBadge != null && onOpenMenu == null) {
+                    Text(
+                        text = serverBadge.label,
+                        style = LocalRiffetTypography.current.caption,
+                        color = if (serverBadge.offline) colors.danger else colors.fg3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         }
         if (onResume != null && connection !is RiffetConnectionState.Failed) {
             ResumeChip(resuming = resuming, enabled = resumeEnabled, onClick = onResume)

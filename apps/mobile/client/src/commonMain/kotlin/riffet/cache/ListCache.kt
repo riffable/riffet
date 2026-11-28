@@ -11,6 +11,7 @@ import kotlinx.serialization.encodeToString
 import riffet.contracts.AgentMember
 import riffet.contracts.AppSettings
 import riffet.contracts.Project
+import riffet.contracts.ServerInfo
 import riffet.contracts.Session
 import riffet.contracts.RiffetJson
 import riffet.ui.timeline.platformNowMillis
@@ -25,6 +26,10 @@ data class CachedList(
     val savedAt: Long,
     /** Null from a server without team members, or a copy saved before they existed. */
     val teamMembers: List<AgentMember>? = null,
+    /** Entry server id (`server-links-v1`); null from older copies or peer caches. */
+    val serverId: String? = null,
+    /** Entry server's known linked servers (`server-links-v1`); null from older copies or peer caches. */
+    val servers: List<ServerInfo>? = null,
 )
 
 /**
@@ -34,19 +39,29 @@ data class CachedList(
  */
 class ListCache(
     private val files: LocalFiles,
-    serverUrl: String,
+    private val serverUrl: String,
     private val io: CoroutineContext = Dispatchers.IO,
     private val now: () -> Long = ::platformNowMillis,
 ) {
     private val path = "servers/${safeName(serverUrl.trimEnd('/').lowercase())}/list.json"
     private val mutex = Mutex()
 
+    /** A separate device copy for one linked peer reached through this entry server. */
+    fun forPeer(peerId: String): ListCache = ListCache(files, "${serverUrl.trimEnd('/')}#peer:$peerId", io, now)
+
     suspend fun loadList(): CachedList? = locked {
         files.read(path)?.let { text -> runCatching { RiffetJson.instance.decodeFromString<CachedList>(text) }.getOrNull() }
     }
 
-    suspend fun saveList(projects: List<Project>, sessions: List<Session>, settings: AppSettings?, teamMembers: List<AgentMember>? = null) = locked {
-        files.write(path, RiffetJson.instance.encodeToString(CachedList(projects, sessions, settings, now(), teamMembers)))
+    suspend fun saveList(
+        projects: List<Project>,
+        sessions: List<Session>,
+        settings: AppSettings?,
+        teamMembers: List<AgentMember>? = null,
+        serverId: String? = null,
+        servers: List<ServerInfo>? = null,
+    ) = locked {
+        files.write(path, RiffetJson.instance.encodeToString(CachedList(projects, sessions, settings, now(), teamMembers, serverId, servers)))
     }
 
     suspend fun clear() = locked { files.delete(path) }
