@@ -1,26 +1,49 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { usePluginHost, type PluginIconName } from '@riffet/plugin-web';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { usePluginHost, type FileIconKind } from '@riffet/plugin-web';
 import { cn } from './cn';
 import type { TreeNode, TreeRow } from './tree';
 
-const ROW = 24;
-const INDENT = 12;
+const ROW = 26;
+const INDENT = 16;
 /** Rows drawn above and below the visible ones, so a quick scroll does not show blank rows. */
 const OVERSCAN = 12;
 /** Rows Page Up and Page Down move. */
 const PAGE = 10;
 const rowId = (index: number) => `studio-tree-${index}`;
+const LOW_PRIORITY_DIRS = new Set(['build', 'dist', 'log', 'logs', 'node_modules', 'out', 'target', '.gradle', '.idea']);
+
+/** Maps a tree node to its semantic duotone icon kind (`UiKit.FileIcon`). */
+function iconKind(node: TreeNode): FileIconKind {
+  if (node.kind === 'module') return 'module';
+  if (node.kind === 'section') return node.label === 'manifests' ? 'manifest' : node.label === 'res' ? 'resources' : 'source';
+  if (node.kind === 'group') return 'group';
+  if (node.kind === 'dir' && node.packages) return 'package';
+  if (node.kind === 'dir' && node.label === 'assets' && /(^|\/)src\/[^/]+\/assets$/.test(node.path ?? '')) return 'assets';
+  if (node.kind === 'dir') return 'folder';
+  return 'file';
+}
+
+const isDimmed = (node: TreeNode): boolean => {
+  const name = node.label.split('/')[0] ?? node.label;
+  return name.startsWith('.') || (node.kind !== 'file' && LOW_PRIORITY_DIRS.has(name));
+};
 
 /**
- * What a row is drawn with: the module view's own kinds get the IDE's distinct glyphs (a module, source
- * and resource roots, packages), everything else the files panel's icon for its name.
+ * Computes the active indent-guide span for the currently opened file's direct parent folder,
+ * matching VS Code / Zed's active indent guide highlight.
  */
-function glyph(node: TreeNode): PluginIconName | undefined {
-  if (node.kind === 'module') return 'package';
-  if (node.kind === 'section') return node.label === 'manifests' ? 'folder-cog' : node.label === 'res' ? 'folder-kanban' : 'folder-code';
-  if (node.kind === 'dir' && node.packages) return 'folder-dot';
-  if (node.kind === 'dir' && node.label === 'assets' && /(^|\/)src\/[^/]+\/assets$/.test(node.path ?? '')) return 'folder-archive';
-  return undefined;
+function activeGuideSpan(rows: readonly TreeRow[], active: string | undefined): { depth: number; start: number; end: number } | undefined {
+  if (!active) return undefined;
+  const activeIdx = rows.findIndex((row) => row.leaf && row.node.path === active);
+  if (activeIdx < 0) return undefined;
+  const targetDepth = rows[activeIdx]!.depth;
+  if (targetDepth <= 0) return undefined;
+  const parentDepth = targetDepth - 1;
+  let start = activeIdx;
+  while (start > 0 && rows[start - 1]!.depth > parentDepth) start--;
+  let end = activeIdx;
+  while (end + 1 < rows.length && rows[end + 1]!.depth > parentDepth) end++;
+  return { depth: parentDepth, start, end };
 }
 
 /**
@@ -32,18 +55,23 @@ function glyph(node: TreeNode): PluginIconName | undefined {
  * (and keeps its tab), Home/End and Page Up/Down jump. A single click opens a file in the preview tab, a
  * double click keeps it.
  */
-export function TreePane({ rows, active, focus, label, onToggle, onOpen, onKeep, onMenu }: {
+export function TreePane({ rows, active, dirty, focus, label, newFileLabel, onToggle, onOpen, onKeep, onMenu, onNewFile }: {
   rows: readonly TreeRow[];
   active: string | undefined;
+  /** Relative paths currently holding unsaved edits, shown as subtle accent dots in the tree. */
+  dirty?: ReadonlySet<string>;
   /** A file to scroll to, again for each new token. */
   focus?: { path: string; token: number } | undefined;
   label: string;
+  newFileLabel?: string;
   onToggle(node: TreeNode): void;
   onOpen(path: string): void;
   /** A file was double-clicked or opened with Enter: its tab stays. */
   onKeep(path: string): void;
   /** A row was right-clicked, or the empty pane (`undefined`). */
   onMenu(node: TreeNode | undefined, point: { x: number; y: number }): void;
+  /** Optional hover action on folders/modules to create a new file inside. */
+  onNewFile?: (folder: string) => void;
 }) {
   const { ui } = usePluginHost();
   const scroller = useRef<HTMLDivElement>(null);
@@ -77,6 +105,9 @@ export function TreePane({ rows, active, focus, label, onToggle, onOpen, onKeep,
     setCursor(rows[index]!.node.id);
     reveal(index, true);
   }, [focus, rows]);
+
+  const guide = useMemo(() => activeGuideSpan(rows, active), [rows, active]);
+  const dirtyList = useMemo(() => (dirty && dirty.size ? [...dirty] : undefined), [dirty]);
 
   const at = cursor === undefined ? -1 : rows.findIndex((row) => row.node.id === cursor);
   const activate = (row: TreeRow, keep: boolean) => {
@@ -121,6 +152,7 @@ export function TreePane({ rows, active, focus, label, onToggle, onOpen, onKeep,
   const first = Math.max(0, Math.floor(view.top / ROW) - OVERSCAN);
   const last = Math.min(rows.length, Math.ceil((view.top + view.height) / ROW) + OVERSCAN);
   const Chevron = ui.icon('chevron-right');
+  const Plus = ui.icon('plus');
   const FileIcon = ui.FileIcon;
 
   return (
@@ -130,34 +162,69 @@ export function TreePane({ rows, active, focus, label, onToggle, onOpen, onKeep,
       onContextMenu={(event) => { event.preventDefault(); onMenu(undefined, { x: event.clientX, y: event.clientY }); }}
       onFocus={() => { if (at < 0 && rows.length) setCursor((rows.find((row) => row.leaf && row.node.path === active) ?? rows[0]!).node.id); }}
       onScroll={(event) => { const top = event.currentTarget.scrollTop; setView((previous) => (previous.top === top ? previous : { ...previous, top })); }}
-      className="group/tree min-h-0 flex-1 overflow-auto px-1.5 py-1 outline-none"
+      className="group/tree min-h-0 flex-1 overflow-auto px-2 py-1.5 outline-none"
     >
-      <div className="relative w-max min-w-full" style={{ height: rows.length * ROW }}>
-        <div className="absolute inset-x-0" style={{ top: first * ROW }}>
+      {/* Normal-flow spacer (`paddingTop` instead of `position: absolute`) so visible rows expand `w-max`
+          and row selection fills (`bg-active`) cover the full width of long file names without clipping. */}
+      <div className="box-border w-max min-w-full" style={{ height: rows.length * ROW, paddingTop: first * ROW }}>
+        <div>
           {rows.slice(first, last).map((row, offset) => {
             const { node, depth, open, loading, leaf } = row;
             const index = first + offset;
             const selected = leaf && node.path === active;
-            const name = glyph(node);
-            const Icon = name ? ui.icon(name) : undefined;
+            const kind = iconKind(node);
+            const dimmed = !selected && isDimmed(node);
+            const isDirtyFile = Boolean(leaf && node.path && dirty?.has(node.path));
+            const hasDirtyChild = Boolean(!leaf && !open && node.path !== undefined && dirtyList?.some((path) => (node.path ? path.startsWith(`${node.path}/`) : true)));
+            const canQuickCreate = Boolean(onNewFile && !leaf && node.path !== undefined);
             return (
               <div
                 key={node.id} id={rowId(index)} role="treeitem" aria-level={depth + 1} aria-expanded={leaf ? undefined : open} aria-selected={selected}
                 onClick={() => { setCursor(node.id); activate(row, false); }}
                 onDoubleClick={() => { if (leaf && node.path !== undefined) onKeep(node.path); }}
                 onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setCursor(node.id); onMenu(node, { x: event.clientX, y: event.clientY }); }}
-                style={{ paddingLeft: 4 + depth * INDENT }}
+                style={{ paddingLeft: 6 + depth * INDENT, height: ROW }}
                 className={cn(
-                  'relative flex h-6 cursor-default select-none items-center gap-1 whitespace-nowrap rounded pr-2 text-sm',
-                  selected ? 'bg-active text-fg' : 'text-fg hover:bg-hover',
+                  'group/row relative flex cursor-default select-none items-center gap-1.5 whitespace-nowrap rounded-md pr-2 text-sm transition-colors',
+                  selected ? 'bg-active font-medium text-fg' : node.kind === 'module' ? 'font-medium text-fg hover:bg-hover' : dimmed ? 'text-fg-3 hover:bg-hover hover:text-fg-2' : 'text-fg-2 hover:bg-hover hover:text-fg',
                   index === at && 'group-focus-visible/tree:ring-2 group-focus-visible/tree:ring-inset group-focus-visible/tree:ring-focus',
                 )}
               >
-                {Array.from({ length: depth }, (_, level) => <span key={level} aria-hidden className="absolute inset-y-0 w-px bg-line-soft" style={{ left: 4 + level * INDENT + 7 }} />)}
-                {leaf ? <span className="w-3.5 shrink-0" /> : loading ? <ui.Spinner className="size-3.5" /> : <Chevron className={cn('size-3.5 shrink-0 text-fg-4 transition-transform', open && 'rotate-90')} />}
-                {Icon ? <Icon className="size-4 shrink-0 text-fg-2" /> : FileIcon ? <FileIcon name={node.label} directory={!leaf} /> : null}
-                <span className={cn(node.kind === 'module' && 'font-medium', node.kind === 'section' && 'text-fg-2')}>{node.label}</span>
-                {node.hint && <span className="text-fg-4">{node.hint}</span>}
+                {Array.from({ length: depth }, (_, level) => {
+                  const isActiveGuide = guide !== undefined && level === guide.depth && index >= guide.start && index <= guide.end;
+                  return (
+                    <span
+                      key={level}
+                      aria-hidden
+                      className={cn(
+                        'pointer-events-none absolute inset-y-0 w-px transition-opacity',
+                        isActiveGuide ? 'bg-line-strong opacity-100' : 'bg-line-soft opacity-0 group-hover/tree:opacity-100',
+                      )}
+                      style={{ left: 6 + level * INDENT + 6 }}
+                    />
+                  );
+                })}
+                {leaf ? <span className="w-3 shrink-0" /> : loading ? <ui.Spinner className="size-3 shrink-0" /> : <Chevron className={cn('size-3 shrink-0 text-fg-4 transition-transform group-hover/row:text-fg-2', open && 'rotate-90')} />}
+                {FileIcon && <FileIcon name={node.label} directory={!leaf} open={open} kind={kind} />}
+                <span className={cn(node.kind === 'section' && 'text-fg-2')}>{node.label}</span>
+                {node.hint && <span className="text-xs text-fg-4">{node.hint}</span>}
+                {(isDirtyFile || hasDirtyChild || canQuickCreate) && (
+                  <span className="ml-auto flex shrink-0 items-center gap-1 pl-2">
+                    {canQuickCreate && (
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        aria-label={newFileLabel ?? 'New File'}
+                        onClick={(event) => { event.stopPropagation(); onNewFile!(node.path!); }}
+                        className="grid size-4 place-items-center rounded text-fg-4 opacity-0 hover:bg-active hover:text-fg group-hover/row:opacity-100 focus-visible:opacity-100"
+                      >
+                        <Plus className="size-3" />
+                      </button>
+                    )}
+                    {isDirtyFile && <span className="size-1.5 rounded-full bg-accent" />}
+                    {!isDirtyFile && hasDirtyChild && <span className="size-1.5 rounded-full bg-accent/50" />}
+                  </span>
+                )}
               </div>
             );
           })}

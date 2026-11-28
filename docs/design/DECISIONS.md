@@ -1167,3 +1167,17 @@
 - **原因**：Web 与 Mac 原来在按钮下方加一行「提交中…」，iPhone 也有同样的说明行。权限卡片的按钮一行一个，页脚本来是空的，提交那一下卡片先撑高、几百毫秒后又缩回，转录被推动两次。规范只写了「Spinner 放在等待的控件内」，没写不能另起一行，所以各端各自加了说明行。转圈放在按下的按钮里还能看出提交的是哪个选择；Android 原本就是这样做的。
 - **否决**：统一放在标题行右侧、按钮只禁用（不加行，但看不出提交的是 Allow 还是 Deny）；给页脚预留一行高度（空着的时候白占位置）。
 - **规则**：[总览](system/README.md) 原则 3；[模式](system/patterns.md) §5.2；[界面](system/surfaces.md) §1.6；代码 `apps/web/src/app/session/NativeInteractionCard.tsx`、`apps/macos/Riffet/Features/Conversation/InteractionCard.swift`、`apps/mobile/iosApp/Riffet/Features/Conversation/InteractionCard.swift`、`apps/mobile/shared/src/commonMain/kotlin/riffet/ui/interaction/InteractionCard.kt`。
+
+## 2026-11-28 · Code Studio 支持 IDE 级别编辑与分屏
+
+- **决定**：推翻 2026-11-23「Code Studio 只读」的决定。在服务端具备 `file-write-v1` 能力时，Code Studio 在桌面端默认直接进入可编辑态（触屏设备默认只读，状态栏可随时切换只读锁）；所有编辑、草稿池、乐观锁冲突合并（`expectedHash` + `unifiedMergeView`）和文件树增删改名/撤销均复用宿主文件服务（`fileDrafts`、`useFileEditing`、`FileWrites`），与侧栏文件面板共享同一份未保存草稿。CodeMirror 6 内核补齐多光标（`⌘D`、Alt 列选）、自动闭合括号与智能缩进、按语言行/块注释切换（`⌘/`）、行移动/复制/删除、软换行（`⌥Z`）、缩进切换，以及按项目/分屏 LRU 保活的 `EditorState`（切换标签不丢撤销栈、折叠与选区）；编辑区支持左右分屏对照与同步编辑。
+- **原因**：用户在 Code Studio 浏览大仓库和定位问题时，经常需要就地修改多处代码、对比两个文件或增删文件，再切回侧栏文件面板不仅打断上下文，窄面板也不适合多文件编辑。服务端 `FileWrites` 与前端 `fileDrafts`/`CodeView` 已经具备并发安全写入与冲突合并，只需通过宿主 `UiKit.CodeFile` 和 `PluginHost.workspace` 透出即可与文件面板共享同一套真相。
+- **否决**：引入 Monaco Editor（体积大、触屏不可用、与现有 CodeMirror 6 + Shiki 14 语义色重复）；自动保存或后写静默覆盖（Agent 并发写入时会静默丢改动）；在插件内另建一套独立的草稿池和写接口封装；对 2000+ 模块的超大仓强接重型 LSP（仍保留 tree-sitter 索引底座）。
+- **规则**：[CODE-STUDIO.md](../CODE-STUDIO.md)；代码 `apps/web/src/app/panels/codeEditing.ts`、`apps/web/src/app/panels/editorSessions.ts`、`apps/web/src/app/panels/CodeView.tsx`、`apps/web/src/plugins/CodeFile.tsx`、`apps/web/src/plugins/host.ts`、`packages/plugin-web/src/index.ts`、`plugins/riffet/code-studio/web/`。
+
+## 2026-11-28 · 文件树与代码标签改用双色精工图标与层次化目录树
+
+- **决定**：修订 2026-11-18 `riffet-style.md` §5「文件夹和文件一样用 `fg-3` 描边图标」在文件树与代码标签处的做法。Web 文件面板与 Code Studio 统一采用 16×16 柔和无硬描边双层填充图标集（`apps/web/src/app/panels/fileIcons.tsx`，Zed / macOS / JetBrains New UI 风格）：文件夹、模块与包去掉 1.2px 外框描边改为双层柔和透明填充并区分展开/收起，模块加右下角主题蓝小方块角标，源码根/资源/包/清单与主流语言及构建脚本使用主题语义变量（`--chart-1`…`--chart-8`、`--fg-*`）着色的低饱和微标，零硬编码色值。Code Studio 左栏采用 `bg-sidebar` 底色，目录行按 26px 行高 / 16px 缩进 / `fg-2` 非活跃文字 / hover 显现缩进线与当前文件活跃链路高亮排版；虚拟列表用文档流 `paddingTop` 垫高确保长文件名选中底色不断裂。右侧 Structure 面板默认收起以把完整宽度留给代码画布，当前文件符号跳转改由面包屑下拉菜单承接，分屏入口收归 `⌘\`、右键菜单与 Actions 避免顶栏图标撞脸。导航栏、按钮和菜单仍沿用 Lucide 1.25px 线框。
+- **原因**：纯 1.25px 空心单色 Lucide 图标在数十行连续排列的文件树里单薄发飘，3D 纸箱 `package` 在 16px 下折线拥挤发黑，所有代码文件共用一两个灰色图标导致扫读效率极低；左栏与编辑区同白且文字无明暗分层也让目录面板缺少 IDE 质感。
+- **否决**：引入整套第三方高饱和彩色图标包（包体大、硬编码色值破坏 Riffet 12 套主题和谐度）；把按钮与主导航图标也改成双色填充（工具栏仍需极简克制的 Lucide 线框）。
+- **规则**：[CODE-STUDIO.md](../CODE-STUDIO.md)；代码 `apps/web/src/app/panels/fileIcons.tsx`、`apps/web/src/app/panels/fileVisuals.tsx`、`apps/web/src/app/panels/FileTree.tsx`、`apps/web/src/plugins/CodeFile.tsx`、`packages/plugin-web/src/index.ts`、`plugins/riffet/code-studio/web/TreePane.tsx`、`plugins/riffet/code-studio/web/CodeStudio.tsx`。

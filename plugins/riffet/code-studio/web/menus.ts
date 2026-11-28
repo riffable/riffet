@@ -1,37 +1,43 @@
 import type { ReactNode } from 'react';
 import type { CodeOutlineItem } from '@contracts';
-import type { CodeMenuAt, CodeSymbolAt, MenuEntry, PluginIconName } from '@riffet/plugin-web';
+import type { CodeFileCommandName, CodeMenuAt, CodeSymbolAt, MenuEntry, PluginIconName } from '@riffet/plugin-web';
 import { dirName, fileName } from './data';
 import type { Messages } from './messages';
 
 /*
  * The page's right-click menus, as the IDE's are: every surface that shows a file, a line or a symbol
  * offers the same groups in the same order, so a command is found in one place whichever surface the
- * reader is on. Navigation first (open, go to, find), then copy, then the file's git and the editor's
- * folding as submenus, then handing it to a conversation (where changes to the code are made: the page
- * is read only). Shortcuts are shown where the page has them.
+ * reader is on. Navigation first (open, go to, find), then editing/file actions, then copy, then git
+ * and folding submenus, then quoting to a conversation. Shortcuts are shown where the page has them.
  *
  * Every entry of a menu has an icon, as the app's menus do; the entries of a submenu have none (they are
  * variants of the row that opened it, and the same icon down a column says nothing).
  */
 
-export type EditorCommand = 'find' | 'fold' | 'unfold' | 'foldAll' | 'unfoldAll' | 'selectAll';
+export type EditorCommand = CodeFileCommandName;
 
 /** What the menus can do, from the page. */
 export interface MenuActions {
   m: Messages;
   icon(name: PluginIconName): ReactNode;
-  keys: { declaration: string; usages: string; text: string; find: string; back: string; line: string; foldAll: string; unfoldAll: string };
+  keys: {
+    declaration: string; usages: string; text: string; find: string; back: string; line: string; foldAll: string; unfoldAll: string;
+    save: string; undo: string; redo: string; comment: string; selectNext: string;
+  };
   /** The project's folder on its server, for absolute paths. */
   root: string;
   hasGit: boolean;
   canQuote: boolean;
+  canWrite: boolean;
+  isEditing: boolean;
+  isDirty(path: string): boolean;
   /** The open file is annotated with git blame. */
   annotating: boolean;
   /** The open file, and its package when the outline has read one. */
   active: string | undefined;
   activePackage: string | undefined;
   open(path: string, line?: number, column?: number): void;
+  openToSide(path: string): void;
   locate(path: string): void;
   declaration(path: string, at: CodeSymbolAt): void;
   usages(path: string, word: string): void;
@@ -45,11 +51,15 @@ export interface MenuActions {
   annotate(path: string): void;
   compare(path: string): void;
   editor(command: EditorCommand): void;
+  newFile(folder: string): void;
+  newFolder(folder: string): void;
+  rename(path: string): void;
+  remove(path: string): void;
 }
 
 const JVM_SOURCE = /\.(kt|kts|java)$/;
 const sep: MenuEntry = { kind: 'separator' };
-const item = (label: string, onSelect: () => void, extra: { icon?: ReactNode; shortcut?: string; disabled?: boolean } = {}): MenuEntry => ({ kind: 'item', label, onSelect, ...extra });
+const item = (label: string, onSelect: () => void, extra: { icon?: ReactNode; shortcut?: string; disabled?: boolean; danger?: boolean } = {}): MenuEntry => ({ kind: 'item', label, onSelect, ...extra });
 /** Drops a separator at either end or next to another, so optional groups can be left out freely. */
 export function tidy(entries: readonly MenuEntry[]): MenuEntry[] {
   const out: MenuEntry[] = [];
@@ -108,6 +118,7 @@ export function fileMenu(a: MenuActions, path: string, options: { open?: 'previe
   const type = classOf(path);
   return tidy([
     options.open ? item(m.menu.open, () => a.open(path), { icon: a.icon('file') }) : undefined,
+    item(m.menu.openToSide, () => a.openToSide(path), { icon: a.icon('columns-2') }),
     sep,
     type ? item(m.menu.usagesOf(type), () => a.usages(path, type), { icon: a.icon('list-tree'), shortcut: a.keys.usages }) : undefined,
     item(m.menu.findInFolder, () => a.findInFolder(dirName(path)), { icon: a.icon('folder-search'), shortcut: a.keys.text }),
@@ -117,6 +128,11 @@ export function fileMenu(a: MenuActions, path: string, options: { open?: 'previe
     gitMenu(a, path),
     sep,
     a.canQuote ? item(m.quoteFile, () => a.quote(path), { icon: a.icon('text-quote') }) : undefined,
+    ...(a.canWrite ? [
+      sep,
+      item(m.fileOps.rename, () => a.rename(path), { icon: a.icon('pencil-line') }),
+      item(m.fileOps.delete, () => a.remove(path), { icon: a.icon('trash-2'), danger: true }),
+    ] : []),
   ].filter((entry): entry is MenuEntry => Boolean(entry)));
 }
 
@@ -124,10 +140,20 @@ export function fileMenu(a: MenuActions, path: string, options: { open?: 'previe
 export function folderMenu(a: MenuActions, path: string, extra: MenuEntry[] = []): MenuEntry[] {
   const { m } = a;
   return tidy([
+    ...(a.canWrite ? [
+      item(m.fileOps.newFile, () => a.newFile(path), { icon: a.icon('file-plus') }),
+      item(m.fileOps.newFolder, () => a.newFolder(path), { icon: a.icon('folder-plus') }),
+      sep,
+    ] : []),
     item(m.menu.findInFolder, () => a.findInFolder(path), { icon: a.icon('folder-search'), shortcut: a.keys.text }),
     ...extra,
     sep,
     copyMenu(a, path),
+    ...(a.canWrite && path ? [
+      sep,
+      item(m.fileOps.rename, () => a.rename(path), { icon: a.icon('pencil-line') }),
+      item(m.fileOps.delete, () => a.remove(path), { icon: a.icon('trash-2'), danger: true }),
+    ] : []),
   ]);
 }
 
@@ -140,12 +166,25 @@ export function codeMenu(a: MenuActions, path: string, at: CodeMenuAt, scope: re
   const reference = declared && a.activePackage !== undefined ? [a.activePackage, ...declared.map((entry) => entry.name)].filter(Boolean).join('.') : undefined;
   const selected = at.selection?.trim();
   const query = selected && !selected.includes('\n') ? selected : symbol?.word;
+  const dirty = a.isDirty(path);
   return tidy([
     symbol && item(m.menu.declaration, () => a.declaration(path, symbol), { icon: a.icon('arrow-up-right'), shortcut: a.keys.declaration }),
     symbol && item(m.menu.usages, () => a.usages(path, symbol.word), { icon: a.icon('list-tree'), shortcut: a.keys.usages }),
     sep,
     query ? item(m.menu.findText(query.length > 40 ? `${query.slice(0, 40)}…` : query), () => a.findText(query), { icon: a.icon('search'), shortcut: a.keys.text }) : undefined,
     item(m.menu.findInFile, () => a.editor('find'), { icon: a.icon('file-search'), shortcut: a.keys.find }),
+    ...(a.isEditing ? [
+      sep,
+      item(m.menu.undo, () => a.editor('undo'), { icon: a.icon('undo-2'), shortcut: a.keys.undo }),
+      item(m.menu.redo, () => a.editor('redo'), { icon: a.icon('rotate-ccw'), shortcut: a.keys.redo }),
+      item(m.menu.comment, () => a.editor('comment'), { icon: a.icon('pencil-line'), shortcut: a.keys.comment }),
+      item(m.menu.selectNext, () => a.editor('selectNextOccurrence'), { icon: a.icon('text-select'), shortcut: a.keys.selectNext }),
+      ...(dirty ? [
+        sep,
+        item(m.menu.save, () => a.editor('save'), { icon: a.icon('save'), shortcut: a.keys.save }),
+        item(m.menu.revert, () => a.editor('revert'), { icon: a.icon('rotate-ccw') }),
+      ] : []),
+    ] : []),
     sep,
     at.selection ? item(m.menu.copy, () => a.copy(at.selection!), { icon: a.icon('copy') }) : undefined,
     copyMenu(a, path, { line: at.line, ...(reference ? { reference } : {}) }),

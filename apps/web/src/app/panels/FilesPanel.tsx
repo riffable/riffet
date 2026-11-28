@@ -754,7 +754,7 @@ export function FilesPanel({ project, sessionId, previewTarget, shown, wide = fa
       {favoritesRow(undefined, showFolder)}
       <FileTree
         projectId={project.id} active={previewFilePath} reveal={reveal} refreshToken={refreshToken}
-        icon={(entry) => <FileIcon entry={entry} />} actions={rowActions}
+        icon={(entry, open) => <FileIcon entry={entry} {...(open !== undefined ? { open } : {})} />} actions={rowActions}
         onOpen={(file) => { if (file !== previewFilePath) void openPreview(file); }}
         onKeep={(file) => { if (file === previewFilePath) fileTabs.keep(file); else void openPreview(file, undefined, undefined, 'keep'); }}
         onContextMenu={setMenuPath} onError={onError}

@@ -25,6 +25,11 @@ msgstr "{0} 不可用"
 msgid "{0} 个文件"
 msgstr "{0} 个文件"
 
+#. placeholder {0}: conflicts.length
+#: src/plugins/host.ts
+msgid "{0} 个文件在磁盘上已被修改，请打开并合并"
+msgstr "{0} 个文件在磁盘上已被修改，请打开并合并"
+
 #. placeholder {0}: formatNumber(item.profile.enabledModels.length)
 #. placeholder {0}: formatNumber(models.length)
 #: src/app/plugins/PluginModelSourceProviders.tsx
@@ -594,6 +599,7 @@ msgstr "创建定时唤醒、委托与通知"
 
 #: src/app/team/MemberConfigDialog.tsx
 #: src/app/Workbench.tsx
+#: src/plugins/host.ts
 msgid "删除"
 msgstr "删除"
 
@@ -611,6 +617,10 @@ msgstr "删除…"
 #: src/app/team/MemberConfigDialog.tsx
 msgid "删除「{0}」？"
 msgstr "删除「{0}」？"
+
+#: src/plugins/host.ts
+msgid "删除「{name}」？"
+msgstr "删除「{name}」？"
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "删除「{title}」的数据？"
@@ -955,6 +965,10 @@ msgstr "失败"
 msgid "委托"
 msgstr "委托"
 
+#: src/plugins/host.ts
+msgid "它太大，删除后无法撤销。"
+msgstr "它太大，删除后无法撤销。"
+
 #: src/app/plugins/PluginGrantDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1059,6 +1073,10 @@ msgstr "已创建「{0}」"
 #: src/app/Workbench.tsx
 msgid "已删除「{0}」"
 msgstr "已删除「{0}」"
+
+#: src/plugins/host.ts
+msgid "已删除「{name}」"
+msgstr "已删除「{name}」"
 
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
@@ -1481,6 +1499,7 @@ msgstr "撤下"
 
 #: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
+#: src/plugins/host.ts
 msgid "撤销"
 msgstr "撤销"
 
@@ -1565,6 +1584,10 @@ msgstr "收起变更面板"
 msgid "收起文件面板"
 msgstr "收起文件面板"
 
+#: src/plugins/CodeFile.tsx
+msgid "收起比较"
+msgstr "收起比较"
+
 #: src/app/App.tsx
 msgid "改用访问令牌"
 msgstr "改用访问令牌"
@@ -1572,6 +1595,19 @@ msgstr "改用访问令牌"
 #: src/app/App.tsx
 msgid "改用配对码"
 msgstr "改用配对码"
+
+#. placeholder {0}: dirty.length
+#: src/plugins/host.ts
+msgid "放弃 {0} 个文件的未保存修改？"
+msgstr "放弃 {0} 个文件的未保存修改？"
+
+#: src/plugins/host.ts
+msgid "放弃修改"
+msgstr "放弃修改"
+
+#: src/plugins/host.ts
+msgid "放弃未保存的修改？"
+msgstr "放弃未保存的修改？"
 
 #: src/app/sidebarDestinations.ts
 msgid "数据统计"
@@ -1615,6 +1651,10 @@ msgstr "新会话"
 msgid "新对话"
 msgstr "新对话"
 
+#: src/plugins/host.ts
+msgid "新建"
+msgstr "新建"
+
 #: src/app/use-project-actions.ts
 msgid "新建 Worktree"
 msgstr "新建 Worktree"
@@ -1640,6 +1680,14 @@ msgstr "新建会话时可以换"
 #: src/app/team/CreateMemberDialog.tsx
 msgid "新建成员"
 msgstr "新建成员"
+
+#: src/plugins/host.ts
+msgid "新建文件"
+msgstr "新建文件"
+
+#: src/plugins/host.ts
+msgid "新建文件夹"
+msgstr "新建文件夹"
 
 #: src/app/SidebarUpdateButton.tsx
 msgid "新版本 {version} 可用"
@@ -1685,6 +1733,10 @@ msgstr "无法保存团队顺序"
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr "无法保存待发送消息，请检查浏览器存储空间"
 
+#: src/plugins/host.ts
+msgid "无法保存文件"
+msgstr "无法保存文件"
+
 #: src/app/WorkbenchHeader.tsx
 msgid "无法保存项目"
 msgstr "无法保存项目"
@@ -1726,6 +1778,10 @@ msgstr "无法创建会话"
 #: src/app/team/CreateMemberDialog.tsx
 msgid "无法创建成员"
 msgstr "无法创建成员"
+
+#: src/plugins/host.ts
+msgid "无法删除"
+msgstr "无法删除"
 
 #: src/app/state/workItemsStore.ts
 msgid "无法删除任务"
@@ -1831,6 +1887,10 @@ msgstr "无法打开这个目录"
 msgid "无法撤下"
 msgstr "无法撤下"
 
+#: src/plugins/host.ts
+msgid "无法撤销删除"
+msgstr "无法撤销删除"
+
 #: src/app/state/marksStore.ts
 msgid "无法收藏"
 msgstr "无法收藏"
@@ -1838,6 +1898,10 @@ msgstr "无法收藏"
 #: src/app/FolderFavorites.tsx
 msgid "无法收藏该目录"
 msgstr "无法收藏该目录"
+
+#: src/plugins/host.ts
+msgid "无法新建"
+msgstr "无法新建"
 
 #: src/app/use-session-actions.ts
 msgid "无法检查状态，请稍后重试"
@@ -1919,6 +1983,10 @@ msgstr "无法连接 Riffet 服务器"
 #: src/app/SidebarUserMenu.tsx
 msgid "无法连接服务器"
 msgstr "无法连接服务器"
+
+#: src/plugins/host.ts
+msgid "无法重命名"
+msgstr "无法重命名"
 
 #: src/app/FolderFavorites.tsx
 msgid "无法重命名收藏"
@@ -2052,6 +2120,10 @@ msgstr "服务器版本不兼容"
 #: src/app/Sidebar.tsx
 msgid "服务器范围"
 msgstr "服务器范围"
+
+#: src/plugins/host.ts
+msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
+msgstr "未保存的修改会丢失，撤销删除也不会恢复它们。"
 
 #: src/app/useServerLabel.tsx
 msgid "未允许本机操作"
@@ -2224,6 +2296,18 @@ msgstr "每次新开"
 msgid "每次新开对话，靠记忆复用"
 msgstr "每次新开对话，靠记忆复用"
 
+#: src/plugins/CodeFile.tsx
+msgid "比较"
+msgstr "比较"
+
+#: src/plugins/host.ts
+msgid "永久删除"
+msgstr "永久删除"
+
+#: src/plugins/host.ts
+msgid "永久删除「{name}」？"
+msgstr "永久删除「{name}」？"
+
 #: src/app/plugins/PluginSharesBlock.tsx
 msgid "没有仍然有效的分享"
 msgstr "没有仍然有效的分享"
@@ -2376,6 +2460,10 @@ msgstr "独立一行"
 #: src/app/onboarding/Onboarding.tsx
 msgid "用手机上的 Riffet 扫码，离开电脑也能处理审批"
 msgstr "用手机上的 Riffet 扫码，离开电脑也能处理审批"
+
+#: src/plugins/CodeFile.tsx
+msgid "用磁盘上的版本"
+msgstr "用磁盘上的版本"
 
 #: src/app/FolderFavorites.tsx
 msgid "留空则显示目录名"
@@ -2669,6 +2757,10 @@ msgstr "草稿无法保存到浏览器，刷新后会丢失"
 msgid "要在 {0} 做什么？"
 msgstr "要在 {0} 做什么？"
 
+#: src/plugins/CodeFile.tsx
+msgid "覆盖保存"
+msgstr "覆盖保存"
+
 #: src/app/SessionInfo.tsx
 msgid "规则"
 msgstr "规则"
@@ -2905,6 +2997,10 @@ msgstr "这个任务的项目已移除或归档"
 msgid "这个插件视图当前不可用"
 msgstr "这个插件视图当前不可用"
 
+#: src/plugins/CodeFile.tsx
+msgid "这个文件在你编辑时被改过"
+msgstr "这个文件在你编辑时被改过"
+
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-status-active"
 msgid "进行中"
@@ -2998,6 +3094,7 @@ msgstr "配置…"
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
+#: src/plugins/host.ts
 msgid "重命名"
 msgstr "重命名"
 

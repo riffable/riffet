@@ -96,10 +96,11 @@ export const TEXT_OPTIONS: TextOptions = { matchCase: false, word: false, regex:
 /**
  * What the page remembers in this browser, per server and project: C class (docs/guide/multi-server.md), not synced.
  * `preview` is the tab a single click in the tree or the find results opened: the next such click reuses it, as
- * the IDE's preview tab does, until it is kept (double click, or a jump from inside it). `side` is what the right pane
- * shows: `structure`, or another plugin's view of the project (a build, Logcat) by its id.
+ * the IDE's preview tab does, until it is kept (double click, an edit, or a jump from inside it). `side` is what
+ * the right pane shows: `structure`, or another plugin's view of the project (a build, Logcat) by its id.
+ * `split` is the optional secondary editor file shown beside the active tab.
  */
-export interface Saved { tabs: string[]; active?: string; preview?: string; mode?: 'modules' | 'project'; outline?: boolean; recent?: string[]; find?: TextOptions; side?: string }
+export interface Saved { tabs: string[]; active?: string; preview?: string; split?: string; mode?: 'modules' | 'project'; outline?: boolean; recent?: string[]; find?: TextOptions; side?: string }
 /** Files the search lists as recently opened. */
 export const MAX_RECENT = 30;
 const KEY = 'riffet.code-studio.v1';
@@ -152,8 +153,8 @@ export function rememberProject(project: string, server: string): void {
   } catch { /* As above. */ }
 }
 
-/** Pane sizes and which side panes show, for every project: they follow the screen, not the code. */
-export interface Layout { tree: number; outline: number; results: number; treeHidden?: boolean }
+/** Pane sizes and editor preferences, for every project: they follow the screen, not the code. */
+export interface Layout { tree: number; outline: number; results: number; treeHidden?: boolean; wordWrap?: boolean }
 export const LAYOUT: Layout = { tree: 300, outline: 260, results: 260 };
 
 export function loadLayout(): Layout {

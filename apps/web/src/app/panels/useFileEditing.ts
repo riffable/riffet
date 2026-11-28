@@ -21,7 +21,7 @@ const lines = (text: string) => text.replace(/\r\n?/g, '\n');
  * working tree changes (the Git status stream) or the page comes back into view: one without a draft
  * simply follows the disk, one with a draft is in conflict until the reader keeps one side.
  */
-export function useFileEditing({ projectId, preview, onPreview, writable, watching }: {
+export function useFileEditing({ projectId, preview, onPreview, writable, watching, defaultEditing = false, onSaved }: {
   projectId: string;
   preview: FilePreview | undefined;
   /** The file as read again, or as just saved. */
@@ -30,11 +30,15 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
   writable: boolean;
   /** The view shows this file, so changes on disk matter now. */
   watching: boolean;
+  /** Start directly in editing mode whenever a writable file opens (used by Code Studio on desktop). */
+  defaultEditing?: boolean;
+  /** Called after a save succeeds (single save or Save All). */
+  onSaved?: (path: string) => void;
 }) {
   const { t } = useLingui();
   const path = preview?.path;
   const draft = useDraft(projectId, path);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(defaultEditing);
   /** The file being written, if any; another file can be edited and refreshed meanwhile. */
   const [savingPath, setSavingPath] = useState<string>();
   const [comparing, setComparing] = useState(false);
@@ -48,17 +52,17 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
   }, [projectId, t]);
   /** A file just created opens for editing. */
   const startOnOpen = useRef<string | undefined>(undefined);
-  // Another file, or the same one again: back to editing only where an edit is kept.
+  // Another file, or the same one again: back to editing when defaultEditing is on, or where an edit is kept.
   useEffect(() => {
     const opened = path !== undefined && startOnOpen.current === path;
-    setEditing(path !== undefined && (Boolean(fileDrafts.get(projectId, path)) || (opened && roomFor(path))));
+    setEditing(path !== undefined && (defaultEditing || Boolean(fileDrafts.get(projectId, path)) || (opened && roomFor(path))));
     if (opened) startOnOpen.current = undefined;
     setComparing(false);
-  }, [projectId, path, roomFor]);
+  }, [projectId, path, defaultEditing, roomFor]);
   useEffect(() => { if (!conflict) setComparing(false); }, [conflict]);
 
-  const latest = useRef({ preview, onPreview });
-  latest.current = { preview, onPreview };
+  const latest = useRef({ preview, onPreview, onSaved });
+  latest.current = { preview, onPreview, onSaved };
   /** The file a save is writing now: refreshes of it wait, and it is not saved twice at once. */
   const writing = useRef<string | undefined>(undefined);
   /** Bumped by every save, so a read that started before one never lands after it. */
@@ -73,6 +77,16 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
       if (generation.current === started && writing.current !== fresh.path && now?.path === fresh.path && now.hash !== fresh.hash) latest.current.onPreview(fresh);
     } catch { /* gone or unreadable: the next open says so */ }
   }, [projectId]);
+
+  // Keep preview hash aligned when another pane or Save All saves this file.
+  useEffect(() => fileDrafts.onSaved(({ projectId: savedProject, version, content }) => {
+    if (savedProject !== projectId) return;
+    const shown = latest.current.preview;
+    if (!shown || shown.path !== version.path) return;
+    generation.current += 1;
+    latest.current.onPreview({ ...shown, content, hash: version.hash, size: version.size, truncated: false });
+    latest.current.onSaved?.(version.path);
+  }), [projectId]);
 
   const status = useGitStatus(watching ? projectId : undefined);
   useEffect(() => (watching ? watchGitStatus(projectId) : undefined), [watching, projectId]);
@@ -94,10 +108,13 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
     if (!shown) return;
     const kept = fileDrafts.get(projectId, shown.path);
     // Typed back to what is on disk: nothing left to save.
-    if ((kept?.base ?? shown.hash) === shown.hash && text === lines(shown.content)) fileDrafts.drop(projectId, shown.path);
-    // Editing starts only where a draft can be kept (`roomFor`), so this holds.
-    else fileDrafts.set(projectId, shown.path, { base: kept?.base ?? shown.hash, text });
-  }, [projectId]);
+    if ((kept?.base ?? shown.hash) === shown.hash && text === lines(shown.content)) {
+      fileDrafts.drop(projectId, shown.path);
+      return;
+    }
+    if (!kept && !roomFor(shown.path)) return;
+    fileDrafts.set(projectId, shown.path, { base: kept?.base ?? shown.hash, text });
+  }, [projectId, roomFor]);
 
   /** Resolves true when [file] has nothing unsaved, or the reader chose to lose it. */
   const discard = useCallback(async (file: string) => {
@@ -125,7 +142,7 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
       const now = fileDrafts.get(projectId, shown.path);
       if (now && now.text !== kept.text) fileDrafts.set(projectId, shown.path, { base: version.hash, text: now.text });
       else fileDrafts.drop(projectId, shown.path);
-      latest.current.onPreview({ ...shown, content: kept.text, hash: version.hash, size: version.size, truncated: false });
+      fileDrafts.notifySaved(projectId, version, kept.text);
     } catch (error) {
       if (error instanceof HttpError && error.code === 'FILE_CHANGED') {
         // Changed on disk meanwhile: show what is there now; the draft stays, in conflict with it.
@@ -159,12 +176,12 @@ export function useFileEditing({ projectId, preview, onPreview, writable, watchi
     startOnOpen: (file: string) => { startOnOpen.current = file; },
     /** Leaves editing; an unsaved edit is discarded, after asking. */
     stop: async () => { if (path !== undefined && await discard(path)) setEditing(false); },
-    /** Escape: leaves editing when nothing is unsaved. */
-    escape: () => { if (!draft) setEditing(false); },
+    /** Escape: leaves editing when nothing is unsaved (unless defaultEditing keeps it open). */
+    escape: () => { if (!draft && !defaultEditing) setEditing(false); },
     change,
     save,
     discard,
-    /** In conflict: drop the draft and take the version on disk. */
+    /** In conflict or on explicit revert: drop the draft and take the version on disk. */
     takeDisk: async () => { if (path !== undefined) await discard(path); },
   };
 }

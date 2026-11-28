@@ -7,6 +7,7 @@ import {
   IconArrowLeft, IconArrowRight, IconPanelLeft, IconPackage, IconFolderDot, IconFolderCode, IconFolderKanban, IconFolderArchive, IconFolderCog, IconTextQuote, IconServer,
   IconFile, IconFileSearch, IconFolderSearch, IconFolderOpen, IconListTree, IconArrowUpRight, IconLink, IconTextSelect, IconPin, IconMinimize,
   IconRotateCcw, IconCopyX, IconArrowRightToLine, IconSquareX, IconChevronsUpDown, IconHash,
+  IconFilePlus, IconFolderPlus, IconPencilLine, IconTrash2, IconUndo2, IconLock, IconWrapText, IconColumns2,
 } from '@/components/icons';
 
 /** What each name of the plugin SDK's icon vocabulary draws. */
@@ -24,6 +25,7 @@ const ICONS: Record<PluginIconName, IconComponent> = {
   file: IconFile, 'file-search': IconFileSearch, 'folder-search': IconFolderSearch, 'folder-open': IconFolderOpen, 'list-tree': IconListTree, 'arrow-up-right': IconArrowUpRight,
   link: IconLink, 'text-select': IconTextSelect, pin: IconPin, minimize: IconMinimize, 'rotate-ccw': IconRotateCcw, 'copy-x': IconCopyX, 'arrow-right-to-line': IconArrowRightToLine,
   'square-x': IconSquareX, 'chevrons-up-down': IconChevronsUpDown, hash: IconHash,
+  'file-plus': IconFilePlus, 'folder-plus': IconFolderPlus, 'pencil-line': IconPencilLine, 'trash-2': IconTrash2, 'undo-2': IconUndo2, lock: IconLock, 'wrap-text': IconWrapText, 'columns-2': IconColumns2,
 };
 
 export const pluginIcon = (name: PluginIconName): IconComponent => ICONS[name] ?? IconWrench;

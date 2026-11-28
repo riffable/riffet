@@ -2,7 +2,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { createElement } from 'react';
 import type { AppSettings, Run, Session, SyncLane, TimelinePage, TurnOutlineV3 } from '@contracts';
-import type { ButtonProps as PluginButtonProps, PluginAccess, PluginHost, SegmentedProps, SelectProps, SettingsPageService, ToolCall } from '@riffet/plugin-web';
+import type { ButtonProps as PluginButtonProps, PluginAccess, PluginHost, SegmentedProps, SelectProps, SettingsPageService, ToolCall, WorkspaceService } from '@riffet/plugin-web';
 import { IconWrench } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Field, Input, Segmented, Select, Spinner, StatusDot, Switch } from '@/components/ui/controls';
@@ -10,12 +10,16 @@ import { Notice } from '@/components/ui/notice';
 import { Progress } from '@/components/ui/progress';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { Tip } from '@/components/ui/tooltip';
-import { api, attachmentPath, request, withClientFeatures, type ForkSessionResult } from '@/lib/api';
+import { api, attachmentPath, HttpError, request, withClientFeatures, type ForkSessionResult } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
+import { confirmDialog, promptDialog } from '@/lib/dialogs';
+import { textOf } from '@/lib/errors';
 import { copyWithToast } from '@/lib/files';
 import { serverOfObject } from '@/lib/server-routing';
 import { toast } from '@/lib/toast';
 import { errorMessage, newId } from '@/lib/utils';
+import { editorSessions } from '../app/panels/editorSessions';
+import { fileDrafts } from '../app/panels/fileDrafts';
 import { Markdown } from '../app/session/Markdown';
 import { lineDiff } from '../app/session/lineDiff';
 import { SettingsGroup, SettingsRow } from '../app/settings/SettingsLayout';
@@ -50,6 +54,119 @@ function PluginSelect({ options, ...props }: SelectProps) {
 
 function PluginSegmented({ options, ...props }: SegmentedProps) {
   return createElement(Segmented, { ...props, options: [...options] });
+}
+
+const joinRel = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
+const baseName = (path: string) => path.split('/').at(-1) ?? path;
+const parentDir = (path: string) => path.split('/').slice(0, -1).join('/');
+const reportWorkspaceError = (error: unknown, fallback: string) => {
+  const translated = error instanceof HttpError && error.code ? textOf({ code: error.code, ...(error.params ? { params: error.params } : {}) }, error.message) : undefined;
+  toast.error(translated ?? errorMessage(error, fallback));
+};
+
+function createWorkspaceService(lists: WorkbenchStores['lists']): WorkspaceService {
+  // Stable per-project array snapshots for `useSyncExternalStore`.
+  const dirtyCache = new Map<string, readonly string[]>();
+  const dirtyPaths = (projectId: string): readonly string[] => {
+    const next = fileDrafts.pathsOf(projectId);
+    const prev = dirtyCache.get(projectId);
+    if (prev && prev.length === next.length && prev.every((item, idx) => item === next[idx])) return prev;
+    dirtyCache.set(projectId, next);
+    return next;
+  };
+
+  return {
+    canWrite: () => lists.get().fileWrites,
+    subscribe: (listener) => {
+      let writable = lists.get().fileWrites;
+      const offLists = lists.subscribe(() => {
+        const next = lists.get().fileWrites;
+        if (next === writable) return;
+        writable = next;
+        listener();
+      });
+      const offDrafts = fileDrafts.subscribe(listener);
+      return () => { offLists(); offDrafts(); };
+    },
+    dirtyPaths,
+    confirmDiscard: async (projectId, paths) => {
+      const dirty = paths.filter((path) => Boolean(fileDrafts.get(projectId, path)));
+      if (!dirty.length) return true;
+      const confirmed = await confirmDialog({
+        title: dirty.length === 1 ? i18n._(msg`放弃未保存的修改？`) : i18n._(msg`放弃 ${dirty.length} 个文件的未保存修改？`),
+        ...(dirty.length === 1 ? { description: dirty[0]! } : {}),
+        confirmLabel: i18n._(msg`放弃修改`),
+        destructive: true,
+      });
+      if (confirmed) for (const path of dirty) fileDrafts.drop(projectId, path);
+      return confirmed;
+    },
+    saveAll: async (projectId, paths) => {
+      const targets = paths ? paths.filter((path) => Boolean(fileDrafts.get(projectId, path))) : fileDrafts.pathsOf(projectId);
+      let saved = 0;
+      const conflicts: string[] = [];
+      for (const path of targets) {
+        const kept = fileDrafts.get(projectId, path);
+        if (!kept) continue;
+        try {
+          const version = await api.saveFile(projectId, path, kept.text, kept.base);
+          const now = fileDrafts.get(projectId, path);
+          if (now && now.text !== kept.text) fileDrafts.set(projectId, path, { base: version.hash, text: now.text });
+          else fileDrafts.drop(projectId, path);
+          fileDrafts.notifySaved(projectId, version, kept.text);
+          saved += 1;
+        } catch (error) {
+          if (error instanceof HttpError && error.code === 'FILE_CHANGED') conflicts.push(path);
+          else reportWorkspaceError(error, i18n._(msg`无法保存文件`));
+        }
+      }
+      if (conflicts.length) toast.error(i18n._(msg`${conflicts.length} 个文件在磁盘上已被修改，请打开并合并`));
+      return { saved, conflicts };
+    },
+    create: async (projectId, kind, folder) => {
+      const name = (await promptDialog({ title: kind === 'file' ? i18n._(msg`新建文件`) : i18n._(msg`新建文件夹`), confirmLabel: i18n._(msg`新建`) }))?.trim();
+      if (!name) return undefined;
+      const target = joinRel(folder, name.replace(/^\/+|\/+$/g, ''));
+      try { await api.createFile(projectId, target, kind); }
+      catch (error) { reportWorkspaceError(error, i18n._(msg`无法新建`)); return undefined; }
+      return target;
+    },
+    rename: async (projectId, from) => {
+      const name = (await promptDialog({ title: i18n._(msg`重命名`), initial: baseName(from), confirmLabel: i18n._(msg`重命名`) }))?.trim();
+      if (!name || name === baseName(from)) return undefined;
+      const to = joinRel(parentDir(from), name.replace(/^\/+|\/+$/g, ''));
+      try { await api.moveFile(projectId, from, to); }
+      catch (error) { reportWorkspaceError(error, i18n._(msg`无法重命名`)); return undefined; }
+      fileDrafts.move(projectId, from, to);
+      editorSessions.move(projectId, from, to);
+      return to;
+    },
+    remove: async (projectId, path, options) => {
+      if (fileDrafts.heldUnder(projectId, path)) {
+        const name = baseName(path);
+        if (!await confirmDialog({ title: i18n._(msg`删除「${name}」？`), description: i18n._(msg`未保存的修改会丢失，撤销删除也不会恢复它们。`), confirmLabel: i18n._(msg`删除`), destructive: true })) return false;
+      }
+      let restoreId: string | undefined;
+      try { restoreId = (await api.deleteFile(projectId, path)).restoreId; }
+      catch (error) {
+        if (!(error instanceof HttpError && error.code === 'DELETE_UNRECOVERABLE')) { reportWorkspaceError(error, i18n._(msg`无法删除`)); return false; }
+        const name = baseName(path);
+        if (!await confirmDialog({ title: i18n._(msg`永久删除「${name}」？`), description: i18n._(msg`它太大，删除后无法撤销。`), confirmLabel: i18n._(msg`永久删除`), destructive: true })) return false;
+        try { await api.deleteFile(projectId, path, true); }
+        catch (again) { reportWorkspaceError(again, i18n._(msg`无法删除`)); return false; }
+      }
+      fileDrafts.dropUnder(projectId, path);
+      editorSessions.dropUnder(projectId, path);
+      if (restoreId) {
+        const id = restoreId;
+        const name = baseName(path);
+        toast.success(i18n._(msg`已删除「${name}」`), { action: { label: i18n._(msg`撤销`), onClick: () => {
+          void api.restoreFile(projectId, id).then(() => options?.onRestored?.(), (error) => reportWorkspaceError(error, i18n._(msg`无法撤销删除`)));
+        } } });
+      }
+      return true;
+    },
+  };
 }
 
 export function createPluginHost({ stores, pluginId, sessionId, locale, access, settingsPage = NO_SETTINGS_PAGE, openPath }: {
@@ -174,6 +291,7 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       toolIcon: (kind) => toolIcons[kind] ?? IconWrench,
       copy: copyWithToast,
     },
+    workspace: createWorkspaceService(lists),
     useProjectViews: projectViewsHook(pluginId),
   };
 }

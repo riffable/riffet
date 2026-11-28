@@ -10,7 +10,7 @@ export const codeStudio: Plugin = {
   manifest: {
     id: 'riffet.code-studio', vendor: 'riffet', name: 'code-studio', apiVersion: PLUGIN_API_VERSION, defaultEnabled: true, version: '0.1.0',
     title: { 'zh-Hans': 'Code Studio', en: 'Code Studio' },
-    description: { 'zh-Hans': '按模块浏览项目代码，跳转定义、查找引用、按类名或符号搜索，大型 Android 仓库无需 Android Studio。', en: 'Browse a project’s code by module, go to definitions, find usages and search by class or symbol, without opening Android Studio on a large repository.' },
+    description: { 'zh-Hans': '按模块浏览与编辑项目代码，支持分屏、多光标、跳转定义、查找引用与符号搜索，大型 Android 仓库无需 Android Studio。', en: 'Browse and edit a project’s code by module with split view, multi-cursor editing, go to definitions, find usages and symbol search, without opening Android Studio on a large repository.' },
     contributes: {
       agentTools: [{
         id: STUDIO_TOOL_GROUP, toolPrefix: 'code_',

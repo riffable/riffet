@@ -5,8 +5,8 @@ import { cn } from './cn';
 import { KindMark } from './Kind';
 import type { Messages } from './messages';
 
-const ROW = 24;
-const INDENT = 12;
+const ROW = 26;
+const INDENT = 14;
 
 interface Row { item: CodeOutlineItem; depth: number; id: string; parent?: string; open: boolean; branch: boolean; chain: CodeOutlineItem[] }
 
@@ -80,28 +80,41 @@ export function Outline({ items, loading, line, messages: m, onJump, onMenu }: {
   const Chevron = ui.icon('chevron-right');
 
   return (
-    <div ref={scroller} role="tree" aria-label={m.outline} className="min-h-0 flex-1 overflow-auto px-1.5 py-1">
+    <div ref={scroller} role="tree" aria-label={m.outline} className="group/outline min-h-0 flex-1 overflow-auto px-2 py-1.5">
       {!loading && !rows.length && <p className="px-2 py-1.5 text-xs text-fg-3">{m.noOutline}</p>}
-      {rows.map(({ item, depth, id, open, branch, chain }, index) => (
-        <div
-          key={id} role="treeitem" aria-selected={index === current} aria-expanded={branch ? open : undefined}
-          onContextMenu={(event) => { event.preventDefault(); onMenu(item, chain, { x: event.clientX, y: event.clientY }); }}
-          style={{ paddingLeft: 4 + depth * INDENT }}
-          className={cn('group/row relative flex h-6 items-center rounded text-sm', index === current ? 'bg-active text-fg' : 'text-fg hover:bg-hover')}
-        >
-          {/* A guide per level, so a long class's members read as its own. */}
-          {Array.from({ length: depth }, (_, level) => <span key={level} aria-hidden className="absolute inset-y-0 w-px bg-line-soft" style={{ left: 4 + level * INDENT + 7 }} />)}
-          {branch ? (
-            <button type="button" tabIndex={-1} aria-label={open ? m.collapse : m.expand} onClick={() => toggle(id)} className="grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:text-fg">
-              <Chevron className={cn('size-3 transition-transform', open && 'rotate-90')} />
+      {rows.map(({ item, depth, id, open, branch, chain: itemChain }, index) => {
+        const selected = index === current;
+        const subtle = item.kind === 'property';
+        return (
+          <div
+            key={id} role="treeitem" aria-selected={selected} aria-expanded={branch ? open : undefined}
+            onContextMenu={(event) => { event.preventDefault(); onMenu(item, itemChain, { x: event.clientX, y: event.clientY }); }}
+            style={{ paddingLeft: 4 + depth * INDENT, height: ROW }}
+            className={cn(
+              'group/row relative flex items-center rounded-md text-sm transition-colors',
+              selected ? 'bg-active font-medium text-fg' : subtle ? 'text-fg-3 hover:bg-hover hover:text-fg-2' : 'text-fg-2 hover:bg-hover hover:text-fg',
+            )}
+          >
+            {Array.from({ length: depth }, (_, level) => (
+              <span
+                key={level}
+                aria-hidden
+                className="pointer-events-none absolute inset-y-0 w-px bg-line-soft opacity-0 transition-opacity group-hover/outline:opacity-100"
+                style={{ left: 4 + level * INDENT + 7 }}
+              />
+            ))}
+            {branch ? (
+              <button type="button" tabIndex={-1} aria-label={open ? m.collapse : m.expand} onClick={() => toggle(id)} className="grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:text-fg">
+                <Chevron className={cn('size-3 transition-transform', open && 'rotate-90')} />
+              </button>
+            ) : <span className="w-4 shrink-0" />}
+            <button type="button" onClick={() => onJump(item.line, item.column)} className="flex h-full min-w-0 flex-1 items-center gap-1.5 whitespace-nowrap rounded pr-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
+              <KindMark kind={item.kind} />
+              <span className="truncate">{item.name}</span>
             </button>
-          ) : <span className="w-4 shrink-0" />}
-          <button type="button" onClick={() => onJump(item.line, item.column)} className="flex h-full min-w-0 flex-1 items-center gap-1 whitespace-nowrap pr-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus rounded">
-            <KindMark kind={item.kind} />
-            <span className="truncate">{item.name}</span>
-          </button>
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

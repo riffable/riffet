@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { FILE_BUDGET } from '@contracts';
+import { FILE_BUDGET, type FileVersion } from '@contracts';
 import { createStore, useStore } from '@/lib/store';
 
 /**
@@ -13,8 +13,18 @@ export interface FileDraft { base: string; text: string }
 const store = createStore<{ drafts: Readonly<Record<string, FileDraft>> }>({ drafts: {} });
 const key = (projectId: string, path: string) => `${projectId}\0${path}`;
 
+type SavedListener = (event: { projectId: string; version: FileVersion; content: string }) => void;
+// perf-rules: allow active editor mount listeners removed on unmount
+const savedListeners = new Set<SavedListener>();
+
 export const fileDrafts = {
   get: (projectId: string, path: string): FileDraft | undefined => store.get().drafts[key(projectId, path)],
+  subscribe: (listener: () => void): (() => void) => store.subscribe(listener),
+  /** All paths of `projectId` currently holding unsaved edits. */
+  pathsOf(projectId: string): string[] {
+    const prefix = `${projectId}\0`;
+    return Object.keys(store.get().drafts).filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length));
+  },
   /** `FILE_BUDGET.draftsKept` files hold unsaved edits: no other file can start one. */
   full: (): boolean => Object.keys(store.get().drafts).length >= FILE_BUDGET.draftsKept,
   /** False when `FILE_BUDGET.draftsKept` other files already hold unsaved edits; the edit is then not kept. */
@@ -46,6 +56,14 @@ export const fileDrafts = {
   dropUnder(projectId: string, path: string): void {
     const gone = key(projectId, path);
     store.set(({ drafts }) => ({ drafts: Object.fromEntries(Object.entries(drafts).filter(([id]) => id !== gone && !id.startsWith(`${gone}/`))) }));
+  },
+  /** Broadcasts that a file was saved (e.g. by Save All) so mounted editors sync their preview hash. */
+  notifySaved(projectId: string, version: FileVersion, content: string): void {
+    for (const listener of savedListeners) listener({ projectId, version, content });
+  },
+  onSaved(listener: SavedListener): () => void {
+    savedListeners.add(listener);
+    return () => { savedListeners.delete(listener); };
   },
 };
 

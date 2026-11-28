@@ -9,7 +9,7 @@ import { cn, errorMessage } from '@/lib/utils';
 const PAGE = 100;
 /** How deep a chain of single-folder directories is opened at once (`com/example/app`). */
 const MAX_CHAIN = 24;
-const INDENT = 10;
+const INDENT = 14;
 
 interface Listing { entries: FileEntry[]; hasMore: boolean }
 const join = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
@@ -27,7 +27,7 @@ export function FileTree({ projectId, active, reveal, refreshToken, icon, action
   /** A file or folder to open the tree down to and scroll to, a folder opened too with `expand`; `token` repeats a request. */
   reveal?: { path: string; token: number; expand?: boolean } | undefined;
   refreshToken: number;
-  icon: (entry: FileEntry) => ReactNode;
+  icon: (entry: FileEntry, open?: boolean) => ReactNode;
   actions: (entry: FileEntry, path: string) => ReactNode;
   onOpen: (path: string) => void;
   /** Double-clicking a file opens and keeps its tab. */
@@ -153,11 +153,12 @@ export function FileTree({ projectId, active, reveal, refreshToken, icon, action
           label.push(next.entries[0]!.name);
         }
         const isOpen = expanded.has(path);
+        const dimmed = entry.name.startsWith('.') || entry.name === 'build' || entry.name === 'node_modules' || entry.name === 'dist';
         rows.push(
-          <div key={path} data-path={path} onContextMenu={(event) => { event.preventDefault(); onContextMenu(path); }} className="group/file flex h-6 items-center gap-1 rounded pr-1 hover:bg-hover" style={indent}>
-            <button type="button" aria-expanded={isOpen} onClick={() => { if (isOpen) setExpanded((previous) => { const next = new Set(previous); next.delete(path); return next; }); else void open(path); }} className="flex h-full flex-1 items-center gap-1 text-left text-sm text-fg">
-              <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 transition-transform', isOpen && 'rotate-90')} />
-              {icon(entry)}
+          <div key={path} data-path={path} onContextMenu={(event) => { event.preventDefault(); onContextMenu(path); }} className="group/file flex h-6.5 items-center gap-1 rounded-md pr-1 hover:bg-hover" style={indent}>
+            <button type="button" aria-expanded={isOpen} onClick={() => { if (isOpen) setExpanded((previous) => { const next = new Set(previous); next.delete(path); return next; }); else void open(path); }} className={cn('flex h-full flex-1 items-center gap-1.5 text-left text-sm transition-colors hover:text-fg', dimmed ? 'text-fg-3' : 'text-fg-2')}>
+              <IconChevronRight className={cn('size-3 shrink-0 text-fg-4 transition-transform group-hover/file:text-fg-2', isOpen && 'rotate-90')} />
+              {icon(entry, isOpen)}
               <span className="whitespace-nowrap">{label.join('/')}</span>
             </button>
             {/* Room for the actions only while they show, so deep rows keep their names. */}
@@ -166,10 +167,12 @@ export function FileTree({ projectId, active, reveal, refreshToken, icon, action
         );
         if (isOpen) walk(deepest, depth + 1);
       } else {
+        const selected = active === path;
+        const dimmed = entry.name.startsWith('.');
         rows.push(
-          <div key={path} data-path={path} onContextMenu={(event) => { event.preventDefault(); onContextMenu(path); }} className={cn('group/file flex h-6 items-center gap-1 rounded pr-1 hover:bg-hover', active === path && 'bg-active hover:bg-active')} style={indent}>
-            <button type="button" onClick={() => onOpen(path)} onDoubleClick={() => onKeep?.(path)} className="flex h-full flex-1 items-center gap-1 pl-[18px] text-left text-sm text-fg">
-              {icon(entry)}
+          <div key={path} data-path={path} onContextMenu={(event) => { event.preventDefault(); onContextMenu(path); }} className={cn('group/file flex h-6.5 items-center gap-1 rounded-md pr-1 hover:bg-hover', selected && 'bg-active hover:bg-active')} style={indent}>
+            <button type="button" onClick={() => onOpen(path)} onDoubleClick={() => onKeep?.(path)} className={cn('flex h-full flex-1 items-center gap-1.5 pl-4.5 text-left text-sm transition-colors hover:text-fg', selected ? 'font-medium text-fg' : dimmed ? 'text-fg-3' : 'text-fg-2')}>
+              {icon(entry, false)}
               <span className="whitespace-nowrap">{entry.name}</span>
             </button>
             {/* Room for the actions only while they show, so deep rows keep their names. */}

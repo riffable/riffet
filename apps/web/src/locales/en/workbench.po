@@ -25,6 +25,11 @@ msgstr "{0} unavailable"
 msgid "{0} 个文件"
 msgstr "{0, plural, one {# file} other {# files}}"
 
+#. placeholder {0}: conflicts.length
+#: src/plugins/host.ts
+msgid "{0} 个文件在磁盘上已被修改，请打开并合并"
+msgstr "{0} files changed on disk; open them to merge"
+
 #. placeholder {0}: formatNumber(item.profile.enabledModels.length)
 #. placeholder {0}: formatNumber(models.length)
 #: src/app/plugins/PluginModelSourceProviders.tsx
@@ -594,6 +599,7 @@ msgstr "Create scheduled wake-ups, delegations, and notifications"
 
 #: src/app/team/MemberConfigDialog.tsx
 #: src/app/Workbench.tsx
+#: src/plugins/host.ts
 msgid "删除"
 msgstr "Delete"
 
@@ -611,6 +617,10 @@ msgstr "Delete…"
 #: src/app/team/MemberConfigDialog.tsx
 msgid "删除「{0}」？"
 msgstr "Delete \"{0}\"?"
+
+#: src/plugins/host.ts
+msgid "删除「{name}」？"
+msgstr "Delete “{name}”?"
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "删除「{title}」的数据？"
@@ -955,6 +965,10 @@ msgstr "Failed"
 msgid "委托"
 msgstr "Delegations"
 
+#: src/plugins/host.ts
+msgid "它太大，删除后无法撤销。"
+msgstr "It is too large to undo once deleted."
+
 #: src/app/plugins/PluginGrantDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1059,6 +1073,10 @@ msgstr "Created “{0}”"
 #: src/app/Workbench.tsx
 msgid "已删除「{0}」"
 msgstr "Deleted “{0}”"
+
+#: src/plugins/host.ts
+msgid "已删除「{name}」"
+msgstr "Deleted “{name}”"
 
 #: src/app/plugins/PluginTasksBlock.tsx
 #: src/plugins/TasksView.tsx
@@ -1481,6 +1499,7 @@ msgstr "Unpublish"
 
 #: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
+#: src/plugins/host.ts
 msgid "撤销"
 msgstr "Undo"
 
@@ -1565,6 +1584,10 @@ msgstr "Close changes panel"
 msgid "收起文件面板"
 msgstr "Close files panel"
 
+#: src/plugins/CodeFile.tsx
+msgid "收起比较"
+msgstr "Hide comparison"
+
 #: src/app/App.tsx
 msgid "改用访问令牌"
 msgstr "Use an access token"
@@ -1572,6 +1595,19 @@ msgstr "Use an access token"
 #: src/app/App.tsx
 msgid "改用配对码"
 msgstr "Use a pairing code"
+
+#. placeholder {0}: dirty.length
+#: src/plugins/host.ts
+msgid "放弃 {0} 个文件的未保存修改？"
+msgstr "Discard unsaved changes in {0} files?"
+
+#: src/plugins/host.ts
+msgid "放弃修改"
+msgstr "Discard changes"
+
+#: src/plugins/host.ts
+msgid "放弃未保存的修改？"
+msgstr "Discard unsaved changes?"
 
 #: src/app/sidebarDestinations.ts
 msgid "数据统计"
@@ -1615,6 +1651,10 @@ msgstr "New"
 msgid "新对话"
 msgstr "New conversation"
 
+#: src/plugins/host.ts
+msgid "新建"
+msgstr "New"
+
 #: src/app/use-project-actions.ts
 msgid "新建 Worktree"
 msgstr "New Worktree"
@@ -1640,6 +1680,14 @@ msgstr "You can switch it when starting a session"
 #: src/app/team/CreateMemberDialog.tsx
 msgid "新建成员"
 msgstr "New member"
+
+#: src/plugins/host.ts
+msgid "新建文件"
+msgstr "New file"
+
+#: src/plugins/host.ts
+msgid "新建文件夹"
+msgstr "New folder"
 
 #: src/app/SidebarUpdateButton.tsx
 msgid "新版本 {version} 可用"
@@ -1685,6 +1733,10 @@ msgstr "Could not save team order"
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr "Couldn't save the outgoing message. Check the browser's storage space."
 
+#: src/plugins/host.ts
+msgid "无法保存文件"
+msgstr "Couldn't save the file"
+
 #: src/app/WorkbenchHeader.tsx
 msgid "无法保存项目"
 msgstr "Could not save project"
@@ -1726,6 +1778,10 @@ msgstr "Couldn't create the session"
 #: src/app/team/CreateMemberDialog.tsx
 msgid "无法创建成员"
 msgstr "Unable to create member"
+
+#: src/plugins/host.ts
+msgid "无法删除"
+msgstr "Couldn't delete"
 
 #: src/app/state/workItemsStore.ts
 msgid "无法删除任务"
@@ -1831,6 +1887,10 @@ msgstr "Couldn't open this folder"
 msgid "无法撤下"
 msgstr "Couldn't unpublish"
 
+#: src/plugins/host.ts
+msgid "无法撤销删除"
+msgstr "Couldn't undo the deletion"
+
 #: src/app/state/marksStore.ts
 msgid "无法收藏"
 msgstr "Couldn't add to favorites"
@@ -1838,6 +1898,10 @@ msgstr "Couldn't add to favorites"
 #: src/app/FolderFavorites.tsx
 msgid "无法收藏该目录"
 msgstr "Couldn't add this folder to favorites"
+
+#: src/plugins/host.ts
+msgid "无法新建"
+msgstr "Couldn't create it"
 
 #: src/app/use-session-actions.ts
 msgid "无法检查状态，请稍后重试"
@@ -1919,6 +1983,10 @@ msgstr "Couldn't connect to the Riffet server"
 #: src/app/SidebarUserMenu.tsx
 msgid "无法连接服务器"
 msgstr "Couldn't connect to the server"
+
+#: src/plugins/host.ts
+msgid "无法重命名"
+msgstr "Couldn't rename"
 
 #: src/app/FolderFavorites.tsx
 msgid "无法重命名收藏"
@@ -2052,6 +2120,10 @@ msgstr "The server version is incompatible"
 #: src/app/Sidebar.tsx
 msgid "服务器范围"
 msgstr "Server scope"
+
+#: src/plugins/host.ts
+msgid "未保存的修改会丢失，撤销删除也不会恢复它们。"
+msgstr "Unsaved edits are lost, and undoing the deletion doesn’t bring them back."
 
 #: src/app/useServerLabel.tsx
 msgid "未允许本机操作"
@@ -2224,6 +2296,18 @@ msgstr "Fresh per run"
 msgid "每次新开对话，靠记忆复用"
 msgstr "Fresh conversation each time, reusing memory"
 
+#: src/plugins/CodeFile.tsx
+msgid "比较"
+msgstr "Compare"
+
+#: src/plugins/host.ts
+msgid "永久删除"
+msgstr "Delete permanently"
+
+#: src/plugins/host.ts
+msgid "永久删除「{name}」？"
+msgstr "Delete “{name}” permanently?"
+
 #: src/app/plugins/PluginSharesBlock.tsx
 msgid "没有仍然有效的分享"
 msgstr "No active shares"
@@ -2376,6 +2460,10 @@ msgstr "Own row"
 #: src/app/onboarding/Onboarding.tsx
 msgid "用手机上的 Riffet 扫码，离开电脑也能处理审批"
 msgstr "Scan with Riffet on your phone to handle approvals away from your computer"
+
+#: src/plugins/CodeFile.tsx
+msgid "用磁盘上的版本"
+msgstr "Use the version on disk"
 
 #: src/app/FolderFavorites.tsx
 msgid "留空则显示目录名"
@@ -2669,6 +2757,10 @@ msgstr "The draft can't be saved in the browser and will be lost on refresh"
 msgid "要在 {0} 做什么？"
 msgstr "What do you want to do in {0}?"
 
+#: src/plugins/CodeFile.tsx
+msgid "覆盖保存"
+msgstr "Save over it"
+
 #: src/app/SessionInfo.tsx
 msgid "规则"
 msgstr "Rules"
@@ -2905,6 +2997,10 @@ msgstr "This task’s project was removed or archived"
 msgid "这个插件视图当前不可用"
 msgstr "This plugin view is currently unavailable"
 
+#: src/plugins/CodeFile.tsx
+msgid "这个文件在你编辑时被改过"
+msgstr "This file changed while you were editing it"
+
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-status-active"
 msgid "进行中"
@@ -2998,6 +3094,7 @@ msgstr "Configure…"
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
+#: src/plugins/host.ts
 msgid "重命名"
 msgstr "Rename"
 

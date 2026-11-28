@@ -267,7 +267,8 @@ export type PluginIconName =
   | 'list-filter' | 'history' | 'chevrons-down-up' | 'case-sensitive' | 'whole-word' | 'regex'
   | 'arrow-left' | 'arrow-right' | 'panel-left' | 'package' | 'folder-dot' | 'folder-code' | 'folder-kanban' | 'folder-archive' | 'folder-cog' | 'text-quote' | 'server'
   | 'file' | 'file-search' | 'folder-search' | 'folder-open' | 'list-tree' | 'arrow-up-right' | 'link' | 'text-select' | 'pin' | 'minimize'
-  | 'rotate-ccw' | 'copy-x' | 'arrow-right-to-line' | 'square-x' | 'chevrons-up-down' | 'hash';
+  | 'rotate-ccw' | 'copy-x' | 'arrow-right-to-line' | 'square-x' | 'chevrons-up-down' | 'hash'
+  | 'file-plus' | 'folder-plus' | 'pencil-line' | 'trash-2' | 'undo-2' | 'lock' | 'wrap-text' | 'columns-2';
 
 export type IconComponent = ComponentType<{ className?: string }>;
 
@@ -364,19 +365,60 @@ export interface ModelFieldProps {
   onOpen?(): void;
 }
 
+/** Indentation style of an editor buffer: spaces (2 or 4) or tabs. */
+export interface CodeIndent { kind: 'spaces' | 'tabs'; size: 2 | 4 }
+/** Commands a caller can run on a `CodeFile`. */
+export type CodeFileCommandName =
+  | 'find' | 'fold' | 'unfold' | 'foldAll' | 'unfoldAll' | 'selectAll'
+  | 'undo' | 'redo' | 'comment' | 'duplicateLine' | 'deleteLine' | 'moveLineUp' | 'moveLineDown' | 'selectNextOccurrence'
+  | 'save' | 'revert';
+/** Current editing state of a `CodeFile`, reported to its caller for toolbar & status bar UI. */
+export interface CodeFileEditState {
+  path: string;
+  editable: boolean;
+  editing: boolean;
+  dirty: boolean;
+  saving: boolean;
+  conflict: boolean;
+  truncated: boolean;
+  lineEnding: 'LF' | 'CRLF';
+  indent: CodeIndent;
+  selections: number;
+  selectedChars: number;
+}
 /** An identifier in a shown file; `line` and `column` are 1-based. */
 export interface CodeSymbolAt { word: string; line: number; column: number }
 /** A place to show in a file: scrolled to the middle and flashed, or with `restore` put back at the top; a new `token` shows it again. */
 export interface CodeFileTarget { line: number; column?: number; restore?: boolean; token: number }
 /**
  * A project file read as the files panel reads it: the host loads it, highlights text, draws images
- * and says when it cannot be shown. Read only. ⌘-click (Ctrl-click) on an identifier and the context
- * menu hand it to `onSymbol` with the pointer, for the view to resolve.
+ * and says when it cannot be shown. With `editable`, UTF-8 text files within the edit budget are
+ * editable in place using the host's shared draft pool and optimistic-hash save conflict merge.
+ * ⌘-click (Ctrl-click) on an identifier and the context menu hand it to `onSymbol` with the pointer,
+ * for the view to resolve.
  */
 export interface CodeFileProps {
   projectId: string;
   path: string;
   target?: CodeFileTarget | undefined;
+  /** Added 2026-11: enables IDE editing (shared drafts, ⌘S save, conflict merge, multi-cursor, auto-brackets). */
+  editable?: boolean;
+  /** Added 2026-11: locks editing into read-only caret mode while `editable` is true. */
+  readOnly?: boolean;
+  /** Added 2026-11: watches the project's Git status stream and window focus to follow disk edits. */
+  watching?: boolean;
+  /** Added 2026-11: soft-wraps long lines inside the viewport. */
+  wordWrap?: boolean;
+  /** Added 2026-11: overrides detected indentation for this file. */
+  indent?: CodeIndent | undefined;
+  /** Added 2026-11: preserves CodeMirror undo history, folds and selections across unmounts under this key. */
+  stateKey?: string | undefined;
+  /** Added 2026-11: reports editing, dirty, conflict, line ending, indent and selection summary. */
+  onEditState?(state: CodeFileEditState): void;
+  /** Added 2026-11: called after a save succeeds (single file or Save All). */
+  onSaved?(path: string): void;
+  /** Added 2026-11: called when ⌘⇧S (Ctrl+Shift+S) is pressed while editing. */
+  onSaveAll?(): void;
   /** `usages` (added 2026-11) comes from ⌥F7 or ⇧F12 at the caret, with `onCaret`. */
   onSymbol?(at: CodeSymbolAt, intent: 'definition' | 'usages' | 'menu', point: { x: number; y: number }): void;
   /** The first line in view, as the reader scrolls. */
@@ -405,7 +447,7 @@ export interface CodeFileProps {
    */
   onMenu?(at: CodeMenuAt, point: { x: number; y: number }): void;
   /** Added 2026-11: runs a command in the file, as a menu entry does; a new `token` runs it again. */
-  command?: { name: 'find' | 'fold' | 'unfold' | 'foldAll' | 'unfoldAll' | 'selectAll'; token: number } | undefined;
+  command?: { name: CodeFileCommandName; token: number } | undefined;
 }
 /**
  * A right-click in a `CodeFile`: where the caret went, the identifier there, the selected text it was inside, or a line number (`gutter`).
@@ -417,8 +459,10 @@ export interface CodeBlameView {
   ranges: ReadonlyArray<{ start: number; count: number; hash: string }>;
   commits: Readonly<Record<string, { author: string; date: string; summary: string }>>;
 }
-/** The files panel's icon for a file name, or a folder. */
-export interface FileIconProps { name: string; directory?: boolean; className?: string }
+/** Semantic tree-node kind for `UiKit.FileIcon` (JetBrains New UI / Zed duotone icon set). */
+export type FileIconKind = 'file' | 'folder' | 'module' | 'group' | 'source' | 'resources' | 'assets' | 'manifest' | 'package';
+/** The files panel's icon for a file name, folder or module tree node. */
+export interface FileIconProps { name: string; directory?: boolean; open?: boolean; kind?: FileIconKind; className?: string }
 
 /** One entry of a `Menu`: a command, a choice of one (`radio`, ticked when current), an on/off option, a line, or a group's caption. */
 export type MenuEntry =
@@ -569,6 +613,28 @@ export interface UiKit {
   copy(text: string): Promise<void>;
 }
 
+/**
+ * Shared project-file write operations and unsaved draft pool (`file-write-v1`), shared with the
+ * files panel so unsaved edits, conflict checks and trash-undo stay in one place.
+ */
+export interface WorkspaceService {
+  /** Whether the server supports project file writes (`file-write-v1`). */
+  canWrite(): boolean;
+  subscribe(listener: () => void): () => void;
+  /** Relative paths of `projectId` currently holding unsaved edits. */
+  dirtyPaths(projectId: string): readonly string[];
+  /** Asks before discarding unsaved edits on `paths`; resolves true if clean or confirmed (dropping drafts). */
+  confirmDiscard(projectId: string, paths: readonly string[]): Promise<boolean>;
+  /** Saves every non-conflicting unsaved file in `projectId` (or the given `paths`); returns saved count and conflicted paths. */
+  saveAll(projectId: string, paths?: readonly string[]): Promise<{ saved: number; conflicts: string[] }>;
+  /** Prompts for a name and creates a file or directory under `folder`; returns the created relative path, or undefined. */
+  create(projectId: string, kind: 'file' | 'directory', folder: string): Promise<string | undefined>;
+  /** Prompts for a new name and renames `from`, carrying unsaved edits and editor history along. */
+  rename(projectId: string, from: string): Promise<string | undefined>;
+  /** Deletes `path` (with 24h undo toast when recoverable, or permanent confirmation when too large). */
+  remove(projectId: string, path: string, options?: { onRestored?: () => void }): Promise<boolean>;
+}
+
 export interface PluginHost {
   /** The app's language as a BCP-47 tag, such as `zh-Hans` or `en`; changes when the user switches. */
   readonly locale: string;
@@ -580,6 +646,8 @@ export interface PluginHost {
   readonly settingsPage: SettingsPageService;
   readonly timeline: TimelineService;
   readonly ui: UiKit;
+  /** Added 2026-11, absent on an older host: shared file drafts and write operations (`file-write-v1`). */
+  readonly workspace?: WorkspaceService;
   /**
    * Added 2026-11, absent on an older host: a hook (call it as one, through `useProjectViews`) listing the plugin
    * views offered for a project outside a conversation, other than the asking plugin's own, judged as the side
@@ -625,6 +693,27 @@ const noServers = () => NO_SERVERS;
 export function useServers(): readonly PluginServer[] {
   const { sessions } = usePluginHost();
   return useSyncExternalStore(sessions.subscribe, sessions.servers ?? noServers);
+}
+
+const NO_DIRTY: readonly string[] = [];
+const noopSubscribe = () => () => undefined;
+const falseFn = () => false;
+
+/** Relative paths of `projectId` currently holding unsaved edits (`PluginHost.workspace`), empty on older hosts. */
+export function useDirtyPaths(projectId: string | undefined): readonly string[] {
+  const { workspace } = usePluginHost();
+  const subscribe = workspace?.subscribe ?? noopSubscribe;
+  const getSnapshot = useMemo(
+    () => (workspace && projectId ? () => workspace.dirtyPaths(projectId) : () => NO_DIRTY),
+    [workspace, projectId],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot);
+}
+
+/** Whether the connected server supports project file writes (`file-write-v1`), false on older hosts. */
+export function useCanWrite(): boolean {
+  const { workspace } = usePluginHost();
+  return useSyncExternalStore(workspace?.subscribe ?? noopSubscribe, workspace?.canWrite ?? falseFn);
 }
 
 /** The declared settings keys, and re-renders when one changes. */

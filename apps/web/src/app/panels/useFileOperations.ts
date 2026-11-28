@@ -5,6 +5,7 @@ import { confirmDialog, promptDialog } from '@/lib/dialogs';
 import { textOf } from '@/lib/errors';
 import { toast } from '@/lib/toast';
 import { errorMessage } from '@/lib/utils';
+import { editorSessions } from './editorSessions';
 import { fileDrafts } from './fileDrafts';
 
 const join = (folder: string, name: string) => (folder ? `${folder}/${name}` : name);
@@ -47,6 +48,7 @@ export function useFileOperations({ projectId, onChanged, onCreated, onMoved, on
     try { await api.moveFile(projectId, from, to); }
     catch (error) { failed(error, t`无法重命名`); return; }
     fileDrafts.move(projectId, from, to);
+    editorSessions.move(projectId, from, to);
     onChanged();
     onMoved(from, to);
   }, [projectId, t, failed, onChanged, onMoved]);
@@ -68,6 +70,7 @@ export function useFileOperations({ projectId, onChanged, onCreated, onMoved, on
     }
     // An unsaved edit of a deleted file goes with it; the undo brings back the file as it was on disk.
     fileDrafts.dropUnder(projectId, path);
+    editorSessions.dropUnder(projectId, path);
     onChanged();
     onRemoved(path);
     if (!restoreId) return;

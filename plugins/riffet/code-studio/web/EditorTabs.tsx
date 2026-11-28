@@ -6,13 +6,16 @@ import type { Messages } from './messages';
 
 /**
  * The open files, as the IDE's editor tabs: the current one underlined (the app's `UnderlineTabs` look),
- * the preview tab's name in italics until it is kept. Middle click closes, right click opens the tab's
- * menu, double click is the page's (keep a preview tab, else maximize the editor); two files of one name show their folders. The current tab is kept in view.
+ * the preview tab's name in italics until it is kept or edited, and unsaved tabs marked with a dot in
+ * place of the close button until hovered. Middle click closes, right click opens the tab's menu, double
+ * click is the page's (keep a preview tab, else maximize the editor); two files of one name show their
+ * folders. The current tab is kept in view.
  */
-export function EditorTabs({ tabs, active, preview, messages: m, onSelect, onClose, onDoubleClick, onMenu }: {
+export function EditorTabs({ tabs, active, preview, dirty, messages: m, onSelect, onClose, onDoubleClick, onMenu }: {
   tabs: readonly string[];
   active: string | undefined;
   preview: string | undefined;
+  dirty?: ReadonlySet<string>;
   messages: Messages;
   onSelect(path: string): void;
   onClose(path: string): void;
@@ -51,6 +54,8 @@ export function EditorTabs({ tabs, active, preview, messages: m, onSelect, onClo
         const selected = tab === active;
         const name = fileName(tab);
         const twin = (names.get(name) ?? 0) > 1;
+        const isDirty = dirty?.has(tab) ?? false;
+        const isPreview = tab === preview && !isDirty;
         return (
           <div
             key={tab} role="tab" aria-selected={selected} tabIndex={selected ? 0 : -1} title={tab}
@@ -67,13 +72,19 @@ export function EditorTabs({ tabs, active, preview, messages: m, onSelect, onClo
             )}
           >
             {ui.FileIcon && <ui.FileIcon name={name} className="size-4 shrink-0" />}
-            <span className={cn('truncate', tab === preview && 'italic')}>{name}</span>
+            <span className={cn('truncate', isPreview && 'italic')}>{name}</span>
             {twin && <span className="truncate text-xs text-fg-4">{fileName(dirName(tab))}</span>}
             <button
-              type="button" tabIndex={-1} aria-label={m.closeTab} onClick={(event) => { event.stopPropagation(); onClose(tab); }}
-              className={cn('grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:bg-active hover:text-fg', !selected && 'opacity-0 group-hover/tab:opacity-100')}
+              type="button" tabIndex={-1} aria-label={isDirty ? m.closeUnsavedTab : m.closeTab}
+              onClick={(event) => { event.stopPropagation(); onClose(tab); }}
+              className={cn('group/close grid size-4 shrink-0 place-items-center rounded text-fg-4 hover:bg-active hover:text-fg', !selected && !isDirty && 'opacity-0 group-hover/tab:opacity-100 focus-visible:opacity-100')}
             >
-              <X className="size-3" />
+              {isDirty ? (
+                <>
+                  <span className="size-2 rounded-full bg-fg-3 group-hover/tab:hidden group-focus-visible/close:hidden" />
+                  <X className="hidden size-3 group-hover/tab:block group-focus-visible/close:block" />
+                </>
+              ) : <X className="size-3" />}
             </button>
           </div>
         );
